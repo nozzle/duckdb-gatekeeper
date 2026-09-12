@@ -1,9 +1,14 @@
 name: Build and test
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   test:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -17,8 +22,20 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install -r requirements-dev.txt
-      - run: cmake -G Ninja -S duckdb -B build/release -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
+      - run: cmake -G Ninja -S duckdb -B build/release -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v1.5.5 -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
       - run: cmake --build build/release --target gatekeeper_loadable_extension --parallel 2
       - run: python -m pytest test -q
       - run: python scripts/audit_inventory.py
       - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp
+      - name: Local lakehouse integration
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install -r test/integration/requirements.txt
+          python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL iceberg; INSTALL ducklake; INSTALL httpfs')"
+          python scripts/test_lakehouses.py
+      - name: Native fuzz smoke test
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang libclang-rt-dev
+          CXX=clang++ python scripts/fuzz_native.py --seconds 60

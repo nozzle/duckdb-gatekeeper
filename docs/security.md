@@ -27,8 +27,9 @@ local to each scalar call. All effective restrictions intersect and blocks win.
   a name; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
-  identify tables without depending on a particular scan operator; live remote
-  Iceberg behavior still requires integration testing.
+  identify tables without depending on a particular scan operator. Local Iceberg
+  REST/MinIO and DuckLake integration tests verify this boundary; other catalog
+  implementations still need verification.
 - Binding may perform remote I/O or evaluate bind-time expressions before returning,
   even for a request eventually denied. Caller-authored prohibited functions are
   rejected first; trusted expansions are not rechecked against function policy.

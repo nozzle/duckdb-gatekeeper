@@ -1,7 +1,8 @@
 #pragma once
-#include "duckdb.hpp"
 #include "yyjson.hpp"
+#include <cstdint>
 #include <set>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 

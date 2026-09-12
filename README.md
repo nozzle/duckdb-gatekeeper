@@ -18,7 +18,8 @@ With Gatekeeper, you can:
 
 > **Status:** early development, targeting **DuckDB 1.5.5 only**. Gatekeeper is not
 > published in the community repository yet. Local builds have been tested on macOS
-> arm64; Linux CI is configured but has not yet been verified. Wildcard matching and
+> arm64; see [validation evidence](docs/validation-review.md) for clean-build and
+> integration results. Wildcard matching and
 > DuckDB v2 support are out of scope.
 
 ## Installation
@@ -240,10 +241,12 @@ path, and transaction. Underlying physical tables in views and macros must pass
 object policy. Trusted attached-table implementations may read their backing files
 without passing caller-facing function restrictions again.
 
-For example, an authorized attached Iceberg table is intended to read its backing
+For example, an authorized attached Iceberg table can read its backing
 Parquet files, while an explicit caller-written `read_parquet(...)` remains subject
-to function policy. Tests currently cover attached DuckDB tables and trusted
-Parquet-backed views; live remote Iceberg integration is not yet verified.
+to function policy. Local integration tests exercise an Iceberg REST catalog with
+MinIO storage and DuckLake with Parquet-backed local storage. They cover allowed
+reads, object denials, trusted views, and write rejection. Other remote catalog
+implementations and credential-vending configurations need separate testing.
 
 Gatekeeper is not a sandbox or automatic execution hook. It does not enforce row
 policies, runtime deadlines, memory budgets, or network/filesystem isolation.
@@ -294,6 +297,9 @@ of the STRUCT result. Run the benchmark on your own workloads; these are not
 latency guarantees.
 
 ## Maintaining the defaults
+
+See [lakehouse integration, native fuzzing, and production review](docs/validation-review.md)
+for reproducible local test commands and remaining production boundaries.
 
 Reviewed defaults live in `inventories/core.json` and 29 per-extension files in
 `inventories/extensions/`. Compute names are enabled; elevated and unreviewed names

@@ -16,10 +16,24 @@ def capture(extension_paths=()):
             db.execute("LOAD '" + str(Path(path).resolve()).replace("'", "''") + "'")
         rows = db.execute("""SELECT function_name, function_type, parameter_types,
             return_type, varargs, has_side_effects, macro_definition
+            , parameters
             FROM duckdb_functions()
             WHERE function_type IN ('scalar','aggregate','table','macro','table_macro')
             ORDER BY ALL""").fetchall()
-        signatures = [dict(zip(["name", "kind", "parameters", "returns", "varargs", "side_effects", "macro"], row)) for row in rows]
+        signatures = []
+        for row in rows:
+            entry = dict(zip(["name", "kind", "parameters", "returns", "varargs", "side_effects", "macro", "parameter_names"], row))
+            if entry["kind"] == "table":
+                pairs = list(zip(entry.pop("parameter_names"), entry["parameters"]))
+                # DuckDB emits positional colN arguments first, then an unordered named-argument map.
+                positional = 0
+                while positional < len(pairs) and pairs[positional][0] == f"col{positional}":
+                    positional += 1
+                entry["parameters"] = [typ for _, typ in pairs[:positional]]
+                entry["named_parameters"] = dict(sorted(pairs[positional:]))
+            else:
+                entry.pop("parameter_names")
+            signatures.append(entry)
         return {"duckdb_version": db.execute("SELECT version()").fetchone()[0],
                 "loaded_extensions": db.execute("SELECT extension_name, extension_version FROM duckdb_extensions() WHERE loaded ORDER BY 1").fetchall(),
                 "initial_extensions": before, "functions": signatures}
