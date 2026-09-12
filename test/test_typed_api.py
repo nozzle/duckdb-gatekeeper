@@ -223,3 +223,23 @@ def test_latest_ast_serialization(db, sql):
     db.execute(sql).fetchall()
     result = validate(db, sql)
     assert result["allowed"], result
+
+
+@pytest.mark.parametrize("name", ["csv", "json", "db", "gz"])
+def test_qualified_suffix_catalog_table_requires_file_opt_in(db, name):
+    db.execute(f'CREATE TABLE main."{name}"(x INT)')
+    assert validate(db, f'SELECT * FROM "{name}"')["allowed"]
+    for sql in [f"SELECT * FROM main.{name}", f'SELECT * FROM "main"."{name}"']:
+        result = validate(db, sql)
+        assert result["code"] == "forbidden" and result["error_message"] == ""
+        assert result["violations"][0]["rule"] == "file_table"
+        assert validate(db, sql, {"allow_file_table_references": True})["allowed"]
+        assert not validate(db, sql, {"allow_file_table_references": True, "allowed_tables": []})["allowed"]
+
+
+def test_internal_dependency_of_trusted_view_requires_opt_in(db):
+    db.execute("CREATE VIEW my_tables AS SELECT table_name FROM duckdb_tables")
+    assert validate(db, "SELECT * FROM my_tables")["violations"][0]["rule"] == "internal_object"
+    options = {"allowed_tables": [{"schema": "main", "table": "my_tables"},
+                                  {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
+    assert validate(db, "SELECT * FROM my_tables", options)["allowed"]

@@ -33,7 +33,7 @@ with initialized pinned submodules. `scripts/versions.py` owns the inventory eng
 version/revision and baseline filename. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
-See [core-review.md](core-review.md) for the source-backed excluded-name corrections.
+Inventory notes retain provenance, non-obvious classification traps, and coverage limitations.
 Migration helpers `migrate_unreviewed.py` and `migrate_signature_baseline.py` are
 import-safe and dry-run by default; `--write` is required to modify canonical files.
 Signature migration still requires the unchanged-signature verification to pass.

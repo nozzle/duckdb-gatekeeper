@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ from versions import BASELINE_FILENAME
 
 @pytest.mark.parametrize("key,value", [
     ("unexpected", True), ("notes", "not a list"), ("notes", [42]), ("notes", []),
-    ("source", {}), ("source", "not a URL"), ("source", "https://"),
+    ("source", {}), ("source", "not a URL"), ("source", "https://"), ("source", "https://host/a b"),
     ("compute", "sum"), ("compute", [None]), ("groups", {"broken": "sum"}),
     ("reviewed_duckdb", "1.0.0"),
 ])
@@ -52,7 +53,7 @@ def test_generation_chunks_roundtrip_and_compile(tmp_path):
     source = tmp_path / "literal.cpp"
     source.write_text('#include <cstdio>\n' + content + '\nint main() { std::fputs(fixture_json, stdout); }\n')
     binary = tmp_path / "literal"
-    subprocess.run(["c++", "-std=c++17", str(source), "-o", str(binary)], check=True)
+    subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", str(source), "-o", str(binary)], check=True)
     assert json.loads(subprocess.check_output([str(binary)])) == data
 
 
@@ -60,6 +61,25 @@ def test_generation_requires_initialized_checkout(tmp_path):
     with pytest.raises(SystemExit, match="Git checkout.*submodule"):
         pinned_revision(tmp_path)
     assert pinned_revision()
+
+
+def test_inventory_uses_supplied_schema(tmp_path):
+    shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
+    path = tmp_path / "inventories/schema.json"
+    schema = json.loads(path.read_text())
+    schema["required"].append("alternate_root_marker")
+    path.write_text(json.dumps(schema))
+    with pytest.raises(ValueError, match="alternate_root_marker"):
+        load(tmp_path)
+
+
+def test_missing_schema_dependency_is_actionable():
+    # -S excludes site packages, independent of the environment running pytest.
+    result = subprocess.run([sys.executable, "-S", "-c",
+                             "import sys; sys.path.insert(0, 'scripts'); from inventory import load; load()"],
+                            cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "requirements-inventory.txt" in result.stderr and "Traceback" not in result.stderr
 
 
 @pytest.mark.parametrize("module", ["migrate_unreviewed", "migrate_signature_baseline"])

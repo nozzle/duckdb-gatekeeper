@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from versions import SUPPORTED_DUCKDB
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
     build = root / "build/release"
     subprocess.run([cmake, "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
                     "-DPython3_EXECUTABLE=" + sys.executable,
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=Release", "-DOVERRIDE_GIT_DESCRIBE=v1.5.5",
+                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=Release", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=" + ("ON" if args.shell else "OFF")], check=True)
     targets = ["gatekeeper_loadable_extension"] + (["shell"] if args.shell else [])

@@ -8,7 +8,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="explicitly write the proposed unreviewed names")
     args = parser.parse_args()
-    entries, _ = load()
+    entries, _ = load(ROOT)
     snapshot = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
     known = set(n for e in entries.values() for group in ["compute", "elevated"] for n in e[group])
     core = entries["core"]

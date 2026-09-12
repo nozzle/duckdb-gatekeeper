@@ -1,15 +1,18 @@
 """Validated source inventories; importing this module never loads DuckDB extensions."""
 import json
 from pathlib import Path
-from jsonschema import Draft202012Validator, FormatChecker
 from versions import SUPPORTED_DUCKDB
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = ROOT / "inventories/schema.json"
 
 
 def load(root=ROOT):
-    validator = Draft202012Validator(json.loads(SCHEMA.read_text()), format_checker=FormatChecker())
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError as error:
+        raise SystemExit("Inventory validation requires jsonschema; install it with "
+                         "python -m pip install -r requirements-inventory.txt using the build's Python interpreter") from error
+    validator = Draft202012Validator(json.loads((root / "inventories/schema.json").read_text()))
     paths = [root / "inventories/core.json", *sorted((root / "inventories/extensions").glob("*.json"))]
     entries = {}
     for path in paths:

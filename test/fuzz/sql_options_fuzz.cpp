@@ -172,7 +172,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	auto options = Option(data[1], bytes) + " := " + Argument(data[2]);
 	if (data[0] & 128)
 		options += ", " + Option(data[1], bytes) + " := NULL"; // Duplicate names.
-	if (data[0] % 4 == 3) {
+	if (data[0] % 16 == 15) {
 		if (Configured(options, text, limit) != Configured(options, text, limit))
 			std::abort();
 		return 0;

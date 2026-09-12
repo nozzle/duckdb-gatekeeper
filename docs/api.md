@@ -112,6 +112,8 @@ such as `duckdb_tables`, `duckdb_views`, `sqlite_master`, or `information_schema
 For example, `allowed_tables := [{catalog: 'system', schema: 'main', table: 'duckdb_tables'}]`
 admits that view, subject to any catalog/schema restrictions. Omitting the catalog
 in an explicit entry retains the any-catalog matching described above.
+This also applies transitively: a trusted user view over `duckdb_tables` requires
+explicit permission for both the user view and that internal dependency.
 
 Explicit admitted table functions are capabilities, not catalog table permissions;
 an empty `allowed_tables` does not prohibit `range()`. Dynamic lookup functions,
@@ -122,7 +124,11 @@ trusted catalog objects. This includes file replacements even if the syntactic
 file-reference flag is enabled; that flag alone cannot grant resolved authorization.
 
 Schema-wide SHOW is rejected with a table policy. SHOW/DESCRIBE may also involve
-system views, which must pass object policy. This API does not filter metadata rows.
+system views, which must pass object policy. In particular, `SHOW TABLES [FROM x]`
+and `SHOW ALL TABLES` depend on internal metadata views and are denied by default.
+A schema allowlist is insufficient, and adding an `allowed_tables` list also
+triggers the schema-wide SHOW preflight denial. Query explicitly authorized
+metadata views instead. This API does not filter metadata rows.
 
 ## Capability options
 
@@ -146,6 +152,11 @@ name and DuckDB's dot-joined nonempty catalog/schema/table parts are checked, so
 unquoted `data.csv` and `catalog.data.csv` receive the same preflight rejection. Quoted
 physical object names with those shapes also require opt-in. Scoped CTE references
 are exempt only when unqualified. DDL/DML and unsupported AST structures are always rejected.
+The preflight deliberately also rejects real catalog tables named `csv`, `json`,
+`db`, or another recognized suffix when qualified (for example, `main.csv`).
+Quoting the identifiers does not change this; an unqualified `csv` is not file-shaped.
+Use `allow_file_table_references := true` for such trusted objects; resolved-object
+authorization still applies.
 
 Replacement scans are collected during binding and rejected afterward, not before
 their bind callbacks. This preflight filename inventory stops the reviewed forms

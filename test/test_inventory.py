@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from inventory import load
 from audit_inventory import compare, coverage
 from migrate_signature_baseline import verify_migration
+from versions import BASELINE_FILENAME
 
 
 def test_complete_default_inventory(db):
@@ -33,7 +34,7 @@ def test_nondefault_inventory(db):
 
 
 def test_audit_deltas():
-    baseline = json.loads((ROOT / "inventories/baselines/duckdb-1.5.5.json").read_text())
+    baseline = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
     candidate = json.loads(json.dumps(baseline))
     assert not any(compare(baseline, candidate).values())
     candidate["functions"].append({"name": "unreviewed_function", "parameters": []})
