@@ -1,8 +1,14 @@
 """Generate immutable C++ data from the pinned serializer and reviewed inventory."""
+import sys
+
+if sys.version_info < (3, 10):
+    raise SystemExit("Gatekeeper generation requires Python 3.10 or newer")
+
 import json
 from pathlib import Path
 import subprocess
 from inventory import load
+from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "duckdb/src/include/duckdb/storage/serialization"
@@ -43,7 +49,7 @@ def grammar():
 
     required = {
         "SelectStatement": ["node"], "SelectNode": ["type", "select_list", "from_table"],
-        "SetOperationNode": ["type", "setop_type", "left", "right"],
+        "SetOperationNode": ["type", "setop_type"],
         "RecursiveCTENode": ["type", "cte_name", "left", "right"],
         "CommonTableExpressionInfo": ["query"], "BaseTableRef": ["type", "table_name"],
         "JoinRef": ["type", "left", "right"], "SubqueryRef": ["type", "subquery"],
@@ -79,19 +85,37 @@ def grammar():
     return {"rules": rules, "dispatch": dispatch}
 
 
+def pinned_revision(root=ROOT):
+    if not (root / ".git").exists() or not (root / "duckdb/.git").exists():
+        raise SystemExit("Gatekeeper generation requires a Git checkout with the pinned DuckDB submodule; "
+                         "clone with --recurse-submodules or run git submodule update --init --recursive")
+    try:
+        revision = subprocess.check_output(["git", "-C", str(root / "duckdb"), "rev-parse", "HEAD"],
+                                           text=True, stderr=subprocess.PIPE).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise SystemExit("Cannot verify the pinned DuckDB revision; install Git and initialize submodules") from error
+    if revision != SUPPORTED_DUCKDB_REVISION:
+        raise SystemExit(f"Gatekeeper requires the pinned DuckDB {SUPPORTED_DUCKDB} revision {SUPPORTED_DUCKDB_REVISION}")
+    return revision
+
+
+def header(name, data):
+    text = json.dumps(data, separators=(",", ":"), ensure_ascii=True)
+    # Separate raw literals avoid MSVC C2026; splitting inside JSON escapes is safe.
+    if ')DATA"' in text:
+        raise ValueError("generated JSON collides with raw string delimiter")
+    chunks = [text[i:i + 8000] for i in range(0, len(text), 8000)]
+    return 'static const char *' + name + '_json =\n' + '\n'.join('R"DATA(' + chunk + ')DATA"' for chunk in chunks) + ';\n'
+
+
 def main():
-    revision = subprocess.check_output(["git", "-C", str(ROOT / "duckdb"), "rev-parse", "HEAD"], text=True).strip()
-    if revision != "d8cdaa33fda8df955cc76ef58a280f68f4cd43fa":
-        raise ValueError("Gatekeeper phase 1 requires the pinned DuckDB 1.5.5 revision")
+    pinned_revision()
     _, defaults = load()
     inventory = {"defaults": defaults}
     generated = ROOT / "generated"
     generated.mkdir(exist_ok=True)
     for name, data in [("grammar", grammar()), ("inventory", inventory)]:
-        text = json.dumps(data, separators=(",", ":"), ensure_ascii=True)
-        (generated / (name + ".hpp")).write_text(
-            'static const char *' + name + '_json = R"DATA(' + text + ')DATA";\n'
-        )
+        (generated / (name + ".hpp")).write_text(header(name, data))
 
 
 if __name__ == "__main__":

@@ -30,14 +30,22 @@ position BIGINT
 Only `allowed = true` and `code = 'ok'` indicate success. Codes are `ok`,
 `forbidden`, `unsupported`, `parser`, `binding`, and `invalid_input`. Rule identifiers
 include `function`, `catalog`, `schema`, `table`, `dynamic_sql`, `table_function`,
-`recursive_cte`, `file_table`, `replacement_scan`, `statement`, `limit`, and
+`recursive_cte`, `file_table`, `replacement_scan`, `internal_object`, `statement`, `limit`, and
 `unsupported_structure`. Consumers should use these fields rather than parse messages.
+`allowed` is true exactly when `code` is `ok`. Successful results have empty
+violations and error messages. `forbidden`/`unsupported` have nonempty violations
+and an empty error message; `parser`/`binding`/`invalid_input` have empty violations
+and a nonempty error message.
 Repeated function violations include occurrence counts in the message. Absent object
 identifiers are empty strings. Positions are zero-based parser byte offsets when
 available, otherwise NULL; resolved-object positions may be unavailable.
 
 Resource and unexpected execution errors can raise exceptions instead of returning
 a result. Callers must reject exceptions, NULL/missing results, and unknown codes.
+Cancellation, internal, fatal, and out-of-memory engine exceptions propagate to
+DuckDB. Parser exceptions return `parser`; other engine errors before binding return
+`invalid_input`, and during binding return `binding`. Parsing uses the connection's parser options, and AST serialization
+uses the latest format of the pinned engine regardless of its storage build flags.
 
 ## Function options
 
@@ -72,7 +80,7 @@ resource access, not an argument-level sandbox. Inventories live in
 | --- | --- | --- | --- |
 | `allowed_catalogs` | VARCHAR[] | Unrestricted catalogs | Deny catalog objects |
 | `allowed_schemas` | VARCHAR[] | Unrestricted schemas | Deny schema objects |
-| `allowed_tables` | STRUCT[] | Unrestricted objects | Deny tables and views |
+| `allowed_tables` | STRUCT[] | Unrestricted non-internal objects | Deny tables and views |
 
 Table structs require nonempty `schema` and `table` strings; optional `catalog` may
 be omitted or NULL. An omitted catalog matches that schema/name in any catalog.
@@ -87,7 +95,8 @@ SELECT gatekeeper_validate(
 );
 ```
 
-Object names compare exactly, case-sensitively, against resolved catalog identities.
+Object names compare using ASCII case-folding against resolved catalog identities,
+matching DuckDB identifier semantics. Diagnostics preserve the resolved spelling.
 Caller-provided catalog qualifiers are checked before binding too. Missing catalog
 or schema qualifiers are resolved using the caller's search path and transaction.
 
@@ -96,6 +105,13 @@ physical table callbacks must still be explicitly authorized by its own identity
 Trusted view/macro and attached-table implementation functions are not subjected
 to caller-facing function policies again. Attached Iceberg/DuckLake tables are
 authorized at their logical catalog/schema/table identity, not their backing files.
+
+Internal tables/views require explicit `allowed_tables` permission even when object
+options are omitted. A schema allowlist alone does not admit system metadata views
+such as `duckdb_tables`, `duckdb_views`, `sqlite_master`, or `information_schema.tables`.
+For example, `allowed_tables := [{catalog: 'system', schema: 'main', table: 'duckdb_tables'}]`
+admits that view, subject to any catalog/schema restrictions. Omitting the catalog
+in an explicit entry retains the any-catalog matching described above.
 
 Explicit admitted table functions are capabilities, not catalog table permissions;
 an empty `allowed_tables` does not prohibit `range()`. Dynamic lookup functions,
@@ -125,13 +141,17 @@ reviewed inventory, not recognition of arbitrary application functions.
 File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
 `.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,
 `.shp`, `.gpkg`, or `.fgb` (case-insensitively). Each suffix followed by `?` anywhere
-in the name is also caught, covering DuckDB's query/glob-marker forms. Quoted
+in the name is also caught, covering DuckDB's query/glob-marker forms. Both the leaf
+name and DuckDB's dot-joined nonempty catalog/schema/table parts are checked, so
+unquoted `data.csv` and `catalog.data.csv` receive the same preflight rejection. Quoted
 physical object names with those shapes also require opt-in. Scoped CTE references
-are exempt. DDL/DML and unsupported AST structures are always rejected.
+are exempt only when unqualified. DDL/DML and unsupported AST structures are always rejected.
 
 Replacement scans are collected during binding and rejected afterward, not before
 their bind callbacks. This preflight filename inventory stops the reviewed forms
-by default, but custom replacements can still perform I/O before rejection.
+by default, but other dotted names can still cause filesystem existence probes and
+custom replacements can still perform I/O before rejection. This is a syntactic
+guard, not replacement-scan suppression (tracked in issue #3).
 Enabling `allow_file_table_references` permits that pre-rejection binding work even
 for known file-shaped names. It never makes an implicit file scan valid; use an
 explicit admitted reader for file access. Shared connection configuration is not
@@ -149,7 +169,8 @@ Limits are independent named integer arguments; omitted ones inherit defaults.
 | `max_ast_depth` | 512 |
 
 Values must be positive integers. Floating-point/boolean values are not coerced.
-Empty SQL is rejected. AST bytes also bound SQL input before parsing. Serialization
+Empty/comment-only SQL returns `invalid_input` with `SQL contains no statements`.
+AST bytes also bound SQL input before parsing. Serialization
 and binder work occur before some limits can be checked; these are not execution
 budgets or a complete resource-exhaustion defense. Limit violations use `forbidden`
 with rule `limit`, separate from unsupported syntax.

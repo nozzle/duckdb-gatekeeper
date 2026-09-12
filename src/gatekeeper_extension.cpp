@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "engine_errors.hpp"
 #include "json_serializer.hpp"
 #include "options.hpp"
 #include <mutex>
@@ -124,12 +125,18 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, CatalogEntry &entr
 		return;
 	auto &object = entry.Cast<StandardEntry>();
 	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
-	if (policy.catalogs && !policy.allowed_catalogs.count(catalog))
+	auto folded_catalog = gatekeeper::Lower(catalog), folded_schema = gatekeeper::Lower(schema),
+	     folded_name = gatekeeper::Lower(name);
+	bool explicit_table = policy.allowed_tables.count({folded_catalog, folded_schema, folded_name}) ||
+	                      policy.allowed_tables.count({"", folded_schema, folded_name});
+	if (entry.internal && !explicit_table)
+		result.violations.emplace("internal_object", "internal object requires explicit allowed_tables permission",
+		                          catalog, schema, name);
+	if (policy.catalogs && !policy.allowed_catalogs.count(folded_catalog))
 		result.violations.emplace("catalog", "catalog is not allowed", catalog, schema, name);
-	if (policy.schemas && !policy.allowed_schemas.count(schema))
+	if (policy.schemas && !policy.allowed_schemas.count(folded_schema))
 		result.violations.emplace("schema", "schema is not allowed", catalog, schema, name);
-	if (policy.tables && !policy.allowed_tables.count({catalog, schema, name}) &&
-	    !policy.allowed_tables.count({"", schema, name}))
+	if (policy.tables && !explicit_table)
 		result.violations.emplace("table", "object is not allowed", catalog, schema, name);
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
@@ -143,10 +150,12 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			throw InvalidInputException("SQL contains a NUL byte");
 		if (sql.size() > policy.bytes)
 			return {false, "forbidden", "", "", {{"limit", "SQL exceeds max_ast_bytes input bound"}}};
-		Parser parser;
+		Parser parser(context.GetParserOptions());
 		parser.ParseQuery(sql);
-		if (parser.statements.empty() || parser.statements.size() > policy.statements)
-			return {false, "forbidden", "", "", {{"limit", "statement count exceeds policy or SQL is empty"}}};
+		if (parser.statements.empty())
+			throw InvalidInputException("SQL contains no statements");
+		if (parser.statements.size() > policy.statements)
+			return {false, "forbidden", "", "", {{"limit", "statement count exceeds policy"}}};
 		unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr),
 		                                                               yyjson_mut_doc_free);
 		if (!doc)
@@ -156,11 +165,13 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		yyjson_mut_obj_add_false(doc.get(), root, "error");
 		auto statements = yyjson_mut_arr(doc.get());
 		yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
+		SerializationOptions serialization_options;
+		serialization_options.serialization_compatibility = SerializationCompatibility::Latest();
 		for (auto &statement : parser.statements) {
 			if (statement->type != StatementType::SELECT_STATEMENT)
 				return {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
-			yyjson_mut_arr_append(
-			    statements, JsonSerializer::Serialize(statement->Cast<SelectStatement>(), doc.get(), true, true, true));
+			yyjson_mut_arr_append(statements, JsonSerializer::Serialize(statement->Cast<SelectStatement>(), doc.get(),
+			                                                            true, true, true, serialization_options));
 		}
 		unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
 		                                                       yyjson_doc_free);
@@ -213,14 +224,18 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		result.error_message = ErrorData(error).RawMessage();
 	} catch (const Exception &error) {
 		ErrorData data(error);
-		result.code = "binding";
+		if (gatekeeper::PropagateEngineError(data.Type()))
+			throw;
+		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_type = Exception::ExceptionTypeToString(data.Type());
 		result.error_message = data.RawMessage();
 	} catch (const std::bad_alloc &) {
 		throw;
 	} catch (const std::exception &error) {
 		ErrorData data(error);
-		result.code = "binding";
+		if (gatekeeper::PropagateEngineError(data.Type()))
+			throw;
+		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_type = Exception::ExceptionTypeToString(data.Type());
 		result.error_message = data.RawMessage();
 	}

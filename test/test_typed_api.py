@@ -139,3 +139,87 @@ def test_file_name_opt_in_only_authorizes_catalog_object(db, tmp_path, monkeypat
     assert validate(db, 'SELECT * FROM "data.parquet"', {"allow_file_table_references": True})["allowed"]
     result = validate(db, "SELECT * FROM 'missing.duckdb'", {"allow_file_table_references": True})
     assert not result["allowed"] and result["code"] == "binding"
+
+
+@pytest.mark.parametrize("name", ["data.csv", "missing.csv", "exists.duckdb", "x.db", "x.ddb", "x.avro",
+                                  "x.shp", "x.gpkg", "x.fgb", "data.parquet", "x.json", "x.tsv",
+                                  "catalog.data.csv", 'data."csv?"'])
+def test_unquoted_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, name):
+    (tmp_path / "data.csv").write_text("x\n42\n")
+    (tmp_path / "catalog.data.csv").write_text("x\n42\n")
+    with duckdb.connect(str(tmp_path / "exists.duckdb")) as local:
+        local.execute("CREATE TABLE t(x INT)")
+    monkeypatch.chdir(tmp_path)
+    result = validate(db, "SELECT * FROM " + name)
+    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert result["violations"][0]["rule"] == "file_table"
+
+
+def test_qualified_file_name_is_not_cte_exempt(db):
+    assert validate(db, 'WITH "data.csv" AS (SELECT 1) SELECT * FROM "data.csv"')["allowed"]
+    result = validate(db, "WITH csv AS (SELECT 1) SELECT * FROM data.csv")
+    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "file_table"
+
+
+@pytest.mark.parametrize("name", ["duckdb_views", "duckdb_tables", "duckdb_columns", "duckdb_logs",
+                                  "sqlite_master", "information_schema.tables"])
+def test_internal_views_require_explicit_permission(db, name):
+    for options in [{}, {"allowed_schemas": ["main"]}]:
+        result = validate(db, "SELECT * FROM " + name, options)
+        assert result["code"] == "forbidden" and result["error_message"] == "", result
+        assert "internal_object" in {v["rule"] for v in result["violations"]}
+
+
+def test_internal_view_explicit_permission_intersects_other_policies(db):
+    table = {"catalog": "SYSTEM", "schema": "MAIN", "table": "DuckDB_Tables"}
+    options = {"allowed_tables": [table], "allowed_schemas": ["main"], "allowed_catalogs": ["system"]}
+    assert validate(db, "SELECT * FROM duckdb_tables", options)["allowed"]
+    assert not validate(db, "SELECT * FROM duckdb_views", options)["allowed"]
+    assert not validate(db, "SELECT * FROM duckdb_tables", {**options, "allowed_catalogs": ["memory"]})["allowed"]
+    assert validate(db, "SELECT * FROM duckdb_tables", {
+        "allowed_tables": [{"schema": "main", "table": "duckdb_tables"}]
+    })["allowed"]
+
+
+def test_object_identifiers_are_ascii_case_insensitive(db):
+    db.execute("CREATE SCHEMA Reporting; CREATE TABLE Reporting.Orders(a INT); CREATE TABLE t(x INT)")
+    assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_schemas": ["reporting"]})["allowed"]
+    assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_catalogs": ["memory"]})["allowed"]
+    db.execute("CREATE MACRO local_abs(x) AS abs(x)")
+    assert validate(db, "SELECT MEMORY.main.local_abs(-1)", {
+        "allowed_catalogs": ["MeMoRy"], "allowed_functions": ["local_abs"]
+    })["allowed"]
+    for catalog in [None, "MeMoRy"]:
+        options = {"allowed_tables": [{"catalog": catalog, "schema": "REPORTING", "table": "orders"}],
+                   "allowed_schemas": ["RePoRtInG"], "allowed_catalogs": ["MEMORY"]}
+        assert validate(db, "SELECT * FROM reporting.orders", options)["allowed"]
+    result = validate(db, "SELECT * FROM reporting.orders", {"allowed_tables": []})
+    assert result["violations"][0]["schema"] == "Reporting"
+    assert result["violations"][0]["table"] == "Orders"
+
+
+@pytest.mark.parametrize("sql", ["", "  ", "-- comment", "/* comment */", "; ;"])
+def test_empty_sql_is_invalid_input(db, sql):
+    result = validate(db, sql)
+    assert result["code"] == "invalid_input" and not result["allowed"]
+    assert result["error_message"] == "SQL contains no statements"
+    assert result["violations"] == []
+
+
+def test_validation_uses_connection_parser_options(db):
+    db.execute("SET max_expression_depth=10")
+    sql = "SELECT " + "abs(" * 20 + "1" + ")" * 20
+    with pytest.raises(duckdb.ParserException):
+        db.execute(sql)
+    assert validate(db, sql)["code"] == "parser"
+    db.execute("SET max_expression_depth=1000; SET preserve_identifier_case=false")
+    result = validate(db, 'SELECT * FROM MISSING', {"allowed_catalogs": []})
+    assert 'missing' in result["error_message"] and 'MISSING' not in result["error_message"]
+
+
+@pytest.mark.parametrize("sql", ["SELECT list_transform([1, 2], lambda x: x + 1)",
+                                  "SELECT * FROM (VALUES (1)) a CROSS JOIN (VALUES (2)) b"])
+def test_latest_ast_serialization(db, sql):
+    db.execute(sql).fetchall()
+    result = validate(db, sql)
+    assert result["allowed"], result

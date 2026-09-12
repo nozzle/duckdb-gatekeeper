@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 
 from inventory import ROOT, load
+from versions import BASELINE_FILENAME
 
 
 def capture(extension_paths=()):
@@ -63,7 +64,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--capture", type=Path, help="write a candidate snapshot, without approving it")
     parser.add_argument("--candidate", type=Path, help="compare a previously captured snapshot")
-    parser.add_argument("--baseline", type=Path, default=ROOT / "inventories/baselines/duckdb-1.5.5.json")
+    parser.add_argument("--baseline", type=Path, default=ROOT / "inventories/baselines" / BASELINE_FILENAME)
     parser.add_argument("--load-extension", type=Path, action="append", default=[], help="explicit trusted local signed extension to load during capture")
     args = parser.parse_args()
     entries, defaults = load()

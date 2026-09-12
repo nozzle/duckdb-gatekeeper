@@ -145,7 +145,7 @@ struct Walker {
 					function_positions[name] = position;
 			}
 			auto catalog = Field(value, "catalog");
-			if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(catalog))
+			if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(Lower(catalog)))
 				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
 				                   name);
 			if (!policy.dynamic_sql && ((edge == "function" && (name == "query" || name == "query_table" ||
@@ -164,21 +164,30 @@ struct Walker {
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
 		     table = Field(value, "table_name");
-		if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(catalog))
+		if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(Lower(catalog)))
 			Reject("catalog", "catalog is not allowed: " + catalog, value);
 		if (kind == "ShowRef") {
 			if (yyjson_obj_get(value, "query"))
 				return;
 			if (policy.tables)
 				Reject("table", "schema-wide SHOW is disabled by table policy", value);
-			if (policy.schemas && (schema.empty() || !policy.allowed_schemas.count(schema)))
+			if (policy.schemas && (schema.empty() || !policy.allowed_schemas.count(Lower(schema))))
 				Reject("schema", "SHOW requires an allowed schema", value);
 			return;
 		}
 		if (catalog.empty() && schema.empty() && scope.count(Lower(table)))
 			return;
-		if (!policy.file_tables && FileName(table))
-			Reject("file_table", "file table reference is disabled: " + table, value);
+		// Match ReplacementScanInput::GetFullPath, including unquoted dotted names.
+		std::string path;
+		for (const auto &part : {catalog, schema, table}) {
+			if (part.empty())
+				continue;
+			if (!path.empty())
+				path += ".";
+			path += part;
+		}
+		if (!policy.file_tables && (FileName(table) || FileName(path)))
+			Reject("file_table", "file table reference is disabled: " + path, value);
 	}
 	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
 		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});
@@ -233,6 +242,17 @@ struct Walker {
 		if (expected == "SetOperationNode" &&
 		    !Names{"UNION", "EXCEPT", "INTERSECT", "UNION_BY_NAME"}.count(Field(value, "setop_type")))
 			throw Stop{"unsupported set operation"};
+		if (expected == "SetOperationNode") {
+			auto children = yyjson_obj_get(value, "children");
+			auto left = yyjson_obj_get(value, "left"), right = yyjson_obj_get(value, "right");
+			// SetOperationNode::SerializeChildNode emits either the legacy pair or the latest list.
+			if (children) {
+				if (left || right || !yyjson_is_arr(children) || yyjson_arr_size(children) < 2)
+					throw Stop{"set operation requires either left/right or at least two children"};
+			} else if (!yyjson_is_obj(left) || !yyjson_is_obj(right)) {
+				throw Stop{"set operation requires either left/right or at least two children"};
+			}
+		}
 		for (auto &name : rule.required)
 			if (!yyjson_obj_getn(value, name.data(), name.size()))
 				throw Stop{"missing AST field: " + name};

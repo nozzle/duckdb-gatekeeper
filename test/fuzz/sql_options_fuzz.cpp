@@ -1,58 +1,193 @@
 #include "duckdb.hpp"
+#include "engine_errors.hpp"
 #include <cstdlib>
 #include <string>
 
-static int Fuzz(const uint8_t *data, size_t size) {
-	if (size < 1 || size > 4096)
-		return 0;
-	static duckdb::DuckDB database(nullptr);
-	static duckdb::Connection connection(database);
-	static bool initialized = false;
-	if (!initialized) {
-		auto result = connection.Query("SET enable_external_access=false; SET autoload_known_extensions=false; SET "
-		                               "autoinstall_known_extensions=false; CREATE TABLE t(x INTEGER); CREATE SCHEMA "
-		                               "secret; CREATE TABLE secret.t(x "
-		                               "INTEGER); CREATE VIEW v AS SELECT * FROM t");
-		if (result->HasError())
+using namespace duckdb;
+
+static void CheckError(ExceptionType type) {
+	if (gatekeeper::PropagateEngineError(type))
+		std::abort();
+}
+
+static void Setup(Connection &connection) {
+	auto result = connection.Query(
+	    "SET enable_external_access=false; SET autoload_known_extensions=false; SET "
+	    "autoinstall_known_extensions=false; "
+	    "SET threads=1; CREATE TABLE t(x INTEGER); CREATE SCHEMA secret; CREATE TABLE secret.t(x INTEGER); "
+	    "CREATE VIEW v AS SELECT * FROM t");
+	for (QueryResult *current = result.get(); current; current = current->next.get()) {
+		if (current->HasError())
 			std::abort();
-		auto check = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
-		if (check->HasError() || !check->GetValue(0, 0).GetValue<bool>())
-			std::abort();
-		auto deny =
-		    connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := []).allowed");
-		if (deny->HasError() || deny->GetValue(0, 0).GetValue<bool>())
-			std::abort();
-		initialized = true;
 	}
-	duckdb::Value text(std::string(reinterpret_cast<const char *>(data + 1), size - 1));
-	duckdb::unique_ptr<duckdb::QueryResult> result;
-	if (data[0] % 5 == 0) {
-		result = connection.Query(
-		    "SELECT gatekeeper_validate($1, blocked_functions := ['read_parquet','query','gatekeeper_configure'], "
-		    "max_ast_bytes := 65536, max_ast_nodes := 2000, max_ast_depth := 100)",
-		    text);
-	} else if (data[0] % 5 == 1) {
-		result = connection.Query(
-		    "SELECT gatekeeper_validate('SELECT sum(x) FROM t', allowed_schemas := [$1], max_ast_depth := $2)", text,
-		    int64_t(data[0]));
-	} else if (data[0] % 5 == 2) {
-		result = connection.Query(
-		    "SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [$1], check_functions := $2)", text,
-		    bool(data[0] & 1));
-	} else if (data[0] % 5 == 3) {
-		result = connection.Query(
-		    "SELECT gatekeeper_validate('SELECT * FROM t', allowed_tables := [{schema:'main', 'table':$1}])", text);
-	} else {
-		result = connection.Query("SELECT gatekeeper_validate('SELECT 1', check_functions := $1)", text);
+}
+
+static Value Decision(QueryResult &result) {
+	if (result.HasError()) {
+		CheckError(result.GetErrorObject().Type());
+		// Binder/type/invalid-option exceptions are expected, but must be deterministic too.
+		return Value::STRUCT({{"type", Value(int64_t(result.GetErrorObject().Type()))},
+		                      {"error", Value(result.GetErrorObject().RawMessage())}});
 	}
-	if (result->HasError())
-		return 0;
-	auto chunk = result->Fetch();
+	auto chunk = result.Fetch();
 	if (!chunk || chunk->size() != 1)
 		std::abort();
 	auto value = chunk->GetValue(0, 0);
-	auto &fields = duckdb::StructValue::GetChildren(value);
-	if (fields[0].GetValue<bool>() != (fields[1].GetValue<std::string>() == "ok"))
+	if (value.IsNull())
+		std::abort();
+	auto &fields = StructValue::GetChildren(value);
+	if (fields.size() != 6)
+		std::abort();
+	const auto code = fields[1].GetValue<std::string>();
+	const auto &violations = ListValue::GetChildren(fields[2]);
+	const auto error = fields[4].GetValue<std::string>();
+	if (fields[0].GetValue<bool>() != (code == "ok"))
+		std::abort();
+	if (code == "ok") {
+		if (!violations.empty() || !error.empty())
+			std::abort();
+	} else if (code == "forbidden" || code == "unsupported") {
+		if (violations.empty() || !error.empty())
+			std::abort();
+	} else if (code == "parser" || code == "binding" || code == "invalid_input") {
+		if (!violations.empty() || error.empty())
+			std::abort();
+	} else {
+		std::abort();
+	}
+	if (!fields[5].IsNull()) {
+		if (fields[5].GetValue<int64_t>() < 0)
+			std::abort();
+		bool carried = code == "parser";
+		for (const auto &violation : violations) {
+			auto &position = StructValue::GetChildren(violation)[6];
+			carried = carried || (!position.IsNull() && position == fields[5]);
+		}
+		if (!carried)
+			std::abort();
+	}
+	return value;
+}
+
+static std::string Option(uint8_t selector, const std::string &text) {
+	static const char *names[] = {"check_functions",       "use_default_functions", "allow_recursive_ctes",
+	                              "allow_table_functions", "allow_dynamic_sql",     "allow_file_table_references",
+	                              "allowed_functions",     "blocked_functions",     "allowed_catalogs",
+	                              "allowed_schemas",       "allowed_tables",        "max_statements",
+	                              "max_ast_bytes",         "max_ast_nodes",         "max_ast_depth"};
+	if (selector % 16 < 15)
+		return names[selector % 16];
+	// Arbitrary option names remain one quoted identifier, never executable SQL.
+	std::string name = "\"";
+	for (auto c : text) {
+		if (c == '"')
+			name += '"';
+		name += c;
+	}
+	return name + '"';
+}
+
+static std::string Argument(uint8_t selector) {
+	static const char *values[] = {"$1",
+	                               "NULL",
+	                               "true",
+	                               "false",
+	                               "$2",
+	                               "0",
+	                               "-1",
+	                               "1.5",
+	                               "[]::VARCHAR[]",
+	                               "[$1]",
+	                               "[NULL]",
+	                               "[1]",
+	                               "[{schema:'main', 'table':$1}]",
+	                               "[{catalog:'memory', schema:'main', 'table':$1}]",
+	                               "[{catalog:NULL, schema:'main', 'table':$1}]",
+	                               "[{schema:NULL, 'table':$1}]",
+	                               "[{'table':$1}]",
+	                               "[{schema:'main', 'table':$1, extra:'x'}]",
+	                               "[{schema:'main', 'table':[$1]}]",
+	                               "[{schema:'main', 'table':{nested:$1}}]",
+	                               "[{schema:'main', 'table':1}]",
+	                               "[NULL::STRUCT(schema VARCHAR, \"table\" VARCHAR)]",
+	                               "{schema:'main', 'table':$1}",
+	                               "['main','secret']",
+	                               "['md5','read_csv','query_table']",
+	                               "8388609"};
+	return values[selector % (sizeof(values) / sizeof(values[0]))];
+}
+
+static Value Run(Connection &connection, const std::string &sql, const Value &text, int64_t limit) {
+	// Always consume both parameters, even when a chosen option value is a literal.
+	auto result = connection.Query("WITH input AS (SELECT $1::VARCHAR AS text, $2::BIGINT AS n) " + sql, text, limit);
+	return Decision(*result);
+}
+
+static Value Configured(const std::string &options, const Value &text, int64_t limit) {
+	// Configuration is one-shot and shared by connections: isolate each replay in a fresh instance.
+	DuckDB database(nullptr);
+	Connection connection(database);
+	Setup(connection);
+	auto result = connection.Query("WITH input AS (SELECT $1::VARCHAR AS text, $2::BIGINT AS n) "
+	                               "SELECT gatekeeper_configure(" +
+	                                   options + ") FROM input",
+	                               text, limit);
+	Value configured;
+	if (result->HasError()) {
+		CheckError(result->GetErrorObject().Type());
+		configured = Value(result->GetErrorObject().RawMessage());
+	} else {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() != 1)
+			std::abort();
+		configured = chunk->GetValue(0, 0);
+		if (configured.IsNull() || !configured.GetValue<bool>())
+			std::abort();
+	}
+	auto decision = Run(connection, "SELECT gatekeeper_validate('SELECT * FROM v') FROM input", text, limit);
+	auto overridden = Run(
+	    connection, "SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []) FROM input", text, limit);
+	return Value::STRUCT({{"configured", configured}, {"decision", decision}, {"overridden", overridden}});
+}
+
+static int Fuzz(const uint8_t *data, size_t size) {
+	if (size < 4 || size > 4096)
+		return 0;
+	static DuckDB database(nullptr);
+	static Connection connection(database);
+	static bool initialized = false;
+	if (!initialized) {
+		Setup(connection);
+		auto allow = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
+		auto deny =
+		    connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := []).allowed");
+		if (allow->HasError() || deny->HasError() || !allow->GetValue(0, 0).GetValue<bool>() ||
+		    deny->GetValue(0, 0).GetValue<bool>())
+			std::abort();
+		initialized = true;
+	}
+	std::string bytes(reinterpret_cast<const char *>(data + 4), size - 4);
+	Value text(bytes);
+	const int64_t limit = data[3];
+	auto options = Option(data[1], bytes) + " := " + Argument(data[2]);
+	if (data[0] & 128)
+		options += ", " + Option(data[1], bytes) + " := NULL"; // Duplicate names.
+	if (data[0] % 4 == 3) {
+		if (Configured(options, text, limit) != Configured(options, text, limit))
+			std::abort();
+		return 0;
+	}
+	std::string sql;
+	if (data[0] % 4 == 0) {
+		sql = "SELECT gatekeeper_validate($1, max_ast_bytes := " + std::to_string(data[1] ? data[1] * 32 : 65536) +
+		      ", max_ast_nodes := " + std::to_string(data[2] ? data[2] : 2000) +
+		      ", max_ast_depth := " + std::to_string(data[3] ? data[3] : 100) +
+		      ", max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
+	} else {
+		sql = "SELECT gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
+		      options + ") FROM input";
+	}
+	if (Run(connection, sql, text, limit) != Run(connection, sql, text, limit))
 		std::abort();
 	return 0;
 }
@@ -60,8 +195,9 @@ static int Fuzz(const uint8_t *data, size_t size) {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	try {
 		return Fuzz(data, size);
-	} catch (const duckdb::Exception &) {
-		// Invalid byte sequences may be rejected while constructing C++ parameter values.
+	} catch (const Exception &error) {
+		CheckError(ErrorData(error).Type());
+		// Invalid byte sequences can fail before Query() constructs its result.
 		return 0;
 	}
 }

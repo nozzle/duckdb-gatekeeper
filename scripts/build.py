@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 
 def main():
@@ -23,6 +24,7 @@ def main():
     cmake = tool("cmake")
     build = root / "build/release"
     subprocess.run([cmake, "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
+                    "-DPython3_EXECUTABLE=" + sys.executable,
                     "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=Release", "-DOVERRIDE_GIT_DESCRIBE=v1.5.5",
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=" + ("ON" if args.shell else "OFF")], check=True)
