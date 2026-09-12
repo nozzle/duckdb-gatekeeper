@@ -88,6 +88,10 @@ detection and vptr checks were disabled for this mixed-runtime setup. This is
 regression testing, not coverage-guided fuzzing or a full engine memory-safety audit.
 Run `.venv/bin/python scripts/test_sanitized.py` to reproduce the instrumented suite.
 
-See [the typed API migration](typed-api-migration.md) for the newer linked SQL/typed-
-option fuzz target and stricter resolved-object boundaries. Earlier sanitizer counts
+The linked SQL/typed-option fuzz target exercises the public entry point against
+fixed local catalog fixtures. Gatekeeper uses coverage and ASan/UBSan instrumentation;
+the linked DuckDB engine is exercised but not fully instrumented. The macOS
+Python-wheel sanitizer runner also disables libc++ container annotations because
+containers cross instrumented and uninstrumented code. This is qualified
+mixed-runtime coverage, not a whole-engine clean sanitizer bill. Earlier counts
 above describe historical runs rather than the current test count.

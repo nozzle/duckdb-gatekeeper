@@ -13,7 +13,7 @@ actual tables and views. Results are native STRUCTs with structured diagnostics.
 
 > Early development. Targets **DuckDB 1.5.5 only**. Not yet published in the community
 > repository. No wildcard matching, public syntax-only mode, or automatic execution
-> hook. See [validation evidence](docs/validation-review.md) for tests and limitations.
+> hook. See [the security model](docs/security.md) for limitations.
 
 ## Installation
 
@@ -175,7 +175,32 @@ reviewed inventories; unsupported engine revisions are rejected.
 
 Tests exercise typed binding, structured errors, policy composition, actual catalog
 fixtures, CTE scoping, view dependencies, prepared statements, concurrency, and
-adversarial inputs. See [integration/fuzzing commands](docs/validation-review.md).
+adversarial inputs.
+
+For disposable localhost Iceberg/MinIO and local DuckLake integration tests:
+
+```sh
+.venv/bin/python -m pip install -r test/integration/requirements.txt
+.venv/bin/python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL iceberg; INSTALL ducklake; INSTALL httpfs')"
+.venv/bin/python scripts/test_lakehouses.py
+```
+
+Ports 18181 and 19000 must be free. The runner removes its test containers and data
+afterward. Setup downloads images/extensions; catalog and storage operations are local.
+
+For coverage-guided native fuzzing with Docker:
+
+```sh
+python3 scripts/generate.py
+docker build -t gatekeeper-fuzz -f test/fuzz/Dockerfile test/fuzz
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" gatekeeper-fuzz --seconds 60
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint python3 gatekeeper-fuzz scripts/fuzz_sql.py --seconds 60
+```
+
+The first target exercises the AST walker/yyjson; the second builds DuckDB and
+exercises SQL parsing, typed options, and catalog binding. Corpus, logs, and crash
+artifacts stay in ignored `build/` directories. See the sanitizer scope in
+[security.md](docs/security.md#adversarial-regression-coverage).
 
 ## Maintaining defaults
 
