@@ -17,7 +17,7 @@ def validate(db, sql, policy):
 @pytest.fixture(params=["iceberg", "ducklake"])
 def lake(request, tmp_path):
     db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-    db.execute("LOAD '" + str(ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension") + "'")
+    db.execute("LOAD '" + str(ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension").replace("'", "''") + "'")
     kind = request.param
     if kind == "iceberg":
         import boto3

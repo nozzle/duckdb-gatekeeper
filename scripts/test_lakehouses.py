@@ -28,7 +28,13 @@ def main():
         env["GATEKEEPER_LAKEHOUSE_TESTS"] = "1"
         subprocess.run([sys.executable, "-m", "pytest", "test/integration", "-q"], cwd=root, env=env, check=True)
     finally:
-        subprocess.run(command + ["down", "--volumes"], check=True)
+        active_failure = sys.exc_info()[0] is not None
+        try:
+            subprocess.run(command + ["down", "--volumes"], check=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            if not active_failure:
+                raise
+            print(f"Lakehouse cleanup also failed: {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":
