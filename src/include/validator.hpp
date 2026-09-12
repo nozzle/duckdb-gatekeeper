@@ -1,5 +1,4 @@
 #pragma once
-#include "duckdb.hpp"
 #include "yyjson.hpp"
 #include <set>
 #include <tuple>

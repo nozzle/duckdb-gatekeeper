@@ -19,7 +19,7 @@ def main():
 
     build = root / "build/sanitized"
     subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DOVERRIDE_GIT_DESCRIBE=v1.5.5",
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF", "-DGATEKEEPER_SANITIZE=ON"], check=True)
     subprocess.run([tool("cmake"), "--build", str(build), "--target", "gatekeeper_loadable_extension", "--parallel", "4"], check=True)

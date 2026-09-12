@@ -1,6 +1,7 @@
 #include "validator.hpp"
 #include "grammar.hpp"
 #include "inventory.hpp"
+#include <map>
 #include <memory>
 #include <stdexcept>
 
