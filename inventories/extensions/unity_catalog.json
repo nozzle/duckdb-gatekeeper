@@ -1,0 +1,15 @@
+{
+  "name": "unity_catalog",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/unity_catalog.go",
+  "notes": [
+    "Source: https://github.com/duckdb/unity_catalog/tree/fd851475780ca064d9706a5025ea6e5d1d9d7e23"
+  ],
+  "compute": [],
+  "elevated": [
+    "__internal_delta_ccv2_commit_staged",
+    "table_data_path",
+    "unity_catalog_checkpoint_table",
+    "unity_catalog_force_checkpoint_table"
+  ]
+}

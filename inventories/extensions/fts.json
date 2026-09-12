@@ -1,0 +1,15 @@
+{
+  "name": "fts",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/fts.go",
+  "notes": [
+    "Source: https://github.com/duckdb/duckdb-fts/tree/6814ec9a7d5fd63500176507262b0dbf7cea0095"
+  ],
+  "compute": [
+    "stem"
+  ],
+  "elevated": [
+    "create_fts_index",
+    "drop_fts_index"
+  ]
+}

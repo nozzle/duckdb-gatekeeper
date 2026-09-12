@@ -1,0 +1,23 @@
+{
+  "name": "lance",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/lance.go",
+  "notes": [
+    "Source: https://github.com/lance-format/lance-duckdb/tree/2f167ea1aa8b1201c89d53740b84deb00aff680e"
+  ],
+  "compute": [],
+  "elevated": [
+    "__lance_cleanup_old_versions",
+    "__lance_compact_files",
+    "__lance_exec",
+    "__lance_namespace_scan",
+    "__lance_optimize_index",
+    "__lance_scan",
+    "__lance_set_auto_cleanup",
+    "__lance_show_auto_cleanup",
+    "__lance_truncate_table",
+    "lance_fts",
+    "lance_hybrid_search",
+    "lance_vector_search"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "odbc",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/odbc.go",
+  "notes": [
+    "Source: https://github.com/duckdb/odbc-scanner/tree/274a3307341dcafd62471c09b45c5d858d6c95cc"
+  ],
+  "compute": [],
+  "elevated": [
+    "odbc_begin_transaction",
+    "odbc_bind_params",
+    "odbc_close",
+    "odbc_commit",
+    "odbc_connect",
+    "odbc_copy",
+    "odbc_create_params",
+    "odbc_list_data_sources",
+    "odbc_list_drivers",
+    "odbc_query",
+    "odbc_rollback"
+  ]
+}

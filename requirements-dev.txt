@@ -1,0 +1,5 @@
+cmake==4.4.3
+ninja==1.13.2
+duckdb==1.5.5
+pytest==9.1.1
+clang-format==23.1.1

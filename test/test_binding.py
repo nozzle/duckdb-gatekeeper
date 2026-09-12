@@ -1,0 +1,116 @@
+import concurrent.futures
+import json
+
+import pytest
+import duckdb
+
+from test_gatekeeper import connect, db
+
+
+def validate(db, sql, options=None):
+    if options is None:
+        return db.execute("SELECT gatekeeper_validate(?)", [sql]).fetchone()[0]
+    return db.execute("SELECT gatekeeper_validate(?,?)", [sql,json.dumps(options)]).fetchone()[0]
+
+
+def test_resolves_unqualified_objects(db):
+    db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders(x INT); SET schema='reporting'")
+    assert validate(db,"SELECT sum(x) FROM orders",{"allowed_schemas":["reporting"]})["allowed"]
+    result=validate(db,"SELECT sum(x) FROM orders",{"allowed_schemas":["secret"]})
+    assert result["code"]=="forbidden"
+    assert validate(db,"SELECT * FROM orders",{"allowed_tables":[{"schema":"reporting","table":"orders"}]})["allowed"]
+    assert not validate(db,"SELECT * FROM orders",{"allowed_catalogs":[]})["allowed"]
+    assert validate(db,"SELECT * FROM orders",{"allowed_catalogs":["memory"]})["allowed"]
+
+
+def test_binding_errors_and_no_execution(db):
+    result=validate(db,"SELECT * FROM missing")
+    assert not result["allowed"] and result["code"]=="binding"
+    assert validate(db,"SELECT * FROM missing",{"resolve_objects":False})["allowed"]
+    db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
+    assert validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
+    assert db.execute("SELECT nextval('seq')").fetchone()==(1,)
+
+
+def test_trusted_views_and_macros(db):
+    db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
+    assert not validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["reporting"]})["allowed"]
+    assert validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["secret"]})["allowed"]
+    assert not validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_schemas":["reporting"]})["allowed"]
+    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_schemas":["secret"]})["allowed"]
+
+
+def test_attached_database_and_trusted_reader(db,tmp_path):
+    db.execute("ATTACH ':memory:' AS lake; CREATE TABLE lake.main.orders AS SELECT 1 AS x")
+    options={"allowed_catalogs":["lake"],"allowed_schemas":["main"],"allowed_tables":[{"catalog":"lake","schema":"main","table":"orders"}],"allow_table_functions":False}
+    assert validate(db,"SELECT * FROM lake.main.orders",options)["allowed"]
+    assert not validate(db,"SELECT * FROM lake.main.orders",{**options,"allowed_catalogs":["other"]})["allowed"]
+    path=str(tmp_path/'trusted.parquet').replace("'","''")
+    db.execute(f"COPY lake.main.orders TO '{path}' (FORMAT PARQUET)")
+    db.execute(f"CREATE VIEW lake.main.file_view AS SELECT * FROM read_parquet('{path}')")
+    assert validate(db,"SELECT * FROM lake.main.file_view",{"allowed_catalogs":["lake"],"allow_table_functions":False,"blocked_functions":["read_parquet"]})["allowed"]
+    assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]
+
+
+def test_defaults_shared_and_override_replaces(db):
+    db.execute("SELECT gatekeeper_configure(?)",[json.dumps({"blocked_functions":["md5"],"resolve_objects":False,"limits":{"max_statements":2}})])
+    with db.cursor() as other:
+        assert not validate(other,"SELECT md5('x')")["allowed"]
+        assert validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
+        assert validate(other,"SELECT 1;SELECT 2")["allowed"]
+        assert not validate(other,"SELECT 1;SELECT 2",{"limits":{"max_ast_depth":100}})["allowed"]
+        with pytest.raises(duckdb.Error):
+            other.execute("SELECT gatekeeper_configure('{}')")
+    with connect() as independent:
+        assert validate(independent,"SELECT md5('x')")["allowed"]
+
+
+def test_invalid_configuration_does_not_lock(db):
+    with pytest.raises(duckdb.Error):
+        db.execute("SELECT gatekeeper_configure('{\"unknown\":true}')")
+    assert db.execute("SELECT gatekeeper_configure('{}')").fetchone()==(True,)
+    with pytest.raises(duckdb.Error):
+        db.execute("SELECT gatekeeper_configure('{}')")
+
+
+def test_prepared_validation_observes_defaults(db):
+    db.execute("PREPARE v AS SELECT gatekeeper_validate('SELECT md5(''x'')')")
+    assert db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    db.execute("SELECT gatekeeper_configure('{\"blocked_functions\":[\"md5\"]}')")
+    assert not db.execute("EXECUTE v").fetchone()[0]["allowed"]
+
+
+def test_configuration_race(db):
+    def configure(i):
+        with db.cursor() as conn:
+            try:
+                conn.execute("SELECT gatekeeper_configure(?)",[json.dumps({"allowed_functions":[f"custom_{i}"]})])
+                return True
+            except duckdb.Error:
+                return False
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        assert sum(pool.map(configure,range(8)))==1
+
+
+def test_binding_preserves_temp_and_transaction_context(db):
+    db.execute("CREATE TEMP TABLE temp_t(x INT); BEGIN; CREATE TABLE uncommitted(x INT)")
+    assert validate(db,"SELECT * FROM temp_t")["allowed"]
+    assert validate(db,"SELECT * FROM uncommitted")["allowed"]
+    db.execute("ROLLBACK")
+    assert validate(db,"SELECT * FROM uncommitted")["code"]=="binding"
+
+
+def test_show_policy_is_preserved(db):
+    db.execute("CREATE TABLE t(x INT)")
+    assert not validate(db,"SHOW TABLES",{"allowed_tables":[]})["allowed"]
+    assert not validate(db,"SHOW ALL TABLES",{"allowed_schemas":["main"]})["allowed"]
+    assert validate(db,"SHOW TABLES FROM main",{"allowed_schemas":["main"]})["allowed"]
+
+
+def test_bound_cte_and_policy_override(db):
+    db.execute("CREATE TABLE secret(x INT)")
+    sql="SELECT * FROM secret WHERE EXISTS (WITH secret AS (SELECT 1) SELECT * FROM secret)"
+    assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
+    db.execute("SELECT gatekeeper_configure('{\"allowed_tables\":[],\"allowed_functions\":[\"custom\"]}')")
+    assert validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
+    assert validate(db,"SELECT mystery(1)",{"check_functions":False,"resolve_objects":False})["allowed"]

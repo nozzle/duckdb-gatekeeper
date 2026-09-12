@@ -1,0 +1,24 @@
+{
+  "name": "quack",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/quack.go",
+  "notes": [
+    "Source: https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0"
+  ],
+  "compute": [
+    "quack_check_token",
+    "quack_nop_authorization",
+    "quack_uri_parser"
+  ],
+  "elevated": [
+    "quack_active_connections",
+    "quack_clear_cache",
+    "quack_identify",
+    "quack_query",
+    "quack_query_by_name",
+    "quack_serve",
+    "quack_server_list",
+    "quack_stop",
+    "whoami"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "encodings",
+  "reviewed_duckdb": "1.5.5",
+  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/encodings.go",
+  "notes": [
+    "Source: https://github.com/duckdb/duckdb-encodings/tree/06295e77b13de65842992c82f14289ea679e4730"
+  ],
+  "compute": [],
+  "elevated": []
+}
