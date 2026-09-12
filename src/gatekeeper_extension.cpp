@@ -98,7 +98,9 @@ static unique_ptr<FunctionData> BindOptions(ClientContext &, ScalarFunction &fun
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires VARCHAR[]", name);
-			if (name == "allowed_tables" && actual.id() != LogicalTypeId::LIST)
+			if (name == "allowed_tables" &&
+			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
+			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("allowed_tables requires STRUCT[]");
 		}
 		// Preserve table-entry field sets rather than silently coercing away unknown fields.

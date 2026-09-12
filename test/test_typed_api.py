@@ -19,7 +19,8 @@ def test_named_prepared_and_row_varying_options(db):
 @pytest.mark.parametrize("args", [
     "'{}'", "resolve_objects := false", "unknown := true", "limits := {max_statements:1}",
     "check_functions := 'false'", "check_functions := 1", "max_statements := 1.5",
-    "allowed_functions := 'sum'", "allowed_functions := [1,2]",
+    "allowed_functions := 'sum'", "allowed_functions := [1,2]", "allowed_tables := [1]",
+    "allowed_tables := ['main.t']",
     "blocked_functions := [], blocked_functions := ['md5']",
 ])
 def test_rejected_signatures(db,args):
@@ -29,7 +30,7 @@ def test_rejected_signatures(db,args):
 
 @pytest.mark.parametrize("options", [
     {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":[""]},
-    {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema":"main","table":"t","extra":"x"}]},
+    {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema":"main","table":"t","extra":"x"}]},
     {"max_statements":0}, {"max_ast_nodes":-1},
 ])
 def test_invalid_typed_values(db,options):
