@@ -48,7 +48,7 @@ not every cloud catalog or credential-vending configuration.
 ```sh
 python scripts/generate.py
 docker build -t gatekeeper-fuzz -f test/fuzz/Dockerfile test/fuzz
-docker run --rm -v "$PWD:/work" gatekeeper-fuzz --seconds 60
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" gatekeeper-fuzz --seconds 60
 ```
 
 Or run `CXX=clang++ python scripts/fuzz_native.py --seconds 60` with a compiler that
@@ -61,8 +61,7 @@ It does not exercise DuckDB's SQL parser/binder or prove policy semantics. Those
 paths are covered separately by SQL tests and the instrumented-extension suite.
 Corpus files, crash artifacts, and logs are retained under ignored `build/fuzz/`.
 An initial 61-second campaign completed 4,120,745 executions without a sanitizer
-finding or invariant failure. Longer campaigns and stronger semantic oracles remain
-useful. A subsequent 181-second campaign completed 12,185,943 executions with no
+finding or invariant failure. A subsequent 181-second campaign completed 12,185,943 executions with no
 reported failure. The harness does not execute mutated SQL or contact services.
 Longer campaigns and stronger semantic oracles remain
 useful; this is not an independent security audit.

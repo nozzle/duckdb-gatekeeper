@@ -1,5 +1,6 @@
 import subprocess
 import importlib.util
+from types import SimpleNamespace
 
 import pytest
 
@@ -43,3 +44,25 @@ def test_cleanup_failure_fails_successful_run(monkeypatch):
     monkeypatch.setattr(runner.urllib.request, "urlopen", lambda *args, **kwargs: Response())
     with pytest.raises(subprocess.CalledProcessError):
         runner.main()
+
+
+def test_fixture_closes_connection_on_setup_failure(monkeypatch, tmp_path):
+    fixture_spec = importlib.util.spec_from_file_location("lakehouse_fixture", ROOT / "test/integration/test_lakehouses.py")
+    fixture = importlib.util.module_from_spec(fixture_spec)
+    fixture_spec.loader.exec_module(fixture)
+
+    class Connection:
+        closed = False
+
+        def execute(self, sql):
+            raise RuntimeError("LOAD failed")
+
+        def close(self):
+            self.closed = True
+
+    connection = Connection()
+    monkeypatch.setattr(fixture.duckdb, "connect", lambda **kwargs: connection)
+    generator = fixture.lake.__wrapped__(SimpleNamespace(param="ducklake"), tmp_path)
+    with pytest.raises(RuntimeError, match="LOAD failed"):
+        next(generator)
+    assert connection.closed

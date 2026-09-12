@@ -17,8 +17,14 @@ def validate(db, sql, policy):
 @pytest.fixture(params=["iceberg", "ducklake"])
 def lake(request, tmp_path):
     db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
+    try:
+        yield from initialize_lake(db, request.param, tmp_path)
+    finally:
+        db.close()
+
+
+def initialize_lake(db, kind, tmp_path):
     db.execute("LOAD '" + str(ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension").replace("'", "''") + "'")
-    kind = request.param
     if kind == "iceberg":
         import boto3
         s3 = boto3.client("s3", endpoint_url="http://127.0.0.1:19000", aws_access_key_id="gatekeeper-test", aws_secret_access_key="gatekeeper-local-only", region_name="us-east-1")
@@ -43,10 +49,7 @@ def lake(request, tmp_path):
     else:
         objects = s3.list_objects_v2(Bucket="warehouse").get("Contents", [])
         assert any(item["Key"].endswith(".parquet") for item in objects), "Iceberg must store backing Parquet data"
-    try:
-        yield db, schema, kind
-    finally:
-        db.close()
+    yield db, schema, kind
 
 
 def test_allowed_and_denied_tables(lake):

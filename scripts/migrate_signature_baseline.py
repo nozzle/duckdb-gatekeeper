@@ -1,4 +1,7 @@
-"""One-time baseline schema upgrade, verifying named-order is the only change."""
+"""Already-applied baseline migration, retained to test its verification invariant.
+
+Running this on the current baseline only verifies and rewrites the same schema.
+"""
 import json
 from collections import Counter
 from audit_inventory import capture

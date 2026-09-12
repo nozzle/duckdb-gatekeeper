@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   test:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

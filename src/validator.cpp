@@ -1,9 +1,11 @@
 #include "validator.hpp"
 #include "grammar.hpp"
 #include "inventory.hpp"
+#include <cstring>
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 namespace gatekeeper {
 using namespace duckdb_yyjson;
