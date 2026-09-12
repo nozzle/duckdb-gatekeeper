@@ -68,10 +68,10 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			policy.blocked_functions = Strings(value, true);
 		else if (name == "allowed_catalogs") {
 			policy.catalogs = true;
-			policy.allowed_catalogs = Strings(value, false);
+			policy.allowed_catalogs = Strings(value, true);
 		} else if (name == "allowed_schemas") {
 			policy.schemas = true;
-			policy.allowed_schemas = Strings(value, false);
+			policy.allowed_schemas = Strings(value, true);
 		} else if (name == "allowed_tables") {
 			if (value.type().id() != LogicalTypeId::LIST)
 				throw std::invalid_argument("allowed_tables requires a list of structs");
@@ -95,6 +95,7 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 					auto text = values[i].GetValue<std::string>();
 					if (text.empty() || text.find('\0') != std::string::npos)
 						throw std::invalid_argument("table identifiers must be nonempty and NUL-free");
+					text = Lower(text);
 					if (key == "catalog")
 						table.catalog = text;
 					if (key == "schema")

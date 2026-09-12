@@ -147,7 +147,8 @@ binding-time work. Read [security boundaries](docs/security.md) before integrati
 
 ## Building from source
 
-Requires Git, Python 3, and a C++17 compiler. The standard C++ template layout uses
+Requires Git, Python 3.10+, and a C++17 compiler. Install the pinned Python tooling
+in `requirements-dev.txt` (including JSON Schema validation). The standard C++ template layout uses
 pinned DuckDB and extension-ci-tools submodules.
 
 ```sh
@@ -192,7 +193,7 @@ For coverage-guided native fuzzing with Docker:
 
 ```sh
 python3 scripts/generate.py
-docker build -t gatekeeper-fuzz -f test/fuzz/Dockerfile test/fuzz
+docker build -t gatekeeper-fuzz -f test/fuzz/Dockerfile .
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" gatekeeper-fuzz --seconds 60
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint python3 gatekeeper-fuzz scripts/fuzz_sql.py --seconds 60
 ```

@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.15)
 project(gatekeeper)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    scripts/generate.py scripts/inventory.py ${INVENTORY_FILES})
+    scripts/generate.py scripts/inventory.py scripts/versions.py ${INVENTORY_FILES})
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
                 RESULT_VARIABLE GENERATE_RESULT)
 if(NOT GENERATE_RESULT EQUAL 0)

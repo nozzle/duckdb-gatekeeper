@@ -5,6 +5,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from versions import SUPPORTED_DUCKDB
 
 
 def main():
@@ -19,17 +20,17 @@ def main():
 
     build = root / "build/sanitized"
     subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DOVERRIDE_GIT_DESCRIBE=v1.5.5",
+                    "-DPython3_EXECUTABLE=" + sys.executable,
+                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF", "-DGATEKEEPER_SANITIZE=ON"], check=True)
     subprocess.run([tool("cmake"), "--build", str(build), "--target", "gatekeeper_loadable_extension", "--parallel", "4"], check=True)
     env = os.environ.copy()
     env["GATEKEEPER_EXTENSION"] = str(build / "extension/gatekeeper/gatekeeper.duckdb_extension")
-    env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
+    # Mixed instrumented/uninstrumented standard-library containers cross the ABI.
+    env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1:detect_container_overflow=0"
     env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
     if platform.system() == "Darwin":
-        # Python's uninstrumented libc++ containers cross into the instrumented extension.
-        env["ASAN_OPTIONS"] += ":detect_container_overflow=0"
         runtime = subprocess.check_output(["clang", "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime
     elif platform.system() == "Linux":

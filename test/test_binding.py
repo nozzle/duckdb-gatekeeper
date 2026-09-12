@@ -100,7 +100,9 @@ def test_show_policy_is_preserved(db):
     db.execute("CREATE TABLE t(x INT)")
     assert not validate(db,"SHOW TABLES",{"allowed_tables":[]})["allowed"]
     assert not validate(db,"SHOW ALL TABLES",{"allowed_schemas":["main"]})["allowed"]
-    assert validate(db,"SHOW TABLES FROM main",{"allowed_schemas":["main"]})["allowed"]
+    result = validate(db,"SHOW TABLES FROM main",{"allowed_schemas":["main"]})
+    assert result["code"] == "forbidden"
+    assert "internal_object" in {v["rule"] for v in result["violations"]}
 
 
 def test_bound_cte_and_policy_override(db):

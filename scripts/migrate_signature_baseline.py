@@ -1,11 +1,13 @@
 """Already-applied baseline migration, retained to test its verification invariant.
 
-Running this on the current baseline only verifies and rewrites the same schema.
+Running this on the current baseline verifies the same schema; --write is required to write.
 """
 import json
+import argparse
 from collections import Counter
 from audit_inventory import capture
 from inventory import ROOT
+from versions import BASELINE_FILENAME
 
 def verify_migration(old, new):
     if old["duckdb_version"] != new["duckdb_version"] or json.dumps(old["loaded_extensions"]) != json.dumps(new["loaded_extensions"]):
@@ -36,11 +38,17 @@ def verify_migration(old, new):
 
 
 def main():
-    path = ROOT / "inventories/baselines/duckdb-1.5.5.json"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write", action="store_true", help="write only after verifying unchanged signatures")
+    args = parser.parse_args()
+    path = ROOT / "inventories/baselines" / BASELINE_FILENAME
     old = json.loads(path.read_text())
     new = capture()
     verify_migration(old, new)
-    path.write_text(json.dumps(new, indent=2) + "\n")
+    if args.write:
+        path.write_text(json.dumps(new, indent=2) + "\n")
+    else:
+        print("Migration verified; dry run (pass --write to write the baseline)")
 
 
 if __name__ == "__main__":

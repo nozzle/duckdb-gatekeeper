@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from inventory import load
 from audit_inventory import compare, coverage
 from migrate_signature_baseline import verify_migration
+from versions import BASELINE_FILENAME
 
 
 def test_complete_default_inventory(db):
@@ -33,7 +34,7 @@ def test_nondefault_inventory(db):
 
 
 def test_audit_deltas():
-    baseline = json.loads((ROOT / "inventories/baselines/duckdb-1.5.5.json").read_text())
+    baseline = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
     candidate = json.loads(json.dumps(baseline))
     assert not any(compare(baseline, candidate).values())
     candidate["functions"].append({"name": "unreviewed_function", "parameters": []})
@@ -92,3 +93,30 @@ def test_migration_preserves_positional_prefix():
     ]}
     with pytest.raises(ValueError, match="Changed or ambiguous"):
         verify_migration(old, ambiguous)
+
+
+@pytest.mark.parametrize("sql, name", [
+    ("SELECT current_catalog()", "current_catalog"),
+    ("SELECT ago(INTERVAL 1 DAY)::VARCHAR", "ago"),
+    ("SELECT pg_catalog.pg_get_viewdef(0)", "pg_get_viewdef"),
+    ("SELECT * FROM histogram('t', x)", "histogram"),
+    ("SELECT * FROM histogram_values('t', x)", "histogram_values"),
+    ("SELECT list_aggregate([1,2], 'sum')", "list_aggregate"),
+])
+def test_reviewed_macro_and_dispatch_names(db, sql, name):
+    db.execute("CREATE TABLE t AS SELECT 1 x")
+    # Verify both the caller-authored serialized spelling and the pinned executable expansion.
+    serialized = json.loads(db.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
+    assert not serialized["error"]
+    def names(value):
+        if isinstance(value, dict):
+            return ({value["function_name"]} if "function_name" in value else set()).union(
+                *(names(child) for child in value.values()))
+        if isinstance(value, list):
+            return set().union(*(names(child) for child in value))
+        return set()
+    assert name in names(serialized)
+    db.execute(sql).fetchall()
+    result = check(db, sql)
+    assert result["code"] == "forbidden" and result["error_message"] == ""
+    assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"])

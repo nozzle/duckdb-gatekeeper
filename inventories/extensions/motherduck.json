@@ -4,7 +4,8 @@
   "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/motherduck.go",
   "notes": [
     "MotherDuck has no public source revision pinned by DuckDB 1.5.5. This elevated snapshot came from the",
-    "v1.5.5-2026-08-22 implementation binary with SHA-256 9a6a53fd5332ac188feb8410ed71b3d8f71822cbfaca8024aec18f2892bf0743."
+    "v1.5.5-2026-08-22 implementation binary with SHA-256 9a6a53fd5332ac188feb8410ed71b3d8f71822cbfaca8024aec18f2892bf0743.",
+    "Core registrations read_csv, read_csv_auto, read_text, read_blob, glob, sniff_csv, read_duckdb, pragma_storage_info, duckdb_table_sample and which_secret from this runtime snapshot are now classified in core.json against the pinned DuckDB source. Their presence here was not evidence of proprietary ownership; all remaining proprietary/runtime-only limitations above still apply."
   ],
   "compute": [],
   "elevated": [
@@ -20,10 +21,8 @@
     "__md_server_memory",
     "__md_storage_info",
     "__reset_user_environment",
-    "duckdb_table_sample",
     "embedding",
     "get_md_token",
-    "glob",
     "h3_are_neighbor_cells",
     "h3_cell_area",
     "h3_cell_to_boundary_wkb",
@@ -181,7 +180,6 @@
     "parquet_metadata",
     "parquet_scan",
     "parquet_schema",
-    "pragma_storage_info",
     "print_md_token",
     "prompt",
     "prompt_explain",
@@ -190,10 +188,6 @@
     "prompt_query",
     "prompt_schema",
     "prompt_sql",
-    "read_blob",
-    "read_csv",
-    "read_csv_auto",
-    "read_duckdb",
     "read_json",
     "read_json_auto",
     "read_json_objects",
@@ -202,9 +196,6 @@
     "read_ndjson_auto",
     "read_ndjson_objects",
     "read_parquet",
-    "read_text",
-    "sniff_csv",
-    "try_bind",
-    "which_secret"
+    "try_bind"
   ]
 }
