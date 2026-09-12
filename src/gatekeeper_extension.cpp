@@ -135,6 +135,7 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, CatalogEntry &entr
 
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const string &sql) {
 	gatekeeper::Result result;
+	bool binding = false;
 	try {
 		if (sql.find('\0') != string::npos)
 			throw InvalidInputException("SQL contains a NUL byte");
@@ -172,6 +173,7 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy);
 		if (!result.allowed)
 			return result;
+		binding = true;
 		for (auto &statement : parser.statements) {
 			auto binder = Binder::CreateBinder(context);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
@@ -200,10 +202,12 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			}
 		}
 	} catch (const std::invalid_argument &error) {
-		result.code = "invalid_input";
+		result.code = binding ? "binding" : "invalid_input";
 		result.error_message = error.what();
 	} catch (const InvalidInputException &error) {
-		result.code = "invalid_input";
+		result.code = binding ? "binding" : "invalid_input";
+		if (binding)
+			result.error_type = "Invalid Input";
 		result.error_message = ErrorData(error).RawMessage();
 	} catch (const Exception &error) {
 		ErrorData data(error);

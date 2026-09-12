@@ -110,3 +110,10 @@ def test_no_prebind_io_for_blocked_reader(db):
     assert result["code"]=="forbidden"
     assert result["violations"][0]["rule"]=="function"
     assert result["error_message"]==""
+
+
+def test_bind_callback_input_errors_have_binding_code(db):
+    result=validate(db,"SELECT map_concat(1)")
+    assert not result["allowed"] and result["code"]=="binding", result
+    result=validate(db,"SELECT 1",{"max_statements":0})
+    assert not result["allowed"] and result["code"]=="invalid_input", result
