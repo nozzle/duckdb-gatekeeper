@@ -22,7 +22,8 @@ updates:
       prefix: "ci"
 
   # requirements*.in are the edited inputs; the hashed requirements*.txt lock files are
-  # regenerated with pip-compile (Dependabot understands the pip-compile header).
+  # regenerated with uv pip compile --universal. Dependabot bumps pins and hashes in the
+  # lock files directly; rerun the compile command when an .in file changes.
   - package-ecosystem: "pip"
     directories:
       - "/"

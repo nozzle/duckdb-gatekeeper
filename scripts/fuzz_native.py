@@ -14,7 +14,6 @@ def main():
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
     root = Path(__file__).resolve().parents[1]
-    subprocess.run([sys.executable, str(root / "scripts/generate.py")], check=True)
     out = root / "build/fuzz"
     out.mkdir(parents=True, exist_ok=True)
     generated = out / "generated"

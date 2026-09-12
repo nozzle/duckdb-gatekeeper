@@ -170,10 +170,13 @@ the CLI. Generation derives the grammar from the exact pinned revision and compi
 reviewed inventories into the build tree; unsupported engine revisions are rejected at
 configure time, and the extension also refuses to load into any other DuckDB release.
 
-`requirements-dev.txt` and `test/integration/requirements.txt` are hash-pinned lock files
-generated from the matching `.in` files. Edit the `.in` file, then regenerate with
-`pip-compile --generate-hashes --strip-extras --allow-unsafe --output-file=<name>.txt <name>.in`
-(from `pip-tools`). Plain `pip install -r` verifies the hashes automatically.
+`requirements-dev.txt`, `requirements-inventory.txt`, and `test/integration/requirements.txt`
+are hash-pinned, platform-universal lock files generated from the matching `.in` files. Edit
+the `.in` file, then regenerate with
+`uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt <name>.in`
+(from [uv](https://docs.astral.sh/uv/)); the universal resolution keeps Windows-only and
+Python-version-conditional dependencies such as `colorama`. Plain `pip install -r` verifies
+the hashes automatically.
 
 The community-extension build path (`make release` with the pinned `extension-ci-tools`
 Makefile, then `make test_release` for the sqllogictests in `test/sql`) also works and is

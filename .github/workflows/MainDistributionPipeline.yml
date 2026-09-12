@@ -25,4 +25,6 @@ jobs:
       ci_tools_version: 72e76e99cd7fee45a99739cd118ec2db64e034ec
       # scripts/generate.py runs at configure time; the musl images only ship Python on request.
       extra_toolchains: python3
+      # Both musl targets are opt-in at this extension-ci-tools revision.
+      opt_in_archs: 'linux_amd64_musl;linux_arm64_musl'
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads'

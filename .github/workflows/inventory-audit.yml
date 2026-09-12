@@ -18,7 +18,7 @@ jobs:
       - name: Install candidate
         env:
           VERSION: ${{ inputs.duckdb_version }}
-        run: python -m pip install -r requirements-inventory.txt "duckdb==$VERSION"
+        run: python -m pip install --require-hashes -r requirements-inventory.txt && python -m pip install "duckdb==$VERSION"
       - run: python scripts/audit_inventory.py --capture build/candidate.json
       - run: python scripts/audit_inventory.py --candidate build/candidate.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

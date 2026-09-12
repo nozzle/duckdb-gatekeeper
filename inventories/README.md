@@ -75,21 +75,22 @@ Every supported **major/minor update** requires this process; run it on patches 
 ## Repinning the engine
 
 `scripts/generate.py` refuses to run against any DuckDB checkout other than
-`PINNED_REVISION`, and `LoadInternal` refuses to load into any other DuckDB release. This
+`SUPPORTED_DUCKDB_REVISION`, and `LoadInternal` refuses to load into any other DuckDB
+release. This
 is deliberate fail-closed behavior: the grammar is derived from the serializer of exactly
 that revision. It also means the community repository's bulk rebuild for the next DuckDB
 release fails at configure time until Gatekeeper is repinned. To repin, update together:
 
-- the `duckdb` submodule and `PINNED_REVISION` in `scripts/generate.py`;
+- the `duckdb` submodule and `SUPPORTED_DUCKDB`/`SUPPORTED_DUCKDB_REVISION` in
+  `scripts/versions.py` (consumed by generation, the build scripts, and the audit);
 - `SUPPORTED_DUCKDB_VERSION` in `src/gatekeeper_extension.cpp`;
-- `OVERRIDE_GIT_DESCRIBE` in `Makefile`, `scripts/build.py`, `scripts/test_sanitized.py`,
-  `scripts/fuzz_sql.py`, and `.github/workflows/test.yml`;
+- `OVERRIDE_GIT_DESCRIBE` in `Makefile` and `.github/workflows/test.yml`;
 - `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
   `v1.5-variegata` rather than tagging patch releases);
 - the `duckdb` pin in `requirements-dev.in`, the regenerated hashed lock files, the fuzz
-  image, and the inventory version literal and baseline described above.
+  image, and the baseline described above.
 
 The CI audit runs on every push/PR. A manually dispatched candidate-version job
 captures and uploads a report against the existing baseline, deliberately failing
