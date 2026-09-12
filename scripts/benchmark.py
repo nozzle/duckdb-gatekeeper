@@ -23,10 +23,9 @@ def main():
         }
         for name, query in queries.items():
             times = []
-            options = json.dumps({"allowed_schemas": ["tenant_a"]})
             for iteration in range(args.iterations + 20):
                 start = time.perf_counter_ns()
-                result = db.execute("SELECT gatekeeper_validate(?, ?)", [query, options]).fetchone()[0]
+                result = db.execute("SELECT gatekeeper_validate(?, allowed_schemas := ?)", [query, ["tenant_a"]]).fetchone()[0]
                 elapsed = time.perf_counter_ns() - start
                 assert result["allowed"], result
                 if iteration >= 20:

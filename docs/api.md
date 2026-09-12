@@ -1,190 +1,180 @@
 # API reference
 
-`gatekeeper_validate(sql[, options])` returns:
+```sql
+gatekeeper_validate(sql VARCHAR, option := value, ...)
+gatekeeper_configure(option := value, ...)
+```
+
+Options are named, native DuckDB values, not JSON. Unknown names, duplicate names,
+unnamed options, and incompatible types raise binder errors. Runtime invalid values
+and NULL validation inputs return `invalid_input`. Configuration errors raise a
+DuckDB error. There is no `resolve_objects` option or public syntax-only function.
+All successful validation includes binding on the calling connection.
+
+## Result
+
+Validation returns a STRUCT:
 
 ```text
-STRUCT(
-  allowed BOOLEAN,
-  code VARCHAR,
-  violations VARCHAR[],
-  error_type VARCHAR,
-  error_message VARCHAR
-)
+allowed BOOLEAN
+code VARCHAR
+violations STRUCT(
+  rule VARCHAR, message VARCHAR, catalog VARCHAR, schema VARCHAR,
+  table VARCHAR, function_name VARCHAR, position BIGINT
+)[]
+error_type VARCHAR
+error_message VARCHAR
+position BIGINT
 ```
 
-Only `allowed = true` with `code = 'ok'` is success. Policy violations are sorted
-and deduplicated; repeated blocked function calls include their occurrence count.
-Parser diagnostics use `error_type` and `error_message`. Empty strings indicate
-no diagnostic. Codes are `ok`, `forbidden`, `unsupported`, `parser`,
-`invalid_input`, and `binding`. Binding errors include missing objects/columns and
-reader errors encountered during resolution. Resource failures and unexpected internal errors may raise a
-DuckDB error rather than produce a row; callers must treat these as rejection.
+Only `allowed = true` and `code = 'ok'` indicate success. Codes are `ok`,
+`forbidden`, `unsupported`, `parser`, `binding`, and `invalid_input`. Rule identifiers
+include `function`, `catalog`, `schema`, `table`, `dynamic_sql`, `table_function`,
+`recursive_cte`, `file_table`, `replacement_scan`, `statement`, `limit`, and
+`unsupported_structure`. Consumers should use these fields rather than parse messages.
+Repeated function violations include occurrence counts in the message. Absent object
+identifiers are empty strings. Positions are zero-based parser byte offsets when
+available, otherwise NULL; resolved-object positions may be unavailable.
 
-Unknown keys, duplicate keys, unexpected JSON types, empty name entries, and
-inconsistent allowlist options produce `invalid_input`. Names containing `*`
-are literal names; no wildcard matching is performed. The multiplication operator
-can be blocked with `"blocked_functions":["*"]` without blocking other functions.
+Resource and unexpected execution errors can raise exceptions instead of returning
+a result. Callers must reject exceptions, NULL/missing results, and unknown codes.
 
-## Functions
+## Function options
 
-| Option | Default | Semantics |
+| Option | Type | Built-in default |
 | --- | --- | --- |
-| `check_functions` | `true` | Enable allowlist enforcement. False leaves blocklist enforcement active. |
-| `use_default_functions` | `true` when checking functions | Include reviewed built-ins/operators and core-extension compute functions. |
-| `allowed_functions` | `[]` | Add exact function names. |
-| `blocked_functions` | `[]` | Reject exact function names, regardless of defaults/additions. |
+| `check_functions` | BOOLEAN | true |
+| `use_default_functions` | BOOLEAN | true when allowlisting |
+| `allowed_functions` | VARCHAR[] | [] |
+| `blocked_functions` | VARCHAR[] | [] |
 
-Function names are ASCII case-folded. Policies match leaf names irrespective of
-schema/catalog qualification; independent catalog policy still applies. Blocks
-win in both allowlist and blocklist-only modes. `check_functions:false` implicitly
-disables defaults unless explicitly set; explicitly enabling defaults or supplying
-allowlist additions in that mode is an error.
+Defaults contain the reviewed compute inventories. `allowed_functions` adds exact
+names; `blocked_functions` wins over defaults and additions in all modes. Functions
+are ASCII case-folded by leaf name. `*` is the literal multiplication operator, not
+a wildcard. Empty names, embedded NULs, and NULL list members are invalid.
 
-```json
-{"allowed_functions":["my_function"],"blocked_functions":["md5"]}
+```sql
+SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']);
+SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']);
+SELECT gatekeeper_validate('SELECT 1', check_functions := false, blocked_functions := ['read_parquet']);
 ```
 
-```json
-{"use_default_functions":false,"allowed_functions":["sum","avg","+"]}
+Turning off `check_functions` implicitly disables inherited allowlist defaults and
+additions unless explicitly supplied; conflicting explicit allowlist options fail.
+Turning it on restores built-in defaults unless `use_default_functions` is specified.
+Explicit readers are governed by function policy; admitting a reader permits its
+resource access, not an argument-level sandbox. Inventories live in
+[`inventories/`](../inventories/README.md) and do not load extensions.
+
+## Object options
+
+| Option | Type | Omitted | [] |
+| --- | --- | --- | --- |
+| `allowed_catalogs` | VARCHAR[] | Unrestricted catalogs | Deny catalog objects |
+| `allowed_schemas` | VARCHAR[] | Unrestricted schemas | Deny schema objects |
+| `allowed_tables` | STRUCT[] | Unrestricted objects | Deny tables and views |
+
+Table structs require nonempty `schema` and `table` strings; optional `catalog` may
+be omitted or NULL. An omitted catalog matches that schema/name in any catalog.
+No wildcard or dotted-string parsing is performed. Unknown table fields are invalid.
+Use `allowed_catalogs` or explicit entry catalogs to constrain cross-catalog access.
+
+```sql
+SELECT gatekeeper_validate(
+  'SELECT * FROM reporting.orders',
+  allowed_schemas := ['reporting'],
+  allowed_tables := [{schema: 'reporting', 'table': 'orders'}]
+);
 ```
 
-```json
-{"check_functions":false,"blocked_functions":["read_parquet"]}
-```
+Object names compare exactly, case-sensitively, against resolved catalog identities.
+Caller-provided catalog qualifiers are checked before binding too. Missing catalog
+or schema qualifiers are resolved using the caller's search path and transaction.
 
-Defaults are maintained in `inventories/core.json` and per-extension files under
-`inventories/extensions/`. Compute groups are compiled in; elevated and unreviewed
-groups remain excluded. See [the inventory update workflow](../inventories/README.md). They do not load
-extensions. Keyword forms such as CURRENT_DATE are not explicit function calls.
+**Views and their underlying tables must both pass.** A file-backed view with no
+physical table callbacks must still be explicitly authorized by its own identity.
+Trusted view/macro and attached-table implementation functions are not subjected
+to caller-facing function policies again. Attached Iceberg/DuckLake tables are
+authorized at their logical catalog/schema/table identity, not their backing files.
 
-## Catalogs, schemas, tables
+Explicit admitted table functions are capabilities, not catalog table permissions;
+an empty `allowed_tables` does not prohibit `range()`. Dynamic lookup functions,
+when explicitly enabled and admitted, must still pass catalog callbacks for objects
+they resolve. Host-language/implicit replacement scans are rejected because their
+identity is not a trustworthy catalog object. Prefer explicit admitted readers or
+trusted catalog objects. This includes file replacements even if the syntactic
+file-reference flag is enabled; that flag alone cannot grant resolved authorization.
 
-`resolve_objects` defaults to `true`. After caller-facing syntax checks pass,
-Gatekeeper binds statements on the calling connection and checks retrieved table
-catalog entries, including unqualified references and tables behind trusted views
-and macros. No query plan is executed. Set it to `false` for syntax-only validation.
+Schema-wide SHOW is rejected with a table policy. SHOW/DESCRIBE may also involve
+system views, which must pass object policy. This API does not filter metadata rows.
 
-In resolved mode, `allowed_catalogs:[]` rejects every resolved physical table.
-A table entry without `catalog` matches that schema/table in any resolved catalog;
-use `allowed_catalogs` or a table-entry catalog to narrow it. Names are compared
-with actual catalog entries. View names are not physical-table permissions:
-underlying tables must pass. Explicit caller catalog qualifiers are also checked
-before binding. The following qualification-specific rules describe syntax-only mode.
+## Capability options
 
-Trusted catalog code and attached tables can use internal readers regardless of
-caller function policies. The logical table is the authorization boundary.
-Tests cover attached DuckDB tables, Parquet-backed views, a local Iceberg REST
-catalog with MinIO, and DuckLake. Binding may perform I/O even when later rejected.
-
-| Option | Omitted | Empty array |
+| Option | Type | Default |
 | --- | --- | --- |
-| `allowed_catalogs` | No restriction on explicit catalog names | Reject all explicit catalog-qualified references |
-| `allowed_schemas` | No schema restriction | Reject all physical table references |
-| `allowed_tables` | No table restriction | Reject all physical table references |
+| `allow_recursive_ctes` | BOOLEAN | true |
+| `allow_table_functions` | BOOLEAN | true |
+| `allow_dynamic_sql` | BOOLEAN | false |
+| `allow_file_table_references` | BOOLEAN | false; opt-in for real catalog objects with file-shaped names, not replacement-scan authorization |
 
-Catalog/schema/table names use exact case-sensitive string matching. This is
-conservative compared with DuckDB's case-insensitive binding; match the spelling
-used in submitted SQL. All configured policies intersect. Object policies do not
-restrict functions by their schema: function policy is separate.
+Permissions intersect: allowing a function does not override capability restrictions.
+Dynamic SQL covers table calls to `query`, `query_table`, and
+`json_execute_serialized_sql`, plus explicit `json_serialize_plan` calls. This is a
+reviewed inventory, not recognition of arbitrary application functions.
 
-Table entries require nonempty `schema` and `table`, and optionally `catalog`:
+File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
+`.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,
+`.shp`, `.gpkg`, or `.fgb` (case-insensitively). Each suffix followed by `?` anywhere
+in the name is also caught, covering DuckDB's query/glob-marker forms. Quoted
+physical object names with those shapes also require opt-in. Scoped CTE references
+are exempt. DDL/DML and unsupported AST structures are always rejected.
 
-```json
-{
-  "allowed_catalogs":["analytics"],
-  "allowed_schemas":["reporting"],
-  "allowed_tables":[
-    {"catalog":"analytics","schema":"reporting","table":"orders"},
-    {"schema":"reporting","table":"customers"}
-  ]
-}
-```
-
-An omitted table-entry catalog matches only references without explicit catalogs.
-Allowed catalogs check explicit table, function, and SHOW qualifiers; missing
-catalogs are not resolved against the execution connection. Unqualified physical
-tables fail enabled schema/table policies. Schema-qualified CTE-like names are
-physical references. Ordinary CTEs are visible only in their query and later CTE
-declarations; recursive self-reference is permitted only in the recursive term.
-CTEs cannot grant exemptions across statements or outside their scope.
-
-SHOW requires an explicit allowed schema when schema policy is configured.
-Schema-wide SHOW is denied whenever a table allowlist is configured. DESCRIBE and
-SUMMARIZE with nested queries validate their physical references normally.
-
-## Capabilities
-
-| Option | Default | Semantics |
-| --- | --- | --- |
-| `allow_recursive_ctes` | `true` | Permit supported recursive CTEs. |
-| `allow_table_functions` | `true` | Permit table functions that pass all other policies. |
-| `allow_dynamic_sql` | `false` | Permit reviewed dynamic SQL/table lookup names, subject to function policy. |
-| `allow_file_table_references` | `false` | Permit file-shaped physical table references. |
-
-Dynamic SQL currently covers table use of `query`, `query_table`, and
-`json_execute_serialized_sql`, and explicit `json_serialize_plan` calls. It is a
-reviewed inventory, not recognition of arbitrary application executors. Disabling
-the allowlist does not override this restriction.
-
-File-shaped references include names with `/`, `\`, or `://`, and names ending
-case-insensitively in `.parquet`, `.csv`, `.tsv`, `.json`, `.jsonl`, `.ndjson`, `.gz`,
-`.zst`, or `.xlsx`. Quoted identifiers with those shapes are rejected too. Scoped
-CTE references are exempt because they do not resolve to files. This is not a
-complete replacement-scan detector: host-language objects and new formats require
-separate controls. There is no wildcard interpretation of a filename.
-
-DDL/DML and unknown AST structures are always rejected. No option enables writes.
-
-## Direct readers
-
-Explicit `read_parquet`, `read_csv`, and other reader calls are governed by function
-policy. Their elevated classifications exclude them from defaults. Admitting a
-reader delegates its resource access to the application; no local/remote argument
-validation is performed. The former `reader_paths` option is rejected as unknown.
-Trusted attached-table implementations may read backing files after their logical
-catalog/schema/table identity is authorized. `allow_file_table_references` still
-controls caller-written file-shaped table references separately.
+Replacement scans are collected during binding and rejected afterward, not before
+their bind callbacks. This preflight filename inventory stops the reviewed forms
+by default, but custom replacements can still perform I/O before rejection.
+Enabling `allow_file_table_references` permits that pre-rejection binding work even
+for known file-shaped names. It never makes an implicit file scan valid; use an
+explicit admitted reader for file access. Shared connection configuration is not
+temporarily modified by this scalar function.
 
 ## Limits
 
-```json
-{
-  "limits": {
-    "max_statements": 1,
-    "max_ast_bytes": 8388608,
-    "max_ast_nodes": 100000,
-    "max_ast_depth": 512
-  }
-}
-```
+Limits are independent named integer arguments; omitted ones inherit defaults.
 
-All values are positive integers. `max_statements` may increase to 1000. Other
-defaults are hard ceilings and may only be lowered. Empty SQL is rejected. Options
-JSON has a fixed 1 MiB ceiling. `max_ast_bytes` also bounds SQL text before parsing;
-the serialized AST bound is checked after serialization. Node/depth budgets apply
-to validation traversal, treating opaque literal/type metadata as data. These are
-not engine execution budgets and do not bound the cost of parsing a pathological
-query below the byte limit. Use server deadlines and process resource limits too.
+| Option | Default / maximum |
+| --- | --- |
+| `max_statements` | 1 / 1000 |
+| `max_ast_bytes` | 8388608 |
+| `max_ast_nodes` | 100000 |
+| `max_ast_depth` | 512 |
 
-## One-time database defaults
+Values must be positive integers. Floating-point/boolean values are not coerced.
+Empty SQL is rejected. AST bytes also bound SQL input before parsing. Serialization
+and binder work occur before some limits can be checked; these are not execution
+budgets or a complete resource-exhaustion defense. Limit violations use `forbidden`
+with rule `limit`, separate from unsupported syntax.
+
+## Database defaults and parameters
 
 ```sql
-SELECT gatekeeper_configure('{"blocked_functions":["md5"],"limits":{"max_statements":2}}');
-SELECT gatekeeper_validate('SELECT md5(''x'')', '{"blocked_functions":[]}');
+SELECT gatekeeper_configure(blocked_functions := ['md5'], max_statements := 2);
+SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []);
 ```
 
-`gatekeeper_configure(options VARCHAR)` returns true or raises a DuckDB error.
-Invalid input does not consume the one-time slot; subsequent successful configuration
-attempts are rejected. Concurrent attempts serialize and exactly one succeeds.
-Submit a single-row bootstrap call. There is no reset command.
+Configuration is one-time per database instance, shared across connections, not
+durable or transactional. There is no reset; invalid configuration leaves the slot
+available. Request lists replace configured lists; each limit overrides independently.
+Defaults may be relaxed by requests, so the application must control who supplies them.
 
-Defaults are shared across connections in one database instance and disappear when
-it closes. They are not persisted or transactional. Validation uses a consistent
-snapshot per input chunk. Prepared validation queries observe defaults at execution.
+Prepared arguments and per-row options are supported:
 
-Omitted request fields inherit defaults. Present fields replace the whole value,
-including lists and the entire `limits` object; missing limit members then use
-built-in values. `check_functions:false` implicitly disables inherited allowlist
-defaults/additions unless explicitly supplied. `check_functions:true` restores
-built-in function defaults unless `use_default_functions` is supplied explicitly.
-Overrides can relax restrictions: this is configuration convenience, not enforcement.
+```python
+decision = db.execute(
+    "SELECT gatekeeper_validate(?, allowed_schemas := ?, blocked_functions := ?)",
+    [sql, ["reporting"], ["md5"]],
+).fetchone()[0]
+```
+
+Options are decoded directly from DuckDB values; no JSON encoding or unescaping is
+performed. Binder errors for malformed API calls are distinct from a `binding`
+result describing invalid submitted SQL.

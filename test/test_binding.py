@@ -5,12 +5,7 @@ import pytest
 import duckdb
 
 from test_gatekeeper import connect, db
-
-
-def validate(db, sql, options=None):
-    if options is None:
-        return db.execute("SELECT gatekeeper_validate(?)", [sql]).fetchone()[0]
-    return db.execute("SELECT gatekeeper_validate(?,?)", [sql,json.dumps(options)]).fetchone()[0]
+from typed_helpers import validate, configure
 
 
 def test_resolves_unqualified_objects(db):
@@ -26,7 +21,8 @@ def test_resolves_unqualified_objects(db):
 def test_binding_errors_and_no_execution(db):
     result=validate(db,"SELECT * FROM missing")
     assert not result["allowed"] and result["code"]=="binding"
-    assert validate(db,"SELECT * FROM missing",{"resolve_objects":False})["allowed"]
+    with pytest.raises(duckdb.BinderException, match="unknown option"):
+        validate(db,"SELECT * FROM missing",{"resolve_objects":False})
     db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
     assert validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
     assert db.execute("SELECT nextval('seq')").fetchone()==(1,)
@@ -35,7 +31,7 @@ def test_binding_errors_and_no_execution(db):
 def test_trusted_views_and_macros(db):
     db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
     assert not validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["reporting"]})["allowed"]
-    assert validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["secret"]})["allowed"]
+    assert validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["reporting","secret"]})["allowed"]
     assert not validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_schemas":["reporting"]})["allowed"]
     assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_schemas":["secret"]})["allowed"]
 
@@ -53,43 +49,43 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
 
 
 def test_defaults_shared_and_override_replaces(db):
-    db.execute("SELECT gatekeeper_configure(?)",[json.dumps({"blocked_functions":["md5"],"resolve_objects":False,"limits":{"max_statements":2}})])
+    configure(db,{"blocked_functions":["md5"],"max_statements":2})
     with db.cursor() as other:
         assert not validate(other,"SELECT md5('x')")["allowed"]
         assert validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
         assert validate(other,"SELECT 1;SELECT 2")["allowed"]
-        assert not validate(other,"SELECT 1;SELECT 2",{"limits":{"max_ast_depth":100}})["allowed"]
+        assert validate(other,"SELECT 1;SELECT 2",{"max_ast_depth":100})["allowed"]
         with pytest.raises(duckdb.Error):
-            other.execute("SELECT gatekeeper_configure('{}')")
+            configure(other)
     with connect() as independent:
         assert validate(independent,"SELECT md5('x')")["allowed"]
 
 
 def test_invalid_configuration_does_not_lock(db):
     with pytest.raises(duckdb.Error):
-        db.execute("SELECT gatekeeper_configure('{\"unknown\":true}')")
-    assert db.execute("SELECT gatekeeper_configure('{}')").fetchone()==(True,)
+        configure(db,{"unknown":True})
+    assert configure(db) is True
     with pytest.raises(duckdb.Error):
-        db.execute("SELECT gatekeeper_configure('{}')")
+        configure(db)
 
 
 def test_prepared_validation_observes_defaults(db):
     db.execute("PREPARE v AS SELECT gatekeeper_validate('SELECT md5(''x'')')")
     assert db.execute("EXECUTE v").fetchone()[0]["allowed"]
-    db.execute("SELECT gatekeeper_configure('{\"blocked_functions\":[\"md5\"]}')")
+    configure(db,{"blocked_functions":["md5"]})
     assert not db.execute("EXECUTE v").fetchone()[0]["allowed"]
 
 
 def test_configuration_race(db):
-    def configure(i):
+    def attempt(i):
         with db.cursor() as conn:
             try:
-                conn.execute("SELECT gatekeeper_configure(?)",[json.dumps({"allowed_functions":[f"custom_{i}"]})])
+                configure(conn,{"allowed_functions":[f"custom_{i}"]})
                 return True
             except duckdb.Error:
                 return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        assert sum(pool.map(configure,range(8)))==1
+        assert sum(pool.map(attempt,range(8)))==1
 
 
 def test_binding_preserves_temp_and_transaction_context(db):
@@ -111,6 +107,6 @@ def test_bound_cte_and_policy_override(db):
     db.execute("CREATE TABLE secret(x INT)")
     sql="SELECT * FROM secret WHERE EXISTS (WITH secret AS (SELECT 1) SELECT * FROM secret)"
     assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
-    db.execute("SELECT gatekeeper_configure('{\"allowed_tables\":[],\"allowed_functions\":[\"custom\"]}')")
+    configure(db,{"allowed_tables":[],"allowed_functions":["custom"]})
     assert validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
-    assert validate(db,"SELECT mystery(1)",{"check_functions":False,"resolve_objects":False})["allowed"]
+    assert validate(db,"SELECT mystery(1)",{"check_functions":False})["code"]=="binding"

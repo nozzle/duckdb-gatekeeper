@@ -13,12 +13,7 @@ def test_readme_sql_examples(db):
         rows = db.execute(block).fetchall()
         if rows:
             observed.append(rows)
-    assert observed[1][0][0]["allowed"] is True
-    assert observed[2] == [(False,)]
-    assert observed[3] == [("binding",)]
-    assert observed[4] == [(True,)]
-    assert observed[5] == [(["function is not allowed: md5"],)]
-    assert observed[6:] == [[(True,)], [(True,)], [(True,)]]
+    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(True,)]]
 
 
 def test_documentation_links():

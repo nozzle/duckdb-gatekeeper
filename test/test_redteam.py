@@ -5,6 +5,7 @@ import pytest
 
 from test_binding import validate
 from test_gatekeeper import db
+from typed_helpers import configure
 
 
 @pytest.mark.parametrize("sql,options", [
@@ -89,7 +90,7 @@ def test_function_hidden_positions(catalog, expression):
     result = validate(catalog, f"SELECT {expression} FROM allowed.t", {"blocked_functions": ["md5"]})
     assert not result["allowed"], result
     assert result["code"] == "forbidden"
-    assert any("md5" in message for message in result["violations"])
+    assert any(v["function_name"]=="md5" for v in result["violations"])
 
 
 @pytest.mark.parametrize("options", [
@@ -110,9 +111,9 @@ def test_function_hidden_positions(catalog, expression):
     '{"check_functions":false} trailing',
 ])
 def test_policy_parser_confusion(db, options):
-    result = db.execute("SELECT gatekeeper_validate('SELECT 1',?)", [options]).fetchone()[0]
-    assert result["allowed"] is False, result
-    assert result["code"] == "invalid_input"
+    import duckdb
+    with pytest.raises(duckdb.BinderException, match="named typed arguments"):
+        db.execute("SELECT gatekeeper_validate('SELECT 1',?)", [options])
 
 
 def test_preflight_denies_before_reader_binding(db):
@@ -124,7 +125,7 @@ def test_preflight_denies_before_reader_binding(db):
 
 
 def test_opt_out_is_not_sticky(catalog):
-    catalog.execute("SELECT gatekeeper_configure('{\"blocked_functions\":[\"md5\"],\"allowed_schemas\":[\"allowed\"]}')")
+    configure(catalog,{"blocked_functions":["md5"],"allowed_schemas":["allowed"]})
     assert validate(catalog, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
     assert not validate(catalog, "SELECT md5('x')")["allowed"]
     assert validate(catalog, "SELECT * FROM secret.t", {"allowed_schemas": ["secret"]})["allowed"]
@@ -132,9 +133,8 @@ def test_opt_out_is_not_sticky(catalog):
 
 
 def test_catalog_changes_rechecked(catalog):
-    options = json.dumps({"allowed_schemas": ["allowed"]})
     catalog.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    catalog.execute("PREPARE validation AS SELECT gatekeeper_validate('SELECT * FROM allowed.changing'," + "'" + options + "')")
+    catalog.execute("PREPARE validation AS SELECT gatekeeper_validate('SELECT * FROM allowed.changing',allowed_schemas := ['allowed'])")
     assert catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
     catalog.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
     assert not catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
@@ -168,12 +168,12 @@ def test_trusted_implementation_is_not_caller_code(catalog):
 def test_validation_cannot_execute_configuration(db):
     result = validate(db, "SELECT gatekeeper_configure('{}')")
     assert not result["allowed"] and result["code"] == "forbidden"
-    assert db.execute("SELECT gatekeeper_configure('{}')").fetchone() == (True,)
+    assert configure(db) is True
 
 
 def test_mixed_batch_rejected_before_binding(catalog):
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
-    result = validate(catalog, sql, {"limits": {"max_statements": 2}, "check_functions": False})
+    result = validate(catalog, sql, {"max_statements": 2, "check_functions": False})
     assert not result["allowed"] and result["code"] == "unsupported"
     assert catalog.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
@@ -186,7 +186,7 @@ def test_mixed_batch_rejected_before_binding(catalog):
     "WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d",
 ])
 def test_write_smuggling(db, sql):
-    result = validate(db, sql, {"limits": {"max_statements": 10}, "check_functions": False, "allow_dynamic_sql": True})
+    result = validate(db, sql, {"max_statements": 10, "check_functions": False, "allow_dynamic_sql": True})
     assert not result["allowed"]
     assert result["code"] in {"parser", "unsupported"}
 

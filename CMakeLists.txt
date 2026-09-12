@@ -14,12 +14,22 @@ endif()
 include_directories(src/include ${CMAKE_CURRENT_SOURCE_DIR}/generated
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/extension/json/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/third_party/yyjson/include)
-set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/validator.cpp
+set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/options.cpp src/validator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/extension/json/json_serializer.cpp)
 build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
 target_link_libraries(gatekeeper_extension duckdb_yyjson)
 target_link_libraries(gatekeeper_loadable_extension duckdb_yyjson)
+option(GATEKEEPER_FUZZ "Build SQL/typed-option libFuzzer target (Clang required)" OFF)
+if(GATEKEEPER_FUZZ)
+  add_executable(gatekeeper_sql_fuzz test/fuzz/sql_options_fuzz.cpp)
+  target_compile_options(gatekeeper_sql_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize=vptr)
+  target_link_options(gatekeeper_sql_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize=vptr)
+  target_link_libraries(gatekeeper_sql_fuzz duckdb)
+  foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
+    target_compile_options(${TARGET} PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize=vptr)
+  endforeach()
+endif()
 option(GATEKEEPER_SANITIZE "Instrument Gatekeeper with address/undefined behavior sanitizers" OFF)
 if(GATEKEEPER_SANITIZE)
   foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)

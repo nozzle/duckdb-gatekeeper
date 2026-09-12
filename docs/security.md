@@ -21,9 +21,9 @@ local to each scalar call. All effective restrictions intersect and blocks win.
 
 ## Remaining boundaries
 
-- Default validation binds on the calling connection and authorizes retrieved table
-  identities, including underlying tables from views/macros. Syntax-only mode does
-  not provide those checks. Function policies do not verify which macro/UDF implements
+- Validation always binds on the calling connection and authorizes retrieved table
+  and view identities, including underlying objects from views/macros. No public
+  syntax-only mode exists. Function policies do not verify which macro/UDF implements
   a name; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
@@ -36,8 +36,12 @@ local to each scalar call. All effective restrictions intersect and blocks win.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
-- File-reference detection is conservative and incomplete; ordinary host-language
-  replacement scans cannot be inferred from SQL AST alone.
+- File-reference detection is conservative and incomplete. Binder-collected
+  host-language and implicit replacement scans are rejected as unsupported; explicit
+  admitted readers and trusted catalog objects are the supported access paths.
+  Collection does not prevent bind-time I/O. Known filename/query-marker forms are
+  denied by preflight unless opted in; custom replacements and opted-in references
+  can access resources before the later rejection.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.
@@ -86,3 +90,11 @@ DuckDB engine and bundled yyjson library were not sanitizer-instrumented. Leak
 detection and vptr checks were disabled for this mixed-runtime setup. This is
 regression testing, not coverage-guided fuzzing or a full engine memory-safety audit.
 Run `.venv/bin/python scripts/test_sanitized.py` to reproduce the instrumented suite.
+
+The linked SQL/typed-option fuzz target exercises the public entry point against
+fixed local catalog fixtures. Gatekeeper uses coverage and ASan/UBSan instrumentation;
+the linked DuckDB engine is exercised but not fully instrumented. The macOS
+Python-wheel sanitizer runner also disables libc++ container annotations because
+containers cross instrumented and uninstrumented code. This is qualified
+mixed-runtime coverage, not a whole-engine clean sanitizer bill. Earlier counts
+above describe historical runs rather than the current test count.

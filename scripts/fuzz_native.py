@@ -23,7 +23,7 @@ def main():
                                    "WITH t AS (SELECT 1) SELECT * FROM t", "SELECT * FROM range(3)",
                                    "WITH RECURSIVE t AS (SELECT 1 n UNION ALL SELECT n+1 FROM t WHERE n<3) SELECT * FROM t"]):
             ast = json.loads(db.execute("SELECT json_serialize_sql(?,skip_default:=true,skip_empty:=true,skip_null:=true)", [query]).fetchone()[0])
-            (corpus / str(i)).write_text(json.dumps({"policy": {"allowed_tables": [], "blocked_functions": ["md5"]}, "ast": ast}))
+            (corpus / str(i)).write_text(json.dumps({"ast": ast}))
     command = [os.environ.get("CXX", "clang++"), "-std=c++17", "-O1", "-g", "-fsanitize=fuzzer,address,undefined", "-fno-sanitize=vptr", "-fno-omit-frame-pointer"]
     for path in ["src/include", "generated", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
         command += ["-I" + str(root / path)]
@@ -38,7 +38,7 @@ def main():
         result = subprocess.run([str(out / "validator_fuzz"), str(corpus), "-max_total_time=" + str(args.seconds),
                                  "-max_len=65536", "-timeout=5", "-artifact_prefix=" + str(out) + "/"],
                                 env=env, stdout=log, stderr=log)
-    lines = (out / "run.log").read_text().splitlines()
+    lines = (out / "run.log").read_text(errors="replace").splitlines()
     for line in lines:
         if "DONE" in line or line.startswith("Done ") or "ERROR:" in line or "SUMMARY:" in line:
             print(line)
