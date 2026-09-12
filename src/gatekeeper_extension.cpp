@@ -216,6 +216,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		result.code = "binding";
 		result.error_type = Exception::ExceptionTypeToString(data.Type());
 		result.error_message = data.RawMessage();
+	} catch (const std::bad_alloc &) {
+		throw;
 	} catch (const std::exception &error) {
 		ErrorData data(error);
 		result.code = "binding";

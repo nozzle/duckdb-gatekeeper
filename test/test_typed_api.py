@@ -118,3 +118,24 @@ def test_bind_callback_input_errors_have_binding_code(db):
     assert not result["allowed"] and result["code"]=="binding", result
     result=validate(db,"SELECT 1",{"max_statements":0})
     assert not result["allowed"] and result["code"]=="invalid_input", result
+
+
+@pytest.mark.parametrize("name", ["exists.duckdb", "missing.duckdb", "x.db", "x.ddb", "x.avro", "x.shp", "x.gpkg", "x.fgb",
+                                  "data.parquet?", "nope.parquet?", "x.json?", "x.jsonl?", "x.ndjson?", "x.csv?", "x.tsv?"])
+def test_relative_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, name):
+    with duckdb.connect(str(tmp_path / "exists.duckdb")) as local:
+        local.execute("CREATE TABLE t(x INT)")
+    (tmp_path / "data.parquetx").write_bytes(b"not parquet")
+    monkeypatch.chdir(tmp_path)
+    result = validate(db, "SELECT * FROM '" + name + "'")
+    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert result["violations"][0]["rule"] == "file_table"
+
+
+def test_file_name_opt_in_only_authorizes_catalog_object(db, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    db.execute('CREATE TABLE "data.parquet"(x INT)')
+    assert not validate(db, 'SELECT * FROM "data.parquet"')["allowed"]
+    assert validate(db, 'SELECT * FROM "data.parquet"', {"allow_file_table_references": True})["allowed"]
+    result = validate(db, "SELECT * FROM 'missing.duckdb'", {"allow_file_table_references": True})
+    assert not result["allowed"] and result["code"] == "binding"

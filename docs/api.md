@@ -115,7 +115,7 @@ system views, which must pass object policy. This API does not filter metadata r
 | `allow_recursive_ctes` | BOOLEAN | true |
 | `allow_table_functions` | BOOLEAN | true |
 | `allow_dynamic_sql` | BOOLEAN | false |
-| `allow_file_table_references` | BOOLEAN | false |
+| `allow_file_table_references` | BOOLEAN | false; opt-in for real catalog objects with file-shaped names, not replacement-scan authorization |
 
 Permissions intersect: allowing a function does not override capability restrictions.
 Dynamic SQL covers table calls to `query`, `query_table`, and
@@ -123,9 +123,19 @@ Dynamic SQL covers table calls to `query`, `query_table`, and
 reviewed inventory, not recognition of arbitrary application functions.
 
 File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
-`.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, or `.xlsx` (case-insensitively). Quoted
+`.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,
+`.shp`, `.gpkg`, or `.fgb` (case-insensitively). Each suffix followed by `?` anywhere
+in the name is also caught, covering DuckDB's query/glob-marker forms. Quoted
 physical object names with those shapes also require opt-in. Scoped CTE references
 are exempt. DDL/DML and unsupported AST structures are always rejected.
+
+Replacement scans are collected during binding and rejected afterward, not before
+their bind callbacks. This preflight filename inventory stops the reviewed forms
+by default, but custom replacements can still perform I/O before rejection.
+Enabling `allow_file_table_references` permits that pre-rejection binding work even
+for known file-shaped names. It never makes an implicit file scan valid; use an
+explicit admitted reader for file access. Shared connection configuration is not
+temporarily modified by this scalar function.
 
 ## Limits
 

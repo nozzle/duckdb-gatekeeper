@@ -39,6 +39,9 @@ local to each scalar call. All effective restrictions intersect and blocks win.
 - File-reference detection is conservative and incomplete. Binder-collected
   host-language and implicit replacement scans are rejected as unsupported; explicit
   admitted readers and trusted catalog objects are the supported access paths.
+  Collection does not prevent bind-time I/O. Known filename/query-marker forms are
+  denied by preflight unless opted in; custom replacements and opted-in references
+  can access resources before the later rejection.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.

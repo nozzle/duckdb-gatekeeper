@@ -98,8 +98,11 @@ static bool FileName(const std::string &name) {
 	if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
 	    name.find("://") != std::string::npos)
 		return true;
-	for (auto suffix : {".parquet", ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".gz", ".zst", ".xlsx"}) {
+	for (auto suffix : {".parquet", ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".gz", ".zst", ".xlsx", ".db", ".ddb",
+	                    ".duckdb", ".avro", ".shp", ".gpkg", ".fgb"}) {
 		if (lower.size() >= strlen(suffix) && lower.compare(lower.size() - strlen(suffix), strlen(suffix), suffix) == 0)
+			return true;
+		if (lower.find(std::string(suffix) + "?") != std::string::npos)
 			return true;
 	}
 	return false;
