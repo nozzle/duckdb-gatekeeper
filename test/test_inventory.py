@@ -52,3 +52,18 @@ def test_inventory_conflicts(tmp_path):
     path.write_text(json.dumps(entry))
     with pytest.raises(ValueError, match="cross-inventory"):
         load(tmp_path)
+
+
+def test_audit_named_arguments_and_positional_order():
+    baseline = {"duckdb_version": "v1.5.5", "loaded_extensions": [], "functions": [
+        {"name": "reader", "kind": "table", "parameters": ["VARCHAR", "INTEGER"],
+         "named_parameters": {"mode": "VARCHAR", "strict": "BOOLEAN"}}
+    ]}
+    candidate = json.loads(json.dumps(baseline))
+    candidate["functions"][0]["named_parameters"] = {"strict": "BOOLEAN", "mode": "VARCHAR"}
+    assert not compare(baseline, candidate)["changed"]
+    candidate["functions"][0]["named_parameters"]["mode"] = "BOOLEAN"
+    assert compare(baseline, candidate)["changed"] == ["reader"]
+    candidate = json.loads(json.dumps(baseline))
+    candidate["functions"][0]["parameters"].reverse()
+    assert compare(baseline, candidate)["changed"] == ["reader"]

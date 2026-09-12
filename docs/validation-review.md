@@ -9,6 +9,13 @@ verifies the exact source revision, so this does not allow arbitrary code to be
 labelled compatible. CI builds from a fresh checkout on macOS and Linux and loads
 the result in the pinned Python runtime.
 
+The cross-platform inventory audit exposed unstable named-argument ordering in
+`duckdb_functions()`: table-function signatures list positional arguments first,
+then iterate an unordered map. Snapshots now retain positional order and a
+name-to-type mapping for named arguments. The baseline migration verified that
+the prior signatures changed only in representation; classifications were not
+modified. Tests still detect positional reorder and named-argument type changes.
+
 ## Local lakehouses
 
 ```sh

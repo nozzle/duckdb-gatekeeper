@@ -13667,7 +13667,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "arrow_scan_dumb",
@@ -13680,7 +13681,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "ascii",
@@ -14952,7 +14954,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "checkpoint",
@@ -14963,7 +14966,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "chr",
@@ -16380,7 +16384,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "disable_profiling",
@@ -16389,7 +16394,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "divide",
@@ -16542,7 +16548,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_columns",
@@ -16551,7 +16558,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_connection_count",
@@ -16560,7 +16568,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_constraints",
@@ -16569,7 +16578,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_coordinate_systems",
@@ -16578,7 +16588,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_databases",
@@ -16587,7 +16598,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_dependencies",
@@ -16596,7 +16608,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_extensions",
@@ -16605,7 +16618,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_external_file_cache",
@@ -16614,7 +16628,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_functions",
@@ -16623,7 +16638,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_indexes",
@@ -16632,7 +16648,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_keywords",
@@ -16641,7 +16658,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_log_contexts",
@@ -16650,18 +16668,20 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_logs",
       "kind": "table",
-      "parameters": [
-        "BOOLEAN"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "denormalized_table": "BOOLEAN"
+      }
     },
     {
       "name": "duckdb_logs_parsed",
@@ -16681,7 +16701,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_optimizers",
@@ -16690,7 +16711,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_prepared_statements",
@@ -16699,7 +16721,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_profiling_settings",
@@ -16717,7 +16740,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_secret_types",
@@ -16726,18 +16750,20 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_secrets",
       "kind": "table",
-      "parameters": [
-        "BOOLEAN"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "redact": "BOOLEAN"
+      }
     },
     {
       "name": "duckdb_sequences",
@@ -16746,7 +16772,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_settings",
@@ -16755,7 +16782,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_table_sample",
@@ -16766,7 +16794,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_tables",
@@ -16775,7 +16804,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_temporary_files",
@@ -16784,7 +16814,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_types",
@@ -16793,7 +16824,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_variables",
@@ -16802,7 +16834,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "duckdb_views",
@@ -16811,7 +16844,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "editdist3",
@@ -16840,33 +16874,35 @@
     {
       "name": "enable_logging",
       "kind": "table",
-      "parameters": [
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "UBIGINT"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": "ANY",
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "level": "VARCHAR",
+        "storage": "VARCHAR",
+        "storage_buffer_size": "UBIGINT",
+        "storage_config": "ANY",
+        "storage_normalize": "BOOLEAN",
+        "storage_path": "VARCHAR"
+      }
     },
     {
       "name": "enable_profiling",
       "kind": "table",
-      "parameters": [
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": "VARCHAR[]",
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "coverage": "VARCHAR",
+        "format": "VARCHAR",
+        "metrics": "ANY",
+        "mode": "VARCHAR",
+        "save_location": "VARCHAR"
+      }
     },
     {
       "name": "encode",
@@ -17596,7 +17632,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "force_checkpoint",
@@ -17607,7 +17644,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "format",
@@ -17884,7 +17922,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "generate_series",
@@ -17896,7 +17935,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "generate_series",
@@ -17909,7 +17949,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "generate_series",
@@ -17922,7 +17963,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "generate_series",
@@ -17935,7 +17977,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "generate_subscripts",
@@ -18043,7 +18086,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "glob",
@@ -18054,7 +18098,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "grade_up",
@@ -18674,7 +18719,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "icu_collate_af",
@@ -20697,7 +20743,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_each",
@@ -20709,7 +20756,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_each",
@@ -20720,7 +20768,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_each",
@@ -20732,7 +20781,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_execute_serialized_sql",
@@ -20743,7 +20793,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_exists",
@@ -21435,7 +21486,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_tree",
@@ -21447,7 +21499,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_tree",
@@ -21458,7 +21511,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_tree",
@@ -21470,7 +21524,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "json_type",
@@ -26992,7 +27047,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_bloom_probe",
@@ -27005,7 +27061,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_bloom_probe",
@@ -27018,7 +27075,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_file_metadata",
@@ -27029,7 +27087,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_file_metadata",
@@ -27040,7 +27099,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_full_metadata",
@@ -27051,7 +27111,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_full_metadata",
@@ -27062,7 +27123,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_kv_metadata",
@@ -27073,7 +27135,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_kv_metadata",
@@ -27084,7 +27147,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_metadata",
@@ -27095,7 +27159,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_metadata",
@@ -27106,57 +27171,62 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_scan",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UBIGINT",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN"
+        "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "binary_as_string": "BOOLEAN",
+        "can_have_nan": "BOOLEAN",
+        "compression": "VARCHAR",
+        "debug_use_openssl": "BOOLEAN",
+        "encryption_config": "ANY",
+        "explicit_cardinality": "UBIGINT",
+        "file_row_number": "BOOLEAN",
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "parquet_version": "VARCHAR",
+        "schema": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "parquet_scan",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "UBIGINT",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "binary_as_string": "BOOLEAN",
+        "can_have_nan": "BOOLEAN",
+        "compression": "VARCHAR",
+        "debug_use_openssl": "BOOLEAN",
+        "encryption_config": "ANY",
+        "explicit_cardinality": "UBIGINT",
+        "file_row_number": "BOOLEAN",
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "parquet_version": "VARCHAR",
+        "schema": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "parquet_schema",
@@ -27167,7 +27237,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parquet_schema",
@@ -27178,7 +27249,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "parse_dirname",
@@ -27544,7 +27616,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pg_ts_config_is_visible",
@@ -27664,7 +27737,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_database_size",
@@ -27673,7 +27747,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_metadata_info",
@@ -27682,7 +27757,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_metadata_info",
@@ -27693,7 +27769,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_platform",
@@ -27702,7 +27779,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_show",
@@ -27713,7 +27791,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_storage_info",
@@ -27724,7 +27803,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_table_info",
@@ -27735,7 +27815,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_user_agent",
@@ -27744,7 +27825,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "pragma_version",
@@ -27753,7 +27835,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "prefix",
@@ -27800,7 +27883,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "quantile",
@@ -28237,7 +28321,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "query_table",
@@ -28248,7 +28333,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "query_table",
@@ -28259,7 +28345,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "query_table",
@@ -28271,7 +28358,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "radians",
@@ -28364,7 +28452,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "range",
@@ -28376,7 +28465,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "range",
@@ -28389,7 +28479,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "range",
@@ -28402,7 +28493,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "range",
@@ -28415,7 +28507,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "rank",
@@ -28444,7 +28537,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "read_blob",
@@ -28455,701 +28549,746 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "read_csv",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "BOOLEAN",
-        "BIGINT",
-        "ANY",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR[]",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR[]",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR[]",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "UBIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
-        "BIGINT"
+        "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_varchar": "BOOLEAN",
+        "allow_quoted_nulls": "BOOLEAN",
+        "auto_detect": "BOOLEAN",
+        "auto_type_candidates": "ANY",
+        "buffer_size": "UBIGINT",
+        "column_names": "VARCHAR[]",
+        "column_types": "ANY",
+        "columns": "ANY",
+        "comment": "VARCHAR",
+        "compression": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "decimal_separator": "VARCHAR",
+        "delim": "VARCHAR",
+        "dtypes": "ANY",
+        "encoding": "VARCHAR",
+        "escape": "VARCHAR",
+        "filename": "ANY",
+        "files_to_sniff": "BIGINT",
+        "force_not_null": "VARCHAR[]",
+        "header": "BOOLEAN",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "max_line_size": "VARCHAR",
+        "maximum_line_size": "VARCHAR",
+        "names": "VARCHAR[]",
+        "new_line": "VARCHAR",
+        "normalize_names": "BOOLEAN",
+        "null_padding": "BOOLEAN",
+        "nullstr": "ANY",
+        "parallel": "BOOLEAN",
+        "quote": "VARCHAR",
+        "rejects_limit": "BIGINT",
+        "rejects_scan": "VARCHAR",
+        "rejects_table": "VARCHAR",
+        "sample_size": "BIGINT",
+        "sep": "VARCHAR",
+        "skip": "BIGINT",
+        "store_rejects": "BOOLEAN",
+        "strict_mode": "BOOLEAN",
+        "thousands": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "types": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_csv",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "BIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "UBIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR[]",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR[]",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR[]",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "ANY",
-        "BIGINT",
-        "BOOLEAN"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_varchar": "BOOLEAN",
+        "allow_quoted_nulls": "BOOLEAN",
+        "auto_detect": "BOOLEAN",
+        "auto_type_candidates": "ANY",
+        "buffer_size": "UBIGINT",
+        "column_names": "VARCHAR[]",
+        "column_types": "ANY",
+        "columns": "ANY",
+        "comment": "VARCHAR",
+        "compression": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "decimal_separator": "VARCHAR",
+        "delim": "VARCHAR",
+        "dtypes": "ANY",
+        "encoding": "VARCHAR",
+        "escape": "VARCHAR",
+        "filename": "ANY",
+        "files_to_sniff": "BIGINT",
+        "force_not_null": "VARCHAR[]",
+        "header": "BOOLEAN",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "max_line_size": "VARCHAR",
+        "maximum_line_size": "VARCHAR",
+        "names": "VARCHAR[]",
+        "new_line": "VARCHAR",
+        "normalize_names": "BOOLEAN",
+        "null_padding": "BOOLEAN",
+        "nullstr": "ANY",
+        "parallel": "BOOLEAN",
+        "quote": "VARCHAR",
+        "rejects_limit": "BIGINT",
+        "rejects_scan": "VARCHAR",
+        "rejects_table": "VARCHAR",
+        "sample_size": "BIGINT",
+        "sep": "VARCHAR",
+        "skip": "BIGINT",
+        "store_rejects": "BOOLEAN",
+        "strict_mode": "BOOLEAN",
+        "thousands": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "types": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_csv_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "BOOLEAN",
-        "BIGINT",
-        "ANY",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR[]",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR[]",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR[]",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "UBIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
-        "BIGINT"
+        "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_varchar": "BOOLEAN",
+        "allow_quoted_nulls": "BOOLEAN",
+        "auto_detect": "BOOLEAN",
+        "auto_type_candidates": "ANY",
+        "buffer_size": "UBIGINT",
+        "column_names": "VARCHAR[]",
+        "column_types": "ANY",
+        "columns": "ANY",
+        "comment": "VARCHAR",
+        "compression": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "decimal_separator": "VARCHAR",
+        "delim": "VARCHAR",
+        "dtypes": "ANY",
+        "encoding": "VARCHAR",
+        "escape": "VARCHAR",
+        "filename": "ANY",
+        "files_to_sniff": "BIGINT",
+        "force_not_null": "VARCHAR[]",
+        "header": "BOOLEAN",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "max_line_size": "VARCHAR",
+        "maximum_line_size": "VARCHAR",
+        "names": "VARCHAR[]",
+        "new_line": "VARCHAR",
+        "normalize_names": "BOOLEAN",
+        "null_padding": "BOOLEAN",
+        "nullstr": "ANY",
+        "parallel": "BOOLEAN",
+        "quote": "VARCHAR",
+        "rejects_limit": "BIGINT",
+        "rejects_scan": "VARCHAR",
+        "rejects_table": "VARCHAR",
+        "sample_size": "BIGINT",
+        "sep": "VARCHAR",
+        "skip": "BIGINT",
+        "store_rejects": "BOOLEAN",
+        "strict_mode": "BOOLEAN",
+        "thousands": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "types": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_csv_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "BIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "UBIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR[]",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR[]",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR[]",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "ANY",
-        "BIGINT",
-        "BOOLEAN"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_varchar": "BOOLEAN",
+        "allow_quoted_nulls": "BOOLEAN",
+        "auto_detect": "BOOLEAN",
+        "auto_type_candidates": "ANY",
+        "buffer_size": "UBIGINT",
+        "column_names": "VARCHAR[]",
+        "column_types": "ANY",
+        "columns": "ANY",
+        "comment": "VARCHAR",
+        "compression": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "decimal_separator": "VARCHAR",
+        "delim": "VARCHAR",
+        "dtypes": "ANY",
+        "encoding": "VARCHAR",
+        "escape": "VARCHAR",
+        "filename": "ANY",
+        "files_to_sniff": "BIGINT",
+        "force_not_null": "VARCHAR[]",
+        "header": "BOOLEAN",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "max_line_size": "VARCHAR",
+        "maximum_line_size": "VARCHAR",
+        "names": "VARCHAR[]",
+        "new_line": "VARCHAR",
+        "normalize_names": "BOOLEAN",
+        "null_padding": "BOOLEAN",
+        "nullstr": "ANY",
+        "parallel": "BOOLEAN",
+        "quote": "VARCHAR",
+        "rejects_limit": "BIGINT",
+        "rejects_scan": "VARCHAR",
+        "rejects_table": "VARCHAR",
+        "sample_size": "BIGINT",
+        "sep": "VARCHAR",
+        "skip": "BIGINT",
+        "store_rejects": "BOOLEAN",
+        "strict_mode": "BOOLEAN",
+        "thousands": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "types": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_duckdb",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "schema_name": "VARCHAR",
+        "table_name": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_duckdb",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "schema_name": "VARCHAR",
+        "table_name": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_objects",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_objects",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_objects_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_json_objects_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "VARCHAR",
-        "BIGINT",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson_auto",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "DOUBLE",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "BIGINT",
-        "BOOLEAN",
-        "BIGINT",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "auto_detect": "BOOLEAN",
+        "columns": "ANY",
+        "compression": "VARCHAR",
+        "convert_strings_to_integers": "BOOLEAN",
+        "date_format": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "field_appearance_threshold": "DOUBLE",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "map_inference_threshold": "BIGINT",
+        "maximum_depth": "BIGINT",
+        "maximum_object_size": "UINTEGER",
+        "maximum_sample_files": "BIGINT",
+        "records": "VARCHAR",
+        "sample_size": "BIGINT",
+        "timestamp_format": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson_objects",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
         "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_ndjson_objects",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "VARCHAR",
-        "BOOLEAN",
-        "UINTEGER",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "compression": "VARCHAR",
+        "filename": "ANY",
+        "format": "VARCHAR",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "maximum_object_size": "UINTEGER",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_parquet",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UBIGINT",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "BOOLEAN"
+        "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "binary_as_string": "BOOLEAN",
+        "can_have_nan": "BOOLEAN",
+        "compression": "VARCHAR",
+        "debug_use_openssl": "BOOLEAN",
+        "encryption_config": "ANY",
+        "explicit_cardinality": "UBIGINT",
+        "file_row_number": "BOOLEAN",
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "parquet_version": "VARCHAR",
+        "schema": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_parquet",
       "kind": "table",
       "parameters": [
-        "VARCHAR[]",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "UBIGINT",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "VARCHAR",
-        "ANY",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN"
+        "VARCHAR[]"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "binary_as_string": "BOOLEAN",
+        "can_have_nan": "BOOLEAN",
+        "compression": "VARCHAR",
+        "debug_use_openssl": "BOOLEAN",
+        "encryption_config": "ANY",
+        "explicit_cardinality": "UBIGINT",
+        "file_row_number": "BOOLEAN",
+        "filename": "ANY",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "parquet_version": "VARCHAR",
+        "schema": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "read_text",
@@ -29160,7 +29299,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "read_text",
@@ -29171,7 +29311,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "reduce",
@@ -29623,18 +29764,20 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "repeat_row",
       "kind": "table",
-      "parameters": [
-        "BIGINT"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": "ANY",
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "num_rows": "BIGINT"
+      }
     },
     {
       "name": "replace",
@@ -30463,7 +30606,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "session_user",
@@ -30756,58 +30900,60 @@
       "name": "sniff_csv",
       "kind": "table",
       "parameters": [
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR[]",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "VARCHAR[]",
-        "VARCHAR",
-        "BOOLEAN",
-        "BIGINT",
-        "ANY",
-        "ANY",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "ANY",
-        "BIGINT",
-        "ANY",
-        "VARCHAR",
-        "VARCHAR",
-        "VARCHAR",
-        "BOOLEAN",
-        "VARCHAR",
-        "VARCHAR[]",
-        "BOOLEAN",
-        "BOOLEAN",
-        "BOOLEAN",
-        "UBIGINT",
-        "VARCHAR",
-        "BOOLEAN",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN",
-        "VARCHAR",
-        "BIGINT",
-        "ANY",
-        "BOOLEAN",
-        "ANY",
-        "BOOLEAN"
+        "VARCHAR"
       ],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_varchar": "BOOLEAN",
+        "allow_quoted_nulls": "BOOLEAN",
+        "auto_detect": "BOOLEAN",
+        "auto_type_candidates": "ANY",
+        "buffer_size": "UBIGINT",
+        "column_names": "VARCHAR[]",
+        "column_types": "ANY",
+        "columns": "ANY",
+        "comment": "VARCHAR",
+        "compression": "VARCHAR",
+        "dateformat": "VARCHAR",
+        "decimal_separator": "VARCHAR",
+        "delim": "VARCHAR",
+        "dtypes": "ANY",
+        "encoding": "VARCHAR",
+        "escape": "VARCHAR",
+        "filename": "ANY",
+        "files_to_sniff": "BIGINT",
+        "force_match": "BOOLEAN",
+        "force_not_null": "VARCHAR[]",
+        "header": "BOOLEAN",
+        "hive_partitioning": "BOOLEAN",
+        "hive_types": "ANY",
+        "hive_types_autocast": "BOOLEAN",
+        "ignore_errors": "BOOLEAN",
+        "max_line_size": "VARCHAR",
+        "maximum_line_size": "VARCHAR",
+        "names": "VARCHAR[]",
+        "new_line": "VARCHAR",
+        "normalize_names": "BOOLEAN",
+        "null_padding": "BOOLEAN",
+        "nullstr": "ANY",
+        "parallel": "BOOLEAN",
+        "quote": "VARCHAR",
+        "rejects_limit": "BIGINT",
+        "rejects_scan": "VARCHAR",
+        "rejects_table": "VARCHAR",
+        "sample_size": "BIGINT",
+        "sep": "VARCHAR",
+        "skip": "BIGINT",
+        "store_rejects": "BOOLEAN",
+        "strict_mode": "BOOLEAN",
+        "thousands": "VARCHAR",
+        "timestampformat": "VARCHAR",
+        "types": "ANY",
+        "union_by_name": "BOOLEAN"
+      }
     },
     {
       "name": "split",
@@ -32053,7 +32199,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "switch",
@@ -32128,26 +32275,29 @@
     {
       "name": "test_all_types",
       "kind": "table",
-      "parameters": [
-        "BOOLEAN",
-        "BOOLEAN"
-      ],
+      "parameters": [],
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "use_large_bignum": "BOOLEAN",
+        "use_large_enum": "BOOLEAN"
+      }
     },
     {
       "name": "test_vector_types",
       "kind": "table",
       "parameters": [
-        "ANY",
-        "BOOLEAN"
+        "ANY"
       ],
       "returns": null,
       "varargs": "ANY",
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {
+        "all_flat": "BOOLEAN"
+      }
     },
     {
       "name": "time_bucket",
@@ -33257,7 +33407,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "try_strptime",
@@ -33388,7 +33539,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "unpivot_list",
@@ -33777,7 +33929,8 @@
       "returns": null,
       "varargs": null,
       "side_effects": null,
-      "macro": null
+      "macro": null,
+      "named_parameters": {}
     },
     {
       "name": "write_log",
