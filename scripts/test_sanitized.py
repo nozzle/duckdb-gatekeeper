@@ -1,4 +1,9 @@
-"""Build and run Gatekeeper ASan/UBSan tests on macOS/Linux."""
+"""Build and run Gatekeeper ASan/UBSan tests on macOS/Linux.
+
+Use Clang on both platforms (CC=clang CXX=clang++ on Linux). GCC's -fsanitize instrumentation
+odr-uses the ``static constexpr`` LogicalType members and emits definitions that collide with the
+out-of-line ones DuckDB keeps in types.cpp when linking against libduckdb_static.a.
+"""
 import os
 from pathlib import Path
 import platform
@@ -34,7 +39,11 @@ def main():
         runtime = subprocess.check_output(["clang", "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime
     elif platform.system() == "Linux":
-        runtime = subprocess.check_output([os.environ.get("CC", "cc"), "-print-file-name=libasan.so"], text=True).strip()
+        compiler = os.environ.get("CC", "cc")
+        version = subprocess.check_output([compiler, "--version"], text=True)
+        # Clang bundles the UBSan runtime into its shared ASan runtime; GCC ships libasan.so.
+        library = "libclang_rt.asan-" + platform.machine() + ".so" if "clang" in version else "libasan.so"
+        runtime = subprocess.check_output([compiler, "-print-file-name=" + library], text=True).strip()
         env["LD_PRELOAD"] = runtime
     else:
         raise SystemExit("Sanitizer runner supports macOS/Linux only")

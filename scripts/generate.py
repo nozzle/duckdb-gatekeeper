@@ -8,7 +8,7 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
-from inventory import load
+from inventory import load, schema_available
 from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,7 +116,13 @@ def main():
                         help="directory for grammar.hpp and inventory.hpp (the build passes its binary dir)")
     args = parser.parse_args()
     pinned_revision()
-    _, defaults = load()
+    # Community distribution images provide only the standard library; schema validation of the
+    # same commit is enforced by the test and audit jobs, which install requirements-inventory.txt.
+    schema = schema_available()
+    if not schema:
+        print("gatekeeper: jsonschema unavailable, skipping inventory schema validation during generation",
+              file=sys.stderr)
+    _, defaults = load(schema=schema)
     inventory = {"defaults": defaults}
     args.output.mkdir(parents=True, exist_ok=True)
     for name, data in [("grammar", grammar()), ("inventory", inventory)]:

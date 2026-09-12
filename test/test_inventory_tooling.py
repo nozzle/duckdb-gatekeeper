@@ -82,6 +82,19 @@ def test_missing_schema_dependency_is_actionable():
     assert "requirements-inventory.txt" in result.stderr and "Traceback" not in result.stderr
 
 
+def test_generation_works_without_schema_dependency(tmp_path):
+    # Distribution images build with a standard-library-only interpreter (-S drops site packages).
+    result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(tmp_path)],
+                            cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "skipping inventory schema validation" in result.stderr
+    assert (tmp_path / "inventory.hpp").exists() and (tmp_path / "grammar.hpp").exists()
+    strict = subprocess.run([sys.executable, "-S", "-c",
+                             "import sys; sys.path.insert(0, 'scripts'); from inventory import load; load(schema=False)"],
+                            cwd=ROOT, capture_output=True, text=True)
+    assert strict.returncode == 0, strict.stderr
+
+
 @pytest.mark.parametrize("module", ["migrate_unreviewed", "migrate_signature_baseline"])
 def test_migrations_import_safe_and_dry_run(module, tmp_path, monkeypatch):
     imported = importlib.import_module(module)
