@@ -5,29 +5,32 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    commit-message:
+      prefix: "ci"
     groups:
       github-actions:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "/"
+      - "/test/integration"
     schedule:
       interval: "weekly"
       day: "monday"
+    commit-message:
+      prefix: "chore"
     ignore:
+      # Engine upgrades must coordinate the submodule, build pins, inventories, and fuzz image.
       - dependency-name: "duckdb"
     groups:
-      pip:
+      python:
         patterns:
           - "*"
-
-  - package-ecosystem: "pip"
-    directory: "/test/integration"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    groups:
-      pip:
-        patterns:
-          - "*"
+        update-types:
+          - "minor"
+          - "patch"
