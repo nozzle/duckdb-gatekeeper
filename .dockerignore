@@ -1,0 +1,3 @@
+# The fuzz image only needs the hashed lock file; sources are bind-mounted at run time.
+*
+!requirements-dev.txt

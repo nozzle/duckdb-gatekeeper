@@ -4,14 +4,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
+file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/src/include/duckdb/storage/serialization/*.json)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    scripts/generate.py scripts/inventory.py scripts/versions.py ${INVENTORY_FILES})
+    scripts/generate.py scripts/inventory.py scripts/versions.py ${INVENTORY_FILES} ${SERIALIZATION_FILES})
+# Generated headers live in the build tree so parallel configurations never race on shared files.
+set(GATEKEEPER_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
+                        --output ${GATEKEEPER_GENERATED_DIR}
                 RESULT_VARIABLE GENERATE_RESULT)
 if(NOT GENERATE_RESULT EQUAL 0)
   message(FATAL_ERROR "Gatekeeper inventory generation failed")
 endif()
-include_directories(src/include ${CMAKE_CURRENT_SOURCE_DIR}/generated
+include_directories(src/include ${GATEKEEPER_GENERATED_DIR}
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/extension/json/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/third_party/yyjson/include)
 set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/options.cpp src/validator.cpp
@@ -20,6 +25,8 @@ build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
 target_link_libraries(gatekeeper_extension duckdb_yyjson)
 target_link_libraries(gatekeeper_loadable_extension duckdb_yyjson)
+# vptr checks are disabled in every sanitizer configuration: the instrumented extension shares
+# RTTI with an uninstrumented DuckDB/Python runtime, which UBSan reports as false positives.
 option(GATEKEEPER_FUZZ "Build SQL/typed-option libFuzzer target (Clang required)" OFF)
 if(GATEKEEPER_FUZZ)
   add_executable(gatekeeper_sql_fuzz test/fuzz/sql_options_fuzz.cpp)

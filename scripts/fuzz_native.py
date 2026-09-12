@@ -17,6 +17,8 @@ def main():
     subprocess.run([sys.executable, str(root / "scripts/generate.py")], check=True)
     out = root / "build/fuzz"
     out.mkdir(parents=True, exist_ok=True)
+    generated = out / "generated"
+    subprocess.run([sys.executable, str(root / "scripts/generate.py"), "--output", str(generated)], check=True)
     corpus = out / "corpus"
     corpus.mkdir(exist_ok=True)
     import duckdb
@@ -35,8 +37,9 @@ def main():
                 node["children"] = [node.pop("left"), node.pop("right")]
                 (corpus / f"children-{i}").write_bytes(bytes([107, 30, 0, 0, 0, 0]) + json.dumps({"ast": ast}).encode())
     command = [os.environ.get("CXX", "clang++"), "-std=c++17", "-O1", "-g", "-fsanitize=fuzzer,address,undefined", "-fno-sanitize=vptr", "-fno-omit-frame-pointer"]
-    for path in ["src/include", "generated", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
+    for path in ["src/include", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
         command += ["-I" + str(root / path)]
+    command += ["-I" + str(generated)]
     command += [str(root / "test/fuzz/validator_fuzz.cpp"), str(root / "src/validator.cpp"),
                 str(root / "duckdb/third_party/yyjson/yyjson.cpp"),
                 "-o", str(out / "validator_fuzz")]

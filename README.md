@@ -167,7 +167,17 @@ python3 -m venv .venv
 For existing clones, run `git submodule update --init --recursive`. The artifact is
 `build/release/extension/gatekeeper/gatekeeper.duckdb_extension`. Add `--shell` for
 the CLI. Generation derives the grammar from the exact pinned revision and compiles
-reviewed inventories; unsupported engine revisions are rejected.
+reviewed inventories into the build tree; unsupported engine revisions are rejected at
+configure time, and the extension also refuses to load into any other DuckDB release.
+
+`requirements-dev.txt` and `test/integration/requirements.txt` are hash-pinned lock files
+generated from the matching `.in` files. Edit the `.in` file, then regenerate with
+`pip-compile --generate-hashes --strip-extras --allow-unsafe --output-file=<name>.txt <name>.in`
+(from `pip-tools`). Plain `pip install -r` verifies the hashes automatically.
+
+The community-extension build path (`make release` with the pinned `extension-ci-tools`
+Makefile, then `make test_release` for the sqllogictests in `test/sql`) also works and is
+exercised on CI together with the multi-platform distribution pipeline.
 
 ## Development
 
@@ -204,8 +214,10 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint python3 
 ```
 
 The first target exercises the AST walker/yyjson; the second builds DuckDB and
-exercises SQL parsing, typed options, and catalog binding. Corpus, logs, and crash
-artifacts stay in ignored `build/` directories. See the sanitizer scope in
+exercises SQL parsing, typed options, and catalog binding. The image is built from the
+repository root so it can install the hashed lock file; sources are bind-mounted at run
+time. Corpus, logs, and crash artifacts stay in ignored `build/` directories. The linked
+fuzzer also runs weekly on CI. See the sanitizer scope in
 [security.md](docs/security.md#adversarial-regression-coverage).
 
 ## Maintaining defaults

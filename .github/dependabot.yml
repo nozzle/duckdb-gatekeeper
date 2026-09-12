@@ -14,6 +14,15 @@ updates:
           - "minor"
           - "patch"
 
+  - package-ecosystem: "docker"
+    directory: "/test/fuzz"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"
+
+  # requirements*.in are the edited inputs; the hashed requirements*.txt lock files are
+  # regenerated with pip-compile (Dependabot understands the pip-compile header).
   - package-ecosystem: "pip"
     directories:
       - "/"

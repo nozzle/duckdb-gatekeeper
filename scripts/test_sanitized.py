@@ -12,8 +12,8 @@ def main():
     root = Path(__file__).resolve().parents[1]
 
     def tool(name):
-        local = root / ".venv/bin" / name
-        found = str(local) if local.exists() else shutil.which(name)
+        found = shutil.which(name, path=os.pathsep.join([str(root / ".venv/bin"), str(root / ".venv/Scripts"),
+                                                         os.environ.get("PATH", "")]))
         if not found:
             raise SystemExit(f"Missing {name}")
         return found

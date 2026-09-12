@@ -394,7 +394,16 @@ static void Configure(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.SetValue(0, Value::BOOLEAN(true));
 }
 
+// The grammar and inventory are generated from exactly this engine release. DuckDB's own footer check
+// compares the same string but can be disabled with allow_extensions_metadata_mismatch, so refuse to
+// load into any other engine build here as well.
+static constexpr const char *SUPPORTED_DUCKDB_VERSION = "v1.5.5";
+
 static void LoadInternal(ExtensionLoader &loader) {
+	if (string(DuckDB::LibraryVersion()) != SUPPORTED_DUCKDB_VERSION) {
+		throw InvalidInputException("Gatekeeper 0.1.0 supports DuckDB %s only; this engine is %s",
+		                            SUPPORTED_DUCKDB_VERSION, DuckDB::LibraryVersion());
+	}
 	auto config = make_shared_ptr<GatekeeperState>();
 	ScalarFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, ResultType(), GatekeeperValidate,
 	                        BindOptions);
