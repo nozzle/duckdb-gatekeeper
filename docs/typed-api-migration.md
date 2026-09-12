@@ -56,6 +56,14 @@ is traversed but not fully coverage/sanitizer instrumented. Logs, corpus and cra
 artifacts remain in ignored `build/sql-fuzz/`. Semantic tests separately assert deny
 decisions for views, dynamic lookup, replacement scans, and malformed API calls.
 
+The Linux arm64 linked campaign completed 128,870 executions in 61 seconds with
+no reported sanitizer or decision-invariant failure. Startup checks verify a known
+allow and deny result. Inputs use explicit VARCHAR `Value` parameters because the
+DuckDB C++ `CreateValue(std::string)` helper produces BLOBs; malformed byte sequences
+rejected by parameter construction are treated as invalid inputs by the harness.
+This result covers the public validation/binder path with Gatekeeper instrumentation,
+not fully instrumented DuckDB engine internals.
+
 The macOS Python-wheel sanitizer runner disables libc++ container annotations in
 addition to leak/vptr checks: containers cross between an uninstrumented Python
 DuckDB wheel and instrumented DuckDB code linked into the extension, which produced

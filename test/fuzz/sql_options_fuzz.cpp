@@ -2,20 +2,29 @@
 #include <cstdlib>
 #include <string>
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+static int Fuzz(const uint8_t *data, size_t size) {
 	if (size < 1 || size > 4096)
 		return 0;
 	static duckdb::DuckDB database(nullptr);
 	static duckdb::Connection connection(database);
 	static bool initialized = false;
 	if (!initialized) {
-		auto result = connection.Query("CREATE TABLE t(x INTEGER); CREATE SCHEMA secret; CREATE TABLE secret.t(x "
+		auto result = connection.Query("SET enable_external_access=false; SET autoload_known_extensions=false; SET "
+		                               "autoinstall_known_extensions=false; CREATE TABLE t(x INTEGER); CREATE SCHEMA "
+		                               "secret; CREATE TABLE secret.t(x "
 		                               "INTEGER); CREATE VIEW v AS SELECT * FROM t");
 		if (result->HasError())
 			std::abort();
+		auto check = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
+		if (check->HasError() || !check->GetValue(0, 0).GetValue<bool>())
+			std::abort();
+		auto deny =
+		    connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := []).allowed");
+		if (deny->HasError() || deny->GetValue(0, 0).GetValue<bool>())
+			std::abort();
 		initialized = true;
 	}
-	std::string text(reinterpret_cast<const char *>(data + 1), size - 1);
+	duckdb::Value text(std::string(reinterpret_cast<const char *>(data + 1), size - 1));
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 	if (data[0] % 5 == 0) {
 		result = connection.Query(
@@ -46,4 +55,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	if (fields[0].GetValue<bool>() != (fields[1].GetValue<std::string>() == "ok"))
 		std::abort();
 	return 0;
+}
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+	try {
+		return Fuzz(data, size);
+	} catch (const duckdb::Exception &) {
+		// Invalid byte sequences may be rejected while constructing C++ parameter values.
+		return 0;
+	}
 }

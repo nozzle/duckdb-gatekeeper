@@ -38,7 +38,7 @@ def main():
         result = subprocess.run([str(out / "validator_fuzz"), str(corpus), "-max_total_time=" + str(args.seconds),
                                  "-max_len=65536", "-timeout=5", "-artifact_prefix=" + str(out) + "/"],
                                 env=env, stdout=log, stderr=log)
-    lines = (out / "run.log").read_text().splitlines()
+    lines = (out / "run.log").read_text(errors="replace").splitlines()
     for line in lines:
         if "DONE" in line or line.startswith("Done ") or "ERROR:" in line or "SUMMARY:" in line:
             print(line)

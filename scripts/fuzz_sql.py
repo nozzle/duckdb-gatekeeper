@@ -31,7 +31,7 @@ def main():
         result = subprocess.run([str(build / "extension/gatekeeper/gatekeeper_sql_fuzz"), str(corpus),
                                  "-max_total_time=" + str(args.seconds), "-max_len=4096", "-timeout=5",
                                  "-artifact_prefix=" + str(build) + "/"], env=env, stdout=log, stderr=log)
-    for line in (build / "fuzz.log").read_text().splitlines():
+    for line in (build / "fuzz.log").read_text(errors="replace").splitlines():
         if "DONE" in line or line.startswith("Done ") or "ERROR:" in line or "SUMMARY:" in line:
             print(line)
     print("Full log:", build / "fuzz.log")
