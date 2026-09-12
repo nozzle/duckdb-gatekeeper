@@ -73,8 +73,8 @@ before binding. The following qualification-specific rules describe syntax-only 
 
 Trusted catalog code and attached tables can use internal readers regardless of
 caller function policies. The logical table is the authorization boundary.
-Tests cover attached DuckDB tables and Parquet-backed views; a live remote Iceberg
-catalog has not yet been tested. Binding may perform I/O even when later rejected.
+Tests cover attached DuckDB tables, Parquet-backed views, a local Iceberg REST
+catalog with MinIO, and DuckLake. Binding may perform I/O even when later rejected.
 
 | Option | Omitted | Empty array |
 | --- | --- | --- |

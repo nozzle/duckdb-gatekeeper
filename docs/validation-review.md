@@ -31,7 +31,8 @@ credentials are disposable test values. No host credentials or cloud account are
 used. The runner removes its containers/network/volumes even on test failure.
 Ports must be free; don't run simultaneous instances on one host.
 
-DuckLake uses temporary local metadata and data paths. Tests create schemas,
+DuckLake uses temporary local metadata and data paths with row inlining disabled;
+both backends must produce actual Parquet files. Tests create schemas,
 logical tables, and Parquet-backed data, validate allowed queries, then execute them
 and check actual results. They also deny other catalogs/schemas/tables, unqualified
 and nested unauthorized references, explicit caller readers, and writes. Trusted
@@ -61,6 +62,9 @@ paths are covered separately by SQL tests and the instrumented-extension suite.
 Corpus files, crash artifacts, and logs are retained under ignored `build/fuzz/`.
 An initial 61-second campaign completed 4,120,745 executions without a sanitizer
 finding or invariant failure. Longer campaigns and stronger semantic oracles remain
+useful. A subsequent 181-second campaign completed 12,185,943 executions with no
+reported failure. The harness does not execute mutated SQL or contact services.
+Longer campaigns and stronger semantic oracles remain
 useful; this is not an independent security audit.
 
 ## Production boundary review

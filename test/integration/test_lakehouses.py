@@ -32,12 +32,17 @@ def lake(request, tmp_path):
         db.execute("LOAD ducklake")
         metadata = str(tmp_path / "metadata.ducklake").replace("'", "''")
         data = str(tmp_path / "data").replace("'", "''")
-        db.execute(f"ATTACH 'ducklake:{metadata}' AS lake (DATA_PATH '{data}')")
+        db.execute(f"ATTACH 'ducklake:{metadata}' AS lake (DATA_PATH '{data}', DATA_INLINING_ROW_LIMIT 0)")
     schema = "test_" + uuid.uuid4().hex[:12]
     db.execute(f"CREATE SCHEMA lake.{schema}")
     db.execute(f"CREATE TABLE lake.{schema}.orders(id BIGINT, amount DOUBLE)")
     db.execute(f"INSERT INTO lake.{schema}.orders VALUES (1,20),(2,30)")
     db.execute(f"CREATE TABLE lake.{schema}.secret AS SELECT 999 AS value")
+    if kind == "ducklake":
+        assert list((tmp_path / "data").rglob("*.parquet")), "DuckLake must exercise actual backing Parquet reads"
+    else:
+        objects = s3.list_objects_v2(Bucket="warehouse").get("Contents", [])
+        assert any(item["Key"].endswith(".parquet") for item in objects), "Iceberg must store backing Parquet data"
     try:
         yield db, schema, kind
     finally:
