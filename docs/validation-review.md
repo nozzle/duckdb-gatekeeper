@@ -1,5 +1,10 @@
 # Integration, fuzzing, and production review
 
+This page records the initial implementation's evidence. The subsequent
+[typed API migration](typed-api-migration.md) removes JSON policy inputs and optional
+resolution, strengthens view/replacement-scan authorization, and adds linked SQL
+fuzzing. Its current API is documented in [api.md](api.md).
+
 ## Clean-checkout builds
 
 The initial GitHub Actions run revealed a shallow-submodule metadata failure:

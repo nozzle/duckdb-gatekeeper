@@ -35,117 +35,6 @@ static Names Strings(Json *value, bool lower = false) {
 	}
 	return names;
 }
-static uint64_t Limit(Json *value, uint64_t ceiling) {
-	if (!yyjson_is_uint(value) || !yyjson_get_uint(value) || yyjson_get_uint(value) > ceiling)
-		Invalid("invalid limit");
-	return yyjson_get_uint(value);
-}
-
-Policy::Policy(Json *value) {
-	if (value)
-		Apply(value);
-}
-
-void Policy::Apply(Json *value) {
-	if (!yyjson_is_obj(value))
-		Invalid("options must be an object");
-	Names seen;
-	size_t i, count;
-	Json *key, *item;
-	yyjson_obj_foreach(value, i, count, key, item) {
-		auto name = Text(key);
-		if (!seen.insert(name).second)
-			Invalid("duplicate option: " + name);
-		if (name == "check_functions" || name == "use_default_functions" || name == "allow_recursive_ctes" ||
-		    name == "allow_table_functions" || name == "allow_dynamic_sql" || name == "allow_file_table_references" ||
-		    name == "resolve_objects") {
-			if (!yyjson_is_bool(item))
-				Invalid("expected boolean: " + name);
-			bool flag = yyjson_get_bool(item);
-			if (name == "check_functions")
-				functions = flag;
-			if (name == "use_default_functions")
-				defaults = flag;
-			if (name == "allow_recursive_ctes")
-				recursive = flag;
-			if (name == "allow_table_functions")
-				table_functions = flag;
-			if (name == "allow_dynamic_sql")
-				dynamic_sql = flag;
-			if (name == "allow_file_table_references")
-				file_tables = flag;
-			if (name == "resolve_objects")
-				resolve_objects = flag;
-		} else if (name == "allowed_functions")
-			allowed_functions = Strings(item, true);
-		else if (name == "blocked_functions")
-			blocked_functions = Strings(item, true);
-		else if (name == "allowed_catalogs") {
-			catalogs = true;
-			allowed_catalogs = Strings(item);
-		} else if (name == "allowed_schemas") {
-			schemas = true;
-			allowed_schemas = Strings(item);
-		} else if (name == "allowed_tables") {
-			tables = true;
-			allowed_tables.clear();
-			if (!yyjson_is_arr(item))
-				Invalid("allowed_tables must be an array");
-			size_t j, n;
-			Json *entry;
-			yyjson_arr_foreach(item, j, n, entry) {
-				if (!yyjson_is_obj(entry))
-					Invalid("expected table object");
-				Names fields;
-				size_t k, m;
-				Json *field, *text;
-				yyjson_obj_foreach(entry, k, m, field, text) {
-					auto f = Text(field);
-					if (!fields.insert(f).second || (f != "catalog" && f != "schema" && f != "table") ||
-					    !yyjson_is_str(text) || !yyjson_get_len(text))
-						Invalid("invalid table entry");
-				}
-				if (!fields.count("schema") || !fields.count("table"))
-					Invalid("table entries require schema and table");
-				allowed_tables.insert({Field(entry, "catalog"), Field(entry, "schema"), Field(entry, "table")});
-			}
-		} else if (name == "limits") {
-			statements = 1;
-			bytes = 8388608;
-			nodes = 100000;
-			depth = 512;
-			if (!yyjson_is_obj(item))
-				Invalid("limits must be an object");
-			Names fields;
-			size_t j, n;
-			Json *field, *limit;
-			yyjson_obj_foreach(item, j, n, field, limit) {
-				auto f = Text(field);
-				if (!fields.insert(f).second)
-					Invalid("duplicate limit");
-				if (f == "max_statements")
-					statements = Limit(limit, 1000);
-				else if (f == "max_ast_bytes")
-					bytes = Limit(limit, 8388608);
-				else if (f == "max_ast_nodes")
-					nodes = Limit(limit, 100000);
-				else if (f == "max_ast_depth")
-					depth = Limit(limit, 512);
-				else
-					Invalid("unknown limit: " + f);
-			}
-		} else
-			Invalid("unknown option: " + name);
-	}
-	if (seen.count("check_functions") && !seen.count("use_default_functions"))
-		defaults = functions;
-	if (!functions && !seen.count("allowed_functions"))
-		allowed_functions.clear();
-	if (!functions && !seen.count("use_default_functions"))
-		defaults = false;
-	if (!functions && (defaults || !allowed_functions.empty()))
-		Invalid("allowlist options require check_functions");
-}
 
 struct Rule {
 	std::unordered_map<std::string, std::string> fields;
@@ -217,12 +106,14 @@ static bool FileName(const std::string &name) {
 }
 struct Stop {
 	std::string message;
+	std::string rule = "unsupported_structure";
 };
 struct Walker {
 	const Inventory &inventory;
 	const Policy &policy;
-	Names violations;
+	std::set<Violation> violations;
 	std::map<std::string, size_t> functions;
+	std::map<std::string, int64_t> function_positions;
 	uint64_t nodes = 0;
 	struct Work {
 		Json *value;
@@ -232,48 +123,59 @@ struct Walker {
 		std::string edge;
 	};
 	std::vector<Work> pending;
-	void Reject(const std::string &message) { violations.insert(message); }
+	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
+	            const std::string &function = {}) {
+		auto location = yyjson_obj_get(node, "query_location");
+		violations.emplace(rule, message, Field(node, "catalog_name"), Field(node, "schema_name"),
+		                   Field(node, "table_name"), function,
+		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
+	}
 	void References(Json *value, const std::string &kind, const Names &scope, const std::string &edge) {
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
 			functions[name]++;
+			auto location = yyjson_obj_get(value, "query_location");
+			if (yyjson_is_uint(location)) {
+				auto position = int64_t(yyjson_get_uint(location));
+				auto found = function_positions.find(name);
+				if (position >= 0 && (found == function_positions.end() || position < found->second))
+					function_positions[name] = position;
+			}
 			auto catalog = Field(value, "catalog");
 			if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(catalog))
-				Reject("catalog is not allowed: " + catalog);
+				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
+				                   name);
 			if (!policy.dynamic_sql && ((edge == "function" && (name == "query" || name == "query_table" ||
 			                                                    name == "json_execute_serialized_sql")) ||
 			                            name == "json_serialize_plan"))
-				Reject("dynamic SQL is disabled: " + name);
+				Reject("dynamic_sql", "dynamic SQL is disabled: " + name, value, name);
 		}
 		if (kind == "RecursiveCTENode" && !policy.recursive)
-			Reject("recursive CTEs are disabled");
+			Reject("recursive_cte", "recursive CTEs are disabled", value);
 		if (kind == "TableFunctionRef") {
 			if (!policy.table_functions)
-				Reject("table functions are disabled");
+				Reject("table_function", "table functions are disabled", value,
+				       Field(yyjson_obj_get(value, "function"), "function_name"));
 		}
 		if (kind != "BaseTableRef" && kind != "ShowRef")
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
 		     table = Field(value, "table_name");
 		if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(catalog))
-			Reject("catalog is not allowed: " + catalog);
+			Reject("catalog", "catalog is not allowed: " + catalog, value);
 		if (kind == "ShowRef") {
 			if (yyjson_obj_get(value, "query"))
 				return;
 			if (policy.tables)
-				Reject("schema-wide SHOW is disabled by table policy");
+				Reject("table", "schema-wide SHOW is disabled by table policy", value);
 			if (policy.schemas && (schema.empty() || !policy.allowed_schemas.count(schema)))
-				Reject("SHOW requires an allowed schema");
+				Reject("schema", "SHOW requires an allowed schema", value);
 			return;
 		}
 		if (catalog.empty() && schema.empty() && scope.count(Lower(table)))
 			return;
 		if (!policy.file_tables && FileName(table))
-			Reject("file table reference is disabled: " + table);
-		if (!policy.defer_table_checks && policy.schemas && (schema.empty() || !policy.allowed_schemas.count(schema)))
-			Reject("schema is not allowed: " + schema);
-		if (!policy.defer_table_checks && policy.tables && !policy.allowed_tables.count({catalog, schema, table}))
-			Reject("table is not allowed: " + schema + "." + table);
+			Reject("file_table", "file table reference is disabled: " + table, value);
 	}
 	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
 		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});
@@ -285,7 +187,7 @@ struct Walker {
 	}
 	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
 		if (++nodes > policy.nodes || depth > policy.depth)
-			throw Stop{"AST size or depth limit exceeded"};
+			throw Stop{"AST size or depth limit exceeded", "limit"};
 		if (expected == "opaque")
 			return;
 		if (expected.size() > 2 && expected.substr(expected.size() - 2) == "[]") {
@@ -374,7 +276,7 @@ Result Validate(Json *root, const Policy &policy) {
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {
-		return {false, "unsupported", "", "", {error.message}};
+		return {false, error.rule == "limit" ? "forbidden" : "unsupported", "", "", {{error.rule, error.message}}};
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
@@ -385,7 +287,9 @@ Result Validate(Json *root, const Policy &policy) {
 			auto message = "function is not allowed: " + name;
 			if (entry.second > 1)
 				message += " (" + std::to_string(entry.second) + " occurrences)";
-			walker.Reject(message);
+			auto found = walker.function_positions.find(name);
+			walker.violations.emplace("function", message, "", "", "", name,
+			                          found == walker.function_positions.end() ? -1 : found->second);
 		}
 	}
 	return {walker.violations.empty(), walker.violations.empty() ? "ok" : "forbidden", "", "", walker.violations};

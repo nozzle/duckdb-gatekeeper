@@ -28,6 +28,8 @@ def main():
     env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
     env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
     if platform.system() == "Darwin":
+        # Python's uninstrumented libc++ containers cross into the instrumented extension.
+        env["ASAN_OPTIONS"] += ":detect_container_overflow=0"
         runtime = subprocess.check_output(["clang", "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime
     elif platform.system() == "Linux":

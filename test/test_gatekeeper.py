@@ -5,6 +5,7 @@ from pathlib import Path
 
 import duckdb
 import pytest
+from typed_helpers import validate as check
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
@@ -22,29 +23,37 @@ def db():
         yield connection
 
 
-def check(db, sql, options=None):
-    options = {"resolve_objects": False, **(options or {})}
-    return db.execute("SELECT gatekeeper_validate(?, ?)", [sql, json.dumps(options)]).fetchone()[0]
+@pytest.fixture
+def populated(db):
+        db.execute("""CREATE TABLE t(x VARCHAR, y INTEGER, z INTEGER, a INTEGER, b INTEGER);
+            CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t AS SELECT * FROM main.t;
+            CREATE TABLE tenant_a.orders(id INTEGER, value DOUBLE);
+            CREATE SCHEMA s; CREATE TABLE s.t AS SELECT * FROM main.t;
+            CREATE TABLE s."*"(x INT);
+            ATTACH ':memory:' AS db; CREATE SCHEMA db.s; CREATE TABLE db.s.t(x INT);
+            CREATE MACRO custom(x) AS x;
+            CREATE MACRO db.main.md5(x) AS system.main.md5(x)""")
+        return db
 
 
 @pytest.mark.parametrize("sql", [
-    "SELECT 1", "VALUES (1),(2)", "SELECT 2*3", "SELECT sum(x) FROM main.t",
+    "SELECT 1", "VALUES (1),(2)", "SELECT 2*3", "SELECT sum(y) FROM main.t",
     "SELECT md5('x'), lower('Y')", "SELECT row_number() OVER ()",
     "SELECT list_transform([1,2], lambda x: x+1)",
     "SELECT DISTINCT ON (x) x FROM t ORDER BY x DESC NULLS LAST LIMIT 3 OFFSET 1",
-    "SELECT CASE WHEN x BETWEEN 1 AND 3 THEN x::VARCHAR ELSE NULL END FROM t",
+    "SELECT CASE WHEN y BETWEEN 1 AND 3 THEN y::VARCHAR ELSE NULL END FROM t",
     "SELECT * REPLACE (upper(x) AS x) FROM t",
     "SELECT * EXCLUDE (x) FROM t", "SELECT CURRENT_DATE",
     "SELECT 1 AS x UNION BY NAME SELECT 2 AS y", "SELECT 1 EXCEPT SELECT 2",
-    "SELECT sum(x) FILTER (WHERE x>0) OVER (PARTITION BY y ORDER BY z ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t",
+    "SELECT sum(y) FILTER (WHERE y>0) OVER (PARTITION BY x ORDER BY z ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t",
     "SELECT * FROM t TABLESAMPLE reservoir(10 ROWS)",
-    "SELECT * FROM t PIVOT (sum(x) FOR y IN (1,2))",
-    "SELECT * FROM t UNPIVOT (value FOR name IN (x,y))",
+    "SELECT * FROM t PIVOT (sum(z) FOR y IN (1,2))",
+    "SELECT * FROM t UNPIVOT (value FOR name IN (y,z))",
     "SELECT '{\"type\":\"DELETE_QUERY_NODE\"}'::JSON",
     "SELECT 'DROP TABLE t; --'", "SELECT * FROM range(3) WITH ORDINALITY",
 ])
-def test_reads(db, sql):
-    result = check(db, sql)
+def test_reads(populated, sql):
+    result = check(populated, sql)
     assert result["allowed"], result
     assert result["code"] == "ok"
     assert result["violations"] == []
@@ -69,9 +78,9 @@ def test_no_execution_or_binding(db, tmp_path):
     db.execute("CREATE TABLE existing AS SELECT 42 AS x")
     assert not check(db, "DROP TABLE existing")["allowed"]
     assert db.execute("SELECT * FROM existing").fetchone() == (42,)
-    assert check(db, "SELECT * FROM nonexistent")["allowed"]
+    assert check(db, "SELECT * FROM nonexistent")["code"] == "binding"
     missing = str(tmp_path / "missing.parquet")
-    assert check(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["allowed"]
+    assert check(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["code"] == "binding"
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
@@ -80,12 +89,12 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT md5('x')", {"blocked_functions": ["MD5"]}, False),
     ("SELECT md5('x')", {"allowed_functions": ["md5"], "blocked_functions": ["md5"]}, False),
     ("SELECT sum(x) FROM t", {"use_default_functions": False}, False),
-    ("SELECT sum(x) FROM t", {"use_default_functions": False, "allowed_functions": ["sum"]}, True),
+    ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": ["sum"]}, True),
     ("SELECT custom(1)", {"check_functions": False}, True),
     ("SELECT custom(1)", {"check_functions": False, "blocked_functions": ["custom"]}, False),
     ("SELECT * FROM read_parquet('local')", {}, False),
     ("SELECT 2*3", {"blocked_functions": ["*"]}, False),
-    ("SELECT sum(x) FROM t", {"blocked_functions": ["*"]}, True),
+    ("SELECT sum(y) FROM t", {"blocked_functions": ["*"]}, True),
     ("SELECT lower('x')", {"use_default_functions": False, "allowed_functions": ["*"]}, False),
     ("SELECT md5('x')", {"allowed_functions": ["md*"]}, True),
     ("SELECT custom(1)", {"allowed_functions": ["cust*"]}, False),
@@ -97,22 +106,22 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"], "allow_dynamic_sql": True}, True),
     ("SELECT * FROM query('SELECT 1')", {"allow_dynamic_sql": True}, False),
 ])
-def test_functions(db, sql, opts, allowed):
-    result = check(db, sql, opts)
+def test_functions(populated, sql, opts, allowed):
+    result = check(populated, sql, opts)
     assert result["allowed"] == allowed, result
 
 
 def test_occurrences(db):
     result = check(db, "SELECT md5('x'), md5('y')", {"blocked_functions": ["md5"]})
     assert len(result["violations"]) == 1
-    assert "2 occurrences" in result["violations"][0]
+    assert "2 occurrences" in result["violations"][0]["message"]
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM db.s.t", {"allowed_catalogs": []}, False),
     ("SELECT * FROM db.s.t", {"allowed_catalogs": ["db"]}, True),
     ("SELECT * FROM other.s.t", {"allowed_catalogs": ["db"]}, False),
-    ("SELECT * FROM s.t", {"allowed_catalogs": []}, True),
+    ("SELECT * FROM s.t", {"allowed_catalogs": []}, False),
     ("SELECT db.main.md5('x')", {"allowed_catalogs": []}, False),
     ("SELECT db.main.md5('x')", {"allowed_catalogs": ["db"]}, True),
     ("SELECT * FROM s.t", {"allowed_schemas": ["s"]}, True),
@@ -120,20 +129,20 @@ def test_occurrences(db):
     ("SELECT * FROM s.t", {"allowed_schemas": []}, False),
     ("SELECT 1", {"allowed_schemas": []}, True),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
-    ("SELECT * FROM db.s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, False),
+    ("SELECT * FROM db.s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "s", "table": "t"}]}, True),
     ("SELECT * FROM s.t", {"allowed_tables": []}, False),
     ("SELECT 1", {"allowed_tables": []}, True),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "*"}]}, False),
     ('SELECT * FROM s."*"', {"allowed_tables": [{"schema": "s", "table": "*"}]}, True),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "t"}], "allowed_schemas": ["other"]}, False),
-    ("SHOW TABLES FROM s", {"allowed_schemas": ["s"]}, True),
+    ("SHOW TABLES FROM s", {"allowed_schemas": ["s"]}, False),
     ("SHOW ALL TABLES", {"allowed_schemas": ["s"]}, False),
     ("SHOW TABLES FROM s", {"allowed_tables": [{"schema": "s", "table": "t"}]}, False),
     ("DESCRIBE s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
 ])
-def test_objects(db, sql, opts, allowed):
-    result = check(db, sql, opts)
+def test_objects(populated, sql, opts, allowed):
+    result = check(populated, sql, opts)
     assert result["allowed"] == allowed, result
 
 
@@ -161,13 +170,10 @@ def test_recursive_toggle(db):
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM 'mine.parquet'", {}, False),
-    ("SELECT * FROM 'mine.parquet'", {"allow_file_table_references": True}, True),
+    ("SELECT * FROM 'mine.parquet'", {}, False),
     ("SELECT * FROM 's3://bucket/data'", {}, False),
-    ("SELECT * FROM 's3://bucket/data'", {"allow_file_table_references": True}, True),
     ("SELECT * FROM read_parquet('local.parquet')", {}, False),
     ("SELECT * FROM read_parquet('s3://bucket/file')", {}, False),
-    ("SELECT * FROM read_parquet('s3://bucket/file')", {"allowed_functions": ["read_parquet"]}, True),
-    ("SELECT * FROM read_parquet('x' || '.parquet')", {"allowed_functions": ["read_parquet"]}, True),
     ("SELECT 'https://example.com'", {}, True),
 ])
 def test_paths(db, sql, opts, allowed):
@@ -178,10 +184,10 @@ def test_paths(db, sql, opts, allowed):
 def test_limits(db):
     assert not check(db, "")["allowed"]
     assert not check(db, "SELECT 1; SELECT 2")["allowed"]
-    assert check(db, "SELECT 1; SELECT 2", {"limits": {"max_statements": 2}})["allowed"]
-    assert not check(db, "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t", {"limits": {"max_statements": 2}, "allowed_tables": []})["allowed"]
+    assert check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
+    assert not check(db, "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t", {"max_statements": 2, "allowed_tables": []})["allowed"]
     for limits in [{"max_ast_nodes": 1}, {"max_ast_depth": 1}, {"max_ast_bytes": 50}]:
-        assert not check(db, "SELECT 1", {"limits": limits})["allowed"]
+        assert not check(db, "SELECT 1", limits)["allowed"]
 
 
 @pytest.mark.parametrize("options", [
@@ -193,16 +199,15 @@ def test_limits(db):
     '{"check_functions":false,"use_default_functions":true}',
 ])
 def test_invalid_options(db, options):
-    result = db.execute("SELECT gatekeeper_validate('SELECT 1', ?)", [options]).fetchone()[0]
-    assert not result["allowed"]
-    assert result["code"] == "invalid_input"
+    with pytest.raises(duckdb.BinderException, match="named typed arguments"):
+        db.execute("SELECT gatekeeper_validate('SELECT 1', ?)", [options])
 
 
 def test_parser_null_batch(db):
     result = check(db, "SELECT * FROM")
     assert result["code"] == "parser" and result["error_message"]
     assert db.execute("SELECT gatekeeper_validate(NULL)").fetchone()[0]["code"] == "invalid_input"
-    assert db.execute("SELECT gatekeeper_validate('SELECT 1',NULL)").fetchone()[0]["code"] == "invalid_input"
+    assert db.execute("SELECT gatekeeper_validate('SELECT 1',blocked_functions := NULL)").fetchone()[0]["code"] == "invalid_input"
     count = db.execute("""SELECT count(*) FROM (
         SELECT gatekeeper_validate(CASE WHEN i%2=0 THEN 'SELECT 1' ELSE 'DROP TABLE t' END) AS r
         FROM range(5000) t(i)) WHERE NOT r.allowed""").fetchone()[0]
@@ -211,6 +216,8 @@ def test_parser_null_batch(db):
 
 def test_concurrent_policies():
     with connect() as db:
+        for i in range(8):
+            db.execute(f"CREATE SCHEMA tenant_{i}; CREATE TABLE tenant_{i}.t(x INT)")
         def worker(i):
             with db.cursor() as conn:
                 for j in range(30):

@@ -11,11 +11,11 @@ SELECT gatekeeper_validate('DROP TABLE t').code;
 unsupported
 
 query I
-SELECT gatekeeper_validate('SELECT md5(''x'')', '{"blocked_functions":["md5"]}').allowed;
+SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']).allowed;
 ----
 false
 
 query I
-SELECT gatekeeper_validate('SELECT * FROM other.t', '{"allowed_schemas":["tenant"]}').allowed;
+SELECT gatekeeper_validate('SELECT * FROM other.t', allowed_schemas := ['tenant']).allowed;
 ----
 false

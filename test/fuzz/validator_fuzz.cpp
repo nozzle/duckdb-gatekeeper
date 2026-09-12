@@ -14,8 +14,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		return 0;
 	auto root = yyjson_doc_get_root(doc.get());
 	try {
-		auto policy_value = yyjson_obj_get(root, "policy");
-		gatekeeper::Policy policy(policy_value);
+		gatekeeper::Policy policy;
+		policy.schemas = true;
+		policy.allowed_schemas.insert("public");
+		policy.blocked_functions.insert("md5");
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
 			return 0;

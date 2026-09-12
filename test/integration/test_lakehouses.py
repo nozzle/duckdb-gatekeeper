@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def validate(db, sql, policy):
-    return db.execute("SELECT gatekeeper_validate(?,?)", [sql, json.dumps(policy)]).fetchone()[0]
+    args = ["?"] + [name + " := ?" for name in policy]
+    return db.execute("SELECT gatekeeper_validate(" + ",".join(args) + ")", [sql, *policy.values()]).fetchone()[0]
 
 
 @pytest.fixture(params=["iceberg", "ducklake"])
@@ -74,7 +75,7 @@ def test_allowed_and_denied_tables(lake):
 def test_trusted_view_and_no_writes(lake):
     db, schema, kind = lake
     db.execute(f"CREATE VIEW main.allowed_view AS SELECT * FROM lake.{schema}.orders")
-    policy = {"allowed_catalogs": ["lake"], "allowed_schemas": [schema], "allow_table_functions": False}
+    policy = {"allowed_catalogs": ["lake", "memory"], "allowed_schemas": [schema,"main"], "allow_table_functions": False}
     assert validate(db, "SELECT * FROM main.allowed_view", policy)["allowed"]
     assert not validate(db, "SELECT * FROM main.allowed_view", {**policy, "allowed_tables": []})["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)

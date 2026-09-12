@@ -11,8 +11,8 @@ Gatekeeper owns its function classifications here:
   functions; it does not claim that all extensions were loaded or audited live.
 
 The initial classifications came from Mosaic `functionset` at `3eb74ea8` (NOTICE).
-Gatekeeper maintains them independently. Normal builds do not need Go or Mosaic.
-The migration helpers are historical tooling, not an update mechanism.
+Gatekeeper maintains them independently; the original migration helpers have been
+removed. Update the reviewed files here rather than re-importing an upstream snapshot.
 
 ## Adjusting defaults
 
