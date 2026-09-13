@@ -46,7 +46,7 @@ when an exact allow rule exists. Metadata readers remain independently forbidden
 and schema-wide `SHOW` is denied under any configured table restriction.
 Table rules do not restrict or authorize function/type namespaces. Functions use
 leaf-name policies; types are supplied by the host without separate authorization;
-see [table matching](../README.md#table-matching).
+see [table ACL](../README.md#table-acl).
 
 ## Function enforcement and trusted expansion
 

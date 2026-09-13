@@ -307,6 +307,11 @@ SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []).all
 -- false: the request cannot clear a global block
 ```
 
+```sql
+SELECT current_setting('gatekeeper_policy').blocked_functions;
+-- [md5]
+```
+
 A request that tries to widen access does not error; it simply cannot authorize anything
 the global policy denies. Grant capabilities (readers, higher statement limits) in
 `CALL gatekeeper_configure`, then use request options to narrow per tenant.
