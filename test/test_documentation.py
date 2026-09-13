@@ -31,7 +31,7 @@ def test_readme_sql_examples(db):
         rows = db.execute(block).fetchall()
         if rows:
             observed.append(rows)
-    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(False,)], [(["md5"],)]]
+    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(True,)], [(False,)], [(["md5"],)]]
 
 
 @pytest.mark.parametrize("block", [

@@ -25,7 +25,8 @@ def main():
             times = []
             for iteration in range(args.iterations + 20):
                 start = time.perf_counter_ns()
-                result = db.execute("SELECT gatekeeper_validate(?, allowed_schemas := ?)", [query, ["tenant_a"]]).fetchone()[0]
+                result = db.execute("SELECT gatekeeper_validate(?, allowed_tables := ?)",
+                                    [query, [{"catalog": "*", "schema": "tenant_a", "table": "*"}]]).fetchone()[0]
                 elapsed = time.perf_counter_ns() - start
                 assert result["allowed"], result
                 if iteration >= 20:

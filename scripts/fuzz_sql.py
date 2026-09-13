@@ -33,7 +33,7 @@ def main():
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
     for mode in [1, 2, 15]:
         for option in range(17):
-            for value in range(30):
+            for value in range(34):
                 (corpus / f"option-{mode}-{option}-{value}").write_bytes(bytes([mode, option, value, 10]) + b"t")
     env = os.environ.copy()
     env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1:detect_container_overflow=0"

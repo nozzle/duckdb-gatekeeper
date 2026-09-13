@@ -19,18 +19,16 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		gatekeeper::Policy policy;
 		policy.functions = data[0] & 1;
 		policy.defaults = policy.functions && (data[0] & 2);
-		policy.catalogs = data[0] & 4;
-		policy.schemas = data[0] & 8;
 		policy.tables = data[0] & 16;
 		policy.recursive = data[0] & 32;
 		policy.table_functions = data[0] & 64;
 		policy.replacement_scans = data[1] & 1;
 		if (data[1] & 2)
-			policy.allowed_catalogs = {"memory", "system"};
+			policy.allowed_tables.insert({"memory", "*", "*"});
 		if (data[1] & 4)
-			policy.allowed_schemas = {"main", "public"};
+			policy.allowed_tables.insert({"*", "main", "*"});
 		if (data[1] & 8)
-			policy.allowed_tables = {{"", "main", "t"}};
+			policy.allowed_tables.insert({"", "main", "t"});
 		if (data[1] & 64)
 			policy.allowed_types = {{"system", "main", "json"}, {"", "main", "custom"}};
 		if (data[1] & 16)

@@ -229,7 +229,7 @@ def test_qualified_file_name_is_not_cte_exempt(db):
 @pytest.mark.parametrize("name", ["duckdb_views", "duckdb_tables", "duckdb_columns", "duckdb_logs",
                                   "sqlite_master", "information_schema.tables"])
 def test_internal_views_require_explicit_permission(db, name):
-    for options in [{}, {"allowed_schemas": ["main"]}]:
+    for options in [{}, {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]}]:
         result = validate(db, "SELECT * FROM " + name, options)
         assert result["code"] == "forbidden" and result["error_message"] == "", result
         assert "internal_object" in {v["rule"] for v in result["violations"]}
@@ -237,12 +237,12 @@ def test_internal_views_require_explicit_permission(db, name):
 
 def test_internal_view_explicit_permission_intersects_other_policies(db):
     table = {"catalog": "SYSTEM", "schema": "MAIN", "table": "DuckDB_Tables"}
-    options = {"allowed_tables": [table], "allowed_schemas": ["main"], "allowed_catalogs": ["system"]}
+    options = {"allowed_tables": [table]}
     configure(db, options)
     result = validate(db, "SELECT * FROM duckdb_tables", options)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"
     assert not validate(db, "SELECT * FROM duckdb_views", options)["allowed"]
-    assert not validate(db, "SELECT * FROM duckdb_tables", {**options, "allowed_catalogs": ["memory"]})["allowed"]
+    assert not validate(db, "SELECT * FROM duckdb_tables", {"allowed_tables": [{**table, "catalog": "memory"}]})["allowed"]
     assert not validate(db, "SELECT * FROM duckdb_tables", {
         "allowed_tables": [{"schema": "main", "table": "duckdb_tables"}]
     })["allowed"]
@@ -250,16 +250,15 @@ def test_internal_view_explicit_permission_intersects_other_policies(db):
 
 def test_object_identifiers_are_ascii_case_insensitive(db):
     db.execute("CREATE SCHEMA Reporting; CREATE TABLE Reporting.Orders(a INT); CREATE TABLE t(x INT)")
-    assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_schemas": ["reporting"]})["allowed"]
-    assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_catalogs": ["memory"]})["allowed"]
+    assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_tables": [{"catalog": "*", "schema": "reporting", "table": "*"}]})["allowed"]
+    assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_tables": [{"catalog": "memory", "schema": "*", "table": "*"}]})["allowed"]
     db.execute("CREATE MACRO local_abs(x) AS abs(x)")
     configure(db, {"allowed_functions": ["local_abs"]})
     assert validate(db, "SELECT MEMORY.main.local_abs(-1)", {
-        "allowed_catalogs": ["MeMoRy"], "allowed_functions": ["local_abs"]
+        "allowed_tables": [], "allowed_functions": ["local_abs"]
     })["allowed"]
     for catalog in [None, "MeMoRy"]:
-        options = {"allowed_tables": [{"catalog": catalog, "schema": "REPORTING", "table": "orders"}],
-                   "allowed_schemas": ["RePoRtInG"], "allowed_catalogs": ["MEMORY"]}
+        options = {"allowed_tables": [{"catalog": catalog, "schema": "REPORTING", "table": "orders"}]}
         assert validate(db, "SELECT * FROM reporting.orders", options)["allowed"]
     result = validate(db, "SELECT * FROM reporting.orders", {"allowed_tables": []})
     assert result["violations"][0]["schema"] == "Reporting"
@@ -281,7 +280,7 @@ def test_validation_uses_connection_parser_options(db):
         db.execute(sql)
     assert validate(db, sql)["code"] == "parser"
     db.execute("SET max_expression_depth=1000; SET preserve_identifier_case=false")
-    result = validate(db, 'SELECT * FROM MISSING', {"allowed_catalogs": []})
+    result = validate(db, 'SELECT * FROM MISSING', {"allowed_tables": []})
     assert 'missing' in result["error_message"] and 'MISSING' not in result["error_message"]
 
 

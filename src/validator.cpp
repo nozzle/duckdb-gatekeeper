@@ -23,6 +23,25 @@ std::string Lower(std::string value) {
 	return value;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
+bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
+                  bool internal) {
+	if (!policy.tables && !internal)
+		return true;
+	auto folded_catalog = Lower(catalog), folded_schema = Lower(schema), folded_table = Lower(table);
+	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
+	if (internal && (folded_schema == "*" || folded_table == "*"))
+		return false;
+	for (const auto &c : {folded_catalog, std::string("*"), std::string()}) {
+		if (policy.allowed_tables.count({c, folded_schema, folded_table}))
+			return true;
+		if (!internal &&
+		    (policy.allowed_tables.count({c, "*", folded_table}) ||
+		     policy.allowed_tables.count({c, folded_schema, "*"}) || policy.allowed_tables.count({c, "*", "*"})))
+			return true;
+	}
+	return false;
+}
+
 static Names Strings(Json *value, bool lower = false) {
 	if (!yyjson_is_arr(value))
 		Invalid("expected string array");
@@ -443,11 +462,6 @@ struct Walker {
 				if (position >= 0 && (found == function_positions.end() || position < found->second))
 					function_positions[name] = position;
 			}
-			auto catalog = Field(value, "catalog");
-			if (!catalog.empty() &&
-			    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
-				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
-				                   name);
 			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this
 			// validation. They are on the never-bind list; this is the earlier, more specific diagnostic.
 			if ((edge == "function" &&
@@ -472,18 +486,11 @@ struct Walker {
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
 		     table = Field(value, "table_name");
-		if (!catalog.empty() &&
-		    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
-			Reject("catalog", "catalog is not allowed: " + catalog, value);
 		if (kind == "ShowRef") {
 			if (yyjson_obj_get(value, "query"))
 				return;
 			if (!Both([](const Policy &p) { return !p.tables; }))
 				Reject("table", "schema-wide SHOW is disabled by table policy", value);
-			if (!Both([&](const Policy &p) {
-				    return !p.schemas || (!schema.empty() && p.allowed_schemas.count(Lower(schema)));
-			    }))
-				Reject("schema", "SHOW requires an allowed schema", value);
 			return;
 		}
 		if (catalog.empty() && schema.empty() && scope.count(Lower(table)))

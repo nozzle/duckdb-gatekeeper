@@ -9,10 +9,11 @@ using duckdb::Value;
 
 const std::vector<std::string> &OptionNames() {
 	static const std::vector<std::string> names = {
-	    "check_functions",         "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
-	    "allow_replacement_scans", "allowed_functions",     "blocked_functions",    "allowed_catalogs",
-	    "allowed_schemas",         "allowed_tables",        "allowed_types",        "max_statements",
-	    "max_ast_bytes",           "max_ast_nodes",         "max_ast_depth"};
+	    "check_functions",       "use_default_functions",   "allow_recursive_ctes",
+	    "allow_table_functions", "allow_replacement_scans", "allowed_functions",
+	    "blocked_functions",     "allowed_tables",          "allowed_types",
+	    "max_statements",        "max_ast_bytes",           "max_ast_nodes",
+	    "max_ast_depth"};
 	return names;
 }
 
@@ -20,8 +21,7 @@ LogicalType OptionType(const std::string &name) {
 	if (name == "check_functions" || name == "use_default_functions" || name == "allow_recursive_ctes" ||
 	    name == "allow_table_functions" || name == "allow_replacement_scans")
 		return LogicalType::BOOLEAN;
-	if (name == "allowed_functions" || name == "blocked_functions" || name == "allowed_catalogs" ||
-	    name == "allowed_schemas")
+	if (name == "allowed_functions" || name == "blocked_functions")
 		return LogicalType::LIST(LogicalType::VARCHAR);
 	if (name == "allowed_tables" || name == "allowed_types")
 		return LogicalType::ANY;
@@ -73,13 +73,7 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			policy.allowed_functions = Strings(value, true);
 		else if (name == "blocked_functions")
 			policy.blocked_functions = Strings(value, true);
-		else if (name == "allowed_catalogs") {
-			policy.catalogs = true;
-			policy.allowed_catalogs = Strings(value, true);
-		} else if (name == "allowed_schemas") {
-			policy.schemas = true;
-			policy.allowed_schemas = Strings(value, true);
-		} else if (name == "allowed_tables" || name == "allowed_types") {
+		else if (name == "allowed_tables" || name == "allowed_types") {
 			bool is_type = name == "allowed_types";
 			std::string leaf = is_type ? "type" : "table";
 			if (value.type().id() != LogicalTypeId::LIST)
@@ -184,16 +178,12 @@ Value PolicyValue(const Policy &policy) {
 	                      {"allow_replacement_scans", Value::BOOLEAN(policy.replacement_scans)},
 	                      {"allowed_functions", strings(policy.allowed_functions)},
 	                      {"blocked_functions", strings(policy.blocked_functions)},
-	                      {"allowed_catalogs", strings(policy.allowed_catalogs)},
-	                      {"allowed_schemas", strings(policy.allowed_schemas)},
 	                      {"allowed_tables", identities(policy.allowed_tables, "table")},
 	                      {"allowed_types", identities(policy.allowed_types, "type")},
 	                      {"max_statements", Value::BIGINT(policy.statements)},
 	                      {"max_ast_bytes", Value::BIGINT(policy.bytes)},
 	                      {"max_ast_nodes", Value::BIGINT(policy.nodes)},
 	                      {"max_ast_depth", Value::BIGINT(policy.depth)},
-	                      {"restrict_catalogs", Value::BOOLEAN(policy.catalogs)},
-	                      {"restrict_schemas", Value::BOOLEAN(policy.schemas)},
 	                      {"restrict_tables", Value::BOOLEAN(policy.tables)}});
 }
 
@@ -227,16 +217,12 @@ Policy ReadPolicy(const Value &value) {
 	auto &fields = duckdb::StructType::GetChildTypes(value.type());
 	auto &values = duckdb::StructValue::GetChildren(value);
 	std::vector<std::pair<std::string, Value>> options;
-	bool catalogs = false, schemas = false, tables = false;
+	bool tables = false;
 	for (size_t i = 0; i < fields.size(); i++) {
 		auto &name = fields[i].first;
 		if (values[i].IsNull())
 			throw std::invalid_argument("NULL policy field: " + name);
-		if (name == "restrict_catalogs")
-			catalogs = values[i].GetValue<bool>();
-		else if (name == "restrict_schemas")
-			schemas = values[i].GetValue<bool>();
-		else if (name == "restrict_tables")
+		if (name == "restrict_tables")
 			tables = values[i].GetValue<bool>();
 		else if (name == "allowed_tables" || name == "allowed_types")
 			options.emplace_back(name, CanonicalIdentities(name, values[i]));
@@ -245,8 +231,6 @@ Policy ReadPolicy(const Value &value) {
 	}
 	Policy policy;
 	ApplyOptions(policy, options);
-	policy.catalogs = catalogs;
-	policy.schemas = schemas;
 	policy.tables = tables;
 	return policy;
 }

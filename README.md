@@ -65,7 +65,6 @@ INSERT INTO reporting.orders VALUES (1, 20), (1, 30), (2, 15);
 ```sql
 SELECT gatekeeper_validate(
     'SELECT customer_id, sum(amount) FROM reporting.orders GROUP BY customer_id',
-    allowed_schemas := ['reporting'],
     allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]
 ).allowed;
 -- true
@@ -111,7 +110,7 @@ spliced into SQL text.
 | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`) the query bound to. Empty unless `ok`. |
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 
-Violation `rule` values: `function`, `catalog`, `schema`, `table`, `type`, `internal_object`,
+Violation `rule` values: `function`, `table`, `type`, `internal_object`,
 `dynamic_sql`, `table_function`, `recursive_cte`, `replacement_scan`,
 `bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
 fields, not on message text.
@@ -124,9 +123,9 @@ What the three failure shapes look like:
 
 ```jsonc
 // Policy denial: code 'forbidden', structured violations, no error text.
-// SELECT * FROM hr.salaries   with   allowed_schemas := ['reporting']
+// SELECT * FROM hr.salaries with allowed_tables := [{catalog:'*', schema:'reporting', 'table':'*'}]
 { "allowed": false, "code": "forbidden",
-  "violations": [{ "rule": "schema", "message": "schema is not allowed",
+  "violations": [{ "rule": "table", "message": "object is not allowed",
                    "catalog": "memory", "schema": "hr", "table": "salaries",
                    "function_name": "", "position": null }],
   "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
@@ -154,9 +153,7 @@ What the three failure shapes look like:
 | `use_default_functions` | BOOLEAN | `true` | Admit the 864 reviewed compute functions. |
 | `allowed_functions` | VARCHAR[] | `[]` | Exact leaf names, ASCII case-folded. `'*'` is multiplication, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
-| `allowed_catalogs` | VARCHAR[] | unrestricted | `[]` denies every catalog object. |
-| `allowed_schemas` | VARCHAR[] | unrestricted | `[]` denies every schema object. |
-| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; omitted catalog matches any. `[]` denies all tables and views. |
+| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
 | `allowed_types` | STRUCT[] | built-in types only | `{catalog?, schema, type}`. Extension and user types (JSON, INET, enums) need an entry. |
 | `allow_recursive_ctes` | BOOLEAN | `true` | |
 | `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
@@ -175,6 +172,49 @@ SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']
 SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']).allowed;
 -- true
 ```
+
+### Table matching and migration
+
+Each `allowed_tables` rule matches all three components of a **resolved** table/view
+identity; any matching rule grants access within that policy layer. Both global and
+request layers must independently grant the object. Names are ASCII case-insensitive.
+Only a whole-component `'*'` is special: `sales_*`, `?`, and `%` are literal names,
+not glob/SQL patterns. There is no escape for a literal name consisting solely of `*`.
+Wildcards include objects created or attached later and, for `catalog: '*'`, temporary
+shadow tables. Prefer explicit catalog names when that scope is not intended.
+
+```sql
+SELECT gatekeeper_validate(
+    'SELECT * FROM reporting.orders',
+    allowed_tables := [{catalog: '*', schema: 'reporting', 'table': '*'}]
+).allowed;
+-- true
+```
+
+For catalog-wide access use `{catalog: 'warehouse', schema: '*', 'table': '*'}`.
+Multiple entries can pair different catalogs and schemas without granting their
+cross-product. Omit the option for unrestricted non-internal tables/views; supply
+`[]` to deny them all. Use explicit `*` in new policies; omitted/NULL `catalog`
+remains the compatible any-catalog shorthand. Schema and table are required.
+
+Internal objects require a matching rule with **exact schema and table names** in
+each policy layer; catalog may match any. Broad wildcards never grant that opt-in.
+Metadata readers remain on the never-bind list even with exact object permission.
+Schema-wide `SHOW` is denied whenever a table restriction is configured, including
+`*/*/*`; this option does not filter metadata rows. `DESCRIBE table` still checks the
+resolved table normally.
+
+**Breaking change:** `allowed_catalogs` and `allowed_schemas` have been removed.
+Translate their table/view restrictions into `allowed_tables` rules, preserving the
+intersection with any existing table rules. They formerly also restricted custom-type
+namespaces and explicitly qualified function catalogs. Those checks are now governed
+solely by `allowed_types` and the function policies: table rules neither grant nor
+restrict types/functions, and those options do not acquire wildcard matching.
+Preserve custom-type namespace limits with exact `allowed_types` identities; function
+permissions remain leaf-name-based and assume trusted catalog definitions.
+`catalog`/`schema` violation rules are replaced by `table` for object denials.
+Recreate canonical settings through `CALL`; the removed options and their
+`restrict_catalogs`/`restrict_schemas` fields are no longer part of the setting.
 
 Things that surprise people:
 
@@ -210,7 +250,10 @@ Things that surprise people:
 ## Global policy
 
 ```sql
-CALL gatekeeper_configure(allowed_schemas := ['reporting'], blocked_functions := ['md5']);
+CALL gatekeeper_configure(
+    allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}],
+    blocked_functions := ['md5']
+);
 -- true
 ```
 
@@ -232,7 +275,7 @@ persisted, not undone by rollback, and `SET SESSION`/`RESET SESSION` are rejecte
 | Dimension | How the layers combine |
 | --- | --- |
 | Blocks and the never-bind list | Either layer's deny wins. |
-| Allowlists (functions, catalogs, schemas, tables, types) | Each layer must allow the resolved identity. |
+| Allowlists (functions, tables, types) | Each layer must allow the resolved identity. |
 | Capability flags | Both layers must grant. |
 | Limits | The stricter value applies. |
 
@@ -254,8 +297,8 @@ tenant.
 Prefer `CALL` for authoring: it validates option names, types, and nested identity fields
 before DuckDB's casts, and fills omitted options from the built-in defaults.
 `SET gatekeeper_policy = <STRUCT>` also works but requires the **complete canonical
-STRUCT**: every option plus the `restrict_catalogs`/`restrict_schemas`/`restrict_tables`
-flags, with no NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails
+STRUCT**: every option plus the `restrict_tables`
+flag, with no NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails
 with `NULL policy field: check_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead. DuckDB silently
 drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''` means
@@ -277,12 +320,13 @@ db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 
 # Trusted setup: install the ceiling, then lock it.
-db.execute("CALL gatekeeper_configure(allowed_schemas := ?)", [["reporting"]])
+tables = [{"catalog": "memory", "schema": "reporting", "table": "*"}]
+db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("SET lock_configuration = true")
 
 sql = "SELECT sum(amount) FROM reporting.orders"
 decision = db.execute(
-    "SELECT gatekeeper_validate(?, allowed_schemas := ?)", [sql, ["reporting"]]
+    "SELECT gatekeeper_validate(?, allowed_tables := ?)", [sql, tables]
 ).fetchone()[0]
 if not decision["allowed"] or decision["code"] != "ok":
     raise PermissionError(decision["violations"] or decision["error_message"])

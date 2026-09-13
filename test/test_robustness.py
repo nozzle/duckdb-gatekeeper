@@ -9,8 +9,8 @@ def test_depth_and_width(db):
     db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t(x INT)")
     for depth in [1, 20, 100]:
         sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
-        assert check(db, sql, {"allowed_schemas": ["tenant_a"]})["allowed"]
-        assert not check(db, sql, {"allowed_schemas": ["tenant_b"]})["allowed"]
+        assert check(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
+        assert not check(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
     assert check(db, sql)["allowed"]
     assert not check(db, sql, {"max_ast_nodes": 10})["allowed"]

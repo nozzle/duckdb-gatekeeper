@@ -32,6 +32,17 @@ NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled 
 `catalog`, `schema`, or leaf) fails closed instead of widening catalog matching.
 See [global policy](../README.md#global-policy) in the README.
 
+`allowed_tables` is a union of catalog/schema/table rules within each layer, with
+an intersection between layers. A whole-component `*` matches any identifier;
+other text is exact and ASCII case-folded. Matching uses resolved identities, not
+caller spellings or CTE names. Wildcards cover future objects as well as existing
+ones. Internal objects require exact schema/table names in a matching rule; a
+wildcard catalog is permitted. Metadata readers remain independently forbidden,
+and schema-wide `SHOW` is denied under any configured table restriction.
+Table rules do not restrict or authorize function/type namespaces. Use exact
+`allowed_types` identities and the leaf-name function policies for those capabilities;
+see the [migration notes](../README.md#table-matching-and-migration).
+
 ## Function enforcement and trusted expansion
 
 Caller-authored function names pass the AST allowlist. Unambiguous syntax such as
@@ -176,7 +187,7 @@ SET autoinstall_known_extensions=false;
 SET memory_limit='512MB';
 SET threads=1;
 SET search_path='memory.reporting';
-CALL gatekeeper_configure(allowed_catalogs := ['memory'], allowed_schemas := ['reporting']);
+CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}]);
 SET lock_configuration=true;
 ```
 
@@ -198,7 +209,7 @@ Successful dependency lists are useful audit evidence, not a TOCTOU solution. Th
 record observed lookups and surviving function implementations, may omit hidden
 extension work, and do not hash definitions or identify overloads. Failed decisions
 return empty lists to avoid presenting an incomplete dependency set as authorization.
-Omitted catalogs in `allowed_tables` include `temp` shadow tables. Table macros may
+Omitted/NULL catalogs and `catalog: '*'` in `allowed_tables` include `temp` shadow tables. Table macros may
 inherit caller CTEs whereas views do not; compare actual resolved objects rather than
 assuming definition-time bindings. Admitted enum types can expose their labels via
 `enum_range`; type permission does not authorize only a subset of labels.

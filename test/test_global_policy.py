@@ -14,11 +14,11 @@ def policy(db):
 
 def test_inspection_reset_and_complete_replacement(db):
     defaults = policy(db)
-    assert defaults["restrict_schemas"] is False
-    assert defaults["allowed_schemas"] == []
+    assert defaults["restrict_tables"] is False
+    assert defaults["allowed_tables"] == []
     assert all(value is not None for value in defaults.values())
-    configure(db, {"allowed_schemas": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
-    assert policy(db)["restrict_schemas"] is True
+    configure(db, {"allowed_tables": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
+    assert policy(db)["restrict_tables"] is True
     assert policy(db)["blocked_functions"] == ["md5"]
     configure(db, {"max_statements": 3})
     assert policy(db) == {**defaults, "max_statements": 3}
@@ -32,9 +32,9 @@ def test_inspection_reset_and_complete_replacement(db):
 def test_canonical_policy_shape_is_pinned(db):
     """The setting's field set is public API; a removed option must disappear from it and be rejected."""
     expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
-                "allow_replacement_scans", "allowed_functions", "blocked_functions", "allowed_catalogs",
-                "allowed_schemas", "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
-                "max_ast_nodes", "max_ast_depth", "restrict_catalogs", "restrict_schemas", "restrict_tables"}
+                "allow_replacement_scans", "allowed_functions", "blocked_functions",
+                "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
+                "max_ast_nodes", "max_ast_depth", "restrict_tables"}
     assert set(policy(db)) == expected
     assert "allow_dynamic_sql" not in policy(db)
     before = policy(db)
@@ -240,15 +240,16 @@ def test_identity_layers_match_independently_and_request_can_narrow(db):
     assert not validate(db, "SELECT * FROM u", broader)["allowed"]
 
 
-def test_types_and_namespaces_remain_ceilings(db):
+def test_type_and_table_ceilings_are_independent(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a'); CREATE TABLE private.t(x INT)")
     grant = {"allowed_types": [{"schema": "private", "type": "customer"}]}
     assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
-    configure(db, {**grant, "allowed_schemas": ["main"]})
-    assert not validate(db, "SELECT NULL::private.customer", {"allowed_schemas": ["private"]})["allowed"]
-    assert not validate(db, "SELECT * FROM private.t", {"allowed_schemas": ["private"]})["allowed"]
-    configure(db, {**grant, "allowed_catalogs": []})
-    assert not validate(db, "SELECT NULL::private.customer", {"allowed_catalogs": ["memory"]})["allowed"]
+    configure(db, {**grant, "allowed_tables": []})
+    assert validate(db, "SELECT NULL::private.customer")["allowed"]
+    assert not validate(db, "SELECT NULL::private.customer", {"allowed_types": []})["allowed"]
+    assert not validate(db, "SELECT * FROM private.t", {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})["allowed"]
+    configure(db, {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})
+    assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
 
 
 def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):
