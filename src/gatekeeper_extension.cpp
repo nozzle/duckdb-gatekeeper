@@ -6,6 +6,8 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -22,7 +24,6 @@
 #include "json_serializer.hpp"
 #include "options.hpp"
 #include <map>
-#include <mutex>
 
 namespace duckdb {
 using namespace duckdb_yyjson;
@@ -79,11 +80,25 @@ static Value ResultValue(const gatekeeper::Result &result) {
 	                      identities(result.objects, true), identities(result.functions, false)});
 }
 
-struct GatekeeperState : ScalarFunctionInfo {
-	std::mutex mutex;
-	bool configured = false;
-	gatekeeper::Policy defaults;
-};
+static constexpr const char *POLICY_SETTING = "gatekeeper_policy";
+
+static void SetPolicy(ClientContext &, SetScope scope, Value &value) {
+	if (scope == SetScope::SESSION)
+		throw InvalidInputException("gatekeeper_policy is global-only");
+	try {
+		value = gatekeeper::PolicyValue(gatekeeper::ReadPolicy(value));
+	} catch (const std::invalid_argument &error) {
+		throw InvalidInputException(error.what());
+	}
+}
+
+static gatekeeper::Policy GlobalPolicy(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	Value value;
+	if (!config.TryGetCurrentSetting(POLICY_SETTING, value))
+		throw std::invalid_argument("gatekeeper_policy is unavailable");
+	return gatekeeper::ReadPolicy(value);
+}
 
 struct OptionBinding : FunctionData {
 	vector<string> names;
@@ -294,19 +309,20 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 	}
 }
 
-static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const string &sql) {
+static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
+                               const gatekeeper::Policy &ceiling, const string &sql) {
 	gatekeeper::Result result;
 	bool binding = false;
 	try {
 		if (sql.find('\0') != string::npos)
 			throw InvalidInputException("SQL contains a NUL byte");
-		if (sql.size() > policy.bytes)
+		if (sql.size() > std::min(policy.bytes, ceiling.bytes))
 			return {false, "forbidden", "", "", {{"limit", "SQL exceeds max_ast_bytes input bound"}}};
 		Parser parser(context.GetParserOptions());
 		parser.ParseQuery(sql);
 		if (parser.statements.empty())
 			throw InvalidInputException("SQL contains no statements");
-		if (parser.statements.size() > policy.statements)
+		if (parser.statements.size() > std::min(policy.statements, ceiling.statements))
 			return {false, "forbidden", "", "", {{"limit", "statement count exceeds policy"}}};
 		unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr),
 		                                                               yyjson_mut_doc_free);
@@ -333,10 +349,10 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		unique_ptr<char, decltype(&free)> serialized(yyjson_write(ast.get(), 0, &bytes), free);
 		if (!serialized)
 			throw std::bad_alloc();
-		if (bytes > policy.bytes)
+		if (bytes > std::min(policy.bytes, ceiling.bytes))
 			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds max_ast_bytes"}}};
 		gatekeeper::BindingPolicy binding_policy;
-		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy);
+		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy, &ceiling);
 		if (!result.allowed)
 			return result;
 		binding = true;
@@ -346,16 +362,20 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			auto binder = Binder::CreateBinder(context);
 			binder->SetParameters(parameters);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-			binder->SetCatalogLookupCallback(
-			    [&](CatalogEntry &entry) { AuthorizeObject(policy, binding_policy, entry, result); });
+			binder->SetCatalogLookupCallback([&](CatalogEntry &entry) {
+				AuthorizeObject(ceiling, binding_policy, entry, result);
+				AuthorizeObject(policy, binding_policy, entry, result);
+			});
 			auto bound = binder->Bind(*statement);
 			// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
 			// parameters.rebind is a cache hint, not incomplete binding.
 			if (!bound.plan)
 				throw BinderException(
 				    "Validation requires a complete bound plan; parameter values or types may be needed");
-			if (bound.plan)
+			if (bound.plan) {
+				AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
 				AuthorizePlan(policy, binding_policy, *bound.plan, result);
+			}
 			if (!binder->GetReplacementScans().empty()) {
 				result.allowed = false;
 				result.code = "unsupported";
@@ -416,23 +436,25 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 
 static void GatekeeperValidate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &expression = state.expr.Cast<BoundFunctionExpression>();
-	auto &configuration = expression.function.function_info->Cast<GatekeeperState>();
 	gatekeeper::Policy defaults;
-	{
-		std::lock_guard<std::mutex> lock(configuration.mutex);
-		defaults = configuration.defaults;
+	std::string configuration_error;
+	try {
+		defaults = GlobalPolicy(state.GetContext());
+	} catch (const std::invalid_argument &error) {
+		configuration_error = error.what();
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto sql = args.data[0].GetValue(row);
 		gatekeeper::Result decision;
 		try {
+			if (!configuration_error.empty()) throw std::invalid_argument(configuration_error);
 			auto policy = defaults;
 			gatekeeper::ApplyOptions(policy, Options(args, expression.bind_info->Cast<OptionBinding>(), row, 1));
 			if (sql.IsNull())
 				decision = {false, "invalid_input", "", "NULL SQL input", {}};
 			else
-				decision = Check(state.GetContext(), policy, sql.GetValue<string>());
+				decision = Check(state.GetContext(), policy, defaults, sql.GetValue<string>());
 		} catch (const std::invalid_argument &error) {
 			decision = {false, "invalid_input", "", error.what(), {}};
 		}
@@ -440,23 +462,51 @@ static void GatekeeperValidate(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-static void Configure(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &expression = state.expr.Cast<BoundFunctionExpression>();
-	auto &config = expression.function.function_info->Cast<GatekeeperState>();
-	if (args.size() != 1)
-		throw InvalidInputException("gatekeeper_configure requires one row");
+struct ConfigureBinding : FunctionData {
+	Value policy;
+	explicit ConfigureBinding(Value policy) : policy(std::move(policy)) {}
+	unique_ptr<FunctionData> Copy() const override { return make_uniq<ConfigureBinding>(policy); }
+	bool Equals(const FunctionData &other) const override { return policy == other.Cast<ConfigureBinding>().policy; }
+};
+
+struct ConfigureState : GlobalTableFunctionState { bool finished = false; };
+
+static unique_ptr<GlobalTableFunctionState> InitConfigure(ClientContext &, TableFunctionInitInput &) {
+	return make_uniq<ConfigureState>();
+}
+
+static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
+                                            vector<LogicalType> &types, vector<string> &names) {
 	try {
 		gatekeeper::Policy policy;
-		gatekeeper::ApplyOptions(policy, Options(args, expression.bind_info->Cast<OptionBinding>(), 0, 0));
-		std::lock_guard<std::mutex> lock(config.mutex);
-		if (config.configured)
-			throw InvalidInputException("Gatekeeper defaults are already configured");
-		config.defaults = std::move(policy);
-		config.configured = true;
+		std::vector<std::pair<std::string, Value>> options;
+		for (const auto &option : input.named_parameters) {
+			auto value = option.second;
+			// ANY preserves original types and nested field names; only integer widening is permitted.
+			if (gatekeeper::OptionType(option.first) == LogicalType::BIGINT && value.type().IsIntegral())
+				value = Value::BIGINT(value.GetValue<int64_t>());
+			options.emplace_back(option.first, std::move(value));
+		}
+		gatekeeper::ApplyOptions(policy, options);
+		types.push_back(LogicalType::BOOLEAN);
+		names.push_back("Success");
+		return make_uniq<ConfigureBinding>(gatekeeper::PolicyValue(policy));
 	} catch (const std::invalid_argument &error) {
 		throw InvalidInputException(error.what());
 	}
-	result.SetValue(0, Value::BOOLEAN(true));
+}
+
+static void Configure(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+	auto &state = input.global_state->Cast<ConfigureState>();
+	if (state.finished) return;
+	auto &config = DBConfig::GetConfig(context);
+	config.CheckLock(POLICY_SETTING);
+	auto value = input.bind_data->Cast<ConfigureBinding>().policy;
+	SetPolicy(context, SetScope::GLOBAL, value);
+	config.SetOption(POLICY_SETTING, std::move(value));
+	state.finished = true;
+	output.SetCardinality(1);
+	output.SetValue(0, 0, Value::BOOLEAN(true));
 }
 
 // The grammar and inventory are generated from exactly this engine release. DuckDB's own footer check
@@ -469,17 +519,19 @@ static void LoadInternal(ExtensionLoader &loader) {
 		throw InvalidInputException("Gatekeeper 0.1.0 supports DuckDB %s only; this engine is %s",
 		                            SUPPORTED_DUCKDB_VERSION, DuckDB::LibraryVersion());
 	}
-	auto config = make_shared_ptr<GatekeeperState>();
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
+	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
+	                          default_policy, SetPolicy, SetScope::GLOBAL);
 	ScalarFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, ResultType(), GatekeeperValidate,
 	                        BindOptions);
-	ScalarFunction configure("gatekeeper_configure", {}, LogicalType::BOOLEAN, Configure, BindOptions);
-	for (auto function : {validate, configure}) {
-		function.varargs = LogicalType::ANY;
-		function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-		function.stability = FunctionStability::VOLATILE;
-		function.function_info = config;
-		loader.RegisterFunction(function);
-	}
+	validate.varargs = LogicalType::ANY;
+	validate.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	validate.stability = FunctionStability::VOLATILE;
+	loader.RegisterFunction(validate);
+	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitConfigure);
+	for (const auto &name : gatekeeper::OptionNames()) configure.named_parameters[name] = LogicalType::ANY;
+	loader.RegisterFunction(configure);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }

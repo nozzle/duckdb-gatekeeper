@@ -7,6 +7,15 @@ using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
 using duckdb::Value;
 
+const std::vector<std::string> &OptionNames() {
+	static const std::vector<std::string> names = {
+	    "check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
+	    "allow_dynamic_sql", "allow_file_table_references", "allowed_functions", "blocked_functions",
+	    "allowed_catalogs", "allowed_schemas", "allowed_tables", "allowed_types", "max_statements",
+	    "max_ast_bytes", "max_ast_nodes", "max_ast_depth"};
+	return names;
+}
+
 LogicalType OptionType(const std::string &name) {
 	if (name == "check_functions" || name == "use_default_functions" || name == "allow_recursive_ctes" ||
 	    name == "allow_table_functions" || name == "allow_dynamic_sql" || name == "allow_file_table_references")
@@ -139,5 +148,57 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 		policy.defaults = false;
 	if (!policy.functions && (policy.defaults || !policy.allowed_functions.empty()))
 		throw std::invalid_argument("allowlist options require check_functions");
+}
+
+Value PolicyValue(const Policy &policy) {
+	auto strings = [](const Names &names) {
+		duckdb::vector<Value> values;
+		for (const auto &name : names) values.emplace_back(name);
+		return Value::LIST(LogicalType::VARCHAR, values);
+	};
+	auto identities = [](const std::set<Table> &entries, const std::string &leaf) {
+		auto type = LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR}, {"schema", LogicalType::VARCHAR},
+		                                 {leaf, LogicalType::VARCHAR}});
+		duckdb::vector<Value> values;
+		for (const auto &entry : entries)
+			values.push_back(Value::STRUCT(type, {entry.catalog.empty() ? Value(LogicalType::VARCHAR) : Value(entry.catalog),
+			                                     Value(entry.schema), Value(entry.table)}));
+		return Value::LIST(type, values);
+	};
+	return Value::STRUCT({
+	    {"check_functions", Value::BOOLEAN(policy.functions)}, {"use_default_functions", Value::BOOLEAN(policy.defaults)},
+	    {"allow_recursive_ctes", Value::BOOLEAN(policy.recursive)}, {"allow_table_functions", Value::BOOLEAN(policy.table_functions)},
+	    {"allow_dynamic_sql", Value::BOOLEAN(policy.dynamic_sql)}, {"allow_file_table_references", Value::BOOLEAN(policy.file_tables)},
+	    {"allowed_functions", strings(policy.allowed_functions)}, {"blocked_functions", strings(policy.blocked_functions)},
+	    {"allowed_catalogs", strings(policy.allowed_catalogs)}, {"allowed_schemas", strings(policy.allowed_schemas)},
+	    {"allowed_tables", identities(policy.allowed_tables, "table")}, {"allowed_types", identities(policy.allowed_types, "type")},
+	    {"max_statements", Value::BIGINT(policy.statements)}, {"max_ast_bytes", Value::BIGINT(policy.bytes)},
+	    {"max_ast_nodes", Value::BIGINT(policy.nodes)}, {"max_ast_depth", Value::BIGINT(policy.depth)},
+	    {"restrict_catalogs", Value::BOOLEAN(policy.catalogs)}, {"restrict_schemas", Value::BOOLEAN(policy.schemas)},
+	    {"restrict_tables", Value::BOOLEAN(policy.tables)}});
+}
+
+Policy ReadPolicy(const Value &value) {
+	// Recheck at use time: host configuration APIs can bypass extension SET callbacks.
+	if (value.IsNull() || value.type() != PolicyValue(Policy()).type())
+		throw std::invalid_argument("gatekeeper_policy requires the complete canonical policy STRUCT");
+	auto &fields = duckdb::StructType::GetChildTypes(value.type());
+	auto &values = duckdb::StructValue::GetChildren(value);
+	std::vector<std::pair<std::string, Value>> options;
+	bool catalogs = false, schemas = false, tables = false;
+	for (size_t i = 0; i < fields.size(); i++) {
+		auto &name = fields[i].first;
+		if (values[i].IsNull()) throw std::invalid_argument("NULL policy field: " + name);
+		if (name == "restrict_catalogs") catalogs = values[i].GetValue<bool>();
+		else if (name == "restrict_schemas") schemas = values[i].GetValue<bool>();
+		else if (name == "restrict_tables") tables = values[i].GetValue<bool>();
+		else options.emplace_back(name, values[i]);
+	}
+	Policy policy;
+	ApplyOptions(policy, options);
+	policy.catalogs = catalogs;
+	policy.schemas = schemas;
+	policy.tables = tables;
+	return policy;
 }
 } // namespace gatekeeper

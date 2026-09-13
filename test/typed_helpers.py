@@ -17,7 +17,8 @@ def call(db, function, sql=None, options=None):
             raise ValueError("invalid test option name")
         arguments.append(key + " := ?")
         values.append(value)
-    return db.execute("SELECT " + function + "(" + ",".join(arguments) + ")", values).fetchone()[0]
+    prefix = "CALL " if function == "gatekeeper_configure" else "SELECT "
+    return db.execute(prefix + function + "(" + ",".join(arguments) + ")", values).fetchone()[0]
 
 
 def validate(db, sql, options=None):

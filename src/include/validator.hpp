@@ -61,5 +61,5 @@ struct BindingPolicy {
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
-Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr);
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr);
 } // namespace gatekeeper
