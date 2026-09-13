@@ -171,6 +171,9 @@ the same function policy as scalar and aggregate calls. Readers are not defaults
 admitting one permits its resource access, without path restrictions from
 `allowed_tables`. Authorized trusted views and macros may introduce readers
 internally, but explicit blocks and the never-bind list still apply.
+To deny default row generators, add their names to `blocked_functions`, or set
+`use_default_functions := false` with an explicit `allowed_functions` list.
+Function policies apply by name, including scalar calls sharing that name.
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']).allowed;
