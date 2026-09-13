@@ -32,6 +32,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			policy.allowed_schemas = {"main", "public"};
 		if (data[1] & 8)
 			policy.allowed_tables = {{"", "main", "t"}};
+		if (data[1] & 64)
+			policy.allowed_types = {{"system", "main", "json"}, {"", "main", "custom"}};
 		if (data[1] & 16)
 			policy.blocked_functions = {"md5", "read_csv"};
 		if (policy.functions && (data[1] & 32))
@@ -44,12 +46,17 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
 			return 0;
-		auto result = gatekeeper::Validate(ast, policy);
+		gatekeeper::BindingPolicy binding;
+		auto result = gatekeeper::Validate(ast, policy, &binding);
 		if ((result.code != "ok" && result.code != "forbidden" && result.code != "unsupported") ||
 		    result.allowed != (result.code == "ok") || result.allowed != result.violations.empty() ||
 		    !result.error_message.empty() || !result.error_type.empty())
 			std::abort();
-		auto again = gatekeeper::Validate(ast, policy);
+		gatekeeper::BindingPolicy again_binding;
+		auto again = gatekeeper::Validate(ast, policy, &again_binding);
+		if (binding.synthesized_functions != again_binding.synthesized_functions ||
+		    binding.caller_types != again_binding.caller_types)
+			std::abort();
 		if (result.allowed != again.allowed || result.code != again.code || result.error_type != again.error_type ||
 		    result.error_message != again.error_message || result.position != again.position ||
 		    result.violations.size() != again.violations.size() ||

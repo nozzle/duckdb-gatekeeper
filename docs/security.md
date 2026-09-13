@@ -2,12 +2,15 @@
 
 Gatekeeper phase one is a pre-execution validator, not an enforcement hook or a
 database sandbox. A successful decision means the SQL conforms to the selected
-syntax and resolved-object policy on the pinned parser/binder. It does not mean the SQL is cheap,
+syntax, caller-function/type/collation and resolved-deny/object policies on the pinned parser/binder. It does not mean the SQL is cheap,
 returns nonsensitive data, or cannot have side effects through admitted functions.
 
 ## Integrating
 
 1. Load a trusted extension build and keep the execution catalog/search path trusted.
+   Provision required extensions first, then set `autoload_known_extensions=false`
+   and `autoinstall_known_extensions=false` on validation connections. Gatekeeper
+   does not temporarily mutate those settings.
 2. Construct policy from authenticated application context. Do not allow an untrusted
    caller to replace deployment restrictions with weaker options.
 3. Call `gatekeeper_validate` with the exact SQL to execute.
@@ -19,12 +22,78 @@ replace values and may relax restrictions; these defaults are not a security
 baseline. Only trusted bootstrap should configure the instance. Request state is
 local to each scalar call. All effective restrictions intersect and blocks win.
 
+## Function enforcement and trusted expansion
+
+Caller-authored function names pass the AST allowlist. Unambiguous syntax such as
+list construction and slicing adds `list_value`/`array_slice` to that check.
+Ambiguous indexing, dotted references, arrows and SQL-value names record the possible
+implementations; the catalog callback checks the implementation DuckDB actually
+selects. `t.column` and a real column named `current_schema` are not automatically
+treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
+
+The callback applies explicit blocks and the non-overridable never-bind list below
+to scalar, aggregate, table, macro, table-macro and pragma-function entries, including
+trusted expansions. Authorized views backed by `read_parquet` still work unless
+that reader is blocked. The callback exposes no expression origin or reliable
+macro/view boundary: when caller syntax requires an implementation check, a trusted
+expansion using the same implementation must also pass it. This conservative
+query-wide restriction can deny a mixed caller/view expression; it does not grant
+an exception to caller code. Caller type names are similarly checked at resolution;
+unrelated types inside trusted expansions retain the trusted boundary.
+
+### Never-bind functions
+
+The explicit list in `src/include/function_policy.hpp` contains:
+
+```
+checkpoint currval force_checkpoint nextval
+query query_table json_execute_serialized_sql read_duckdb seq_scan which_secret
+pragma_collations pragma_database_size pragma_metadata_info pragma_show
+pragma_storage_info pragma_table_info pragma_table_sample
+duckdb_approx_database_count duckdb_columns duckdb_connection_count duckdb_constraints
+duckdb_coordinate_systems duckdb_databases duckdb_dependencies duckdb_extensions
+duckdb_external_file_cache duckdb_functions duckdb_indexes duckdb_log_contexts
+duckdb_logs duckdb_logs_parsed duckdb_memory duckdb_prepared_statements
+duckdb_profiling_settings duckdb_schemas duckdb_secret_types duckdb_secrets
+duckdb_sequences duckdb_settings duckdb_table_sample duckdb_tables
+duckdb_temporary_files duckdb_types duckdb_variables duckdb_views
+```
+
+Source review at the pinned revision: `src/function/table/query_function.cpp`
+reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
+`src/function/table/system/` readers inspect catalogs, secrets, storage or session
+state outside table authorization; `checkpoint.cpp` and `scalar/sequence/nextval.cpp`
+mutate or inspect storage/sequence state. `seq_scan` is the internal scan entry,
+not a caller capability (normal physical scans retain object authorization).
+JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
+reserved defensive spelling from the issue; the pinned registration is `duckdb_table_sample`.
+Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
+All listed names are excluded from defaults and cannot be admitted by options.
+Metadata views expanding to these readers are denied even with `allowed_tables`.
+
+### Callback bypasses
+
+- `bind_pivot.cpp` performs direct aggregate and enum lookups. Explicit aggregate
+  names pass preflight; named PIVOT enums are conservatively unsupported (use IN values).
+- `bind_window_expression.cpp` and `function_binder.cpp` contain direct aggregate/
+  function lookup paths. Caller names pass preflight; surviving bound scalar,
+  aggregate, window and table functions also pass a resolved-deny plan walk.
+- `collation_binding.cpp` directly loads collation entries and binds their scalar
+  functions. Explicit collation names are checked before binding; known built-in
+  implementations (`lower`, `strip_accents`, `nfc_normalize`) honor explicit blocks.
+  The plan walk catches surviving implementations, including implicit collations.
+- The plan walk cannot undo bind-time work or see functions already folded away.
+  Host default collations, trusted extension callbacks, custom casts/type binders,
+  macro expansion internals and optimizer rewrites are not a complete execution
+  interception surface. In particular, global blocks are not a sandbox for arbitrary
+  trusted callback code that performs its own direct lookups/evaluation.
+
 ## Remaining boundaries
 
 - Validation always binds on the calling connection and authorizes retrieved table
   and view identities, including underlying objects from views/macros. No public
-  syntax-only mode exists. Function policies do not verify which macro/UDF implements
-  a name; catalog integrity is assumed.
+  syntax-only mode exists. Function matching remains name-based, not a proof of a
+  macro/UDF's implementation; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
   identify tables without depending on a particular scan operator. Local Iceberg
@@ -32,7 +101,9 @@ local to each scalar call. All effective restrictions intersect and blocks win.
   implementations still need verification.
 - Binding may perform remote I/O or evaluate bind-time expressions before returning,
   even for a request eventually denied. Caller-authored prohibited functions are
-  rejected first; trusted expansions are not rechecked against function policy.
+  rejected first; trusted expansions pass the resolved deny layer, not a wholesale
+  caller allowlist. Lookup-triggered autoload can occur before the callback; use
+  the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
@@ -45,8 +116,9 @@ local to each scalar call. All effective restrictions intersect and blocks win.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.
-- Explicitly admitting dynamic SQL or elevated readers transfers responsibility
-  for their hidden dependencies to the application.
+- Explicitly admitting eligible elevated readers/types/collations transfers responsibility
+  for their resources and trusted implementation to the application. The never-bind
+  list cannot be overridden, including with `allow_dynamic_sql`.
 - AST validation occurs after parsing and serialization; traversal limits do not
   replace process limits against parser/serializer resource exhaustion.
 
@@ -59,7 +131,9 @@ statement lifecycle.
 
 Only the pinned DuckDB 1.5.5 revision is supported. Internal C++ and serializer APIs
 require rebuilding/reviewing for other versions. Unknown serialized fields and
-node classes fail closed; opaque values are not interpreted as executable nodes.
+node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
+including nested type parameters. Computed type parameters and named PIVOT enums
+are conservatively unsupported. Ordinary literal payloads remain data, not executable nodes.
 The local tests and randomized-input checks are not a complete security audit.
 Distribution signing, broader platform testing, fuzzing, and production review
 remain required before deployment against hostile callers.

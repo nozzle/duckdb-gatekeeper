@@ -18,14 +18,14 @@ def grammar():
     primitives = {
         "string": "string", "bool": "boolean", "optional_idx": "number",
         "idx_t": "number", "int64_t": "number", "Value": "opaque",
-        "LogicalType": "opaque", "GroupingSet": "opaque",
+        "LogicalType": "logical_type", "GroupingSet": "opaque",
         "case_insensitive_set_t": "opaque", "qualified_column_set_t": "opaque",
         "qualified_column_map_t<string>": "opaque", "case_insensitive_map_t<idx_t>": "opaque",
         "case_insensitive_map_t<ParsedExpression*>": "replacement[]",
         "InsertionOrderPreservingMap<CommonTableExpressionInfo*>": "cte_entry[]",
     }
     enums = set("QueryNodeType AggregateHandling SetOperationType CTEMaterialize TableReferenceType JoinType JoinRefType OrdinalityType ShowType ResultModifierType OrderType OrderByNullType SampleMethod ExpressionClass ExpressionType LambdaSyntaxType SubqueryType WindowBoundary WindowExcludeMode".split())
-    allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier".split())
+    allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression TypeExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier".split())
     entries = {}
     for name in ["statement", "query_node", "tableref", "parsed_expression", "result_modifier", "nodes"]:
         for entry in json.loads((SOURCE / (name + ".json")).read_text()):
@@ -66,6 +66,7 @@ def grammar():
         "ConjunctionExpression": ["children"], "LambdaExpression": ["lhs", "expr"],
         "OperatorExpression": ["children"], "ParameterExpression": ["identifier"],
         "PositionalReferenceExpression": ["index"],
+        "TypeExpression": ["type_name"],
     }
     rules, dispatch = {}, {}
     for name, entry in entries.items():

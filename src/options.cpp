@@ -14,7 +14,7 @@ LogicalType OptionType(const std::string &name) {
 	if (name == "allowed_functions" || name == "blocked_functions" || name == "allowed_catalogs" ||
 	    name == "allowed_schemas")
 		return LogicalType::LIST(LogicalType::VARCHAR);
-	if (name == "allowed_tables")
+	if (name == "allowed_tables" || name == "allowed_types")
 		return LogicalType::ANY;
 	if (name == "max_statements" || name == "max_ast_bytes" || name == "max_ast_nodes" || name == "max_ast_depth")
 		return LogicalType::BIGINT;
@@ -72,40 +72,44 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 		} else if (name == "allowed_schemas") {
 			policy.schemas = true;
 			policy.allowed_schemas = Strings(value, true);
-		} else if (name == "allowed_tables") {
+		} else if (name == "allowed_tables" || name == "allowed_types") {
+			bool is_type = name == "allowed_types";
+			std::string leaf = is_type ? "type" : "table";
 			if (value.type().id() != LogicalTypeId::LIST)
-				throw std::invalid_argument("allowed_tables requires a list of structs");
-			policy.tables = true;
-			policy.allowed_tables.clear();
+				throw std::invalid_argument(name + " requires a list of structs");
+			if (!is_type)
+				policy.tables = true;
+			auto &identities = is_type ? policy.allowed_types : policy.allowed_tables;
+			identities.clear();
 			for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
 				if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT)
-					throw std::invalid_argument("expected table struct");
+					throw std::invalid_argument("expected " + leaf + " struct");
 				auto &types = duckdb::StructType::GetChildTypes(entry.type());
 				auto &values = duckdb::StructValue::GetChildren(entry);
 				Names fields;
 				Table table;
 				for (size_t i = 0; i < types.size(); i++) {
 					auto key = types[i].first;
-					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != "table"))
-						throw std::invalid_argument("unknown table field: " + key);
+					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != leaf))
+						throw std::invalid_argument("unknown " + leaf + " field: " + key);
 					if (values[i].IsNull() && key == "catalog")
 						continue;
 					if (values[i].IsNull() || values[i].type().id() != LogicalTypeId::VARCHAR)
-						throw std::invalid_argument("expected table identifier string");
+						throw std::invalid_argument("expected " + leaf + " identifier string");
 					auto text = values[i].GetValue<std::string>();
 					if (text.empty() || text.find('\0') != std::string::npos)
-						throw std::invalid_argument("table identifiers must be nonempty and NUL-free");
+						throw std::invalid_argument(leaf + " identifiers must be nonempty and NUL-free");
 					text = Lower(text);
 					if (key == "catalog")
 						table.catalog = text;
 					if (key == "schema")
 						table.schema = text;
-					if (key == "table")
+					if (key == leaf)
 						table.table = text;
 				}
-				if (!fields.count("schema") || !fields.count("table"))
-					throw std::invalid_argument("table entries require schema and table");
-				policy.allowed_tables.insert(table);
+				if (!fields.count("schema") || !fields.count(leaf))
+					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
+				identities.insert(table);
 			}
 		} else {
 			if (value.type() != LogicalType::BIGINT)

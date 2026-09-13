@@ -25,11 +25,13 @@ def main():
     corpus = build / "corpus"
     corpus.mkdir(exist_ok=True)
     for i, query in enumerate(["SELECT 1", "SELECT * FROM t", "SELECT * FROM v", "SELECT * FROM secret.t",
-                               "SELECT md5('x')", "DROP TABLE t", "WITH a AS (SELECT * FROM t) SELECT * FROM a"]):
+                               "SELECT md5('x')", "DROP TABLE t", "WITH a AS (SELECT * FROM t) SELECT * FROM a",
+                               "SELECT current_schema", "SELECT [1,2][1]", "SELECT {'a':1}.a", "SELECT NULL::INET"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
+        (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
     for mode in [1, 2, 15]:
-        for option in range(16):
-            for value in range(26):
+        for option in range(17):
+            for value in range(30):
                 (corpus / f"option-{mode}-{option}-{value}").write_bytes(bytes([mode, option, value, 10]) + b"t")
     env = os.environ.copy()
     env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1:detect_container_overflow=0"

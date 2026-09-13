@@ -161,7 +161,8 @@ def test_quoted_names_and_exact_catalog(db):
 
 def test_trusted_implementation_is_not_caller_code(catalog):
     options = {"allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]}
-    assert validate(catalog, "SELECT trusted_abs(-1)", options)["allowed"]
+    assert validate(catalog, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
+    assert not validate(catalog, "SELECT trusted_abs(-1)", options)["allowed"]
     assert not validate(catalog, "SELECT abs(-1)", options)["allowed"]
 
 
