@@ -497,8 +497,10 @@ struct Walker {
 				path += ".";
 			path += part;
 		}
-		if (!Both([](const Policy &p) { return p.file_tables; }) && (FileName(table) || FileName(path)))
-			Reject("file_table", "file table reference is disabled: " + path, value);
+		// Preflight: file-shaped names cannot be catalog objects unless replacement scans are enabled.
+		// The authoritative check is the Gatekeeper replacement scan installed at LOAD.
+		if (!Both([](const Policy &p) { return p.replacement_scans; }) && (FileName(table) || FileName(path)))
+			Reject("replacement_scan", "replacement scans are disabled: " + path, value);
 	}
 	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
 		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});

@@ -131,12 +131,18 @@ removed because every function it gated is on this list.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
-- File-reference detection is conservative and incomplete. Binder-collected
-  host-language and implicit replacement scans are rejected as unsupported; explicit
-  admitted readers and trusted catalog objects are the supported access paths.
-  Collection does not prevent bind-time I/O. Known filename/query-marker forms are
-  denied by preflight unless opted in; custom replacements and opted-in references
-  can access resources before the later rejection.
+- Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
+  replacement-scan list. It runs only while a validation is binding on the calling
+  thread; ordinary connections are unaffected. Other callbacks only construct a table
+  reference, so a denial happens before the substituted reader binds and no file is
+  opened. Readers substituted by DuckDB are authorized by their resolved names
+  (`parquet_scan`, `read_csv_auto`, `read_json_auto`), not by `read_parquet`/`read_csv`.
+  Host-language scans that resolve to subqueries are always denied. Residual: when
+  replacement scans are enabled and no callback claims a `/`-qualified name, DuckDB
+  itself probes `FileExists` under `enable_external_access`; keep the flag off or
+  disable external access on hosts where that probe matters. The file-shaped-name
+  preflight remains as an earlier diagnostic and to keep the callback out of the
+  common path.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.

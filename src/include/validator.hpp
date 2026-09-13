@@ -17,7 +17,7 @@ struct Table {
 };
 struct Policy {
 	bool functions = true, defaults = true, catalogs = false, schemas = false, tables = false;
-	bool recursive = true, table_functions = true, file_tables = false;
+	bool recursive = true, table_functions = true, replacement_scans = false;
 	Names allowed_functions, blocked_functions, allowed_catalogs, allowed_schemas;
 	std::set<Table> allowed_tables;
 	// Type identities share catalog/schema/leaf matching; table stores the type leaf.

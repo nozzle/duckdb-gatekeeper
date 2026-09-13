@@ -88,21 +88,11 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	static const char *names[] = {"check_functions",
-	                              "use_default_functions",
-	                              "allow_recursive_ctes",
-	                              "allow_table_functions",
-	                              "allow_file_table_references",
-	                              "allowed_functions",
-	                              "blocked_functions",
-	                              "allowed_catalogs",
-	                              "allowed_schemas",
-	                              "allowed_tables",
-	                              "max_statements",
-	                              "max_ast_bytes",
-	                              "max_ast_nodes",
-	                              "max_ast_depth",
-	                              "allowed_types"};
+	static const char *names[] = {"check_functions",       "use_default_functions",   "allow_recursive_ctes",
+	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
+	                              "blocked_functions",     "allowed_catalogs",        "allowed_schemas",
+	                              "allowed_tables",        "max_statements",          "max_ast_bytes",
+	                              "max_ast_nodes",         "max_ast_depth",           "allowed_types"};
 	if (selector % 16 < 15)
 		return names[selector % 16];
 	// Arbitrary option names remain one quoted identifier, never executable SQL.

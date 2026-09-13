@@ -32,7 +32,7 @@ def test_inspection_reset_and_complete_replacement(db):
 def test_canonical_policy_shape_is_pinned(db):
     """The setting's field set is public API; a removed option must disappear from it and be rejected."""
     expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
-                "allow_file_table_references", "allowed_functions", "blocked_functions", "allowed_catalogs",
+                "allow_replacement_scans", "allowed_functions", "blocked_functions", "allowed_catalogs",
                 "allowed_schemas", "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
                 "max_ast_nodes", "max_ast_depth", "restrict_catalogs", "restrict_schemas", "restrict_tables"}
     assert set(policy(db)) == expected
@@ -215,7 +215,7 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"allow_table_functions": False}, {"allow_table_functions": True}, "SELECT * FROM range(3)", "table_function"),
     ({"allow_recursive_ctes": False}, {"allow_recursive_ctes": True},
      "WITH RECURSIVE t AS (SELECT 1 x UNION ALL SELECT x+1 FROM t WHERE x<3) SELECT * FROM t", "recursive_cte"),
-    ({"allow_file_table_references": False}, {"allow_file_table_references": True}, "SELECT * FROM 'missing.csv'", "file_table"),
+    ({"allow_replacement_scans": False}, {"allow_replacement_scans": True}, "SELECT * FROM 'missing.csv'", "replacement_scan"),
     ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
 def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, rule):

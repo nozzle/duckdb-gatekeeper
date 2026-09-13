@@ -103,7 +103,7 @@ spliced into SQL text.
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 
 Violation `rule` values: `function`, `catalog`, `schema`, `table`, `type`, `internal_object`,
-`dynamic_sql`, `table_function`, `recursive_cte`, `file_table`, `replacement_scan`,
+`dynamic_sql`, `table_function`, `recursive_cte`, `replacement_scan`,
 `bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
 fields, not on message text.
 
@@ -151,7 +151,7 @@ What the three failure shapes look like:
 | `allowed_types` | STRUCT[] | built-in types only | `{catalog?, schema, type}`. Extension and user types (JSON, INET, enums) need an entry. |
 | `allow_recursive_ctes` | BOOLEAN | `true` | |
 | `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
-| `allow_file_table_references` | BOOLEAN | `false` | Permit catalog objects with file-shaped names (`x.parquet`, `a/b`). Never authorizes implicit file scans. |
+| `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 | `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
 | `max_ast_nodes` | BIGINT | `100000` | Positive; at most the default. |
@@ -184,9 +184,11 @@ Things that surprise people:
   `{catalog: 'system', schema: 'main', type: 'json'}`, `::INET` needs
   `{catalog: 'system', schema: 'main', type: 'inet'}` and the `inet` extension loaded
   first. A `json` entry does not admit `inet`.
-- Implicit file scans (`SELECT * FROM 'x.parquet'`) and host-language replacement scans
-  (DataFrames in scope) are currently rejected. Call the reader explicitly
-  (`read_parquet('x.parquet')`) and admit it in the global policy.
+- `SELECT * FROM 'x.parquet'` needs `allow_replacement_scans := true` **and** the reader
+  DuckDB substitutes admitted by name: `parquet_scan` for Parquet, `read_csv_auto` for
+  CSV, `read_json_auto` for JSON. The decision happens before the reader binds, so a
+  denied path is never opened. `objects` then lists the path with type `replacement`.
+  Host-language scans (DataFrames, relations in scope) are always denied.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
 - Caller expressions in bind-time positions (LIMIT, reader arguments, type parameters,
