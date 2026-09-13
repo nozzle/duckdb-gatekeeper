@@ -37,9 +37,10 @@ for building/loading the extension and the excluded MVP/threads targets.
 
 Gatekeeper parses the statement, checks the syntax the caller wrote (functions,
 capabilities, limits), then binds it on your connection and authorizes every table and
-view it resolves to, plus the types and functions the caller requested. Functions and
-types that trusted views and macros introduce internally are exempt from the caller
-allowlists, but explicit blocks and the never-bind list still apply to them. Each check
+view it resolves to, plus the types and functions the caller requested. Functions that
+trusted views and macros introduce internally are exempt from the caller allowlist but
+still subject to explicit blocks and the never-bind list; types they introduce internally
+are not caller capabilities and are not checked. Each check
 runs against both the global policy and the request layer (global policy plus the
 request's named options); both must allow the query. Nothing is executed, but **binding
 can perform I/O** through trusted catalogs and explicitly admitted readers.
@@ -81,11 +82,11 @@ gatekeeper_validate(sql VARCHAR, option := value, ...)   -- returns the result S
 CALL gatekeeper_configure(option := value, ...)          -- replaces the global policy
 ```
 
-Options are named DuckDB values. Unknown or duplicate names and wrong types are binder
-errors for both functions. Invalid runtime values (`max_statements := 0`, a NULL list
-member) differ: `gatekeeper_validate` returns a result with `code = 'invalid_input'`,
-while `CALL gatekeeper_configure` raises a DuckDB error and leaves the active policy
-unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
+Options are named DuckDB values. Unknown or duplicate names and wrong types raise a
+DuckDB error while the statement is bound, for both functions. Invalid runtime values
+(`max_statements := 0`, a NULL list member) differ: `gatekeeper_validate` returns a
+result with `code = 'invalid_input'`, while `CALL gatekeeper_configure` raises and
+leaves the active policy unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
 spliced into SQL text.
 
 ### Result
@@ -95,7 +96,7 @@ spliced into SQL text.
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
 | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
-| `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...). Nonempty only for `parser`/`binding`/`invalid_input`. |
+| `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when one is available; may be empty for `invalid_input`. Always empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message for that error; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
 | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`) the query bound to. Empty unless `ok`. |
@@ -152,10 +153,10 @@ What the three failure shapes look like:
 | `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
 | `allow_dynamic_sql` | BOOLEAN | `false` | Only gates `json_serialize_plan`; `query`/`query_table` can never be admitted. |
 | `allow_file_table_references` | BOOLEAN | `false` | Permit catalog objects with file-shaped names (`x.parquet`, `a/b`). Never authorizes implicit file scans. |
-| `max_statements` | BIGINT | `1` (max 1000) | |
-| `max_ast_bytes` | BIGINT | `8388608` | Also bounds the input text. |
-| `max_ast_nodes` | BIGINT | `100000` | |
-| `max_ast_depth` | BIGINT | `512` | |
+| `max_statements` | BIGINT | `1` | Positive; at most 1000. |
+| `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
+| `max_ast_nodes` | BIGINT | `100000` | Positive; at most the default. |
+| `max_ast_depth` | BIGINT | `512` | Positive; at most the default. |
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']).allowed;
@@ -177,6 +178,9 @@ Things that surprise people:
   sequence/storage functions.
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
+- Collations `binary`/`c`/`posix`, `nocase`, `noaccent`, and `nfc` are available by default
+  and still honor `blocked_functions`. Any other collation (`COLLATE de`) needs its name in
+  `allowed_functions` with `check_functions` on.
 - Extension types need a matching `allowed_types` entry per type: `::JSON` needs
   `{catalog: 'system', schema: 'main', type: 'json'}`, `::INET` needs
   `{catalog: 'system', schema: 'main', type: 'inet'}` and the `inet` extension loaded
@@ -212,8 +216,8 @@ SELECT current_setting('gatekeeper_policy').blocked_functions;
 
 The global policy is a ceiling. Each `CALL` **replaces** it atomically, starting from the
 built-in defaults for any option you omit; an invalid call leaves the previous policy in
-place. It is shared by every connection of the database instance, not persisted, and not
-undone by rollback.
+place. It is global-only: shared by every connection of the database instance, not
+persisted, not undone by rollback, and `SET SESSION`/`RESET SESSION` are rejected.
 
 | Dimension | How the layers combine |
 | --- | --- |
