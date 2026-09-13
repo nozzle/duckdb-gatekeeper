@@ -102,6 +102,8 @@ def test_output_file_is_not_overwritten(artifacts, tmp_path):
     ("community/description.yml", "version: 0.1.0", "other_version: 0.1.0", "extension.version"),
     ("community/description.yml", "ref: v0.1.0", "other_ref: v0.1.0", "repo.ref"),
     ("community/description.yml", "repo:\n", "other_repo:\n", "repo.ref"),
+    ("community/description.yml", release.SUPPORTED_DUCKDB_REVISION, "0" * 40, "must cite the pinned DuckDB"),
+    ("community/description.yml", "DuckDB 1.5.5", "DuckDB 1.5.4", "must cite the pinned DuckDB"),
 ])
 def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old, new, message):
     for source in ("extension_config.cmake", "src/gatekeeper_extension.cpp", "community/description.yml"):

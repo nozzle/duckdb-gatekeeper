@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import zipfile
 
-from versions import SUPPORTED_DUCKDB
+from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 # Keep aligned with MainDistributionPipeline.yml and the community descriptor.
@@ -36,6 +36,9 @@ def release_version(tag):
         raise ValueError(f"C++ engine pin {engine_version} and scripts/versions.py v{SUPPORTED_DUCKDB} must agree")
 
     descriptor = (ROOT / "community/description.yml").read_text()
+    if SUPPORTED_DUCKDB_REVISION not in descriptor or f"DuckDB {SUPPORTED_DUCKDB}" not in descriptor:
+        raise ValueError("community/description.yml must cite the pinned DuckDB version and source revision "
+                         "from scripts/versions.py")
 
     def descriptor_pin(section, key):
         # These two pins use canonical two-space, unquoted scalar syntax in the

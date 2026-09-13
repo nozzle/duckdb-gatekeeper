@@ -43,7 +43,9 @@ Only stable `vMAJOR.MINOR.PATCH` tag pushes trigger distribution; prerelease and
 tags are excluded. The package gate validates the exact stable version again before
 the tag-only publish job can run, including the version in the load-time error message.
 It also checks `community/description.yml`'s `extension.version` and `repo.ref`, and
-the C++ engine pin against `scripts/versions.py`. Keep the descriptor's version/ref
+the C++ engine pin against `scripts/versions.py`. The descriptor must also cite the
+pinned DuckDB version and source revision in its compatibility description.
+Keep the descriptor's version/ref
 as unquoted scalars with two-space indentation; the standard-library-only packaging
 check deliberately rejects changes to that local format.
 
