@@ -41,5 +41,7 @@ true
 statement ok
 SET lock_configuration=true;
 
-statement error locked
+statement error
 CALL gatekeeper_configure();
+----
+locked

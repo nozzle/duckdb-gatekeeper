@@ -9,7 +9,7 @@ actual tables and views. Results are native STRUCTs with structured diagnostics.
 - **864 reviewed function defaults**, with exact-name additions and blocks.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
 - **Read-only statements**, type/collation permissions, capability restrictions, and AST limits.
-- **One-time database defaults** and typed per-request overrides.
+- **Replaceable, lockable global policy** and narrowing-only typed request overrides.
 
 > Early development. Targets **DuckDB 1.5.5 only**. Not yet published in the community
 > repository. No wildcard matching, public syntax-only mode, or automatic execution
