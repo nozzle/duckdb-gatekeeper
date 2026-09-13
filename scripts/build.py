@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,8 +17,8 @@ def main():
         parser.error("--jobs must be positive")
 
     def tool(name):
-        local = root / ".venv/bin" / name
-        found = str(local) if local.exists() else shutil.which(name)
+        found = shutil.which(name, path=os.pathsep.join([str(root / ".venv/bin"), str(root / ".venv/Scripts"),
+                                                         os.environ.get("PATH", "")]))
         if not found:
             raise SystemExit(f"Missing {name}: install requirements-dev.txt first")
         return found

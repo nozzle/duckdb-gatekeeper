@@ -23,13 +23,19 @@ were absent from the imported review; these remain excluded and must not be prom
 automatically. Unreviewed is not a claim of elevated behavior.
 
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
-and invalid group shapes. `scripts/inventory.py` checks version/source metadata, sorting, duplicates, and
-classification conflicts, including conflicts across extensions. The build consumes
-this same loader. Tests exercise every default and every excluded name.
+and invalid group shapes. The contract is: **Python's standard library is sufficient to
+generate and build Gatekeeper; development tests additionally use `jsonschema` to verify
+the validator.** `scripts/schema_check.py` evaluates exactly the JSON Schema keywords the
+schema uses and refuses any other keyword anywhere in the schema (including `$defs` and
+unselected conditional branches), so a schema edit that needs an unsupported keyword fails
+clearly rather than being ignored. The test suite runs generation under `python -S`,
+checks that malformed inventories are still rejected there, and cross-checks the validator
+against the pinned `jsonschema` package (from `requirements-inventory.txt`) on the real
+inventories and on mutated documents. `scripts/inventory.py` then checks version/source metadata,
+sorting, duplicates, and classification conflicts, including conflicts across extensions.
+The build consumes this same loader. Tests exercise every default and every excluded name.
 
-Install `requirements-inventory.txt` for standalone inventory commands (also included
-by `requirements-dev.txt`). The generator requires Python 3.10+ and a Git checkout
-with initialized pinned submodules. `scripts/versions.py` owns the inventory engine
+The generator requires Python 3.10+ and a Git checkout with initialized pinned submodules. `scripts/versions.py` owns the inventory engine
 version/revision and baseline filename. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
@@ -46,7 +52,6 @@ Every supported **major/minor update** requires this process; run it on patches 
    accepted baseline or classifications:
 
    ```sh
-   python -m pip install -r requirements-inventory.txt
    python scripts/audit_inventory.py --capture build/candidate.json
    ```
 
@@ -71,6 +76,26 @@ Every supported **major/minor update** requires this process; run it on patches 
    inventory version alone cannot enable a new engine version.
 6. Run the runtime audit, full conformance/default tests, build, and benchmarks.
    Replace an accepted baseline only after the review is complete.
+
+## Repinning the engine
+
+`scripts/generate.py` refuses to run against any DuckDB checkout other than
+`SUPPORTED_DUCKDB_REVISION`, and `LoadInternal` refuses to load into any other DuckDB
+release. This
+is deliberate fail-closed behavior: the grammar is derived from the serializer of exactly
+that revision. It also means the community repository's bulk rebuild for the next DuckDB
+release fails at configure time until Gatekeeper is repinned. To repin, update together:
+
+- the `duckdb` submodule and `SUPPORTED_DUCKDB`/`SUPPORTED_DUCKDB_REVISION` in
+  `scripts/versions.py` (consumed by generation, the build scripts, and the audit);
+- `SUPPORTED_DUCKDB_VERSION` in `src/gatekeeper_extension.cpp`;
+- `OVERRIDE_GIT_DESCRIBE` in `Makefile` and `.github/workflows/test.yml`;
+- `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
+  `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
+  submodule (upstream tracks each minor release on a codename branch such as
+  `v1.5-variegata` rather than tagging patch releases);
+- the `duckdb` pin in `requirements-dev.in`, the regenerated hashed lock files, the fuzz
+  image, and the baseline described above.
 
 The CI audit runs on every push/PR. A manually dispatched candidate-version job
 captures and uploads a report against the existing baseline, deliberately failing

@@ -1,25 +1,28 @@
 """Validated source inventories; importing this module never loads DuckDB extensions."""
 import json
 from pathlib import Path
+import schema_check
 from versions import SUPPORTED_DUCKDB
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def load(root=ROOT):
-    try:
-        from jsonschema import Draft202012Validator
-    except ImportError as error:
-        raise SystemExit("Inventory validation requires jsonschema; install it with "
-                         "python -m pip install -r requirements-inventory.txt using the build's Python interpreter") from error
-    validator = Draft202012Validator(json.loads((root / "inventories/schema.json").read_text()))
+    """Load and check the reviewed inventories against inventories/schema.json.
+
+    Validation uses the standard-library validator in schema_check.py so that generation works in
+    the community distribution images, which provide no third-party Python packages. The test
+    suite cross-checks that validator against the jsonschema package.
+    """
+    schema = json.loads((root / "inventories/schema.json").read_text())
     paths = [root / "inventories/core.json", *sorted((root / "inventories/extensions").glob("*.json"))]
     entries = {}
     for path in paths:
         entry = json.loads(path.read_text())
-        errors = sorted(validator.iter_errors(entry), key=lambda error: str(list(error.path)))
-        if errors:
-            raise ValueError(f"invalid inventory {path.name}: {errors[0].message}")
+        try:
+            schema_check.validate(schema, entry)
+        except schema_check.ValidationError as error:
+            raise ValueError(f"invalid inventory {path.name}: {error.message}") from error
         name = entry["name"]
         if name in entries:
             raise ValueError(f"duplicate inventory: {name}")

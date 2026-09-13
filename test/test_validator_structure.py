@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -10,9 +11,12 @@ from test_gatekeeper import ROOT, db
 
 @pytest.fixture(scope="module")
 def native_validator(tmp_path_factory):
-    binary = tmp_path_factory.mktemp("validator") / "validator"
-    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-O1"]
-    for path in ["src/include", "generated", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
+    work = tmp_path_factory.mktemp("validator")
+    binary = work / "validator"
+    generated = work / "generated"
+    subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated)], check=True)
+    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-O1", "-I" + str(generated)]
+    for path in ["src/include", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
         command.append("-I" + str(ROOT / path))
     command += [str(ROOT / path) for path in ["test/validator_structure.cpp", "src/validator.cpp",
                                              "duckdb/third_party/yyjson/yyjson.cpp"]]

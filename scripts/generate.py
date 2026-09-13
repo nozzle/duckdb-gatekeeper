@@ -4,6 +4,7 @@ import sys
 if sys.version_info < (3, 10):
     raise SystemExit("Gatekeeper generation requires Python 3.10 or newer")
 
+import argparse
 import json
 from pathlib import Path
 import subprocess
@@ -110,13 +111,20 @@ def header(name, data):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=ROOT / "generated",
+                        help="directory for grammar.hpp and inventory.hpp (the build passes its binary dir)")
+    args = parser.parse_args()
     pinned_revision()
     _, defaults = load()
     inventory = {"defaults": defaults}
-    generated = ROOT / "generated"
-    generated.mkdir(exist_ok=True)
+    args.output.mkdir(parents=True, exist_ok=True)
     for name, data in [("grammar", grammar()), ("inventory", inventory)]:
-        (generated / (name + ".hpp")).write_text(header(name, data))
+        target = args.output / (name + ".hpp")
+        content = header(name, data)
+        # Leave the timestamp alone when nothing changed so reconfiguring does not force a rebuild.
+        if not target.exists() or target.read_text() != content:
+            target.write_text(content)
 
 
 if __name__ == "__main__":
