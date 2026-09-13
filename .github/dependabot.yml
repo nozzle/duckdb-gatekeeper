@@ -1,5 +1,15 @@
 version: 2
 updates:
+  - package-ecosystem: "npm"
+    directory: "/test/wasm"
+    schedule:
+      interval: "monthly"
+    ignore:
+      # The npm package version is independent of its embedded DuckDB version.
+      - dependency-name: "@duckdb/duckdb-wasm"
+    commit-message:
+      prefix: "test"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

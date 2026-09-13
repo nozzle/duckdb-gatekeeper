@@ -4,3 +4,4 @@ generated/
 __pycache__/
 .cache/
 .pytest_cache/
+node_modules/

@@ -1,0 +1,12 @@
+{
+  "name": "gatekeeper-wasm-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node smoke.mjs"},
+  "engines": {"node": ">=22"},
+  "devDependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0"
+  }
+}
