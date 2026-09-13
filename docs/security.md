@@ -27,7 +27,8 @@ still require validation and control access to the raw connection/native APIs.
 Configuration is nontransactional; a surrounding rollback does not undo replacement.
 Each validation chunk takes one coherent snapshot. Lock before exposing the instance.
 Use strict parameterized `CALL` for authoring; direct STRUCT `SET` can silently drop
-unknown fields during DuckDB casting, including a misspelled nullable catalog field.
+unknown top-level fields during DuckDB casting. The canonical setting is NULL-free, so
+a misspelled nested identity field fails closed instead of widening catalog matching.
 See [the configuration contract](api.md#global-policy-and-configuration).
 
 ## Function enforcement and trusted expansion

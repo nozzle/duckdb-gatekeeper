@@ -55,11 +55,40 @@ def test_strict_parameterized_call_preserves_old_policy_on_failure(db, options):
     assert policy(db) == before
 
 
-def test_nullable_catalog_and_quoted_parameters(db):
-    configure(db, {"allowed_tables": [{"catalog": None, "schema": "a'b", "table": "t"}],
+def test_any_catalog_is_canonically_empty_and_quoted_parameters(db):
+    db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
+    configure(db, {"allowed_tables": [{"catalog": None, "schema": "a'b", "table": "t"},
+                                      {"schema": "main", "table": "t"}],
                    "allowed_types": [{"schema": "main", "type": "customer"}]})
-    assert policy(db)["allowed_tables"] == [{"catalog": None, "schema": "a'b", "table": "t"}]
-    assert policy(db)["allowed_types"] == [{"catalog": None, "schema": "main", "type": "customer"}]
+    # The canonical setting never contains NULL; '' spells "any catalog".
+    assert policy(db)["allowed_tables"] == [{"catalog": "", "schema": "a'b", "table": "t"},
+                                            {"catalog": "", "schema": "main", "table": "t"}]
+    assert policy(db)["allowed_types"] == [{"catalog": "", "schema": "main", "type": "customer"}]
+    assert validate(db, "SELECT * FROM memory.main.t")["allowed"]
+    assert validate(db, "SELECT * FROM lake.main.t")["allowed"]
+    # Round trip through direct SET is a no-op and preserves any-catalog matching.
+    db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
+    assert policy(db)["allowed_tables"][1] == {"catalog": "", "schema": "main", "table": "t"}
+    assert validate(db, "SELECT * FROM lake.main.t")["allowed"]
+
+
+@pytest.mark.parametrize("entry", [
+    "{catlog: 'memory', schema: 'main', \"table\": 't'}",
+    "{catalog: NULL, schema: 'main', \"table\": 't'}",
+    "{catalog: 'memory', schema: NULL, \"table\": 't'}",
+    "NULL::STRUCT(catalog VARCHAR, schema VARCHAR, \"table\" VARCHAR)",
+])
+def test_set_rejects_null_nested_identity_fields(db, entry):
+    """A misspelled or NULL nested field on direct SET must fail closed rather than widen to any catalog."""
+    db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
+    configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]})
+    before = policy(db)
+    assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
+    with pytest.raises(duckdb.Error, match="NULL policy field"):
+        db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := ["
+                   + entry + "])")
+    assert policy(db) == before
+    assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
 
 
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
