@@ -46,3 +46,19 @@ def test_set_operation_representations_and_all_branches(db, native_validator):
         assert native_validator(malformed) == "unsupported"
     node["left"] = node["children"][0]
     assert native_validator(modern) == "unsupported"
+
+
+def test_serialized_bind_time_sites(db, native_validator):
+    # Exercise serializer-only shapes independently of SQL parser restrictions.
+    ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT 1', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])
+    computation = json.loads(db.execute("SELECT json_serialize_sql('SELECT abs(1)', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])["statements"][0]["node"]["select_list"][0]
+    for modifier in ["LIMIT_MODIFIER", "LIMIT_PERCENT_MODIFIER"]:
+        candidate = copy.deepcopy(ast)
+        candidate["statements"][0]["node"]["modifiers"] = [{"type": modifier, "limit": computation}]
+        assert native_validator(candidate) == "forbidden"
+    candidate = copy.deepcopy(ast)
+    candidate["statements"][0]["node"]["select_list"] = [{
+        "class": "CAST", "type": "OPERATOR_CAST", "child": ast["statements"][0]["node"]["select_list"][0],
+        "cast_type": {"id": "UNBOUND", "type_info": {"expr": {
+            "class": "TYPE", "type": "TYPE", "type_name": "decimal", "children": [computation]}}}}]
+    assert native_validator(candidate) == "forbidden"

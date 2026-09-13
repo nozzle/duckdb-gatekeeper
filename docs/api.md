@@ -25,13 +25,15 @@ violations STRUCT(
 error_type VARCHAR
 error_message VARCHAR
 position BIGINT
+objects STRUCT(catalog VARCHAR, schema VARCHAR, table VARCHAR, type VARCHAR)[]
+functions STRUCT(catalog VARCHAR, schema VARCHAR, name VARCHAR, type VARCHAR)[]
 ```
 
 Only `allowed = true` and `code = 'ok'` indicate success. Codes are `ok`,
 `forbidden`, `unsupported`, `parser`, `binding`, and `invalid_input`. Rule identifiers
 include `function`, `catalog`, `schema`, `table`, `dynamic_sql`, `table_function`,
-`recursive_cte`, `file_table`, `replacement_scan`, `internal_object`, `type`, `statement`, `limit`, and
-`unsupported_structure`. Consumers should use these fields rather than parse messages.
+`recursive_cte`, `file_table`, `replacement_scan`, `internal_object`, `type`, `statement`, `limit`,
+`bind_time_expression`, and `unsupported_structure`. Consumers should use these fields rather than parse messages.
 `allowed` is true exactly when `code` is `ok`. Successful results have empty
 violations and error messages. `forbidden`/`unsupported` have nonempty violations
 and an empty error message; `parser`/`binding`/`invalid_input` have empty violations
@@ -39,6 +41,61 @@ and a nonempty error message.
 Repeated function violations include occurrence counts in the message. Absent object
 identifiers are empty strings. Positions are zero-based parser byte offsets when
 available, otherwise NULL; resolved-object positions may be unavailable.
+
+`objects` and `functions` contain sorted, deduplicated **observed binding dependencies**
+only on success; both are empty for every other result, including errors after partial
+binding. Sorting is lexicographic by `(catalog, schema, table/name, type)` using the
+reported spelling. Object types are `table`/`view`; function types are `scalar`,
+`aggregate`, `table`, `macro`, `table_macro`, `pragma`, or `window`. Catalog lookups
+preserve separate resolved identifiers, including `system.main`; dots in names are
+never parsed as separators. Views and their underlying tables appear; CTE names do not.
+Function implementations observed only in a bound plan may have empty catalog/schema
+when no matching name/kind was observed by the catalog callback; these empty fields
+mean unknown provenance, not the default catalog. This is neither an exhaustive
+execution trace nor overload/definition identity. Comparing dependencies can detect
+some search-path differences but cannot close TOCTOU or detect same-name replacements.
+
+## Prepared parameters
+
+`?`, `$1`, and `$name` use UNKNOWN-typed binder placeholders with no supplied values.
+Validation succeeds only when DuckDB completes binding, for example a typed table
+predicate, `LIMIT ?`, or `SELECT $1::INTEGER`. Bare `SELECT $1`, ambiguous overloads
+such as `abs($1)`, and value-dependent reader arguments return `binding` when values
+or types are required. No dummy values are substituted, and partial plans are never
+approved. Parameter values, value-dependent behavior, and execution-time rebinds
+are not validated; execute the same text with trusted parameter handling and reject
+binding failures rather than inlining untrusted values.
+
+## Bind-time expressions
+
+No opt-out is provided for the `bind_time_expression` rule. Caller expressions in
+LIMIT/OFFSET (including percentage limits), AT clauses, table-function arguments,
+COLUMNS selectors, PIVOT IN values, quantile fractions/options, UNNEST options, and
+type parameters must be literals or parameters that DuckDB can bind without values.
+Type parameters can also contain nested type syntax. In list-capable positions,
+literal lists/structs are supported; PIVOT accepts literal tuples and unqualified
+label names. Casts/TRY_CAST of permitted literal forms or parameters are accepted;
+target types still require type permission. Arithmetic, arbitrary function calls
+and COLUMNS lambdas are rejected. Use string-form intervals (`INTERVAL '1 day'`)
+in bind-time positions: `INTERVAL 1 DAY` expands to arithmetic helper functions.
+Correlated column/subquery arguments are allowed for pinned system table-in-out
+functions `unnest`, `range`, and `generate_series`, whose non-scalar arguments are
+evaluated at execution time. Standard readers do not get this exception; a bare
+identifier in a named-argument key is not a runtime reference. DuckDB selects the
+in-out binding path for the whole call, so companion scalar expressions also run
+at execution time in this case. A bare
+identifier in a reader argument can be converted into a string by DuckDB's binder.
+The exception is checked against the resolved system table-function identity;
+same-named table macros cannot claim it. Each scalar UNNEST option is still checked.
+The pinned parser stores sample sizes as literal values (and only accepts literal
+percentage-limit syntax); those forms remain supported. Literal constructors must
+resolve to system scalar entries, so a same-named macro cannot evade the restriction.
+
+These are conservative caller-syntax checks, not a resource budget or complete
+interception of bind-time execution. Trusted views/macros, function-specific binders,
+large literals, type binders, parsing and serialization still require host limits.
+Permitting literal casts does not prove their custom cast implementations are cheap;
+custom types/casts and function extensions remain trusted host capabilities.
 
 Resource and unexpected execution errors can raise exceptions instead of returning
 a result. Callers must reject exceptions, NULL/missing results, and unknown codes.
@@ -109,6 +166,8 @@ Table structs require nonempty `schema` and `table` strings; optional `catalog` 
 be omitted or NULL. An omitted catalog matches that schema/name in any catalog.
 `allowed_types` structs use `schema` and `type` with the same optional `catalog`; see
 [Types and collations](#types-and-collations).
+This includes `temp`: a temporary table can shadow a persistent table with the same
+schema/name. Use explicit catalogs when that distinction matters, and inspect `objects`.
 No wildcard or dotted-string parsing is performed. Unknown table fields are invalid.
 Use `allowed_catalogs` or explicit entry catalogs to constrain cross-catalog access.
 
@@ -131,6 +190,10 @@ Trusted view/macro and attached-table implementation functions pass explicit blo
 and never-bind checks, while retaining their caller-allowlist exemption (subject to
 the syntax-overlap restriction above). Attached Iceberg/DuckLake tables are
 authorized at their logical catalog/schema/table identity, not their backing files.
+Caller CTEs can shadow table references inside trusted table macros because DuckDB
+uses regular child binders there. Views use view binders and do not inherit that CTE
+scope. The observed `objects` list reflects the actual binding; do not assume a
+trusted table macro necessarily accesses its definition-time table.
 
 Internal tables/views require explicit `allowed_tables` permission even when object
 options are omitted. A schema allowlist alone does not admit system metadata views
@@ -179,6 +242,9 @@ are set. Built-in types remain exempt from namespace restrictions. The same type
 name occurring in a trusted expansion
 can be subject to this query-wide resolved check. Unknown fields, NULL entries and
 invalid identifier values are rejected like `allowed_tables`.
+Admitting an enum type also permits eligible default functions such as
+`enum_range(NULL::your_enum)` to disclose its labels. `allowed_tables` is not an
+enum-label or column-data policy; types use their separate permission rules.
 
 Collations `binary` (also `c`/`posix`), `nocase`, `noaccent`, and `nfc` are available
 by default. Other collation components require explicit `allowed_functions` entries,
@@ -208,6 +274,9 @@ remain denied even if this flag and explicit function permission are supplied.
 `allow_dynamic_sql` is deprecated and retained for option compatibility; it no longer
 admits SQL execution. It still gates the explicitly admitted plan-inspection function
 `json_serialize_plan`.
+The complete non-overridable [never-bind list](security.md#never-bind-functions)
+includes metadata readers and sequence/storage operations; `allowed_functions`
+cannot override it.
 
 File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
 `.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,

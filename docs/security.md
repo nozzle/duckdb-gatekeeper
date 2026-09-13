@@ -138,6 +138,49 @@ and configuration changes controlled independently. A future locked connection
 enforcement mode needs separate analysis of binding-time side effects and prepared
 statement lifecycle.
 
+## Validating-connection profiles
+
+Provision extensions, trusted catalogs/credentials, and Gatekeeper defaults before
+locking configuration. Keep `search_path`, `USE`, attached catalog identities,
+relevant parser settings, and trusted definitions aligned with execution. In-memory
+and temporary objects belong to their connection/database context; a separate
+validator cannot assume identical names refer to identical objects.
+
+For a local-only deployment, after trusted setup:
+
+```sql
+SET enable_external_access=false;
+SET autoload_known_extensions=false;
+SET autoinstall_known_extensions=false;
+SET memory_limit='512MB';
+SET threads=1;
+SET search_path='memory.reporting';
+SET lock_configuration=true;
+```
+
+For trusted Iceberg/DuckLake or reader-backed views, keep external access enabled
+where required. Install/load extensions and attach catalogs through trusted bootstrap,
+scope credentials and network/filesystem access outside DuckDB, then disable autoload
+and autoinstall, choose an application-appropriate memory limit, set `threads=1`, align
+the search path, and finally lock configuration. Gatekeeper never changes these host
+settings on behalf of a query. Test the profile against the particular catalog.
+
+`memory_limit` is not a hard process RSS bound; use process/container memory limits,
+timeouts/cancellation and isolation for hostile input. Literal-only preflight prevents
+the reviewed computed-expression forms at LIMIT/OFFSET, table-function arguments,
+AT, COLUMNS, PIVOT, quantile fractions, UNNEST options and type parameters. It does
+not cap literal sizes beyond AST/input limits or prevent all evaluation inside trusted
+definitions and function/type binders. No runtime-discovered allowlist is introduced.
+
+Successful dependency lists are useful audit evidence, not a TOCTOU solution. They
+record observed lookups and surviving function implementations, may omit hidden
+extension work, and do not hash definitions or identify overloads. Failed decisions
+return empty lists to avoid presenting an incomplete dependency set as authorization.
+Omitted catalogs in `allowed_tables` include `temp` shadow tables. Table macros may
+inherit caller CTEs whereas views do not; compare actual resolved objects rather than
+assuming definition-time bindings. Admitted enum types can expose their labels via
+`enum_range`; type permission does not authorize only a subset of labels.
+
 ## Compatibility and review
 
 Only the pinned DuckDB 1.5.5 revision is supported. Internal C++ and serializer APIs

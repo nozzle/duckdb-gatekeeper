@@ -55,7 +55,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		gatekeeper::BindingPolicy again_binding;
 		auto again = gatekeeper::Validate(ast, policy, &again_binding);
 		if (binding.synthesized_functions != again_binding.synthesized_functions ||
-		    binding.caller_types != again_binding.caller_types)
+		    binding.caller_types != again_binding.caller_types ||
+		    binding.literal_constructors != again_binding.literal_constructors ||
+		    binding.runtime_table_functions != again_binding.runtime_table_functions)
 			std::abort();
 		if (result.allowed != again.allowed || result.code != again.code || result.error_type != again.error_type ||
 		    result.error_message != again.error_message || result.position != again.position ||
