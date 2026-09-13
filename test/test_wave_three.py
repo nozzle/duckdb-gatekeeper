@@ -112,14 +112,10 @@ def test_temp_shadowing_and_explicit_catalog(db):
 
 
 def test_qualified_function_capability_diagnostics(db):
-    for sql, options, rule in [
-        ("SELECT * FROM SYSTEM.main.range(3)", {"allow_table_functions": False}, "table_function"),
-        ("SELECT * FROM SYSTEM.main.query('SELECT 1')", {}, "dynamic_sql"),
-    ]:
-        result = validate(db, sql, options)
-        violation = next(v for v in result["violations"] if v["rule"] == rule)
-        assert violation["catalog"] == "SYSTEM" and violation["schema"] == "main"
-        assert violation["position"] is not None
+    result = validate(db, "SELECT * FROM SYSTEM.main.query('SELECT 1')")
+    violation = next(v for v in result["violations"] if v["rule"] == "dynamic_sql")
+    assert violation["catalog"] == "SYSTEM" and violation["schema"] == "main"
+    assert violation["position"] is not None
 
 
 def test_quoted_dependency_identities_are_not_dotted_strings(db):

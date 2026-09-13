@@ -41,13 +41,13 @@ def test_trusted_views_and_macros(db):
 
 def test_attached_database_and_trusted_reader(db,tmp_path):
     db.execute("ATTACH ':memory:' AS lake; CREATE TABLE lake.main.orders AS SELECT 1 AS x")
-    options={"allowed_tables":[{"catalog":"lake","schema":"main","table":"orders"}],"allow_table_functions":False}
+    options={"allowed_tables":[{"catalog":"lake","schema":"main","table":"orders"}]}
     assert validate(db,"SELECT * FROM lake.main.orders",options)["allowed"]
     assert not validate(db,"SELECT * FROM lake.main.orders",{**options,"allowed_tables":[{"catalog":"other","schema":"*","table":"*"}]})["allowed"]
     path=str(tmp_path/'trusted.parquet').replace("'","''")
     db.execute(f"COPY lake.main.orders TO '{path}' (FORMAT PARQUET)")
     db.execute(f"CREATE VIEW lake.main.file_view AS SELECT * FROM read_parquet('{path}')")
-    options = {"allowed_tables": [{"catalog": "lake", "schema": "*", "table": "*"}], "allow_table_functions": False}
+    options = {"allowed_tables": [{"catalog": "lake", "schema": "*", "table": "*"}]}
     assert validate(db,"SELECT * FROM lake.main.file_view",options)["allowed"]
     assert not validate(db,"SELECT * FROM lake.main.file_view",{**options,"blocked_functions":["read_parquet"]})["allowed"]
     assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]

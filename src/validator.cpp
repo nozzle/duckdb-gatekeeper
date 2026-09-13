@@ -418,15 +418,6 @@ struct Walker {
 		}
 		if (kind == "RecursiveCTENode" && !Both([](const Policy &p) { return p.recursive; }))
 			Reject("recursive_cte", "recursive CTEs are disabled", value);
-		if (kind == "TableFunctionRef") {
-			if (!Both([](const Policy &p) { return p.table_functions; })) {
-				auto function = yyjson_obj_get(value, "function");
-				auto location = yyjson_obj_get(function, "query_location");
-				violations.emplace("table_function", "table functions are disabled", Field(function, "catalog"),
-				                   Field(function, "schema"), "", Field(function, "function_name"),
-				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
-			}
-		}
 		if (kind != "BaseTableRef" && kind != "ShowRef")
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),

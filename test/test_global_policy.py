@@ -31,7 +31,7 @@ def test_inspection_reset_and_complete_replacement(db):
 
 def test_canonical_policy_shape_is_pinned(db):
     """The canonical setting has exactly the supported policy fields."""
-    expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
+    expected = {"check_functions", "use_default_functions", "allow_recursive_ctes",
                 "allow_replacement_scans", "allowed_functions", "blocked_functions",
                 "allowed_tables", "max_statements", "max_ast_bytes",
                 "max_ast_nodes", "max_ast_depth", "restrict_tables"}
@@ -63,6 +63,7 @@ def test_configuration_is_nontransactional_and_requires_table_function(db):
     {"alowed_schemas": ["main"]}, {"check_functions": "false"}, {"check_functions": 1},
     {"allowed_functions": [1]}, {"allowed_functions": [None]}, {"max_statements": 1.5},
     {"max_statements": 0}, {"max_statements": None},
+    {"allow_table_functions": True}, {"allow_table_functions": False},
     {"allowed_tables": [{"schema": "main", "table": "t", "catlog": "memory"}]},
     {"allowed_tables": [{"schema": "main", "tabel": "t"}]},
     {"allowed_types": [{"schema": "main", "type": "t", "extra": "x"}]},
@@ -245,7 +246,7 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"max_ast_nodes": 1}, {"max_ast_nodes": 100000}, "SELECT 1", "limit"),
     ({"max_ast_depth": 1}, {"max_ast_depth": 512}, "SELECT 1", "limit"),
     ({"max_ast_bytes": 50}, {"max_ast_bytes": 8388608}, "SELECT 1", "limit"),
-    ({"allow_table_functions": False}, {"allow_table_functions": True}, "SELECT * FROM range(3)", "table_function"),
+    ({"blocked_functions": ["range"]}, {"blocked_functions": []}, "SELECT * FROM range(3)", "function"),
     ({"allow_recursive_ctes": False}, {"allow_recursive_ctes": True},
      "WITH RECURSIVE t AS (SELECT 1 x UNION ALL SELECT x+1 FROM t WHERE x<3) SELECT * FROM t", "recursive_cte"),
     ({"allow_replacement_scans": False}, {"allow_replacement_scans": True}, "SELECT * FROM 'missing.csv'", "replacement_scan"),
@@ -297,7 +298,7 @@ def test_configuration_is_never_admitted_as_submitted_sql(db, sql):
                "CREATE MACRO cfg_macro() AS TABLE SELECT * FROM gatekeeper_configure()")
     configure(db, {"check_functions": False, "blocked_functions": ["md5"]})
     before = policy(db)
-    result = validate(db, sql, {"check_functions": False, "allow_table_functions": True})
+    result = validate(db, sql, {"check_functions": False})
     assert result["code"] in {"forbidden", "unsupported"} and not result["allowed"], result
     assert result["objects"] == result["functions"] == []
     assert policy(db) == before

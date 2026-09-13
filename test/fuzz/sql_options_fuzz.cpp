@@ -92,6 +92,7 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
+	// Keep the removed allow_table_functions selector to exercise unknown-option rejection.
 	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
 	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
 	                              // Unknown namespace options exercise rejection.

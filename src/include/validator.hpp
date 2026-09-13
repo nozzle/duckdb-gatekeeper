@@ -17,7 +17,7 @@ struct Table {
 };
 struct Policy {
 	bool functions = true, defaults = true, tables = false;
-	bool recursive = true, table_functions = true, replacement_scans = false;
+	bool recursive = true, replacement_scans = false;
 	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables;
 	uint64_t statements = 1, bytes = 8388608, nodes = 100000, depth = 512;
