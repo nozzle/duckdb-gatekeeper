@@ -13,19 +13,28 @@ views and macros. The result is a native STRUCT with structured diagnostics.
 - **Read-only statements only**, with type, collation, and capability controls and AST limits.
 - **A lockable global policy** that request options can narrow but never widen.
 
-> Early development. Targets **DuckDB 1.5.5 only** and is not yet published in the
-> community repository. Gatekeeper is a pre-execution validator, not a sandbox: read
+> Early development. Targets **DuckDB 1.5.5 only**; community publication is pending.
+> Gatekeeper is a pre-execution validator, not a sandbox: read
 > the [security model](docs/security.md) before integrating.
 
 ## Installation
 
-[Build from source](CONTRIBUTING.md#building), start `duckdb -unsigned`, and load the artifact:
+**Pending publication:** the following commands will become available after Gatekeeper
+is accepted and deployed in the DuckDB community repository. For now, use the
+[build and local-load instructions](CONTRIBUTING.md#building).
 
 ```sql
-LOAD '/absolute/path/to/duckdb-gatekeeper/build/release/extension/gatekeeper/gatekeeper.duckdb_extension';
+INSTALL gatekeeper FROM community;
+LOAD gatekeeper;
 ```
 
-`INSTALL gatekeeper FROM community` is not available yet.
+Community binaries are built and signed by DuckDB and load with signature verification
+enabled. Source builds and binaries attached to this project's GitHub Releases are
+unsigned development artifacts; see [loading unsigned builds](CONTRIBUTING.md#loading-unsigned-builds).
+
+Gatekeeper supports exactly DuckDB **1.5.5**, including its reviewed source revision.
+New DuckDB patch and minor releases require a coordinated review, rebuild, and community
+descriptor update. Gatekeeper may be unavailable on a newer engine until that work lands.
 
 **Browser/Wasm:** the EH bundle is supported with a pinned DuckDB-Wasm runtime
 embedding DuckDB 1.5.5. See [Wasm installation and browser tests](test/wasm/README.md)
@@ -256,11 +265,14 @@ or macros.
 
 ## Python
 
+After community publication, the Python setup is:
+
 ```python
 import duckdb
 
-db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-db.execute("LOAD '/absolute/path/to/gatekeeper.duckdb_extension'")
+db = duckdb.connect()
+db.execute("INSTALL gatekeeper FROM community")
+db.execute("LOAD gatekeeper")
 db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 
@@ -276,6 +288,9 @@ if not decision["allowed"] or decision["code"] != "ok":
     raise PermissionError(decision["violations"] or decision["error_message"])
 rows = db.execute(sql).fetchall()
 ```
+
+Until publication, replace the connection and install/load lines with the
+[unsigned build setup](CONTRIBUTING.md#loading-unsigned-builds).
 
 Recommended validating-connection settings (`autoload_known_extensions = false`, memory
 and thread limits, `lock_configuration`) are in the

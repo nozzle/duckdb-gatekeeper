@@ -1,13 +1,14 @@
 name: Extension distribution
 # Builds and tests Gatekeeper on every community-extension platform through the reusable
-# extension-ci-tools pipeline (linux amd64/arm64 glibc and musl, macOS amd64/arm64, Windows MSVC
-# and MinGW). This is the same path the DuckDB community repository uses, so it doubles as the
-# Windows/musl platform matrix for CI. Wasm EH is browser-tested in wasm.yml; MVP and threads
+# extension-ci-tools pipeline (linux amd64/arm64 glibc and musl, macOS amd64/arm64,
+# Windows MSVC x64/ARM64 and MinGW). This is the DuckDB community build path and our
+# Windows/musl platform matrix. Wasm EH is browser-tested here and in wasm.yml; MVP and threads
 # remain excluded (see test/wasm/README.md). Both refs below are pinned to the commit tracked by the
 # extension-ci-tools submodule; upstream publishes 1.5.x tooling on the v1.5-variegata branch.
 on:
   push:
     branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -25,9 +26,10 @@ jobs:
       ci_tools_version: 72e76e99cd7fee45a99739cd118ec2db64e034ec
       # scripts/generate.py runs at configure time; the musl images only ship Python on request.
       extra_toolchains: python3
-      # Both musl targets are opt-in at this extension-ci-tools revision.
-      opt_in_archs: 'linux_amd64_musl;linux_arm64_musl'
+      # Both musl targets and Windows ARM64 are opt-in at this revision.
+      opt_in_archs: 'linux_amd64_musl;linux_arm64_musl;windows_arm64'
       exclude_archs: 'wasm_mvp;wasm_threads'
+      reduced_ci_mode: disabled
 
   browser-test:
     name: Distribution Wasm EH Chromium
@@ -51,3 +53,57 @@ jobs:
         working-directory: test/wasm
       - run: npm test
         working-directory: test/wasm
+
+  package:
+    name: Package unsigned release artifacts
+    needs: [build, browser-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gatekeeper-*-extension-*
+          path: build/release-artifacts
+      - name: Package and checksum every target
+        env:
+          # Exercise packaging on PRs/main too; version tags must match the source.
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: python3 scripts/package_release.py --tag "$RELEASE_TAG" --artifacts build/release-artifacts --output build/release-assets
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gatekeeper-release-assets
+          path: build/release-assets
+          if-no-files-found: error
+
+  release:
+    name: Publish unsigned release artifacts
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gatekeeper-release-assets
+          path: build/release-assets
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        # Assemble as a draft so failed uploads cannot publish a partial release.
+        run: |
+          existing=$(gh api --paginate "repos/$GH_REPO/releases" \
+            | jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag) | .id')
+          if [[ -n "$existing" ]]; then
+            echo "::error::A release or draft for $RELEASE_TAG already exists; inspect it before retrying."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" build/release-assets/*.zip build/release-assets/SHA256SUMS \
+            --verify-tag --draft --title "Gatekeeper $RELEASE_TAG" \
+            --notes-file build/release-assets/RELEASE_NOTES.md
+          gh release edit "$RELEASE_TAG" --draft=false

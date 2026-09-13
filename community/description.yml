@@ -1,0 +1,53 @@
+# Prepared for extensions/gatekeeper/description.yml in duckdb/community-extensions.
+# Submit only after v0.1.0 exists and its full distribution workflow succeeds.
+extension:
+  name: gatekeeper
+  description: Validate untrusted read-only SQL against a lockable authorization policy
+  version: 0.1.0
+  language: C++
+  build: cmake
+  license: MIT
+  maintainers:
+    - derekperkins
+  requires_toolchains: python3
+  excluded_platforms: 'wasm_mvp;wasm_threads'
+  opt_in_platforms: 'linux_amd64_musl;linux_arm64_musl;windows_arm64'
+
+repo:
+  github: nozzle/duckdb-gatekeeper
+  ref: v0.1.0
+
+docs:
+  hello_world: |
+    SELECT gatekeeper_validate('SELECT 1').allowed;
+    -- true
+    SELECT gatekeeper_validate('DROP TABLE orders').code;
+    -- unsupported
+  extended_description: |
+    Gatekeeper checks untrusted read-only SQL before execution. It parses the statement,
+    checks caller-authored syntax and functions, then binds it to authorize resolved
+    catalogs, schemas, tables, views, types, collations, and functions. It returns a
+    native STRUCT with an authorization decision, structured diagnostics, and resolved
+    dependencies. A lockable global policy sets a ceiling that request options may
+    narrow but never widen. The function defaults are reviewed inventories, not
+    runtime-discovered allowlists.
+
+    This release supports **DuckDB 1.5.5 only**, with source revision
+    `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa`. Configure-time source checks and
+    load-time engine checks deliberately reject other versions. Every DuckDB patch
+    or minor release needs a coordinated source/inventory review, repin, rebuild,
+    and update of this community descriptor. Bulk rebuilds against a newer engine
+    will fail until that update; Gatekeeper may be unavailable on that engine in
+    the meantime. See the [repinning checklist](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/inventories/README.md#repinning-the-engine).
+
+    Gatekeeper is a pre-execution validator, not a sandbox or an execution-time
+    enforcement layer. Binding can perform I/O through trusted catalogs and explicitly
+    admitted readers. Applications must control trusted definitions, host capabilities,
+    credentials, resource limits, and the gap between validation and execution.
+    Require both `allowed = true` and `code = 'ok'`, and fail closed on errors.
+    See the [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/docs/security.md).
+
+    Wasm support is limited to the EH bundle, browser-tested with
+    `@duckdb/duckdb-wasm@1.33.1-dev64.0` embedding DuckDB 1.5.5. The npm package
+    version is independent of its embedded engine version. MVP and threads/COI
+    remain excluded; see [Wasm compatibility](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/test/wasm/README.md).
