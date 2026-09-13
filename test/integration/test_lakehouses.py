@@ -58,10 +58,14 @@ def test_allowed_and_denied_tables(lake):
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
     policy = {"allowed_catalogs": ["lake"], "allowed_schemas": [schema],
               "allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}],
-              "allow_table_functions": False, "blocked_functions": ["read_parquet", "parquet_scan", "iceberg_scan"]}
+              "allow_table_functions": False}
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
     assert db.execute(sql).fetchone() == (50.0,)
+    if kind == "iceberg":
+        blocked = validate(db, sql, {**policy, "blocked_functions": ["iceberg_scan"]})
+        assert blocked["code"] == "forbidden"
+        assert any(v["function_name"] == "iceberg_scan" for v in blocked["violations"])
     for changes in [{"allowed_catalogs": ["other"]}, {"allowed_schemas": ["other"]}, {"allowed_tables": []}]:
         denied = validate(db, sql, {**policy, **changes})
         assert not denied["allowed"] and denied["code"] == "forbidden", (kind, denied)

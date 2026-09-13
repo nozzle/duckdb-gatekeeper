@@ -24,7 +24,7 @@ def test_binding_errors_and_no_execution(db):
     with pytest.raises(duckdb.BinderException, match="unknown option"):
         validate(db,"SELECT * FROM missing",{"resolve_objects":False})
     db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
-    assert validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
+    assert not validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
     assert db.execute("SELECT nextval('seq')").fetchone()==(1,)
 
 
@@ -44,7 +44,8 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
     path=str(tmp_path/'trusted.parquet').replace("'","''")
     db.execute(f"COPY lake.main.orders TO '{path}' (FORMAT PARQUET)")
     db.execute(f"CREATE VIEW lake.main.file_view AS SELECT * FROM read_parquet('{path}')")
-    assert validate(db,"SELECT * FROM lake.main.file_view",{"allowed_catalogs":["lake"],"allow_table_functions":False,"blocked_functions":["read_parquet"]})["allowed"]
+    assert validate(db,"SELECT * FROM lake.main.file_view",{"allowed_catalogs":["lake"],"allow_table_functions":False})["allowed"]
+    assert not validate(db,"SELECT * FROM lake.main.file_view",{"allowed_catalogs":["lake"],"allow_table_functions":False,"blocked_functions":["read_parquet"]})["allowed"]
     assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]
 
 

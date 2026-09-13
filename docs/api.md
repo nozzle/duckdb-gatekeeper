@@ -30,7 +30,7 @@ position BIGINT
 Only `allowed = true` and `code = 'ok'` indicate success. Codes are `ok`,
 `forbidden`, `unsupported`, `parser`, `binding`, and `invalid_input`. Rule identifiers
 include `function`, `catalog`, `schema`, `table`, `dynamic_sql`, `table_function`,
-`recursive_cte`, `file_table`, `replacement_scan`, `internal_object`, `statement`, `limit`, and
+`recursive_cte`, `file_table`, `replacement_scan`, `internal_object`, `type`, `statement`, `limit`, and
 `unsupported_structure`. Consumers should use these fields rather than parse messages.
 `allowed` is true exactly when `code` is `ok`. Successful results have empty
 violations and error messages. `forbidden`/`unsupported` have nonempty violations
@@ -60,6 +60,28 @@ Defaults contain the reviewed compute inventories. `allowed_functions` adds exac
 names; `blocked_functions` wins over defaults and additions in all modes. Functions
 are ASCII case-folded by leaf name. `*` is the literal multiplication operator, not
 a wildcard. Empty names, embedded NULs, and NULL list members are invalid.
+Explicit blocks also apply to resolved functions inside views and macros. JSON
+arrows/path aliases share canonical extraction blocks (`json_extract` and
+`json_extract_string`). The [never-bind list](security.md#never-bind-functions)
+is non-overridable, even with `check_functions := false`.
+
+Syntax-generated functions also require permission: list construction/slicing are
+checked before binding; indexing, field extraction and SQL-value names are checked
+against the implementation selected by DuckDB. Actual qualified columns remain
+columns. A query-wide conservative check also applies to matching implementations
+inside trusted expansions; see [the enforcement boundary](security.md#function-enforcement-and-trusted-expansion).
+For example, under `use_default_functions := false`, `SELECT * FROM v_st` can
+pass while `SELECT t.x FROM t, v_st` fails if the trusted view uses `struct_extract`
+and that name is not admitted. Single-part whole-row references (`SELECT t FROM t`)
+also require `struct_pack`, so ordinary column references conservatively enable
+that implementation check query-wide.
+
+**Compatibility:** bare `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIME`,
+`LOCALTIME`, `LOCALTIMESTAMP`, and other SQL-value functions now follow their inventory
+classification. Current-time/session functions are denied by default; opt in using
+their resolved names, e.g. `allowed_functions := ['current_date']` (timestamp/time use
+`get_current_timestamp`/`get_current_time`, local forms use `current_localtime`/
+`current_localtimestamp`). Casts `::JSON` and `::INET` require `allowed_types`.
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']);
@@ -102,23 +124,25 @@ or schema qualifiers are resolved using the caller's search path and transaction
 
 **Views and their underlying tables must both pass.** A file-backed view with no
 physical table callbacks must still be explicitly authorized by its own identity.
-Trusted view/macro and attached-table implementation functions are not subjected
-to caller-facing function policies again. Attached Iceberg/DuckLake tables are
+Trusted view/macro and attached-table implementation functions pass explicit blocks
+and never-bind checks, while retaining their caller-allowlist exemption (subject to
+the syntax-overlap restriction above). Attached Iceberg/DuckLake tables are
 authorized at their logical catalog/schema/table identity, not their backing files.
 
 Internal tables/views require explicit `allowed_tables` permission even when object
 options are omitted. A schema allowlist alone does not admit system metadata views
 such as `duckdb_tables`, `duckdb_views`, `sqlite_master`, or `information_schema.tables`.
-For example, `allowed_tables := [{catalog: 'system', schema: 'main', table: 'duckdb_tables'}]`
-admits that view, subject to any catalog/schema restrictions. Omitting the catalog
-in an explicit entry retains the any-catalog matching described above.
+An explicit entry satisfies object policy only: metadata views such as `duckdb_tables`
+still fail the never-bind layer when expanded to their underlying metadata functions.
+The standard internal metadata views cannot be admitted by object opt-in;
+`internal_object` provides an earlier diagnostic, not an escape from never-bind.
+Omitting the catalog in an explicit entry retains any-catalog matching.
 This also applies transitively: a trusted user view over `duckdb_tables` requires
 explicit permission for both the user view and that internal dependency.
 
 Explicit admitted table functions are capabilities, not catalog table permissions;
-an empty `allowed_tables` does not prohibit `range()`. Dynamic lookup functions,
-when explicitly enabled and admitted, must still pass catalog callbacks for objects
-they resolve. Host-language/implicit replacement scans are rejected because their
+an empty `allowed_tables` does not prohibit `range()`. Dynamic lookup functions in
+the never-bind list cannot be admitted. Host-language/implicit replacement scans are rejected because their
 identity is not a trustworthy catalog object. Prefer explicit admitted readers or
 trusted catalog objects. This includes file replacements even if the syntactic
 file-reference flag is enabled; that flag alone cannot grant resolved authorization.
@@ -127,8 +151,41 @@ Schema-wide SHOW is rejected with a table policy. SHOW/DESCRIBE may also involve
 system views, which must pass object policy. In particular, `SHOW TABLES [FROM x]`
 and `SHOW ALL TABLES` depend on internal metadata views and are denied by default.
 A schema allowlist is insufficient, and adding an `allowed_tables` list also
-triggers the schema-wide SHOW preflight denial. Query explicitly authorized
-metadata views instead. This API does not filter metadata rows.
+triggers the schema-wide SHOW preflight denial. Their underlying metadata readers
+are also never-bind functions. Use host-controlled metadata access outside validation
+when needed. This API does not filter metadata rows.
+
+## Types and collations
+
+`allowed_types` is a list of structs requiring nonempty `schema` and `type`, with
+optional `catalog` (omitted/NULL matches any catalog). Identifiers are ASCII-case-folded.
+Omitted options inherit defaults; `[]` removes additional type permissions. Built-in
+DuckDB types and their nested constructors remain available. Extension/user-defined
+types—including JSON and INET—require explicit entries:
+
+```sql
+SELECT gatekeeper_validate('SELECT ''{}''::JSON',
+    allowed_types := [{catalog: 'system', schema: 'main', type: 'json'}]);
+```
+
+Preflight inspects latest serialized type expressions and nested parameters; resolved
+identities must match. Computed type parameters, computed type expressions and named
+PIVOT enums are unsupported. Admitted nonbuiltin types also intersect `allowed_catalogs`
+and `allowed_schemas`; JSON in `system.main` requires that namespace if those lists
+are set. Built-in types remain exempt from namespace restrictions. The same type
+name occurring in a trusted expansion
+can be subject to this query-wide resolved check. Unknown fields, NULL entries and
+invalid identifier values are rejected like `allowed_tables`.
+
+Collations `binary` (also `c`/`posix`), `nocase`, `noaccent`, and `nfc` are available
+by default. Other collation components require explicit `allowed_functions` entries,
+as a separate binding capability. Disabling function checks does not grant collation
+permission; because `allowed_functions` conflicts with `check_functions := false`,
+enable function checks to admit a nondefault collation. This avoids broadening type/
+collation lookup capabilities through the function-check toggle. Blocks win, including blocks on known built-in
+implementation functions. Dotted combinations are checked component by component.
+Disable autoload/autoinstall on validation connections; preflight and post-lookup
+callbacks are not a guarantee against extension loading.
 
 ## Capability options
 
@@ -143,6 +200,11 @@ Permissions intersect: allowing a function does not override capability restrict
 Dynamic SQL covers table calls to `query`, `query_table`, and
 `json_execute_serialized_sql`, plus explicit `json_serialize_plan` calls. This is a
 reviewed inventory, not recognition of arbitrary application functions.
+The never-bind functions `query`, `query_table` and `json_execute_serialized_sql`
+remain denied even if this flag and explicit function permission are supplied.
+`allow_dynamic_sql` is deprecated and retained for option compatibility; it no longer
+admits SQL execution. It still gates the explicitly admitted plan-inspection function
+`json_serialize_plan`.
 
 File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
 `.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,

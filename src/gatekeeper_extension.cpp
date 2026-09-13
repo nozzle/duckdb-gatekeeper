@@ -3,16 +3,24 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "engine_errors.hpp"
+#include "function_policy.hpp"
 #include "json_serializer.hpp"
 #include "options.hpp"
+#include <map>
 #include <mutex>
 
 namespace duckdb {
@@ -99,13 +107,13 @@ static unique_ptr<FunctionData> BindOptions(ClientContext &, ScalarFunction &fun
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires VARCHAR[]", name);
-			if (name == "allowed_tables" &&
+			if ((name == "allowed_tables" || name == "allowed_types") &&
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
-				throw BinderException("allowed_tables requires STRUCT[]");
+				throw BinderException("%s requires STRUCT[]", name);
 		}
 		// Preserve table-entry field sets rather than silently coercing away unknown fields.
-		function.arguments.push_back(name == "allowed_tables" ? actual : expected);
+		function.arguments.push_back(name == "allowed_tables" || name == "allowed_types" ? actual : expected);
 		result->names.push_back(name);
 	}
 	function.varargs = LogicalType::INVALID;
@@ -120,7 +128,49 @@ static std::vector<std::pair<std::string, Value>> Options(DataChunk &args, const
 	return options;
 }
 
-static void AuthorizeObject(const gatekeeper::Policy &policy, CatalogEntry &entry, gatekeeper::Result &result) {
+static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                              const string &name, gatekeeper::Result &result) {
+	auto canonical = gatekeeper::CanonicalFunction(name);
+	if (gatekeeper::FunctionDenied(policy, name) ||
+	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
+		result.violations.emplace("function", "resolved function is not allowed: " + canonical, "", "", "", canonical);
+		throw PermissionException("resolved function is not allowed");
+	}
+}
+
+static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                            CatalogEntry &entry, gatekeeper::Result &result) {
+	switch (entry.type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		AuthorizeFunction(policy, binding, entry.name, result);
+		return;
+	case CatalogType::TYPE_ENTRY: {
+		auto &type = entry.Cast<TypeCatalogEntry>();
+		if (!binding.caller_types.count(gatekeeper::Lower(type.name)))
+			return; // Types inside trusted expansions are not caller-requested capabilities.
+		if (type.internal && gatekeeper::BuiltinTypes().count(gatekeeper::Lower(type.name)))
+			return; // DefaultTypeGenerator installs built-ins in each catalog's main schema.
+		auto catalog = type.schema.catalog.GetName(), schema = type.schema.name;
+		if (policy.catalogs && !policy.allowed_catalogs.count(gatekeeper::Lower(catalog)))
+			result.violations.emplace("catalog", "type catalog is not allowed", catalog, schema);
+		if (policy.schemas && !policy.allowed_schemas.count(gatekeeper::Lower(schema)))
+			result.violations.emplace("schema", "type schema is not allowed", catalog, schema);
+		if (!gatekeeper::TypeAllowed(policy, catalog, schema, type.name, true)) {
+			result.violations.emplace("type", "resolved type is not allowed: " + type.name, catalog, schema);
+			throw PermissionException("resolved type is not allowed");
+		}
+		if (!result.violations.empty())
+			throw PermissionException("resolved type namespace is not allowed");
+		return;
+	}
+	default:
+		break;
+	}
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
 		return;
 	auto &object = entry.Cast<StandardEntry>();
@@ -140,6 +190,53 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, CatalogEntry &entr
 		result.violations.emplace("table", "object is not allowed", catalog, schema, name);
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
+}
+
+// Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
+// backstop checks surviving bound expressions; it cannot undo earlier bind-time work.
+static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                          LogicalOperator &root, gatekeeper::Result &result) {
+	vector<LogicalOperator *> operators{&root};
+	while (!operators.empty()) {
+		auto op = operators.back();
+		operators.pop_back();
+		for (auto &child : op->children)
+			operators.push_back(child.get());
+		// A catalog table's physical scan is authorized by its object identity.
+		if (op->type == LogicalOperatorType::LOGICAL_GET && op->Cast<LogicalGet>().function.name != "seq_scan")
+			AuthorizeFunction(policy, binding, op->Cast<LogicalGet>().function.name, result);
+		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
+			ExpressionIterator::EnumerateExpression(*expr, [&](Expression &child) {
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION)
+					AuthorizeFunction(policy, binding, child.Cast<BoundFunctionExpression>().function.name, result);
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
+					AuthorizeFunction(policy, binding, child.Cast<BoundAggregateExpression>().function.name, result);
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
+					auto &window = child.Cast<BoundWindowExpression>();
+					if (window.aggregate)
+						AuthorizeFunction(policy, binding, window.aggregate->name, result);
+					else {
+						static const std::map<ExpressionType, string> windows = {
+						    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
+						    {ExpressionType::WINDOW_RANK, "rank"},
+						    {ExpressionType::WINDOW_RANK_DENSE, "dense_rank"},
+						    {ExpressionType::WINDOW_NTILE, "ntile"},
+						    {ExpressionType::WINDOW_PERCENT_RANK, "percent_rank"},
+						    {ExpressionType::WINDOW_CUME_DIST, "cume_dist"},
+						    {ExpressionType::WINDOW_FIRST_VALUE, "first_value"},
+						    {ExpressionType::WINDOW_LAST_VALUE, "last_value"},
+						    {ExpressionType::WINDOW_LEAD, "lead"},
+						    {ExpressionType::WINDOW_LAG, "lag"},
+						    {ExpressionType::WINDOW_NTH_VALUE, "nth_value"},
+						    {ExpressionType::WINDOW_FILL, "fill"}};
+						auto found = windows.find(window.GetExpressionType());
+						if (found != windows.end())
+							AuthorizeFunction(policy, binding, found->second, result);
+					}
+				}
+			});
+		});
+	}
 }
 
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const string &sql) {
@@ -183,15 +280,19 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			throw std::bad_alloc();
 		if (bytes > policy.bytes)
 			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds max_ast_bytes"}}};
-		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy);
+		gatekeeper::BindingPolicy binding_policy;
+		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy);
 		if (!result.allowed)
 			return result;
 		binding = true;
 		for (auto &statement : parser.statements) {
 			auto binder = Binder::CreateBinder(context);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-			binder->SetCatalogLookupCallback([&](CatalogEntry &entry) { AuthorizeObject(policy, entry, result); });
+			binder->SetCatalogLookupCallback(
+			    [&](CatalogEntry &entry) { AuthorizeObject(policy, binding_policy, entry, result); });
 			auto bound = binder->Bind(*statement);
+			if (bound.plan)
+				AuthorizePlan(policy, binding_policy, *bound.plan, result);
 			if (!binder->GetReplacementScans().empty()) {
 				result.allowed = false;
 				result.code = "unsupported";

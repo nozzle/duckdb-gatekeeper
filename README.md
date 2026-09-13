@@ -8,7 +8,7 @@ actual tables and views. Results are native STRUCTs with structured diagnostics.
 
 - **864 reviewed function defaults**, with exact-name additions and blocks.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
-- **Read-only statements**, capability restrictions, and AST limits.
+- **Read-only statements**, type/collation permissions, capability restrictions, and AST limits.
 - **One-time database defaults** and typed per-request overrides.
 
 > Early development. Targets **DuckDB 1.5.5 only**. Not yet published in the community
@@ -140,6 +140,11 @@ use their internal Parquet readers without exposing those functions to callers.
 Explicit admitted readers are capabilities whose resource access the application
 controls. Host-language and implicit replacement scans are rejected; use explicit
 admitted readers or trusted catalog objects.
+Explicit function blocks also apply inside trusted expansions. A non-overridable
+[never-bind list](docs/security.md#never-bind-functions) excludes dynamic SQL,
+metadata bypasses and sequence/storage operations. User-defined/extension cast
+types require `allowed_types`; nondefault collations require explicit permission.
+Provision extensions before disabling autoload/autoinstall on validation connections.
 
 Gatekeeper is not a sandbox: no row authorization, execution deadlines, memory
 budgets, or filesystem/network isolation. Trusted macros and extensions can perform

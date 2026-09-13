@@ -1,4 +1,5 @@
 #include "validator.hpp"
+#include "function_policy.hpp"
 #include "grammar.hpp"
 #include "inventory.hpp"
 #include <cstring>
@@ -66,6 +67,7 @@ struct Inventory {
 	    {"PARAMETER", {"VALUE_PARAMETER"}},
 	    {"POSITIONAL_REFERENCE", {"POSITIONAL_REFERENCE"}},
 	    {"STAR", {"STAR"}},
+	    {"TYPE", {"TYPE"}},
 	    {"SUBQUERY", {"SUBQUERY"}},
 	    {"WINDOW",
 		 {"WINDOW_AGGREGATE", "WINDOW_RANK", "WINDOW_RANK_DENSE", "WINDOW_NTILE", "WINDOW_PERCENT_RANK",
@@ -93,6 +95,30 @@ struct Inventory {
 	}
 };
 
+static const Inventory &GetInventory() {
+	static const Inventory inventory;
+	return inventory;
+}
+
+bool FunctionAllowed(const Policy &policy, const std::string &name) {
+	auto &inventory = GetInventory();
+	return !FunctionDenied(policy, name) && (!policy.functions || policy.allowed_functions.count(Lower(name)) ||
+	                                         policy.allowed_functions.count(CanonicalFunction(name)) ||
+	                                         (policy.defaults && inventory.defaults.count(Lower(name))));
+}
+
+bool TypeAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &name,
+                 bool resolved) {
+	auto c = Lower(catalog), s = Lower(schema), n = Lower(name);
+	if (BuiltinTypes().count(n) && (c.empty() || c == "system") && (s.empty() || s == "main"))
+		return true;
+	for (const auto &entry : policy.allowed_types)
+		if (entry.table == n && (entry.catalog.empty() || entry.catalog == c || (!resolved && c.empty())) &&
+		    (entry.schema == s || (!resolved && s.empty())))
+			return true;
+	return false;
+}
+
 static bool FileName(const std::string &name) {
 	auto lower = Lower(name);
 	if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
@@ -114,6 +140,7 @@ struct Stop {
 struct Walker {
 	const Inventory &inventory;
 	const Policy &policy;
+	BindingPolicy *binding;
 	std::set<Violation> violations;
 	std::map<std::string, size_t> functions;
 	std::map<std::string, int64_t> function_positions;
@@ -126,6 +153,74 @@ struct Walker {
 		std::string edge;
 	};
 	std::vector<Work> pending;
+	void Implied(const Names &names) {
+		if (binding)
+			binding->synthesized_functions.insert(names.begin(), names.end());
+	}
+	void Function(const std::string &name, Json *value) {
+		functions[Lower(name)]++;
+		auto location = yyjson_obj_get(value, "query_location");
+		if (yyjson_is_uint(location))
+			function_positions.emplace(Lower(name), int64_t(yyjson_get_uint(location)));
+	}
+	void Collation(const std::string &collation, Json *value) {
+		size_t start = 0;
+		auto folded = Lower(collation);
+		while (start < folded.size()) {
+			auto end = folded.find('.', start);
+			auto name = folded.substr(start, end == std::string::npos ? end : end - start);
+			bool builtin = Names{"binary", "c", "posix", "nocase", "noaccent", "nfc"}.count(name);
+			std::string implementation = name == "nocase"     ? "lower"
+			                             : name == "noaccent" ? "strip_accents"
+			                             : name == "nfc"      ? "nfc_normalize"
+			                                                  : name;
+			if (FunctionDenied(policy, name) || (!builtin && !policy.allowed_functions.count(name)))
+				Reject("function", "collation is not allowed: " + name, value, name);
+			if (implementation != name && FunctionDenied(policy, implementation))
+				Reject("function", "collation function is not allowed: " + implementation, value, implementation);
+			if (end == std::string::npos)
+				break;
+			start = end + 1;
+		}
+	}
+	void Type(Json *value, size_t depth) {
+		auto id = Field(value, "id");
+		auto info = yyjson_obj_get(value, "type_info");
+		if (id == "UNBOUND" || id == "USER") {
+			auto expr = yyjson_obj_get(info, "expr");
+			if (expr) {
+				if (Field(expr, "class") != "TYPE")
+					throw Stop{"computed type expressions are unsupported"};
+				pending.push_back({expr, "ParsedExpression", {}, depth + 1, "type"});
+			} else {
+				auto name = Field(info, "name"), catalog = Field(info, "catalog"), schema = Field(info, "schema");
+				if (name.empty())
+					throw Stop{"missing type name"};
+				if (!TypeAllowed(policy, catalog, schema, name, false))
+					violations.emplace("type", "type is not allowed: " + name, catalog, schema);
+			}
+			return;
+		}
+		if (id.empty())
+			throw Stop{"missing logical type id"};
+		if (!info)
+			return;
+		auto collation = Field(info, "collation");
+		if (!collation.empty())
+			Collation(collation, value);
+		auto child = yyjson_obj_get(info, "child_type");
+		if (child)
+			pending.push_back({child, "logical_type", {}, depth + 1, "type"});
+		auto children = yyjson_obj_get(info, "child_types");
+		if (children) {
+			if (!yyjson_is_arr(children))
+				throw Stop{"invalid nested type list"};
+			size_t i, n;
+			Json *entry;
+			yyjson_arr_foreach(children, i, n, entry)
+			    pending.push_back({yyjson_obj_get(entry, "second"), "logical_type", {}, depth + 1, "type"});
+		}
+	}
 	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
 	            const std::string &function = {}) {
 		auto location = yyjson_obj_get(node, "query_location");
@@ -134,6 +229,71 @@ struct Walker {
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
 	void References(Json *value, const std::string &kind, const Names &scope, const std::string &edge) {
+		if (kind == "PivotColumn" && !Field(value, "pivot_enum").empty())
+			throw Stop{"named PIVOT enums bypass type authorization; use explicit IN values"};
+		if (kind == "TypeExpression") {
+			auto name = Field(value, "type_name"), catalog = Field(value, "catalog"), schema = Field(value, "schema");
+			if (binding)
+				binding->caller_types.insert(Lower(name));
+			if (!TypeAllowed(policy, catalog, schema, name, false))
+				violations.emplace("type", "type is not allowed: " + name, catalog, schema);
+			auto children = yyjson_obj_get(value, "children");
+			size_t i, n;
+			Json *child;
+			yyjson_arr_foreach(children, i, n, child) {
+				if (Field(child, "class") != "TYPE" && Field(child, "class") != "CONSTANT")
+					throw Stop{"computed type parameters are unsupported"};
+				if (Names{"varchar", "bpchar", "string", "char", "nvarchar", "text"}.count(Lower(name)) &&
+				    Lower(Field(child, "alias")) == "collation") {
+					if (Field(child, "class") != "CONSTANT")
+						throw Stop{"computed type collations are unsupported"};
+					Collation(Field(yyjson_obj_get(child, "value"), "value"), child);
+				}
+			}
+		}
+		if (kind == "CollateExpression")
+			Collation(Field(value, "collation"), value);
+		if (kind == "OperatorExpression") {
+			auto type = Field(value, "type");
+			if (type == "ARRAY_CONSTRUCTOR")
+				Function("list_value", value);
+			if (type == "ARRAY_SLICE")
+				Function("array_slice", value);
+			if (type == "ARROW")
+				Function("json_extract", value);
+			if (type == "ARRAY_EXTRACT")
+				Implied({"array_extract", "map_extract_value", "json_extract", "variant_extract"});
+			if (type == "STRUCT_EXTRACT")
+				Implied({"struct_extract", "union_extract", "map_extract_value", "json_extract", "variant_extract"});
+		}
+		if (kind == "LambdaExpression" && Field(value, "syntax_type") != "LAMBDA_KEYWORD")
+			Implied({"json_extract"});
+		if (kind == "ColumnRefExpression") {
+			auto columns = yyjson_obj_get(value, "column_names");
+			if (yyjson_arr_size(columns) > 1)
+				Implied({"struct_extract", "struct_pack", "union_extract", "map_extract_value", "json_extract",
+				         "variant_extract"});
+			else {
+				// An unresolved single-part table alias can become a whole-row struct.
+				Implied({"struct_pack"});
+				auto name = Lower(Text(yyjson_arr_get(columns, 0)));
+				static const std::map<std::string, std::string> sql_values = {
+				    {"current_catalog", "current_catalog"},
+				    {"current_schema", "current_schema"},
+				    {"current_date", "current_date"},
+				    {"current_time", "get_current_time"},
+				    {"current_timestamp", "get_current_timestamp"},
+				    {"current_user", "current_user"},
+				    {"current_role", "current_role"},
+				    {"session_user", "session_user"},
+				    {"user", "user"},
+				    {"localtime", "current_localtime"},
+				    {"localtimestamp", "current_localtimestamp"}};
+				auto found = sql_values.find(name);
+				if (found != sql_values.end())
+					Implied({found->second});
+			}
+		}
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
 			functions[name]++;
@@ -200,6 +360,15 @@ struct Walker {
 	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
 		if (++nodes > policy.nodes || depth > policy.depth)
 			throw Stop{"AST size or depth limit exceeded", "limit"};
+		if (expected == "logical_type") {
+			Type(value, depth);
+			return;
+		}
+		// TYPE constants carry nested type expressions too; literal payloads otherwise remain opaque.
+		if (expected == "opaque" && Field(yyjson_obj_get(value, "type"), "id") == "TYPE") {
+			pending.push_back({yyjson_obj_get(value, "value"), "logical_type", {}, depth + 1, "type"});
+			return;
+		}
 		if (expected == "opaque")
 			return;
 		if (expected.size() > 2 && expected.substr(expected.size() - 2) == "[]") {
@@ -293,9 +462,9 @@ struct Walker {
 	}
 };
 
-Result Validate(Json *root, const Policy &policy) {
-	static const Inventory inventory;
-	Walker walker{inventory, policy};
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding) {
+	auto &inventory = GetInventory();
+	Walker walker{inventory, policy, binding};
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {
@@ -303,15 +472,13 @@ Result Validate(Json *root, const Policy &policy) {
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
-		bool blocked = policy.blocked_functions.count(name);
-		bool allowed = !policy.functions || policy.allowed_functions.count(name) ||
-		               (policy.defaults && inventory.defaults.count(name));
-		if (blocked || !allowed) {
-			auto message = "function is not allowed: " + name;
+		if (!FunctionAllowed(policy, name)) {
+			auto canonical = CanonicalFunction(name);
+			auto message = "function is not allowed: " + canonical;
 			if (entry.second > 1)
 				message += " (" + std::to_string(entry.second) + " occurrences)";
 			auto found = walker.function_positions.find(name);
-			walker.violations.emplace("function", message, "", "", "", name,
+			walker.violations.emplace("function", message, "", "", "", canonical,
 			                          found == walker.function_positions.end() ? -1 : found->second);
 		}
 	}

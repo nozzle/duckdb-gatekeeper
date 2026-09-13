@@ -20,6 +20,8 @@ struct Policy {
 	bool recursive = true, table_functions = true, dynamic_sql = false, file_tables = false;
 	Names allowed_functions, blocked_functions, allowed_catalogs, allowed_schemas;
 	std::set<Table> allowed_tables;
+	// Type identities share catalog/schema/leaf matching; table stores the type leaf.
+	std::set<Table> allowed_types;
 	uint64_t statements = 1, bytes = 8388608, nodes = 100000, depth = 512;
 };
 struct Violation {
@@ -42,8 +44,13 @@ struct Result {
 	std::set<Violation> violations;
 	int64_t position = -1;
 };
+struct BindingPolicy {
+	// Ambiguous caller syntax: enforce only the implementation actually looked up.
+	Names synthesized_functions;
+	Names caller_types;
+};
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
-Result Validate(Json *root, const Policy &policy);
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr);
 } // namespace gatekeeper

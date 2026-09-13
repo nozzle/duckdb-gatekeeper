@@ -43,13 +43,13 @@ def populated(db):
     "SELECT DISTINCT ON (x) x FROM t ORDER BY x DESC NULLS LAST LIMIT 3 OFFSET 1",
     "SELECT CASE WHEN y BETWEEN 1 AND 3 THEN y::VARCHAR ELSE NULL END FROM t",
     "SELECT * REPLACE (upper(x) AS x) FROM t",
-    "SELECT * EXCLUDE (x) FROM t", "SELECT CURRENT_DATE",
+    "SELECT * EXCLUDE (x) FROM t",
     "SELECT 1 AS x UNION BY NAME SELECT 2 AS y", "SELECT 1 EXCEPT SELECT 2",
     "SELECT sum(y) FILTER (WHERE y>0) OVER (PARTITION BY x ORDER BY z ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t",
     "SELECT * FROM t TABLESAMPLE reservoir(10 ROWS)",
     "SELECT * FROM t PIVOT (sum(z) FOR y IN (1,2))",
     "SELECT * FROM t UNPIVOT (value FOR name IN (y,z))",
-    "SELECT '{\"type\":\"DELETE_QUERY_NODE\"}'::JSON",
+    "SELECT '{\"type\":\"DELETE_QUERY_NODE\"}'",
     "SELECT 'DROP TABLE t; --'", "SELECT * FROM range(3) WITH ORDINALITY",
 ])
 def test_reads(populated, sql):
@@ -103,7 +103,7 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT * FROM query('SELECT 1')", {"check_functions": False}, False),
     ("SELECT * FROM query_table('t')", {"check_functions": False}, False),
     ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": ["json_serialize_plan"]}, False),
-    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"], "allow_dynamic_sql": True}, True),
+    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"], "allow_dynamic_sql": True}, False),
     ("SELECT * FROM query('SELECT 1')", {"allow_dynamic_sql": True}, False),
 ])
 def test_functions(populated, sql, opts, allowed):

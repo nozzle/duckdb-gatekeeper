@@ -138,7 +138,8 @@ def test_file_name_opt_in_only_authorizes_catalog_object(db, tmp_path, monkeypat
     assert not validate(db, 'SELECT * FROM "data.parquet"')["allowed"]
     assert validate(db, 'SELECT * FROM "data.parquet"', {"allow_file_table_references": True})["allowed"]
     result = validate(db, "SELECT * FROM 'missing.duckdb'", {"allow_file_table_references": True})
-    assert not result["allowed"] and result["code"] == "binding"
+    assert not result["allowed"] and result["code"] == "forbidden"
+    assert result["violations"][0]["function_name"] == "read_duckdb"
 
 
 @pytest.mark.parametrize("name", ["data.csv", "missing.csv", "exists.duckdb", "x.db", "x.ddb", "x.avro",
@@ -173,10 +174,11 @@ def test_internal_views_require_explicit_permission(db, name):
 def test_internal_view_explicit_permission_intersects_other_policies(db):
     table = {"catalog": "SYSTEM", "schema": "MAIN", "table": "DuckDB_Tables"}
     options = {"allowed_tables": [table], "allowed_schemas": ["main"], "allowed_catalogs": ["system"]}
-    assert validate(db, "SELECT * FROM duckdb_tables", options)["allowed"]
+    result = validate(db, "SELECT * FROM duckdb_tables", options)
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"
     assert not validate(db, "SELECT * FROM duckdb_views", options)["allowed"]
     assert not validate(db, "SELECT * FROM duckdb_tables", {**options, "allowed_catalogs": ["memory"]})["allowed"]
-    assert validate(db, "SELECT * FROM duckdb_tables", {
+    assert not validate(db, "SELECT * FROM duckdb_tables", {
         "allowed_tables": [{"schema": "main", "table": "duckdb_tables"}]
     })["allowed"]
 
@@ -242,4 +244,5 @@ def test_internal_dependency_of_trusted_view_requires_opt_in(db):
     assert validate(db, "SELECT * FROM my_tables")["violations"][0]["rule"] == "internal_object"
     options = {"allowed_tables": [{"schema": "main", "table": "my_tables"},
                                   {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
-    assert validate(db, "SELECT * FROM my_tables", options)["allowed"]
+    result = validate(db, "SELECT * FROM my_tables", options)
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"

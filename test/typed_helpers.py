@@ -1,4 +1,10 @@
 import re
+from pathlib import Path
+
+
+def never_bind_names():
+    header = (Path(__file__).resolve().parents[1] / "src/include/function_policy.hpp").read_text()
+    return re.findall(r'"([a-z_]+)"', header.split("static const Names names =", 1)[1].split("return names;", 1)[0])
 
 
 def call(db, function, sql=None, options=None):

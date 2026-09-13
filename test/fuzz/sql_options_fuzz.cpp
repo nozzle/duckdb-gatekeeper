@@ -74,9 +74,10 @@ static std::string Option(uint8_t selector, const std::string &text) {
 	                              "allow_table_functions", "allow_dynamic_sql",     "allow_file_table_references",
 	                              "allowed_functions",     "blocked_functions",     "allowed_catalogs",
 	                              "allowed_schemas",       "allowed_tables",        "max_statements",
-	                              "max_ast_bytes",         "max_ast_nodes",         "max_ast_depth"};
-	if (selector % 16 < 15)
-		return names[selector % 16];
+	                              "max_ast_bytes",         "max_ast_nodes",         "max_ast_depth",
+	                              "allowed_types"};
+	if (selector % 17 < 16)
+		return names[selector % 17];
 	// Arbitrary option names remain one quoted identifier, never executable SQL.
 	std::string name = "\"";
 	for (auto c : text) {
@@ -113,7 +114,11 @@ static std::string Argument(uint8_t selector) {
 	                               "{schema:'main', 'table':$1}",
 	                               "['main','secret']",
 	                               "['md5','read_csv','query_table']",
-	                               "8388609"};
+	                               "8388609",
+	                               "[{schema:'main', type:$1}]",
+	                               "[{catalog:'system', schema:'main', type:$1}]",
+	                               "[{schema:'main', type:NULL}]",
+	                               "[{schema:'main', type:{nested:$1}}]"};
 	return values[selector % (sizeof(values) / sizeof(values[0]))];
 }
 
@@ -175,6 +180,35 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	if (data[0] % 16 == 15) {
 		if (Configured(options, text, limit) != Configured(options, text, limit))
 			std::abort();
+		return 0;
+	}
+	if (data[0] % 16 == 14) {
+		// A resolved function denial must also reject its explicit caller spelling.
+		auto first =
+		    Run(connection,
+			    "SELECT gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract']) FROM input",
+			    text, limit);
+		if (StructValue::GetChildren(first).size() == 6) {
+			for (const auto &violation : ListValue::GetChildren(StructValue::GetChildren(first)[2])) {
+				auto &fields = StructValue::GetChildren(violation);
+				if (fields[0].GetValue<string>() != "function")
+					continue;
+				auto name = fields[5].GetValue<string>();
+				std::string quoted;
+				for (auto c : name) {
+					if (c == '"')
+						quoted += '"';
+					quoted += c;
+				}
+				auto explicit_result = Run(
+				    connection,
+				    "SELECT gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract']) FROM input",
+				    Value("SELECT \"" + quoted + "\"(1)"), limit);
+				auto &decision = StructValue::GetChildren(explicit_result);
+				if (decision.size() != 6 || decision[1].GetValue<string>() != "forbidden")
+					std::abort();
+			}
+		}
 		return 0;
 	}
 	std::string sql;
