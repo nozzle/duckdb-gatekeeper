@@ -262,22 +262,25 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 // bind happens: with replacement scans disabled in either layer, any claimed name is denied; with
 // them enabled, the resolved reader is authorized like a caller-written table function.
 struct ValidationScope {
+	ClientContext &context; // the connection this validation binds on
 	const gatekeeper::Policy &policy;
 	const gatekeeper::Policy &ceiling;
 	gatekeeper::Result &result;
 	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
 };
 static thread_local ValidationScope *active_scope = nullptr;
+// Nested validations (a host callback validating on another connection) restore the outer scope.
 struct ScopeGuard {
-	explicit ScopeGuard(ValidationScope &scope) { active_scope = &scope; }
-	~ScopeGuard() { active_scope = nullptr; }
+	ValidationScope *previous;
+	explicit ScopeGuard(ValidationScope &scope) : previous(active_scope) { active_scope = &scope; }
+	~ScopeGuard() { active_scope = previous; }
 };
 
 static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
                                                       optional_ptr<ReplacementScanData>) {
 	auto scope = active_scope;
-	if (!scope)
-		return nullptr; // Ordinary connections are unaffected.
+	if (!scope || &context != &scope->context)
+		return nullptr; // Ordinary connections, including reentrant ones on this thread, are unaffected.
 	auto path = ReplacementScan::GetFullPath(input);
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
@@ -311,7 +314,12 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		scope->result.objects.insert({"", "", path, "replacement"});
 		return replacement;
 	}
-	return nullptr; // No scan claims the name; DuckDB reports the missing table.
+	// No callback claimed the name. Returning nullptr would let DuckDB run every callback a second
+	// time outside this authorization, so raise the engine's own missing-table error here instead.
+	// The lookup throws for every catalog with transactional DDL; if it finds the entry after all,
+	// DuckDB's second lookup will bind it as an ordinary object under the catalog callback.
+	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
+	return nullptr;
 }
 
 // Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
@@ -427,7 +435,7 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 				AuthorizeObject(ceiling, binding_policy, entry, result);
 				AuthorizeObject(policy, binding_policy, entry, result);
 			});
-			ValidationScope scope{policy, ceiling, result, {}};
+			ValidationScope scope{context, policy, ceiling, result, {}};
 			BoundStatement bound;
 			{
 				ScopeGuard guard(scope);

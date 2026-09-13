@@ -137,12 +137,13 @@ removed because every function it gated is on this list.
   reference, so a denial happens before the substituted reader binds and no file is
   opened. Readers substituted by DuckDB are authorized by their resolved names
   (`parquet_scan`, `read_csv_auto`, `read_json_auto`), not by `read_parquet`/`read_csv`.
-  Host-language scans that resolve to subqueries are always denied. Residual: when
-  replacement scans are enabled and no callback claims a `/`-qualified name, DuckDB
-  itself probes `FileExists` under `enable_external_access`; keep the flag off or
-  disable external access on hosts where that probe matters. The file-shaped-name
-  preflight remains as an earlier diagnostic and to keep the callback out of the
-  common path.
+  Host-language scans that resolve to subqueries are always denied. When no callback
+  claims a name, Gatekeeper raises the engine's missing-table error itself rather than
+  returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and
+  only behind this authorization; DuckDB's autoload retry and `FileExists` probe do not
+  run. The callback is keyed to the validating connection and nested validations
+  restore the outer scope, so reentrant host callbacks cannot disable interception.
+  The file-shaped-name preflight remains as an earlier diagnostic.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.
