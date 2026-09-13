@@ -171,10 +171,10 @@ Things that surprise people:
 
 - Objects are authorized by their **resolved** identity after binding, using the caller's
   search path and transaction. Views and the tables behind them must both pass.
-- Dynamic SQL (`query`, `query_table`, `json_serialize_plan`), internal metadata views
-  (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), and sequence/storage
-  functions are denied regardless of options; they are on the non-overridable
-  [never-bind list](docs/security.md#never-bind-functions).
+- Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`, `json_serialize_plan`),
+  internal metadata views (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), and
+  sequence/storage functions are denied regardless of options; they are on the
+  non-overridable [never-bind list](docs/security.md#never-bind-functions).
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
 - Collations `binary`/`c`/`posix`, `nocase`, `noaccent`, and `nfc` are available by default
