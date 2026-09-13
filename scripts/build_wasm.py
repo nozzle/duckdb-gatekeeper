@@ -1,6 +1,7 @@
 """Build the EH side module with the distribution pipeline's pinned Emscripten."""
 
 import argparse
+import os
 from pathlib import Path
 import subprocess
 
@@ -22,6 +23,10 @@ def main():
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=root, text=True
     ).strip())
     docker = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{root}:{root}", "-w", str(root)]
+    # Preserve checkout ownership on Linux; Git rejects a runner-owned checkout as root.
+    # The pinned SDK's prebuilt cache is read-only for this user.
+    if hasattr(os, "getuid"):
+        docker += ["--user", f"{os.getuid()}:{os.getgid()}"]
     # Linked worktrees and their submodules refer to metadata outside the worktree.
     if not common.is_relative_to(root):
         docker += ["-v", f"{common}:{common}:ro"]
