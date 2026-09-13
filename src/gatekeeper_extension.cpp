@@ -484,7 +484,8 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
                                               vector<LogicalType> &types, vector<string> &names) {
 	try {
 		// DuckDB overwrites duplicate named parameters in its map before calling bind.
-		if (input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
+		if (input.ref.function &&
+		    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
 			throw std::invalid_argument("duplicate Gatekeeper configuration option");
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
