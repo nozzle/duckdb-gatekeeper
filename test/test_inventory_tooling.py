@@ -130,11 +130,22 @@ def test_schema_check_matches_jsonschema():
     assert outcomes == {True, False}
 
 
-def test_schema_check_rejects_unsupported_keywords():
-    with pytest.raises(schema_check.SchemaError, match="unsupported schema keywords"):
-        schema_check.validate({"type": "string", "format": "uri"}, "x")
-    with pytest.raises(schema_check.SchemaError, match="local"):
-        schema_check.validate({"$ref": "https://example.com/schema"}, "x")
+@pytest.mark.parametrize("schema", [
+    {"type": "string", "format": "uri"},
+    {"$ref": "https://example.com/schema"},
+    {"type": "string", "$defs": {"unused": {"type": "string", "format": "uri"}}},
+    {"type": "string", "if": {"const": "never"}, "then": {"maxLength": 1}},
+    {"type": "string", "if": {"type": "string"}, "else": {"maxLength": 1}},
+    {"type": "object", "properties": {"unused": {"enum": ["a"]}}},
+    {"type": "object", "additionalProperties": {"anyOf": []}},
+    {"type": "array", "items": {"type": "string", "maxItems": 1}},
+    {"type": "string", "allOf": [{"not": {"format": "uri"}}]},
+    {"type": "date"},
+])
+def test_schema_check_rejects_unsupported_keywords_anywhere(schema):
+    # Each schema would accept "x" if the unsupported keyword were ignored; the pre-scan must refuse it.
+    with pytest.raises(schema_check.SchemaError):
+        schema_check.validate(schema, "x")
 
 
 @pytest.mark.parametrize("module", ["migrate_unreviewed", "migrate_signature_baseline"])

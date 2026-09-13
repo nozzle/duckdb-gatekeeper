@@ -27,6 +27,29 @@ class ValidationError(ValueError):
         super().__init__(message)
 
 
+def _scan(schema):
+    """Reject unsupported keywords anywhere in the schema, including $defs and unselected branches."""
+    if isinstance(schema, bool):
+        return
+    if not isinstance(schema, dict):
+        raise SchemaError("schema nodes must be objects or booleans")
+    unknown = set(schema) - KNOWN
+    if unknown:
+        raise SchemaError("unsupported schema keywords: " + ", ".join(sorted(unknown)))
+    if "$ref" in schema and not schema["$ref"].startswith("#/"):
+        raise SchemaError("only local $ref pointers are supported: " + schema["$ref"])
+    if "type" in schema and schema["type"] not in TYPES:
+        raise SchemaError("unsupported type: " + str(schema["type"]))
+    for key in ("properties", "$defs"):
+        for sub in schema.get(key, {}).values():
+            _scan(sub)
+    for key in ("additionalProperties", "items", "if", "then", "else", "not"):
+        if key in schema:
+            _scan(schema[key])
+    for sub in schema.get("allOf", []):
+        _scan(sub)
+
+
 def _resolve(root, ref):
     if not ref.startswith("#/"):
         raise SchemaError("only local $ref pointers are supported: " + ref)
@@ -102,5 +125,10 @@ def _check(root, schema, value, path):
 
 
 def validate(schema, value):
-    """Raise ValidationError for the first violation, or SchemaError for an unsupported schema."""
+    """Raise ValidationError for the first violation, or SchemaError for an unsupported schema.
+
+    The whole schema is scanned for unsupported keywords before any document is evaluated, so a
+    keyword hidden in an unreferenced definition or an unselected conditional branch still fails.
+    """
+    _scan(schema)
     _check(schema, schema, value, [])
