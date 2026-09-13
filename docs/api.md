@@ -74,8 +74,16 @@ COLUMNS selectors, PIVOT IN values, quantile fractions/options, UNNEST options, 
 type parameters must be literals or parameters that DuckDB can bind without values.
 Type parameters can also contain nested type syntax. In list-capable positions,
 literal lists/structs are supported; PIVOT accepts literal tuples and unqualified
-label names. TRUE/FALSE parser casts are accepted, but arbitrary casts, arithmetic,
-function calls, subqueries and COLUMNS lambdas are rejected in these positions.
+label names. Casts/TRY_CAST of permitted literal forms or parameters are accepted;
+target types still require type permission. Arithmetic, arbitrary function calls
+and COLUMNS lambdas are rejected. Use string-form intervals (`INTERVAL '1 day'`)
+in bind-time positions: `INTERVAL 1 DAY` expands to arithmetic helper functions.
+Correlated column/subquery arguments are allowed for pinned system table-in-out
+functions `unnest`, `range`, and `generate_series`, whose non-scalar arguments are
+evaluated at execution time. Standard readers do not get this exception; a bare
+identifier in a reader argument can be converted into a string by DuckDB's binder.
+The exception is checked against the resolved system table-function identity;
+same-named table macros cannot claim it. Each scalar UNNEST option is still checked.
 The pinned parser stores sample sizes as literal values (and only accepts literal
 percentage-limit syntax); those forms remain supported. Literal constructors must
 resolve to system scalar entries, so a same-named macro cannot evade the restriction.
@@ -83,6 +91,8 @@ resolve to system scalar entries, so a same-named macro cannot evade the restric
 These are conservative caller-syntax checks, not a resource budget or complete
 interception of bind-time execution. Trusted views/macros, function-specific binders,
 large literals, type binders, parsing and serialization still require host limits.
+Permitting literal casts does not prove their custom cast implementations are cheap;
+custom types/casts and function extensions remain trusted host capabilities.
 
 Resource and unexpected execution errors can raise exceptions instead of returning
 a result. Callers must reject exceptions, NULL/missing results, and unknown codes.

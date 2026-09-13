@@ -56,6 +56,7 @@ struct BindingPolicy {
 	Names synthesized_functions;
 	Names caller_types;
 	Names literal_constructors;
+	Names runtime_table_functions;
 };
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);

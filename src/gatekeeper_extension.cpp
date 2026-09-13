@@ -169,6 +169,14 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
 		AuthorizeFunction(policy, binding, entry.name, result);
 		auto &function = entry.Cast<StandardEntry>();
+		if (binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
+		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
+		     function.schema.name != "main")) {
+			result.violations.emplace("bind_time_expression",
+			                          "runtime arguments require a system table-in-out function",
+			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
+			throw PermissionException("untrusted table-in-out function");
+		}
 		if (binding.literal_constructors.count(gatekeeper::Lower(entry.name)) &&
 		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
 		     function.schema.name != "main")) {
@@ -235,18 +243,6 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
                           LogicalOperator &root, gatekeeper::Result &result) {
 	auto function = [&](const string &name, const string &type) {
 		AuthorizeFunction(policy, binding, name, result);
-		if (binding.literal_constructors.count(gatekeeper::Lower(name))) {
-			bool observed_builtin = false;
-			for (const auto &entry : result.functions)
-				if (entry.catalog == "system" && entry.schema == "main" && entry.name == name &&
-				    entry.type == "scalar" && type == "scalar")
-					observed_builtin = true;
-			if (!observed_builtin) {
-				result.violations.emplace("bind_time_expression", "literal constructor has unverified provenance", "",
-				                          "", "", name);
-				throw PermissionException("unverified bind-time constructor");
-			}
-		}
 		for (const auto &entry : result.functions)
 			if (entry.name == name && entry.type == type)
 				return;
@@ -353,7 +349,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			    [&](CatalogEntry &entry) { AuthorizeObject(policy, binding_policy, entry, result); });
 			auto bound = binder->Bind(*statement);
 			// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
-			if (!bound.plan || parameters.rebind)
+			// parameters.rebind is a cache hint, not incomplete binding.
+			if (!bound.plan)
 				throw BinderException(
 				    "Validation requires a complete bound plan; parameter values or types may be needed");
 			if (bound.plan)

@@ -154,7 +154,7 @@ struct Walker {
 	};
 	std::vector<Work> pending;
 	// Recognize syntax, never evaluate it. Literal containers are permitted only in
-	// contexts that require them; arbitrary casts and function calls are not literals.
+	// contexts that require them; casts must have literal-form children.
 	bool BindLiteral(Json *value, bool containers = false, bool pivot_names = false) {
 		std::vector<Json *> work{value};
 		uint64_t visited = 0;
@@ -169,14 +169,8 @@ struct Walker {
 			if (pivot_names && kind == "COLUMN_REF" && yyjson_arr_size(yyjson_obj_get(expr, "column_names")) == 1)
 				continue;
 			if (kind == "CAST") {
-				// DuckDB parses TRUE/FALSE as a cast of 't'/'f', not a Boolean constant.
-				auto child = yyjson_obj_get(expr, "child");
-				auto type = yyjson_obj_get(expr, "cast_type");
-				auto name = Lower(Field(yyjson_obj_get(yyjson_obj_get(type, "type_info"), "expr"), "type_name"));
-				auto text = Field(yyjson_obj_get(child, "value"), "value");
-				if (Field(child, "class") == "CONSTANT" && (text == "t" || text == "f") &&
-				    (Field(type, "id") == "BOOLEAN" || name == "boolean"))
-					continue;
+				work.push_back(yyjson_obj_get(expr, "child"));
+				continue; // The normal type walk checks target types and parameters.
 			}
 			auto name = Lower(Field(expr, "function_name"));
 			bool container = containers && ((kind == "OPERATOR" && Field(expr, "type") == "ARRAY_CONSTRUCTOR") ||
@@ -202,6 +196,35 @@ struct Walker {
 			yyjson_arr_foreach(children, i, n, child) work.push_back(child);
 		}
 		return true;
+	}
+	bool HasRuntimeReference(Json *value) {
+		std::vector<Json *> work{value};
+		uint64_t visited = 0;
+		while (!work.empty()) {
+			auto expr = work.back();
+			work.pop_back();
+			if (++visited > policy.nodes)
+				return false;
+			if (yyjson_is_arr(expr)) {
+				size_t i, n;
+				Json *child;
+				yyjson_arr_foreach(expr, i, n, child) work.push_back(child);
+				continue;
+			}
+			auto kind = Field(expr, "class");
+			if (kind == "COLUMN_REF" || kind == "SUBQUERY")
+				return true;
+			// Never mistake literal payloads, type metadata or lambda variables for row references.
+			if (kind == "CONSTANT" || kind == "TYPE" || kind == "LAMBDA")
+				continue;
+			for (auto key : {"children", "child", "left", "right", "input", "lower", "upper", "else_expr",
+			                 "case_checks", "when_expr", "then_expr"}) {
+				auto child = yyjson_obj_get(expr, key);
+				if (child)
+					work.push_back(child);
+			}
+		}
+		return false;
 	}
 	void BindTime(Json *expr, const std::string &context, bool containers = false, bool pivot_names = false) {
 		if (expr && !BindLiteral(expr, containers, pivot_names))
@@ -371,13 +394,17 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			if (edge == "function") {
+				bool runtime = Names{"unnest", "range", "generate_series"}.count(name) && HasRuntimeReference(children);
+				if (runtime && binding)
+					binding->runtime_table_functions.insert(name);
 				yyjson_arr_foreach(children, i, n, child) {
 					auto argument = child;
 					if (Field(child, "type") == "COMPARE_EQUAL" &&
 					    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
 					    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
 						argument = yyjson_obj_get(child, "right");
-					BindTime(argument, "table-function argument", true);
+					if (!runtime)
+						BindTime(argument, "table-function argument", true);
 				}
 			}
 			if (name == "unnest") {

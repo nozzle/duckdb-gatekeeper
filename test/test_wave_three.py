@@ -45,6 +45,7 @@ def test_literal_bind_time_forms_remain_usable(db, sql):
 @pytest.mark.parametrize("sql", [
     "SELECT x FROM t WHERE x=?", "SELECT x FROM t WHERE x=$1", "SELECT x FROM t WHERE x=$value",
     "SELECT * FROM t LIMIT ?", "SELECT * FROM t LIMIT $n OFFSET $offset", "SELECT $1::INTEGER",
+    "SELECT x FROM t WHERE x=$1::INT AND x=$1::INT", "SELECT x FROM t WHERE x=$1 LIMIT $1",
 ])
 def test_parameters_with_complete_binding(db, sql):
     db.execute("CREATE TABLE t(x INTEGER)")
@@ -198,3 +199,49 @@ def test_equals_is_not_a_named_struct_or_scalar_unnest_argument(db):
             db.execute(sql)
     result = validate(db, "SELECT unnest([1,2], recursive=true)")
     assert result["code"] == "forbidden"
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM d, unnest(d.arr)", "SELECT * FROM d CROSS JOIN unnest(d.arr) AS u(v)",
+    "SELECT * FROM d, range(d.x)", "SELECT * FROM d, generate_series(1,d.x)",
+    "SELECT * FROM d, unnest(list_transform(arr, lambda v: v+1))",
+])
+def test_correlated_table_in_out_arguments(db, sql):
+    db.execute("CREATE TABLE d AS SELECT 2 x, [1,2] arr")
+    db.execute(sql).fetchall()
+    result = validate(db, sql)
+    assert result["allowed"], result
+
+
+def test_in_out_exception_requires_builtin_identity(db):
+    db.execute("CREATE TABLE d(x INT); CREATE MACRO main.range(x) AS TABLE SELECT x")
+    result = validate(db, "SELECT * FROM d, range(d.x)")
+    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
+
+
+def test_unresolved_column_does_not_relax_standard_reader(db):
+    result = validate(db, "SELECT * FROM read_csv(repeat(not_a_column,200000000))", {"allowed_functions": ["read_csv"]})
+    assert result["code"] == "forbidden" and result["error_message"] == ""
+    assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM generate_series(DATE '2024-01-01',DATE '2024-01-03',INTERVAL '1 day')",
+    "SELECT * FROM range(TIMESTAMP '2024-01-01',TIMESTAMP '2024-02-01',INTERVAL '1 month')",
+    "SELECT * FROM unnest(['a','b']::VARCHAR[])", "SELECT 1 LIMIT 5::INT",
+])
+def test_typed_bind_time_literals(db, sql):
+    db.execute(sql).fetchall()
+    result = validate(db, sql)
+    assert result["allowed"], result
+
+
+def test_typed_reader_parameter_still_requires_value(db):
+    result = validate(db, "SELECT * FROM range(?::BIGINT)")
+    assert result["code"] == "binding" and "parameter" in result["error_message"].lower()
+
+
+def test_cast_does_not_admit_computation(db):
+    result = validate(db, "SELECT 1 LIMIT len(repeat('x',200000000))::INT")
+    assert result["code"] == "forbidden" and result["error_message"] == ""
