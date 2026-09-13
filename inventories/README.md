@@ -23,13 +23,15 @@ were absent from the imported review; these remain excluded and must not be prom
 automatically. Unreviewed is not a claim of elevated behavior.
 
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
-and invalid group shapes. `scripts/inventory.py` checks version/source metadata, sorting, duplicates, and
-classification conflicts, including conflicts across extensions. The build consumes
-this same loader. Tests exercise every default and every excluded name.
+and invalid group shapes. It is evaluated by `scripts/schema_check.py`, a standard-library
+validator for exactly the keywords the schema uses (it refuses unknown keywords), so the
+build needs no third-party Python packages in the community distribution images. The test
+suite cross-checks that validator against the `jsonschema` package from
+`requirements-inventory.txt`. `scripts/inventory.py` then checks version/source metadata,
+sorting, duplicates, and classification conflicts, including conflicts across extensions.
+The build consumes this same loader. Tests exercise every default and every excluded name.
 
-Install `requirements-inventory.txt` for standalone inventory commands (also included
-by `requirements-dev.txt`). The generator requires Python 3.10+ and a Git checkout
-with initialized pinned submodules. `scripts/versions.py` owns the inventory engine
+The generator requires Python 3.10+ and a Git checkout with initialized pinned submodules. `scripts/versions.py` owns the inventory engine
 version/revision and baseline filename. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
@@ -46,7 +48,6 @@ Every supported **major/minor update** requires this process; run it on patches 
    accepted baseline or classifications:
 
    ```sh
-   python -m pip install -r requirements-inventory.txt
    python scripts/audit_inventory.py --capture build/candidate.json
    ```
 

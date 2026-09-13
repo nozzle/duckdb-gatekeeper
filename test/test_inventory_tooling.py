@@ -12,6 +12,7 @@ from test_gatekeeper import ROOT
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from generate import header, pinned_revision
+import schema_check
 from inventory import load
 from versions import BASELINE_FILENAME
 
@@ -73,26 +74,67 @@ def test_inventory_uses_supplied_schema(tmp_path):
         load(tmp_path)
 
 
-def test_missing_schema_dependency_is_actionable():
-    # -S excludes site packages, independent of the environment running pytest.
-    result = subprocess.run([sys.executable, "-S", "-c",
-                             "import sys; sys.path.insert(0, 'scripts'); from inventory import load; load()"],
-                            cwd=ROOT, capture_output=True, text=True)
-    assert result.returncode != 0
-    assert "requirements-inventory.txt" in result.stderr and "Traceback" not in result.stderr
-
-
-def test_generation_works_without_schema_dependency(tmp_path):
+def test_generation_needs_only_the_standard_library(tmp_path):
     # Distribution images build with a standard-library-only interpreter (-S drops site packages).
     result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(tmp_path)],
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert "skipping inventory schema validation" in result.stderr
     assert (tmp_path / "inventory.hpp").exists() and (tmp_path / "grammar.hpp").exists()
-    strict = subprocess.run([sys.executable, "-S", "-c",
-                             "import sys; sys.path.insert(0, 'scripts'); from inventory import load; load(schema=False)"],
-                            cwd=ROOT, capture_output=True, text=True)
-    assert strict.returncode == 0, strict.stderr
+
+
+MUTATIONS = [
+    ("unexpected", True), ("notes", "not a list"), ("notes", [42]), ("notes", []), ("notes", [""]),
+    ("source", {}), ("source", "not a URL"), ("source", "https://"), ("source", "https://host/a b"),
+    ("compute", "sum"), ("compute", [None]), ("compute", ["a", "a"]), ("compute", [""]),
+    ("groups", {"broken": "sum"}), ("groups", {}), ("reviewed_duckdb", "1.0.0"), ("name", "Core"),
+    ("unreviewed_reason", ""), ("unreviewed", ["x"]),
+]
+
+
+def _documents():
+    core = json.loads((ROOT / "inventories/core.json").read_text())
+    yield core
+    for path in sorted((ROOT / "inventories/extensions").glob("*.json")):
+        extension = json.loads(path.read_text())
+        yield extension
+        for key in ["groups", "unreviewed_reason", "source", "notes", "elevated"]:
+            mutated = dict(extension)
+            mutated.pop(key, None)
+            yield mutated
+        yield {**extension, "groups": {"a": ["b"]}}
+        yield {**extension, "unreviewed": ["x"]}
+    for key, value in MUTATIONS:
+        yield {**core, key: value}
+    for key in list(core):
+        mutated = dict(core)
+        del mutated[key]
+        yield mutated
+    yield {**core, "unreviewed": [], "unreviewed_reason": "none"}
+    yield {**core, "unreviewed": []}
+
+
+def test_schema_check_matches_jsonschema():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((ROOT / "inventories/schema.json").read_text())
+    reference = jsonschema.Draft202012Validator(schema)
+    outcomes = set()
+    for document in _documents():
+        expected = reference.is_valid(document)
+        try:
+            schema_check.validate(schema, document)
+            actual = True
+        except schema_check.ValidationError:
+            actual = False
+        assert actual == expected, json.dumps(document)[:200]
+        outcomes.add(expected)
+    assert outcomes == {True, False}
+
+
+def test_schema_check_rejects_unsupported_keywords():
+    with pytest.raises(schema_check.SchemaError, match="unsupported schema keywords"):
+        schema_check.validate({"type": "string", "format": "uri"}, "x")
+    with pytest.raises(schema_check.SchemaError, match="local"):
+        schema_check.validate({"$ref": "https://example.com/schema"}, "x")
 
 
 @pytest.mark.parametrize("module", ["migrate_unreviewed", "migrate_signature_baseline"])
