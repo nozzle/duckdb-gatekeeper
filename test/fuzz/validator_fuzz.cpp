@@ -17,10 +17,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	auto root = yyjson_doc_get_root(doc.get());
 	try {
 		gatekeeper::Policy policy;
-		policy.functions = data[0] & 1;
-		policy.defaults = policy.functions && (data[0] & 2);
+		policy.defaults = data[0] & 2;
 		policy.tables = data[0] & 16;
-		policy.recursive = data[0] & 32;
 		policy.replacement_scans = data[1] & 1;
 		if (data[1] & 2)
 			policy.allowed_tables.insert({"memory", "*", "*"});
@@ -30,12 +28,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			policy.allowed_tables.insert({"", "main", "t"});
 		if (data[1] & 16)
 			policy.blocked_functions = {"md5", "read_csv"};
-		if (policy.functions && (data[1] & 32))
+		if (data[1] & 32)
 			policy.allowed_functions = {"md5", "range", "query_table"};
-		policy.nodes = data[2] ? data[2] : 100000;
-		policy.depth = data[3] ? data[3] : 512;
-		// These are Check()-level limits; the linked SQL harness exercises them.
-		policy.bytes = data[4] ? data[4] : 8388608;
+		// Statement counts are checked by the linked SQL harness.
 		policy.statements = data[5] ? data[5] : 1;
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
@@ -43,7 +38,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		gatekeeper::BindingPolicy binding;
 		auto result = gatekeeper::Validate(ast, policy, &binding);
 		gatekeeper::Policy ceiling;
-		ceiling.recursive = data[4] & 1;
+		ceiling.defaults = data[4] & 1;
 		ceiling.blocked_functions = {"abs", "md5"};
 		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling);
 		if (layered.allowed && (!result.allowed || !gatekeeper::Validate(ast, ceiling).allowed))

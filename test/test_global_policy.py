@@ -31,10 +31,9 @@ def test_inspection_reset_and_complete_replacement(db):
 
 def test_canonical_policy_shape_is_pinned(db):
     """The canonical setting has exactly the supported policy fields."""
-    expected = {"check_functions", "use_default_functions", "allow_recursive_ctes",
+    expected = {"use_default_functions",
                 "allow_replacement_scans", "allowed_functions", "blocked_functions",
-                "allowed_tables", "max_statements", "max_ast_bytes",
-                "max_ast_nodes", "max_ast_depth", "restrict_tables"}
+                "allowed_tables", "max_statements", "restrict_tables"}
     assert set(policy(db)) == expected
     for statement in ("CALL gatekeeper_configure(allowed_types := [])",
                       "SELECT gatekeeper_validate('SELECT 1', allowed_types := [])"):
@@ -60,14 +59,13 @@ def test_configuration_is_nontransactional_and_requires_table_function(db):
 
 
 @pytest.mark.parametrize("options", [
-    {"alowed_schemas": ["main"]}, {"check_functions": "false"}, {"check_functions": 1},
+    {"alowed_schemas": ["main"]}, {"use_default_functions": "false"}, {"use_default_functions": 1},
     {"allowed_functions": [1]}, {"allowed_functions": [None]}, {"max_statements": 1.5},
     {"max_statements": 0}, {"max_statements": None},
     {"allow_table_functions": True}, {"allow_table_functions": False},
     {"allowed_tables": [{"schema": "main", "table": "t", "catlog": "memory"}]},
     {"allowed_tables": [{"schema": "main", "tabel": "t"}]},
     {"allowed_types": [{"schema": "main", "type": "t", "extra": "x"}]},
-    {"check_functions": False, "use_default_functions": True},
 ])
 def test_strict_parameterized_call_preserves_old_policy_on_failure(db, options):
     configure(db, {"blocked_functions": ["md5"]})
@@ -145,7 +143,7 @@ def test_set_requires_consistent_table_restriction(db):
 
 
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
-                                     "max_ast_nodes := NULL::INTEGER",
+                                     "max_statements := NULL::INTEGER",
                                      "blocked_functions := [], blocked_functions := ['md5']",
                                      "blocked_functions = [], blocked_functions = ['md5']"])
 def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument):
@@ -241,14 +239,10 @@ def test_prepare_validation_reads_global_at_execution(db):
 
 @pytest.mark.parametrize("global_options,overrides,sql,rule", [
     ({"blocked_functions": ["md5"]}, {"blocked_functions": []}, "SELECT md5('x')", "function"),
-    ({"use_default_functions": False}, {"check_functions": False}, "SELECT abs(1)", "function"),
+    ({"use_default_functions": False}, {"use_default_functions": True}, "SELECT abs(1)", "function"),
+    ({"use_default_functions": False}, {"allowed_functions": ["abs"]}, "SELECT abs(1)", "function"),
     ({"max_statements": 1}, {"max_statements": 2}, "SELECT 1; SELECT 2", "limit"),
-    ({"max_ast_nodes": 1}, {"max_ast_nodes": 100000}, "SELECT 1", "limit"),
-    ({"max_ast_depth": 1}, {"max_ast_depth": 512}, "SELECT 1", "limit"),
-    ({"max_ast_bytes": 50}, {"max_ast_bytes": 8388608}, "SELECT 1", "limit"),
     ({"blocked_functions": ["range"]}, {"blocked_functions": []}, "SELECT * FROM range(3)", "function"),
-    ({"allow_recursive_ctes": False}, {"allow_recursive_ctes": True},
-     "WITH RECURSIVE t AS (SELECT 1 x UNION ALL SELECT x+1 FROM t WHERE x<3) SELECT * FROM t", "recursive_cte"),
     ({"allow_replacement_scans": False}, {"allow_replacement_scans": True}, "SELECT * FROM 'missing.csv'", "replacement_scan"),
     ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
@@ -296,9 +290,10 @@ def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):
 def test_configuration_is_never_admitted_as_submitted_sql(db, sql):
     db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(); "
                "CREATE MACRO cfg_macro() AS TABLE SELECT * FROM gatekeeper_configure()")
-    configure(db, {"check_functions": False, "blocked_functions": ["md5"]})
+    options = {"allowed_functions": ["gatekeeper_configure", "cfg_macro"], "blocked_functions": ["md5"]}
+    configure(db, options)
     before = policy(db)
-    result = validate(db, sql, {"check_functions": False})
+    result = validate(db, sql, options)
     assert result["code"] in {"forbidden", "unsupported"} and not result["allowed"], result
     assert result["objects"] == result["functions"] == []
     assert policy(db) == before

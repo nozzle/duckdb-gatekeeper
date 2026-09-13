@@ -92,7 +92,7 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	// Keep the removed allow_table_functions selector to exercise unknown-option rejection.
+	// Keep removed selectors to exercise unknown-option rejection and preserve corpus mappings.
 	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
 	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
 	                              // Unknown namespace options exercise rejection.
@@ -384,10 +384,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	std::string sql;
 	if (data[0] % 4 == 0) {
-		sql = "SELECT gatekeeper_validate($1, max_ast_bytes := " + std::to_string(data[1] ? data[1] * 32 : 65536) +
-		      ", max_ast_nodes := " + std::to_string(data[2] ? data[2] : 2000) +
-		      ", max_ast_depth := " + std::to_string(data[3] ? data[3] : 100) +
-		      ", max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
+		sql = "SELECT gatekeeper_validate($1, max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
 	} else {
 		sql = "SELECT gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
 		      options + ") FROM input";

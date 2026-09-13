@@ -52,6 +52,10 @@ implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
 treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
 
+Function allowlisting cannot be disabled. Each policy layer admits its explicit
+`allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
+explicit blocks and the never-bind list always take precedence.
+
 The callback applies explicit blocks and the non-overridable never-bind list below
 to scalar, aggregate, table, macro, table-macro and pragma-function entries, including
 trusted expansions. Authorized views backed by `read_parquet` still work unless
@@ -148,6 +152,7 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   caller allowlist. Lookup-triggered autoload can occur before the callback; use
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
+  Recursive CTEs are supported; their iterations are not bounded by AST depth.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
 - Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
@@ -170,8 +175,10 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
 - Explicitly admitting eligible elevated readers transfers responsibility
   for their resources and trusted implementation to the application. The never-bind
   list cannot be overridden by any option.
-- AST validation occurs after parsing and serialization; traversal limits do not
-  replace process limits against parser/serializer resource exhaustion.
+- Fixed internal limits cap SQL input and serialized AST size at 8 MiB, AST traversal
+  at 100,000 nodes, and AST depth at 512. AST validation occurs after parsing and
+  serialization; traversal limits do not replace process limits against
+  parser/serializer resource exhaustion.
 
 Keep external access, extension loading, credentials, filesystem/network permissions,
 and configuration changes controlled independently. A future locked connection

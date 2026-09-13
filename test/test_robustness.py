@@ -1,5 +1,6 @@
 import json
 import random
+import pytest
 
 from test_gatekeeper import check, db
 import duckdb
@@ -13,7 +14,22 @@ def test_depth_and_width(db):
         assert not check(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
     assert check(db, sql)["allowed"]
-    assert not check(db, sql, {"max_ast_nodes": 10})["allowed"]
+
+
+@pytest.mark.parametrize("sql,message", [
+    ("SELECT '" + "x" * 8388608 + "'", "SQL exceeds fixed input size limit"),
+    # The input fits, but AST serialization adds enough overhead to exceed 8 MiB.
+    ("SELECT '" + "x" * (8388608 - 9) + "'", "serialized AST exceeds fixed size limit"),
+    ("SELECT " + ",".join("1" for _ in range(20000)), "AST size or depth limit exceeded"),
+    ("SELECT " + "abs(" * 260 + "1" + ")" * 260, "AST size or depth limit exceeded"),
+], ids=["input-bytes", "serialized-bytes", "nodes", "depth"])
+def test_fixed_ast_guardrails_and_recovery(db, sql, message):
+    result = check(db, sql)
+    assert result["code"] == "forbidden" and not result["allowed"], result
+    assert result["violations"][0]["rule"] == "limit"
+    assert result["violations"][0]["message"] == message
+    assert result["objects"] == result["functions"] == []
+    assert check(db, "SELECT 1")["allowed"]
 
 
 def test_nul(db):
@@ -34,7 +50,7 @@ def test_random_invalid_sql(db):
 def test_random_option_types(db):
     rng = random.Random(99)
     values = [None, True, False, 1, -1, 1.5, "x", [], {}, ["x"]]
-    keys = ["check_functions", "allowed_functions", "allowed_tables", "limits", "reader_paths", "allow_dynamic_sql"]  # last three are unknown names
+    keys = ["use_default_functions", "allowed_functions", "allowed_tables", "limits", "reader_paths", "allow_dynamic_sql"]  # last three are unknown names
     for _ in range(100):
         options = {rng.choice(keys): rng.choice(values)}
         try:

@@ -116,7 +116,7 @@ have their field names checked even when empty.
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 
 Violation `rule` values: `function`, `table`, `internal_object`,
-`dynamic_sql`, `recursive_cte`, `replacement_scan`,
+`dynamic_sql`, `replacement_scan`,
 `bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
 fields, not on message text.
 
@@ -154,17 +154,24 @@ What the three failure shapes look like:
 
 | Option | Type | Built-in default | Notes |
 | --- | --- | --- | --- |
-| `check_functions` | BOOLEAN | `true` | `false` skips the allowlist; blocks and the never-bind list still apply. |
-| `use_default_functions` | BOOLEAN | `true` | Admit the 864 reviewed compute functions. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: the 864 reviewed compute defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Exact leaf names, ASCII case-folded. `'*'` is multiplication, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
-| `allow_recursive_ctes` | BOOLEAN | `true` | |
 | `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
-| `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
-| `max_ast_nodes` | BIGINT | `100000` | Positive; at most the default. |
-| `max_ast_depth` | BIGINT | `512` | Positive; at most the default. |
+
+Function allowlisting always applies to caller-authored functions. With
+`use_default_functions := true`, the allowed set is **defaults ∪ allowed_functions**;
+with `false`, it is just `allowed_functions`. Explicit blocks and the never-bind list
+win either way. Global and request policies each must grant permission: a request
+cannot add a function that the global policy denies.
+
+Recursive CTEs are supported and undergo the same function and table checks as other
+queries. Fixed internal guardrails bound SQL input and serialized AST size to 8 MiB,
+AST traversal to 100,000 nodes, and AST depth to 512. These are not configurable and
+do not bound recursive iterations, execution time, memory, or result size. Parsing
+and serialization precede the AST traversal checks; enforce resource budgets in the host.
 
 Caller-written table functions (`FROM range(...)`, `FROM read_parquet(...)`) use
 the same function policy as scalar and aggregate calls. Readers are not defaults;
@@ -285,15 +292,13 @@ persisted, not undone by rollback, and `SET SESSION`/`RESET SESSION` are rejecte
 | Blocks and the never-bind list | Either layer's deny wins. |
 | Allowlists (functions, tables) | Each layer must allow the resolved identity. |
 | Capability flags | Both layers must grant. |
-| Limits | The stricter value applies. |
+| Statement limit | The stricter value applies. |
 
 An otherwise valid request that tries to widen access does not error; it simply cannot
-authorize anything the global policy denies. Conflicting options are still rejected as
-`invalid_input`, for example `check_functions := false` with a nonempty
-`allowed_functions := ['md5']` (an empty list or `use_default_functions := false` is
-compatible with disabled checks). So grant capabilities (`read_parquet`, higher
-statement limits) in `CALL gatekeeper_configure`, and use request options to narrow per
-tenant.
+authorize anything the global policy denies. Invalid option values, such as
+`max_statements := 0`, are rejected as `invalid_input`. Grant capabilities
+(`read_parquet`, higher statement limits) in `CALL gatekeeper_configure`, and use
+request options to narrow per tenant.
 
 | Operation | SQL |
 | --- | --- |
@@ -307,7 +312,7 @@ before DuckDB's casts, and fills omitted options from the built-in defaults.
 `SET gatekeeper_policy = <STRUCT>` also works but requires the **complete canonical
 STRUCT**: every option plus the `restrict_tables`
 flag, with no NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails
-with `NULL policy field: check_functions`; start from
+with `NULL policy field: use_default_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead. DuckDB silently
 drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''` means
 any catalog) means a typo that displaces a required field fails closed. Check the readback.

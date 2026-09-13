@@ -18,12 +18,15 @@ def test_named_prepared_and_row_varying_options(db):
 
 @pytest.mark.parametrize("args", [
     "'{}'", "resolve_objects := false", "unknown := true", "limits := {max_statements:1}",
-    "check_functions := 'false'", "check_functions := 1", "max_statements := 1.5",
+    "use_default_functions := 'false'", "use_default_functions := 1", "max_statements := 1.5",
     "allowed_functions := 'sum'", "allowed_functions := [1,2]", "allowed_tables := [1]",
     "allowed_tables := ['main.t']",
     "blocked_functions := [], blocked_functions := ['md5']",
     "allow_dynamic_sql := true",  # unknown option
     "allow_table_functions := true", "allow_table_functions := false",  # removed option
+    "check_functions := true", "check_functions := false",
+    "allow_recursive_ctes := true", "allow_recursive_ctes := false",
+    "max_ast_bytes := 8388608", "max_ast_nodes := 100000", "max_ast_depth := 512",
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):
@@ -35,7 +38,7 @@ def test_rejected_signatures(db,args):
 @pytest.mark.parametrize("options", [
     {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":[""]},
     {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema":"main","table":"t","extra":"x"}]},
-    {"max_statements":0}, {"max_ast_nodes":-1},
+    {"max_statements":0}, {"max_statements":-1},
 ])
 def test_invalid_typed_values(db,options):
     result = validate(db,"SELECT 1", options)
@@ -44,7 +47,7 @@ def test_invalid_typed_values(db,options):
 
 def test_configure_replacement_and_independent_limits(db):
     assert configure(db,{"blocked_functions":["md5"],"max_statements":2})
-    assert validate(db,"SELECT 1; SELECT 2", {"max_ast_depth":100})["allowed"]
+    assert validate(db,"SELECT 1; SELECT 2", {"use_default_functions":False})["allowed"]
     assert not validate(db,"SELECT md5('x')")["allowed"]
     assert not validate(db,"SELECT md5('x')", {"blocked_functions":[]})["allowed"]
     configure(db)
@@ -71,8 +74,6 @@ def test_structured_object_and_limit_diagnostics(db):
     assert result["violations"][0]["position"]==7
     result=validate(db,"SELECT * FROM")
     assert result["position"]==13 and result["error_type"]=="parser"
-    result=validate(db,"SELECT 1",{"max_ast_nodes":1})
-    assert result["code"]=="forbidden" and result["violations"][0]["rule"]=="limit"
 
 
 def test_file_backed_view_requires_own_permission(db,tmp_path):

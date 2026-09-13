@@ -358,8 +358,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 	try {
 		if (sql.find('\0') != string::npos)
 			throw InvalidInputException("SQL contains a NUL byte");
-		if (sql.size() > std::min(policy.bytes, ceiling.bytes))
-			return {false, "forbidden", "", "", {{"limit", "SQL exceeds max_ast_bytes input bound"}}};
+		if (sql.size() > gatekeeper::MAX_AST_BYTES)
+			return {false, "forbidden", "", "", {{"limit", "SQL exceeds fixed input size limit"}}};
 		Parser parser(context.GetParserOptions());
 		parser.ParseQuery(sql);
 		if (parser.statements.empty())
@@ -391,8 +391,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		unique_ptr<char, decltype(&free)> serialized(yyjson_write(ast.get(), 0, &bytes), free);
 		if (!serialized)
 			throw std::bad_alloc();
-		if (bytes > std::min(policy.bytes, ceiling.bytes))
-			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds max_ast_bytes"}}};
+		if (bytes > gatekeeper::MAX_AST_BYTES)
+			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds fixed size limit"}}};
 		gatekeeper::BindingPolicy binding_policy;
 		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy, &ceiling);
 		if (!result.allowed)
