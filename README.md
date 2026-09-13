@@ -96,6 +96,11 @@ DuckDB error while the statement is bound, for both functions. Invalid runtime v
 result with `code = 'invalid_input'`, while `CALL gatekeeper_configure` raises and
 leaves the active policy unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
 spliced into SQL text.
+For `CALL gatekeeper_configure`, an empty non-STRUCT list supplied to
+`allowed_tables` or `allowed_types` means an empty restriction regardless of its
+element type: DuckDB converts even an untyped `[]` to `INTEGER[]` before the
+configuration callback. Nonempty lists require structs, and typed STRUCT lists
+have their field names checked even when empty.
 
 ### Result
 

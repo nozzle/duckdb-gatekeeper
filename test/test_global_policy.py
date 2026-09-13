@@ -150,6 +150,17 @@ def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument)
         db.execute("CALL gatekeeper_configure(" + argument + ")")
 
 
+@pytest.mark.parametrize("empty", ["[]", "[]::INTEGER[]", "[]::VARCHAR[]"])
+def test_call_empty_lists_deny_all_identities(db, empty):
+    db.execute("CREATE TABLE t(x INT); CREATE TYPE customer AS ENUM ('a')")
+    configure(db, {"allowed_types": [{"schema": "main", "type": "customer"}]})
+    db.execute(f"CALL gatekeeper_configure(allowed_tables := {empty}, allowed_types := {empty})")
+    assert policy(db)["restrict_tables"]
+    assert policy(db)["allowed_tables"] == policy(db)["allowed_types"] == []
+    assert not validate(db, "SELECT * FROM t")["allowed"]
+    assert not validate(db, "SELECT NULL::customer")["allowed"]
+
+
 def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
     before = policy(db)
     # SQL PREPARE's grammar excludes CALL; the equivalent table SELECT is preparable.
