@@ -56,8 +56,7 @@ def initialize_lake(db, kind, tmp_path):
 def test_allowed_and_denied_tables(lake):
     db, schema, kind = lake
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}],
-              "allow_table_functions": False}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
     db.execute("CALL gatekeeper_configure(" + ",".join(name + " := ?" for name in policy) + ")", list(policy.values()))
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
@@ -83,7 +82,7 @@ def test_trusted_view_and_no_writes(lake):
     db, schema, kind = lake
     db.execute(f"CREATE VIEW main.allowed_view AS SELECT * FROM lake.{schema}.orders")
     policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "*"},
-                                 {"catalog": "memory", "schema": "main", "table": "*"}], "allow_table_functions": False}
+                                 {"catalog": "memory", "schema": "main", "table": "*"}]}
     assert validate(db, "SELECT * FROM main.allowed_view", policy)["allowed"]
     assert not validate(db, "SELECT * FROM main.allowed_view", {**policy, "allowed_tables": []})["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)

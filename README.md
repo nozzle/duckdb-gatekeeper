@@ -116,7 +116,7 @@ have their field names checked even when empty.
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 
 Violation `rule` values: `function`, `table`, `internal_object`,
-`dynamic_sql`, `table_function`, `recursive_cte`, `replacement_scan`,
+`dynamic_sql`, `recursive_cte`, `replacement_scan`,
 `bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
 fields, not on message text.
 
@@ -160,12 +160,17 @@ What the three failure shapes look like:
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
 | `allow_recursive_ctes` | BOOLEAN | `true` | |
-| `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
 | `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 | `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
 | `max_ast_nodes` | BIGINT | `100000` | Positive; at most the default. |
 | `max_ast_depth` | BIGINT | `512` | Positive; at most the default. |
+
+Caller-written table functions (`FROM range(...)`, `FROM read_parquet(...)`) use
+the same function policy as scalar and aggregate calls. Readers are not defaults;
+admitting one permits its resource access, without path restrictions from
+`allowed_tables`. Authorized trusted views and macros may introduce readers
+internally, but explicit blocks and the never-bind list still apply.
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']).allowed;

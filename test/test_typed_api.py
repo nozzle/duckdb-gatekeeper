@@ -23,6 +23,7 @@ def test_named_prepared_and_row_varying_options(db):
     "allowed_tables := ['main.t']",
     "blocked_functions := [], blocked_functions := ['md5']",
     "allow_dynamic_sql := true",  # unknown option
+    "allow_table_functions := true", "allow_table_functions := false",  # removed option
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):
@@ -79,7 +80,10 @@ def test_file_backed_view_requires_own_permission(db,tmp_path):
     db.execute(f"COPY (SELECT 42 AS x) TO '{path}' (FORMAT PARQUET)")
     db.execute(f"CREATE VIEW v AS SELECT * FROM read_parquet('{path}')")
     assert not validate(db,"SELECT * FROM v",{"allowed_tables":[]})["allowed"]
-    assert validate(db,"SELECT * FROM v",{"allowed_tables":[{"schema":"main","table":"v"}],"allow_table_functions":False})["allowed"]
+    assert validate(db,"SELECT * FROM v",{"allowed_tables":[{"schema":"main","table":"v"}]})["allowed"]
+    result = validate(db, f"SELECT * FROM read_parquet('{path}')")
+    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
+    assert not validate(db, "SELECT * FROM v", {"blocked_functions": ["read_parquet"]})["allowed"]
 
 
 def test_view_and_underlying_table_must_both_pass(db):
@@ -174,7 +178,6 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     assert validate(db, "SELECT * FROM '/does/not/exist.parquet'")["code"] == "binding"
     # Requests narrow only: they cannot enable scans the global policy disables, and can disable them.
     assert not validate(db, "SELECT * FROM 'data.parquet'", {"allow_replacement_scans": False})["allowed"]
-    assert not validate(db, "SELECT * FROM 'data.parquet'", {"allow_table_functions": False})["allowed"]
     assert not validate(db, "SELECT * FROM 'data.parquet'", {"blocked_functions": ["parquet_scan"]})["allowed"]
     configure(db, {"allowed_functions": ["parquet_scan"]})
     result = validate(db, "SELECT * FROM 'data.parquet'", {"allow_replacement_scans": True})

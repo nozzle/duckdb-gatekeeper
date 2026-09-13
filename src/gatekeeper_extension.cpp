@@ -278,8 +278,6 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			deny("replacement_scan", "replacement scan has no resolvable function: " + path);
 		auto name = function->Cast<FunctionExpression>().function_name;
 		for (const auto *layer : {&scope->ceiling, &scope->policy}) {
-			if (!layer->table_functions)
-				deny("table_function", "table functions are disabled", name);
 			if (!gatekeeper::FunctionAllowed(*layer, name))
 				deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
 				     gatekeeper::CanonicalFunction(name));

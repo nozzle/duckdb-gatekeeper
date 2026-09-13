@@ -21,7 +21,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		policy.defaults = policy.functions && (data[0] & 2);
 		policy.tables = data[0] & 16;
 		policy.recursive = data[0] & 32;
-		policy.table_functions = data[0] & 64;
 		policy.replacement_scans = data[1] & 1;
 		if (data[1] & 2)
 			policy.allowed_tables.insert({"memory", "*", "*"});
@@ -45,7 +44,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		auto result = gatekeeper::Validate(ast, policy, &binding);
 		gatekeeper::Policy ceiling;
 		ceiling.recursive = data[4] & 1;
-		ceiling.table_functions = data[4] & 2;
 		ceiling.blocked_functions = {"abs", "md5"};
 		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling);
 		if (layered.allowed && (!result.allowed || !gatekeeper::Validate(ast, ceiling).allowed))
