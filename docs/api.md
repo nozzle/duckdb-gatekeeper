@@ -390,11 +390,13 @@ Prefer `CALL` for authoring. Direct `SET [GLOBAL] gatekeeper_policy = <complete 
 is supported for integration but **DuckDB casts before the extension sees the value**:
 unknown fields are dropped, missing fields become NULL, and compatible values may be
 coerced. Because the canonical value contains no NULL at any depth, any NULL produced
-by that cast is rejected: a missing top-level field or a misspelled nested field
-(including `catalog`) fails with `NULL policy field` and leaves the active policy
-unchanged. Extra unknown top-level keys alongside a complete policy are still dropped
-silently, so an intended restriction may simply not apply. Never treat direct `SET` as
-strict validation of an authored policy. Inspect normalized readback.
+by that cast is rejected: a missing or NULL-filled field at any depth, including a
+nested `catalog` whose key was misspelled, fails with `NULL policy field` and leaves the
+active policy unchanged. Extra unknown keys alongside a complete top-level policy or a
+complete nested identity are still dropped silently: at the top level an intended
+restriction may simply not apply; inside an identity the entry keeps its canonical
+fields and cannot widen. Never treat direct `SET` as strict validation of an authored
+policy. Inspect normalized readback.
 
 Trusted bootstrap order is: `LOAD` required extensions, provision catalogs/credentials
 and other host settings, `CALL gatekeeper_configure(...)`, then

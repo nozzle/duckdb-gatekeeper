@@ -28,10 +28,12 @@ This is a breaking pre-1.0 API and authorization change.
    Direct SET accepts a complete canonical STRUCT, but DuckDB casts it before the
    callback: unmatched source fields disappear, missing target fields become NULL,
    and compatible values are coerced. Because the canonical value is NULL-free at
-   every depth, any NULL the cast produces is rejected on read, so replacement typos at
-   any depth fail closed. Extra top-level keys alongside a complete policy are still
-   dropped silently. Document CALL as the strict authoring path; SET is an integration
-   surface with this limitation. Read back the normalized setting for inspection.
+   every depth, any NULL the cast produces is rejected on read, so a typo that displaces
+   a canonical field at any depth fails closed. Extra keys alongside a complete policy
+   or a complete nested identity are still dropped silently; nested extras cannot widen
+   because the canonical fields remain intact. Document CALL as the strict authoring
+   path; SET is an integration surface with this limitation. Read back the normalized
+   setting for inspection.
 
 4. **The setting is the sole source of truth.** Do not publish a separate policy
    cache in the SET callback. Native setting APIs and registration/startup paths may

@@ -91,6 +91,18 @@ def test_set_rejects_null_nested_identity_fields(db, entry):
     assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
 
 
+def test_set_drops_extra_nested_keys_without_widening(db):
+    """An extra key beside complete canonical fields is cast away silently; the identity is unchanged."""
+    db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
+    configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]})
+    before = policy(db)
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := ["
+               "{catalog: 'memory', schema: 'main', \"table\": 't', catlog: 'lake'}])")
+    assert policy(db) == before
+    assert validate(db, "SELECT * FROM memory.main.t")["allowed"]
+    assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
+
+
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
                                      "max_ast_nodes := NULL::INTEGER",
                                      "blocked_functions := [], blocked_functions := ['md5']",
