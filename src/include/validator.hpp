@@ -38,16 +38,24 @@ struct Violation {
 		                other.position);
 	}
 };
+struct Identity {
+	std::string catalog, schema, name, type;
+	bool operator<(const Identity &other) const {
+		return std::tie(catalog, schema, name, type) < std::tie(other.catalog, other.schema, other.name, other.type);
+	}
+};
 struct Result {
 	bool allowed = false;
 	std::string code, error_type, error_message;
 	std::set<Violation> violations;
 	int64_t position = -1;
+	std::set<Identity> objects, functions;
 };
 struct BindingPolicy {
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
 	Names caller_types;
+	Names literal_constructors;
 };
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);

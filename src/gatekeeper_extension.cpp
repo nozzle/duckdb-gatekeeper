@@ -10,6 +10,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -36,13 +37,22 @@ static LogicalType ViolationType() {
 	                            {"position", LogicalType::BIGINT}});
 }
 
+static LogicalType IdentityType(bool object) {
+	return LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
+	                            {"schema", LogicalType::VARCHAR},
+	                            {object ? "table" : "name", LogicalType::VARCHAR},
+	                            {"type", LogicalType::VARCHAR}});
+}
+
 static LogicalType ResultType() {
 	return LogicalType::STRUCT({{"allowed", LogicalType::BOOLEAN},
 	                            {"code", LogicalType::VARCHAR},
 	                            {"violations", LogicalType::LIST(ViolationType())},
 	                            {"error_type", LogicalType::VARCHAR},
 	                            {"error_message", LogicalType::VARCHAR},
-	                            {"position", LogicalType::BIGINT}});
+	                            {"position", LogicalType::BIGINT},
+	                            {"objects", LogicalType::LIST(IdentityType(true))},
+	                            {"functions", LogicalType::LIST(IdentityType(false))}});
 }
 
 static Value Position(int64_t position) { return position < 0 ? Value(LogicalType::BIGINT) : Value::BIGINT(position); }
@@ -54,9 +64,19 @@ static Value ResultValue(const gatekeeper::Result &result) {
 		    Value::STRUCT(ViolationType(), {Value(v.rule), Value(v.message), Value(v.catalog), Value(v.schema),
 			                                Value(v.table), Value(v.function_name), Position(v.position)}));
 	}
+	auto identities = [&](const std::set<gatekeeper::Identity> &entries, bool object) {
+		vector<Value> values;
+		if (result.allowed) {
+			for (const auto &entry : entries)
+				values.push_back(Value::STRUCT(IdentityType(object), {Value(entry.catalog), Value(entry.schema),
+				                                                      Value(entry.name), Value(entry.type)}));
+		}
+		return Value::LIST(IdentityType(object), values);
+	};
 	return Value::STRUCT(ResultType(),
 	                     {Value::BOOLEAN(result.allowed), Value(result.code), Value::LIST(ViolationType(), violations),
-	                      Value(result.error_type), Value(result.error_message), Position(result.position)});
+	                      Value(result.error_type), Value(result.error_message), Position(result.position),
+	                      identities(result.objects, true), identities(result.functions, false)});
 }
 
 struct GatekeeperState : ScalarFunctionInfo {
@@ -146,9 +166,25 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 	case CatalogType::TABLE_FUNCTION_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
-	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
 		AuthorizeFunction(policy, binding, entry.name, result);
+		auto &function = entry.Cast<StandardEntry>();
+		if (binding.literal_constructors.count(gatekeeper::Lower(entry.name)) &&
+		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
+		     function.schema.name != "main")) {
+			result.violations.emplace("bind_time_expression", "literal constructor must resolve to a system builtin",
+			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
+			throw PermissionException("untrusted bind-time constructor");
+		}
+		string type = entry.type == CatalogType::SCALAR_FUNCTION_ENTRY      ? "scalar"
+		              : entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY ? "aggregate"
+		              : entry.type == CatalogType::TABLE_FUNCTION_ENTRY     ? "table"
+		              : entry.type == CatalogType::MACRO_ENTRY              ? "macro"
+		              : entry.type == CatalogType::TABLE_MACRO_ENTRY        ? "table_macro"
+		                                                                    : "pragma";
+		result.functions.insert({function.schema.catalog.GetName(), function.schema.name, entry.name, type});
 		return;
+	}
 	case CatalogType::TYPE_ENTRY: {
 		auto &type = entry.Cast<TypeCatalogEntry>();
 		if (!binding.caller_types.count(gatekeeper::Lower(type.name)))
@@ -190,12 +226,22 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 		result.violations.emplace("table", "object is not allowed", catalog, schema, name);
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
+	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
 }
 
 // Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
 // backstop checks surviving bound expressions; it cannot undo earlier bind-time work.
 static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                           LogicalOperator &root, gatekeeper::Result &result) {
+	auto function = [&](const string &name, const string &type) {
+		AuthorizeFunction(policy, binding, name, result);
+		for (const auto &entry : result.functions)
+			if (entry.name == name && entry.type == type)
+				return;
+		// A bound implementation does not expose catalog provenance. Do not infer it
+		// from a same-named catalog entry of a different kind or do another lookup.
+		result.functions.insert({"", "", name, type});
+	};
 	vector<LogicalOperator *> operators{&root};
 	while (!operators.empty()) {
 		auto op = operators.back();
@@ -204,17 +250,17 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 			operators.push_back(child.get());
 		// A catalog table's physical scan is authorized by its object identity.
 		if (op->type == LogicalOperatorType::LOGICAL_GET && op->Cast<LogicalGet>().function.name != "seq_scan")
-			AuthorizeFunction(policy, binding, op->Cast<LogicalGet>().function.name, result);
+			function(op->Cast<LogicalGet>().function.name, "table");
 		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
 			ExpressionIterator::EnumerateExpression(*expr, [&](Expression &child) {
 				if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION)
-					AuthorizeFunction(policy, binding, child.Cast<BoundFunctionExpression>().function.name, result);
+					function(child.Cast<BoundFunctionExpression>().function.name, "scalar");
 				if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
-					AuthorizeFunction(policy, binding, child.Cast<BoundAggregateExpression>().function.name, result);
+					function(child.Cast<BoundAggregateExpression>().function.name, "aggregate");
 				if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 					auto &window = child.Cast<BoundWindowExpression>();
 					if (window.aggregate)
-						AuthorizeFunction(policy, binding, window.aggregate->name, result);
+						function(window.aggregate->name, "aggregate");
 					else {
 						static const std::map<ExpressionType, string> windows = {
 						    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
@@ -231,7 +277,7 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 						    {ExpressionType::WINDOW_FILL, "fill"}};
 						auto found = windows.find(window.GetExpressionType());
 						if (found != windows.end())
-							AuthorizeFunction(policy, binding, found->second, result);
+							function(found->second, "window");
 					}
 				}
 			});
@@ -286,11 +332,18 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			return result;
 		binding = true;
 		for (auto &statement : parser.statements) {
+			case_insensitive_map_t<BoundParameterData> parameter_data;
+			BoundParameterMap parameters(parameter_data);
 			auto binder = Binder::CreateBinder(context);
+			binder->SetParameters(parameters);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
 			binder->SetCatalogLookupCallback(
 			    [&](CatalogEntry &entry) { AuthorizeObject(policy, binding_policy, entry, result); });
 			auto bound = binder->Bind(*statement);
+			// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
+			if (!bound.plan || parameters.rebind)
+				throw BinderException(
+				    "Validation requires a complete bound plan; parameter values or types may be needed");
 			if (bound.plan)
 				AuthorizePlan(policy, binding_policy, *bound.plan, result);
 			if (!binder->GetReplacementScans().empty()) {
@@ -330,6 +383,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_type = Exception::ExceptionTypeToString(data.Type());
 		result.error_message = data.RawMessage();
+		if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
+			result.error_message = "Validation cannot complete binding without parameter values or types";
 	} catch (const std::bad_alloc &) {
 		throw;
 	} catch (const std::exception &error) {

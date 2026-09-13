@@ -27,7 +27,9 @@ def main():
                                    "WITH RECURSIVE t AS (SELECT 1 n UNION ALL SELECT n+1 FROM t WHERE n<3) SELECT * FROM t",
                                    "SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT md5('x')",
                                    "SELECT NULL::STRUCT(x INTEGER, y INET[])", "SELECT [1,2][1]",
-                                   "SELECT current_schema", "SELECT 'x' COLLATE de"]):
+                                   "SELECT current_schema", "SELECT 'x' COLLATE de",
+                                   "SELECT 1 LIMIT len(repeat('x',200000000))", "SELECT * FROM range($1)",
+                                   "SELECT quantile_cont(x,[0.2,0.8]) FROM t"]):
             ast = json.loads(db.execute("SELECT json_serialize_sql(?,skip_default:=true,skip_empty:=true,skip_null:=true)", [query]).fetchone()[0])
             for j, prefix in enumerate([bytes([107, 30, 0, 0, 0, 0]), bytes([255, 63, 1, 1, 1, 1]), bytes(6)]):
                 (corpus / f"seed-{i}-{j}").write_bytes(prefix + json.dumps({"ast": ast}).encode())

@@ -26,7 +26,7 @@ def test_random_invalid_sql(db):
     for _ in range(500):
         sql = "".join(rng.choice(alphabet) for _ in range(rng.randrange(1, 200)))
         result = check(db, sql)
-        assert set(result) == {"allowed", "code", "violations", "error_type", "error_message", "position"}
+        assert set(result) == {"allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions"}
         assert result["code"] in {"ok", "forbidden", "unsupported", "parser", "invalid_input", "binding"}
         assert result["allowed"] == (result["code"] == "ok")
 

@@ -26,7 +26,9 @@ def main():
     corpus.mkdir(exist_ok=True)
     for i, query in enumerate(["SELECT 1", "SELECT * FROM t", "SELECT * FROM v", "SELECT * FROM secret.t",
                                "SELECT md5('x')", "DROP TABLE t", "WITH a AS (SELECT * FROM t) SELECT * FROM a",
-                               "SELECT current_schema", "SELECT [1,2][1]", "SELECT {'a':1}.a", "SELECT NULL::INET"]):
+                               "SELECT current_schema", "SELECT [1,2][1]", "SELECT {'a':1}.a", "SELECT NULL::INET",
+                               "SELECT * FROM t WHERE x=? LIMIT $n", "SELECT 1 LIMIT len(repeat('x',200000000))",
+                               "SELECT $1", "SELECT * FROM range($1)"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
     for mode in [1, 2, 15]:

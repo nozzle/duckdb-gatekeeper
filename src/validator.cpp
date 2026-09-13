@@ -153,6 +153,60 @@ struct Walker {
 		std::string edge;
 	};
 	std::vector<Work> pending;
+	// Recognize syntax, never evaluate it. Literal containers are permitted only in
+	// contexts that require them; arbitrary casts and function calls are not literals.
+	bool BindLiteral(Json *value, bool containers = false, bool pivot_names = false) {
+		std::vector<Json *> work{value};
+		uint64_t visited = 0;
+		while (!work.empty()) {
+			auto expr = work.back();
+			work.pop_back();
+			if (++visited > policy.nodes)
+				return false;
+			auto kind = Field(expr, "class");
+			if (kind == "CONSTANT" || kind == "PARAMETER")
+				continue;
+			if (pivot_names && kind == "COLUMN_REF" && yyjson_arr_size(yyjson_obj_get(expr, "column_names")) == 1)
+				continue;
+			if (kind == "CAST") {
+				// DuckDB parses TRUE/FALSE as a cast of 't'/'f', not a Boolean constant.
+				auto child = yyjson_obj_get(expr, "child");
+				auto type = yyjson_obj_get(expr, "cast_type");
+				auto name = Lower(Field(yyjson_obj_get(yyjson_obj_get(type, "type_info"), "expr"), "type_name"));
+				auto text = Field(yyjson_obj_get(child, "value"), "value");
+				if (Field(child, "class") == "CONSTANT" && (text == "t" || text == "f") &&
+				    (Field(type, "id") == "BOOLEAN" || name == "boolean"))
+					continue;
+			}
+			auto name = Lower(Field(expr, "function_name"));
+			bool container = containers && ((kind == "OPERATOR" && Field(expr, "type") == "ARRAY_CONSTRUCTOR") ||
+			                                (kind == "FUNCTION" && (name == "list_value" || name == "struct_pack" ||
+			                                                        (pivot_names && name == "row"))));
+			if (!container)
+				return false;
+			if (binding && kind == "OPERATOR")
+				binding->literal_constructors.insert("list_value");
+			if (yyjson_obj_get(expr, "filter") ||
+			    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(expr, "order_bys"), "orders")))
+				return false;
+			if (binding && kind == "FUNCTION")
+				binding->literal_constructors.insert(name);
+			if (!Field(expr, "catalog").empty() ||
+			    (!Field(expr, "schema").empty() && Lower(Field(expr, "schema")) != "main"))
+				return false;
+			auto children = yyjson_obj_get(expr, "children");
+			if (!yyjson_is_arr(children))
+				return false;
+			size_t i, n;
+			Json *child;
+			yyjson_arr_foreach(children, i, n, child) work.push_back(child);
+		}
+		return true;
+	}
+	void BindTime(Json *expr, const std::string &context, bool containers = false, bool pivot_names = false) {
+		if (expr && !BindLiteral(expr, containers, pivot_names))
+			Reject("bind_time_expression", context + " requires a literal or bindable parameter", expr);
+	}
 	void Implied(const Names &names) {
 		if (binding)
 			binding->synthesized_functions.insert(names.begin(), names.end());
@@ -229,6 +283,23 @@ struct Walker {
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
 	void References(Json *value, const std::string &kind, const Names &scope, const std::string &edge) {
+		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
+			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
+			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
+		}
+		if (kind == "AtClause")
+			BindTime(yyjson_obj_get(value, "expr"), "AT clause");
+		if (kind == "StarExpression")
+			BindTime(yyjson_obj_get(value, "expr"), "COLUMNS", true);
+		if (kind == "PivotColumnEntry")
+			BindTime(yyjson_obj_get(value, "star_expr"), "PIVOT IN", true, true);
+		if (kind == "SampleOptions") {
+			// sample_size is already a serialized Value in the pinned grammar.
+			auto sample = yyjson_obj_get(value, "sample_size");
+			if (sample &&
+			    (!yyjson_is_obj(sample) || !yyjson_obj_get(sample, "type") || yyjson_obj_get(sample, "class")))
+				Reject("bind_time_expression", "sample size requires a literal", value);
+		}
 		if (kind == "PivotColumn" && !Field(value, "pivot_enum").empty())
 			throw Stop{"named PIVOT enums bypass type authorization; use explicit IN values"};
 		if (kind == "TypeExpression") {
@@ -241,8 +312,8 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			yyjson_arr_foreach(children, i, n, child) {
-				if (Field(child, "class") != "TYPE" && Field(child, "class") != "CONSTANT")
-					throw Stop{"computed type parameters are unsupported"};
+				if (Field(child, "class") != "TYPE")
+					BindTime(child, "type parameter");
 				if (Names{"varchar", "bpchar", "string", "char", "nvarchar", "text"}.count(Lower(name)) &&
 				    Lower(Field(child, "alias")) == "collation") {
 					if (Field(child, "class") != "CONSTANT")
@@ -296,6 +367,29 @@ struct Walker {
 		}
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
+			auto children = yyjson_obj_get(value, "children");
+			size_t i, n;
+			Json *child;
+			if (edge == "function") {
+				yyjson_arr_foreach(children, i, n, child) {
+					auto argument = child;
+					if (Field(child, "type") == "COMPARE_EQUAL" &&
+					    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
+					    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
+						argument = yyjson_obj_get(child, "right");
+					BindTime(argument, "table-function argument", true);
+				}
+			}
+			if (name == "unnest") {
+				yyjson_arr_foreach(children, i, n, child) if (i > 0) BindTime(child, "UNNEST option");
+			}
+			if (Names{"quantile", "quantile_cont", "quantile_disc", "approx_quantile", "reservoir_quantile"}.count(
+			        name)) {
+				auto orders = yyjson_obj_get(yyjson_obj_get(value, "order_bys"), "orders");
+				size_t fraction = yyjson_arr_size(children) == 1 && yyjson_arr_size(orders) ? 0 : 1;
+				yyjson_arr_foreach(children, i, n, child) if (i >= fraction)
+				    BindTime(child, "quantile fraction/options", true);
+			}
 			functions[name]++;
 			auto location = yyjson_obj_get(value, "query_location");
 			if (yyjson_is_uint(location)) {
@@ -311,14 +405,20 @@ struct Walker {
 			if (!policy.dynamic_sql && ((edge == "function" && (name == "query" || name == "query_table" ||
 			                                                    name == "json_execute_serialized_sql")) ||
 			                            name == "json_serialize_plan"))
-				Reject("dynamic_sql", "dynamic SQL is disabled: " + name, value, name);
+				violations.emplace("dynamic_sql", "dynamic SQL is disabled: " + name, Field(value, "catalog"),
+				                   Field(value, "schema"), "", name,
+				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}
 		if (kind == "RecursiveCTENode" && !policy.recursive)
 			Reject("recursive_cte", "recursive CTEs are disabled", value);
 		if (kind == "TableFunctionRef") {
-			if (!policy.table_functions)
-				Reject("table_function", "table functions are disabled", value,
-				       Field(yyjson_obj_get(value, "function"), "function_name"));
+			if (!policy.table_functions) {
+				auto function = yyjson_obj_get(value, "function");
+				auto location = yyjson_obj_get(function, "query_location");
+				violations.emplace("table_function", "table functions are disabled", Field(function, "catalog"),
+				                   Field(function, "schema"), "", Field(function, "function_name"),
+				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
+			}
 		}
 		if (kind != "BaseTableRef" && kind != "ShowRef")
 			return;

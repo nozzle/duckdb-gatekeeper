@@ -40,7 +40,7 @@ INSERT INTO reporting.orders VALUES (1, 20), (1, 30), (2, 15);
 SELECT gatekeeper_validate(
     'SELECT customer_id, sum(amount) FROM reporting.orders GROUP BY customer_id',
     allowed_schemas := ['reporting'],
-    allowed_tables := [{schema: 'reporting', 'table': 'orders'}]
+    allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]
 ).allowed AS allowed;
 -- true
 ```
@@ -124,6 +124,10 @@ decision = db.execute(
 ).fetchone()[0]
 if not decision["allowed"] or decision["code"] != "ok":
     raise ValueError(decision)
+expected_objects = [{"catalog": "memory", "schema": "reporting", "table": "orders", "type": "table"}]
+if decision["objects"] != expected_objects:
+    raise ValueError("Unexpected binding dependencies", decision["objects"])
+print("Validated dependencies:", decision["objects"], decision["functions"])
 rows = db.execute(sql).fetchall()
 ```
 
@@ -131,6 +135,11 @@ Reject validation exceptions/missing results too. Keep the catalog trusted betwe
 validation and execution. Each violation has a stable `rule`, human `message`,
 object/function identifiers, and an optional parser byte `position`. See the
 [result contract](docs/api.md#result) rather than parsing English messages.
+Dependency lists are sorted, deduplicated binding evidence, empty on failure; they
+do not prove unchanged definitions or close TOCTOU. Parameterized SQL is supported
+when binding can finish without values (e.g. typed predicates and LIMIT parameters).
+Computed expressions in reviewed bind-time positions are rejected before binding;
+see the [connection profiles](docs/security.md#validating-connection-profiles).
 
 ## Trusted objects and readers
 
