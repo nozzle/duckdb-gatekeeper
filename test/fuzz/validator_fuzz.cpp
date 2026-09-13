@@ -24,7 +24,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		policy.tables = data[0] & 16;
 		policy.recursive = data[0] & 32;
 		policy.table_functions = data[0] & 64;
-		policy.file_tables = data[1] & 1;
+		policy.replacement_scans = data[1] & 1;
 		if (data[1] & 2)
 			policy.allowed_catalogs = {"memory", "system"};
 		if (data[1] & 4)

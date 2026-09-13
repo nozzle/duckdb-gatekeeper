@@ -1,5 +1,9 @@
 #include "duckdb.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "engine_errors.hpp"
 #include <cstdlib>
 #include <string>
@@ -88,21 +92,11 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	static const char *names[] = {"check_functions",
-	                              "use_default_functions",
-	                              "allow_recursive_ctes",
-	                              "allow_table_functions",
-	                              "allow_file_table_references",
-	                              "allowed_functions",
-	                              "blocked_functions",
-	                              "allowed_catalogs",
-	                              "allowed_schemas",
-	                              "allowed_tables",
-	                              "max_statements",
-	                              "max_ast_bytes",
-	                              "max_ast_nodes",
-	                              "max_ast_depth",
-	                              "allowed_types"};
+	static const char *names[] = {"check_functions",       "use_default_functions",   "allow_recursive_ctes",
+	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
+	                              "blocked_functions",     "allowed_catalogs",        "allowed_schemas",
+	                              "allowed_tables",        "max_statements",          "max_ast_bytes",
+	                              "max_ast_nodes",         "max_ast_depth",           "allowed_types"};
 	if (selector % 16 < 15)
 		return names[selector % 16];
 	// Arbitrary option names remain one quoted identifier, never executable SQL.
@@ -238,6 +232,80 @@ static void CheckNativeSettingBypass() {
 		std::abort();
 }
 
+// Host replacement callbacks must only ever run behind Gatekeeper's authorization while validating.
+struct ProbeData : ReplacementScanData {
+	int calls = 0;
+	Connection *other = nullptr; // a second connection used for a nested validation
+};
+
+static unique_ptr<TableRef> Reader(const char *function, Value argument) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ConstantExpression>(std::move(argument)));
+	auto ref = make_uniq<TableFunctionRef>();
+	ref->function = make_uniq<FunctionExpression>(function, std::move(children));
+	return std::move(ref);
+}
+
+static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput &input,
+                                          optional_ptr<ReplacementScanData> data) {
+	auto &probe = data->Cast<ProbeData>();
+	probe.calls++;
+	// Declines on its first call and claims on its second: a second engine-driven pass would bypass us.
+	if (input.table_name == "second_claim")
+		return probe.calls % 2 == 0 ? Reader("read_csv_auto", Value("/gatekeeper/missing/second.csv")) : nullptr;
+	// Validates on another connection mid-bind, then yields an admitted reader.
+	if (input.table_name == "nested_probe") {
+		auto nested = probe.other->Query("SELECT gatekeeper_validate('SELECT 1')");
+		if (nested->HasError() || !StructValue::GetChildren(Decision(*nested))[0].GetValue<bool>())
+			std::abort();
+		return Reader("range", Value::BIGINT(1));
+	}
+	if (input.table_name == "denied_probe")
+		return Reader("read_csv_auto", Value("/gatekeeper/missing/denied.csv"));
+	return nullptr;
+}
+
+static std::string Code(Connection &connection, const std::string &sql) {
+	auto result = connection.Query("SELECT gatekeeper_validate($1)", Value(sql));
+	if (result->HasError())
+		std::abort();
+	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
+}
+
+static void CheckReplacementCallbacks() {
+	DuckDB database(nullptr);
+	Connection connection(database), other(database);
+	Setup(connection);
+	auto &config = DBConfig::GetConfig(*database.instance);
+	auto data = make_uniq<ProbeData>();
+	auto &probe = *data;
+	probe.other = &other;
+	config.replacement_scans.emplace_back(ProbeCallback, std::move(data));
+	if (connection.Query("CALL gatekeeper_configure(allow_replacement_scans := true, allowed_functions := ['range'])")
+	        ->HasError())
+		std::abort();
+	// A stateful callback cannot be reached a second time outside authorization.
+	probe.calls = 0;
+	if (Code(connection, "SELECT * FROM second_claim") != "binding" || probe.calls != 1)
+		std::abort();
+	if (Code(connection, "SELECT * FROM second_claim") != "forbidden" || probe.calls != 2)
+		std::abort();
+	// A nested validation on another connection must not disable interception for the outer bind.
+	if (Code(connection, "SELECT * FROM denied_probe") != "forbidden")
+		std::abort();
+	if (Code(connection, "SELECT * FROM nested_probe CROSS JOIN denied_probe") != "forbidden")
+		std::abort();
+	// Ordinary queries on the same thread still reach the callback normally.
+	probe.calls = 0;
+	auto plain = connection.Query("SELECT * FROM nested_probe");
+	if (plain->HasError() || probe.calls != 1)
+		std::abort();
+	// A genuinely missing table keeps the engine's error and invokes the callback exactly once.
+	probe.calls = 0;
+	if (Code(connection, "SELECT * FROM missing_table") != "binding" || probe.calls != 1)
+		std::abort();
+}
+
 static int Fuzz(const uint8_t *data, size_t size) {
 	if (size < 4 || size > 4096)
 		return 0;
@@ -246,6 +314,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	static bool initialized = false;
 	if (!initialized) {
 		CheckNativeSettingBypass();
+		CheckReplacementCallbacks();
 		Setup(connection);
 		auto allow = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
 		auto deny =

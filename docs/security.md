@@ -131,12 +131,20 @@ removed because every function it gated is on this list.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
-- File-reference detection is conservative and incomplete. Binder-collected
-  host-language and implicit replacement scans are rejected as unsupported; explicit
-  admitted readers and trusted catalog objects are the supported access paths.
-  Collection does not prevent bind-time I/O. Known filename/query-marker forms are
-  denied by preflight unless opted in; custom replacements and opted-in references
-  can access resources before the later rejection.
+- Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
+  replacement-scan list. It runs only while a validation is binding on the calling
+  thread; ordinary connections are unaffected. Other callbacks only construct a table
+  reference, so a denial happens before the substituted reader binds and no file is
+  opened. Readers substituted by DuckDB are authorized by their resolved names
+  (`parquet_scan`, `read_csv_auto`, `read_json_auto`), not by `read_parquet`/`read_csv`.
+  Host-language scans that resolve to subqueries are always denied. When no callback
+  claims a name, Gatekeeper raises the engine's missing-table error itself rather than
+  returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and
+  only behind this authorization; DuckDB's autoload retry and `FileExists` probe do not
+  run. If a catalog without transactional DDL finds the object on that lookup, the
+  validation fails closed with a `binding` retry error rather than resuming the loop. The callback is keyed to the validating connection and nested validations
+  restore the outer scope, so reentrant host callbacks cannot disable interception.
+  The file-shaped-name preflight remains as an earlier diagnostic.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.

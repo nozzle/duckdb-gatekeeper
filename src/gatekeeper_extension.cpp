@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -255,6 +256,73 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
 }
 
+// Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
+// construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
+// first callback at LOAD and, while a validation is binding on this thread, decides before that
+// bind happens: with replacement scans disabled in either layer, any claimed name is denied; with
+// them enabled, the resolved reader is authorized like a caller-written table function.
+struct ValidationScope {
+	ClientContext &context; // the connection this validation binds on
+	const gatekeeper::Policy &policy;
+	const gatekeeper::Policy &ceiling;
+	gatekeeper::Result &result;
+	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
+};
+static thread_local ValidationScope *active_scope = nullptr;
+// Nested validations (a host callback validating on another connection) restore the outer scope.
+struct ScopeGuard {
+	ValidationScope *previous;
+	explicit ScopeGuard(ValidationScope &scope) : previous(active_scope) { active_scope = &scope; }
+	~ScopeGuard() { active_scope = previous; }
+};
+
+static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
+                                                      optional_ptr<ReplacementScanData>) {
+	auto scope = active_scope;
+	if (!scope || &context != &scope->context)
+		return nullptr; // Ordinary connections, including reentrant ones on this thread, are unaffected.
+	auto path = ReplacementScan::GetFullPath(input);
+	auto deny = [&](const string &rule, const string &message, const string &function = "") {
+		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
+		                                 function);
+		throw PermissionException("replacement scan is not allowed");
+	};
+	auto &config = DBConfig::GetConfig(context);
+	for (auto &scan : config.replacement_scans) {
+		if (scan.function == GatekeeperReplacementScan)
+			continue;
+		// Other callbacks construct a TableRef without binding it; nothing is opened here.
+		auto replacement = scan.function(context, input, scan.data.get());
+		if (!replacement)
+			continue;
+		if (!scope->policy.replacement_scans || !scope->ceiling.replacement_scans)
+			deny("replacement_scan", "replacement scans are disabled: " + path);
+		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
+			deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path);
+		auto &function = replacement->Cast<TableFunctionRef>().function;
+		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
+			deny("replacement_scan", "replacement scan has no resolvable function: " + path);
+		auto name = function->Cast<FunctionExpression>().function_name;
+		for (const auto *layer : {&scope->ceiling, &scope->policy}) {
+			if (!layer->table_functions)
+				deny("table_function", "table functions are disabled", name);
+			if (!gatekeeper::FunctionAllowed(*layer, name))
+				deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
+				     gatekeeper::CanonicalFunction(name));
+		}
+		scope->authorized.insert(gatekeeper::Lower(input.table_name));
+		scope->result.objects.insert({"", "", path, "replacement"});
+		return replacement;
+	}
+	// No callback claimed the name. Returning nullptr would let DuckDB run every callback a second
+	// time outside this authorization, so raise the engine's own missing-table error here instead.
+	// The lookup throws for every catalog with transactional DDL. If a catalog without it finds the
+	// entry after all, returning nullptr would still resume DuckDB's callback loop rather than the
+	// later catalog lookup, so fail closed and let the caller retry.
+	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
+	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
+}
+
 // Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
 // backstop checks surviving bound expressions; it cannot undo earlier bind-time work.
 static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
@@ -368,7 +436,12 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 				AuthorizeObject(ceiling, binding_policy, entry, result);
 				AuthorizeObject(policy, binding_policy, entry, result);
 			});
-			auto bound = binder->Bind(*statement);
+			ValidationScope scope{context, policy, ceiling, result, {}};
+			BoundStatement bound;
+			{
+				ScopeGuard guard(scope);
+				bound = binder->Bind(*statement);
+			}
 			// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
 			// parameters.rebind is a cache hint, not incomplete binding.
 			if (!bound.plan)
@@ -378,14 +451,13 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 				AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
 				AuthorizePlan(policy, binding_policy, *bound.plan, result);
 			}
-			if (!binder->GetReplacementScans().empty()) {
-				result.allowed = false;
-				result.code = "unsupported";
-				result.violations.emplace("replacement_scan",
-				                          "host-language or implicit replacement scans cannot be authorized; use an "
-				                          "explicit admitted reader or trusted catalog object");
-				return result;
-			}
+			// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
+			for (auto &entry : binder->GetReplacementScans())
+				if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
+					result.violations.emplace("replacement_scan", "replacement scan was not authorized: " + entry.first,
+					                          "", "", entry.first);
+			if (!result.violations.empty())
+				throw PermissionException("unauthorized replacement scan");
 		}
 		return result;
 	} catch (const ParserException &error) {
@@ -534,6 +606,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
 	                          default_policy, SetPolicy, SetScope::GLOBAL);
+	// First position: decide replacement scans before any other callback's reader can bind.
+	bool installed = false;
+	for (auto &scan : config.replacement_scans)
+		installed = installed || scan.function == GatekeeperReplacementScan;
+	if (!installed)
+		config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
 	ScalarFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, ResultType(), GatekeeperValidate,
 	                        BindOptions);
 	validate.varargs = LogicalType::ANY;

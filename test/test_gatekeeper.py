@@ -171,7 +171,7 @@ def test_recursive_toggle(db):
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM 'mine.parquet'", {}, False),
-    ("SELECT * FROM 'mine.parquet'", {"allow_file_table_references": True}, False),
+    ("SELECT * FROM 'mine.parquet'", {"allow_replacement_scans": True}, False),
     ("SELECT * FROM 's3://bucket/data'", {}, False),
     ("SELECT * FROM read_parquet('local.parquet')", {}, False),
     ("SELECT * FROM read_parquet('s3://bucket/file')", {}, False),
