@@ -72,7 +72,9 @@ make an unsigned extension a DuckDB-signed community build. See the
 
 `test/test_documentation.py` executes every ```` ```sql ```` block in `README.md` in
 order against a fresh database, except the exact community installation block,
-and checks the results. README examples must stay runnable and their expected values
+and checks the results. It parses all blocks first and rejects installation-block
+drift before any examples execute, so edits cannot trigger remote extension loading.
+README examples must stay runnable and their expected values
 must match.
 
 The pipeline diagram in the README is `docs/pipeline.svg`, exported from the

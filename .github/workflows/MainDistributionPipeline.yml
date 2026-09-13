@@ -8,7 +8,7 @@ name: Extension distribution
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -90,12 +90,19 @@ jobs:
           name: gatekeeper-release-assets
           path: build/release-assets
       - name: Create GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         # Assemble as a draft so failed uploads cannot publish a partial release.
         run: |
+          existing=$(gh api --paginate "repos/$GH_REPO/releases" \
+            | jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag) | .id')
+          if [[ -n "$existing" ]]; then
+            echo "::error::A release or draft for $RELEASE_TAG already exists; inspect it before retrying."
+            exit 1
+          fi
           gh release create "$RELEASE_TAG" build/release-assets/*.zip build/release-assets/SHA256SUMS \
             --verify-tag --draft --title "Gatekeeper $RELEASE_TAG" \
             --notes-file build/release-assets/RELEASE_NOTES.md

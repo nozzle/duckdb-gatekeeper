@@ -39,6 +39,9 @@ GitHub Release. The tag must match the CMake and runtime extension versions.
 Packaging also runs on PRs and `main`, uploading `gatekeeper-release-assets` as a CI
 artifact so archive creation is tested before tagging. Only a version-tag push publishes
 a GitHub Release.
+Only stable `vMAJOR.MINOR.PATCH` tag pushes trigger distribution; prerelease and test
+tags are excluded. The package gate validates the exact stable version again before
+the tag-only publish job can run, including the version in the load-time error message.
 
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
@@ -48,7 +51,9 @@ community binaries. The release notes link to versioned loading and security doc
 The publisher initially creates a draft and publishes it after all uploads succeed.
 If upload/publication fails after draft creation, inspect that draft and the job logs.
 To retry, delete the incomplete draft (not the tag), then rerun the failed release job.
-An existing release is never silently overwritten. Do not move a published version tag.
+The job refuses to create a release while any draft or published release for that tag
+exists, and fails closed if the release lookup fails. An existing release is never
+silently overwritten. Do not move a published version tag.
 
 ## Submit the community descriptor manually
 

@@ -80,3 +80,31 @@ def test_existing_assets_are_not_overwritten(artifacts, tmp_path):
     with pytest.raises(ValueError, match="Output must be empty"):
         release.package_release("v0.1.0", artifacts, output)
     assert existing.read_text() == "previous release"
+
+
+def test_output_file_is_not_overwritten(artifacts, tmp_path):
+    output = tmp_path / "release"
+    output.write_text("existing file")
+    with pytest.raises(ValueError, match="Output must be empty and a directory"):
+        release.package_release("v0.1.0", artifacts, output)
+    assert output.read_text() == "existing file"
+
+
+@pytest.mark.parametrize("filename,old,new,message", [
+    ("extension_config.cmake", "EXTENSION_VERSION", "OTHER_VERSION", "extension_config.cmake"),
+    ("src/gatekeeper_extension.cpp", "Version()", "OtherVersion()", "Version"),
+    ("src/gatekeeper_extension.cpp", "Gatekeeper 0.1.0 supports", "Gatekeeper supports", "load-error message"),
+    ("src/gatekeeper_extension.cpp", "Gatekeeper 0.1.0 supports", "Gatekeeper 0.0.9 supports", "must agree"),
+])
+def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old, new, message):
+    for source in ("extension_config.cmake", "src/gatekeeper_extension.cpp"):
+        target = tmp_path / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = (ROOT / source).read_text()
+        if source == filename:
+            assert old in text
+            text = text.replace(old, new)
+        target.write_text(text)
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+    with pytest.raises(ValueError, match=message):
+        release.release_version("v0.1.0")

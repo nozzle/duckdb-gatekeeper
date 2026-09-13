@@ -17,12 +17,22 @@ PLATFORMS = (
 
 
 def release_version(tag):
+    def extract(pattern, text, location):
+        match = re.search(pattern, text)
+        if match is None:
+            raise ValueError(f"Cannot read release version from {location}")
+        return match.group(1)
+
     config = (ROOT / "extension_config.cmake").read_text()
-    version = re.search(r"EXTENSION_VERSION\s+(\d+\.\d+\.\d+)\)", config).group(1)
+    version = extract(r"EXTENSION_VERSION\s+(\d+\.\d+\.\d+)\)", config, "extension_config.cmake")
     source = (ROOT / "src/gatekeeper_extension.cpp").read_text()
-    runtime_version = re.search(r'GatekeeperExtension::Version\(\) const\s*\{\s*return "([^"]+)";', source).group(1)
-    if (tag and tag != f"v{version}") or runtime_version != version:
-        raise ValueError(f"Tag {tag!r}, CMake version {version}, and runtime version {runtime_version} must agree")
+    runtime_version = extract(r'GatekeeperExtension::Version\(\) const\s*\{\s*return "([^"]+)";',
+                              source, "src/gatekeeper_extension.cpp Version()")
+    error_version = extract(r'"Gatekeeper ([^" ]+) supports DuckDB %s only;',
+                            source, "src/gatekeeper_extension.cpp load-error message")
+    if (tag and tag != f"v{version}") or runtime_version != version or error_version != version:
+        raise ValueError(f"Tag {tag!r}, CMake version {version}, runtime version {runtime_version}, "
+                         f"and load-error version {error_version} must agree")
     return version
 
 
@@ -46,8 +56,8 @@ def package_release(tag, artifacts, output):
         if set(directory.iterdir()) != {binary}:
             raise ValueError(f"Unexpected files in artifact: {directory}")
         binaries.append((platform, binary))
-    if output.exists() and any(output.iterdir()):
-        raise ValueError(f"Output must be empty: {output}")
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError(f"Output must be empty and a directory: {output}")
     output.mkdir(parents=True, exist_ok=True)
 
     checksums = []
