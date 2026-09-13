@@ -15,8 +15,7 @@ env:
   CMAKE_CXX_COMPILER_LAUNCHER: ccache
 jobs:
   test:
-    # No explicit name: the main-branch ruleset requires the job-id-based checks
-    # "test (ubuntu-latest)" and "test (macos-latest)".
+    name: Test (${{ matrix.os }})
     timeout-minutes: 90
     strategy:
       fail-fast: false
