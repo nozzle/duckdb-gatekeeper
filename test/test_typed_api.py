@@ -22,10 +22,13 @@ def test_named_prepared_and_row_varying_options(db):
     "allowed_functions := 'sum'", "allowed_functions := [1,2]", "allowed_tables := [1]",
     "allowed_tables := ['main.t']",
     "blocked_functions := [], blocked_functions := ['md5']",
+    "allow_dynamic_sql := true",  # removed option; every function it gated is never-bind
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):
         db.execute("SELECT gatekeeper_validate('SELECT 1'," + args + ")")
+    with pytest.raises(duckdb.Error):
+        db.execute("CALL gatekeeper_configure(" + args.replace("'SELECT 1',", "") + ")")
 
 
 @pytest.mark.parametrize("options", [
