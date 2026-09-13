@@ -32,6 +32,34 @@ make release          # pinned extension-ci-tools Makefile
 make test_release     # sqllogictests in test/sql
 ```
 
+### Loading unsigned builds
+
+Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use DuckDB
+1.5.5 and explicitly enable unsigned loading for these development artifacts:
+
+```sh
+duckdb -unsigned
+```
+
+```sql
+LOAD '/absolute/path/to/duckdb-gatekeeper/build/release/extension/gatekeeper/gatekeeper.duckdb_extension';
+```
+
+With Python:
+
+```python
+import duckdb
+
+connection = duckdb.connect(config={"allow_unsigned_extensions": True})
+connection.execute("LOAD '/absolute/path/to/gatekeeper.duckdb_extension'")
+```
+
+For a GitHub Release, select the archive for your DuckDB platform and engine version,
+verify it against `SHA256SUMS`, and extract it before loading. The binary retains its
+canonical filename inside the archive. A checksum detects corruption; it does not
+make an unsigned extension a DuckDB-signed community build. See the
+[Wasm instructions](test/wasm/README.md) for EH loading and its pinned runtime.
+
 ## Testing
 
 ```sh
@@ -43,7 +71,7 @@ make test_release     # sqllogictests in test/sql
 ```
 
 `test/test_documentation.py` executes every ```` ```sql ```` block in `README.md` in
-order against a fresh database, except the installation block that begins with `LOAD`,
+order against a fresh database, except the exact community installation block,
 and checks the results. README examples must stay runnable and their expected values
 must match.
 
@@ -109,3 +137,9 @@ Run the full pytest suite, the inventory audit, and `clang-format` before openin
 Changes to policy semantics should include regression tests and, where they affect the
 configuration or validation paths, a fuzz smoke run. Summarize validation results in the
 PR description.
+
+## Releases and community publication
+
+Follow the [release checklist](docs/releasing.md). The distribution workflow builds and
+tests version tags, then publishes unsigned platform archives and checksums to a GitHub
+Release. Community publication is a separate, manually submitted descriptor update.

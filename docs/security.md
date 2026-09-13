@@ -211,8 +211,12 @@ node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decodi
 including nested type parameters. Computed type parameters and named PIVOT enums
 are conservatively unsupported. Ordinary literal payloads remain data, not executable nodes.
 The local tests and randomized-input checks are not a complete security audit.
-Distribution signing, broader platform testing, fuzzing, and production review
-remain required before deployment against hostile callers.
+DuckDB builds and signs binaries distributed through its community repository;
+Gatekeeper's community publication is pending. Local builds, CI artifacts, and this
+project's GitHub Release binaries are unsigned. Distribution signatures authenticate
+the distributed binary, not its policy semantics or suitability for hostile workloads.
+Platform CI, browser tests, and fuzzing provide regression coverage; production use
+against hostile callers still requires review of the application and its trust boundary.
 
 ## Adversarial regression coverage
 

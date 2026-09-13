@@ -8,7 +8,9 @@ def test_readme_sql_examples(db):
     blocks = re.findall(r"```sql\n(.*?)```", (ROOT / "README.md").read_text(), re.S)
     observed = []
     for block in blocks:
-        if block.lstrip().startswith("LOAD "):
+        # The fixture already loads this checkout's binary. Never install a remote
+        # version (or require publication/network access) when testing its examples.
+        if block.strip() == "INSTALL gatekeeper FROM community;\nLOAD gatekeeper;":
             continue
         rows = db.execute(block).fetchall()
         if rows:
