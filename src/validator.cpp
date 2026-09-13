@@ -191,7 +191,7 @@ struct Walker {
 				return false;
 			if (binding && kind == "FUNCTION")
 				binding->literal_constructors.insert(name);
-			if (!Field(expr, "catalog").empty() ||
+			if ((!Field(expr, "catalog").empty() && Lower(Field(expr, "catalog")) != "system") ||
 			    (!Field(expr, "schema").empty() && Lower(Field(expr, "schema")) != "main"))
 				return false;
 			auto children = yyjson_obj_get(expr, "children");

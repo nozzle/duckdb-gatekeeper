@@ -235,6 +235,18 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
                           LogicalOperator &root, gatekeeper::Result &result) {
 	auto function = [&](const string &name, const string &type) {
 		AuthorizeFunction(policy, binding, name, result);
+		if (binding.literal_constructors.count(gatekeeper::Lower(name))) {
+			bool observed_builtin = false;
+			for (const auto &entry : result.functions)
+				if (entry.catalog == "system" && entry.schema == "main" && entry.name == name &&
+				    entry.type == "scalar" && type == "scalar")
+					observed_builtin = true;
+			if (!observed_builtin) {
+				result.violations.emplace("bind_time_expression", "literal constructor has unverified provenance", "",
+				                          "", "", name);
+				throw PermissionException("unverified bind-time constructor");
+			}
+		}
 		for (const auto &entry : result.functions)
 			if (entry.name == name && entry.type == type)
 				return;

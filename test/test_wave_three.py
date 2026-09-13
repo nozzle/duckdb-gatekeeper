@@ -178,3 +178,23 @@ def test_local_connection_profile_after_setup(db):
                "SET search_path='memory.reporting'; SET lock_configuration=true")
     result = validate(db, "SELECT x FROM t WHERE x=?")
     assert result["allowed"] and result["objects"][0]["schema"] == "reporting"
+
+
+def test_qualified_builtin_containers_and_named_fields(db):
+    db.execute("CREATE TABLE t(x INT)")
+    for sql in ["SELECT quantile_cont(x, system.main.list_value(0.2,0.8)) FROM t",
+                "SELECT * FROM unnest([struct_pack(x:=1)])",
+                "SELECT * FROM unnest([system.main.struct_pack(x:=1)])",
+                "SELECT unnest([[1]], recursive:=true)"]:
+        db.execute(sql).fetchall()
+        result = validate(db, sql)
+        assert result["allowed"], result
+
+
+def test_equals_is_not_a_named_struct_or_scalar_unnest_argument(db):
+    import duckdb
+    for sql in ["SELECT struct_pack(x=1)", "SELECT unnest([1,2], recursive=true)"]:
+        with pytest.raises(duckdb.BinderException):
+            db.execute(sql)
+    result = validate(db, "SELECT unnest([1,2], recursive=true)")
+    assert result["code"] == "forbidden"
