@@ -1,8 +1,9 @@
 """Build and run Gatekeeper ASan/UBSan tests on macOS/Linux.
 
-Use Clang on both platforms (CC=clang CXX=clang++ on Linux). GCC's -fsanitize instrumentation
-odr-uses the ``static constexpr`` LogicalType members and emits definitions that collide with the
-out-of-line ones DuckDB keeps in types.cpp when linking against libduckdb_static.a.
+Clang is required on both platforms and is selected explicitly (override with CC/CXX only to point
+at a different Clang). GCC's -fsanitize instrumentation odr-uses the ``static constexpr``
+LogicalType members and emits definitions that collide with the out-of-line ones DuckDB keeps in
+types.cpp when linking against libduckdb_static.a, so a GCC configuration is refused up front.
 """
 import os
 from pathlib import Path
@@ -23,8 +24,18 @@ def main():
             raise SystemExit(f"Missing {name}")
         return found
 
+    cc = os.environ.get("CC", "clang")
+    cxx = os.environ.get("CXX", "clang++")
+    for compiler in (cc, cxx):
+        try:
+            version = subprocess.run([compiler, "--version"], capture_output=True, text=True)
+        except OSError:
+            raise SystemExit(f"Missing {compiler}; the sanitized build requires Clang (see module docstring)")
+        if version.returncode != 0 or "clang" not in version.stdout.lower():
+            raise SystemExit(f"{compiler} is not Clang; the sanitized build requires Clang (see module docstring)")
     build = root / "build/sanitized"
     subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
+                    "-DCMAKE_C_COMPILER=" + cc, "-DCMAKE_CXX_COMPILER=" + cxx,
                     "-DPython3_EXECUTABLE=" + sys.executable,
                     "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
@@ -36,14 +47,12 @@ def main():
     env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1:detect_container_overflow=0"
     env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
     if platform.system() == "Darwin":
-        runtime = subprocess.check_output(["clang", "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
+        runtime = subprocess.check_output([cc, "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime
     elif platform.system() == "Linux":
-        compiler = os.environ.get("CC", "cc")
-        version = subprocess.check_output([compiler, "--version"], text=True)
-        # Clang bundles the UBSan runtime into its shared ASan runtime; GCC ships libasan.so.
-        library = "libclang_rt.asan-" + platform.machine() + ".so" if "clang" in version else "libasan.so"
-        runtime = subprocess.check_output([compiler, "-print-file-name=" + library], text=True).strip()
+        # Clang's shared ASan runtime also carries the UBSan handlers the extension references.
+        library = "libclang_rt.asan-" + platform.machine() + ".so"
+        runtime = subprocess.check_output([cc, "-print-file-name=" + library], text=True).strip()
         env["LD_PRELOAD"] = runtime
     else:
         raise SystemExit("Sanitizer runner supports macOS/Linux only")

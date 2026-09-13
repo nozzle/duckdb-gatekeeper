@@ -69,11 +69,8 @@ jobs:
           max-size: 600M
       - run: python -m pip install --require-hashes -r requirements-dev.txt
       - run: sudo apt-get update -qq && sudo apt-get install -y clang libclang-rt-dev
-      # Clang is required here; see the module docstring in scripts/test_sanitized.py.
+      # The script selects and requires Clang; see its module docstring.
       - run: python scripts/test_sanitized.py
-        env:
-          CC: clang
-          CXX: clang++
 
   extension-template:
     # The community build path: extension-ci-tools Makefile, static linking into the shell and

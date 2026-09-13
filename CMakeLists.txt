@@ -7,7 +7,8 @@ file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
 file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/src/include/duckdb/storage/serialization/*.json)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    scripts/generate.py scripts/inventory.py scripts/versions.py ${INVENTORY_FILES} ${SERIALIZATION_FILES})
+    scripts/generate.py scripts/inventory.py scripts/schema_check.py scripts/versions.py
+    ${INVENTORY_FILES} ${SERIALIZATION_FILES})
 # Generated headers live in the build tree so parallel configurations never race on shared files.
 set(GATEKEEPER_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
