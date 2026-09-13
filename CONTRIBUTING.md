@@ -43,8 +43,9 @@ make test_release     # sqllogictests in test/sql
 ```
 
 `test/test_documentation.py` executes every ```` ```sql ```` block in `README.md` in
-order against a fresh database and checks the results, so README examples must stay
-runnable and their expected values must match.
+order against a fresh database, except the installation block that begins with `LOAD`,
+and checks the results. README examples must stay runnable and their expected values
+must match.
 
 The pipeline diagram in the README is `docs/pipeline.svg`, exported from the
 [Archify](https://github.com/tt-a1i/archify) specification `docs/pipeline.dataflow.json`.

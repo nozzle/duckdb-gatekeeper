@@ -79,8 +79,11 @@ CALL gatekeeper_configure(option := value, ...)          -- replaces the global 
 ```
 
 Options are named DuckDB values. Unknown or duplicate names and wrong types are binder
-errors; invalid runtime values return `invalid_input`. Both functions accept host-bound
-parameters (`?`, `$1`), so policies never need to be spliced into SQL text.
+errors for both functions. Invalid runtime values (`max_statements := 0`, a NULL list
+member) differ: `gatekeeper_validate` returns a result with `code = 'invalid_input'`,
+while `CALL gatekeeper_configure` raises a DuckDB error and leaves the active policy
+unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
+spliced into SQL text.
 
 ### Result
 
@@ -171,14 +174,20 @@ Things that surprise people:
   sequence/storage functions.
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
-- `::JSON` and `::INET` casts need `allowed_types := [{catalog: 'system', schema: 'main', type: 'json'}]`.
+- Extension types need a matching `allowed_types` entry per type: `::JSON` needs
+  `{catalog: 'system', schema: 'main', type: 'json'}`, `::INET` needs
+  `{catalog: 'system', schema: 'main', type: 'inet'}` and the `inet` extension loaded
+  first. A `json` entry does not admit `inet`.
 - Implicit file scans (`SELECT * FROM 'x.parquet'`) and host-language replacement scans
   (DataFrames in scope) are currently rejected. Call the reader explicitly
   (`read_parquet('x.parquet')`) and admit it in the global policy.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
-- Caller expressions in bind-time positions (LIMIT, table-function arguments, type
-  parameters, PIVOT values) must be literals or parameters; arithmetic there is rejected.
+- Caller expressions in bind-time positions (LIMIT, reader arguments, type parameters,
+  PIVOT values) must be literals or parameters; arithmetic there is rejected. The system
+  table-in-out functions `unnest`, `range`, and `generate_series` are the exception: their
+  arguments are evaluated at execution time, so correlated columns and computed lists
+  (`FROM t, unnest(list_transform(t.arr, x -> x + 1))`) are accepted.
 
 ## Global policy
 
@@ -222,9 +231,14 @@ tenant.
 | Allow later changes while locked | `SET allowed_configs = ['gatekeeper_policy']` before locking |
 
 Prefer `CALL` for authoring: it validates option names, types, and nested identity fields
-before DuckDB's casts. `SET gatekeeper_policy = <STRUCT>` also works, but DuckDB silently
-drops unknown keys during the cast. The canonical value is NULL-free (`catalog: ''` means
-any catalog), so a typo that displaces a required field fails closed; check the readback.
+before DuckDB's casts, and fills omitted options from the built-in defaults.
+`SET gatekeeper_policy = <STRUCT>` also works but requires the **complete canonical
+STRUCT**: every option plus the `restrict_catalogs`/`restrict_schemas`/`restrict_tables`
+flags, with no NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails
+with `NULL policy field: check_functions`; start from
+`current_setting('gatekeeper_policy')` and `struct_update` it instead. DuckDB silently
+drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''` means
+any catalog) means a typo that displaces a required field fails closed. Check the readback.
 `gatekeeper_configure` itself is never admitted in validated SQL, including through views
 or macros.
 

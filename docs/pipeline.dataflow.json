@@ -186,7 +186,7 @@
       "title": "Main path",
       "items": [
         "Parse, preflight, and bind run once per statement",
-        "Nothing is executed; only allowed = true and code = 'ok' mean success",
+        "The submitted query is never executed, though binding may perform I/O; only allowed = true and code = 'ok' mean success",
         "objects and functions list what the query actually bound to"
       ]
     },
