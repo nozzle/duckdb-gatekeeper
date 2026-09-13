@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Gatekeeper validation pipeline",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      520
+    ],
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "emphasis": {
+          "label": "validation path"
+        },
+        "security": {
+          "label": "policy"
+        },
+        "dashed": {
+          "label": "may perform I/O"
+        },
+        "database": {
+          "label": "catalog"
+        },
+        "default": {
+          "visible": false
+        }
+      }
+    },
+    "output": "docs/pipeline.html"
+  },
+  "stages": [
+    {
+      "label": "Input"
+    },
+    {
+      "label": "Parse"
+    },
+    {
+      "label": "Preflight"
+    },
+    {
+      "label": "Bind"
+    },
+    {
+      "label": "Decide"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "sql",
+      "type": "frontend",
+      "label": "Untrusted SQL",
+      "sublabel": "caller text",
+      "stage": 0,
+      "row": 0,
+      "width": 128
+    },
+    {
+      "id": "parse",
+      "type": "backend",
+      "label": "DuckDB parser",
+      "sublabel": "statements, AST",
+      "stage": 1,
+      "row": 0,
+      "width": 128
+    },
+    {
+      "id": "preflight",
+      "type": "security",
+      "label": "AST checks",
+      "sublabel": "functions, flags, limits",
+      "stage": 2,
+      "row": 0,
+      "width": 128
+    },
+    {
+      "id": "bind",
+      "type": "security",
+      "label": "Bind",
+      "sublabel": "resolve identities",
+      "stage": 3,
+      "row": 0,
+      "width": 128
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "Catalog",
+      "sublabel": "tables, views, DBs",
+      "stage": 3,
+      "row": 2,
+      "width": 128
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "Global policy",
+      "sublabel": "gatekeeper_configure",
+      "stage": 2,
+      "row": 2,
+      "tag": "ceiling",
+      "width": 128
+    },
+    {
+      "id": "result",
+      "type": "backend",
+      "label": "Result",
+      "sublabel": "allowed, code, deps",
+      "stage": 4,
+      "row": 0,
+      "width": 128
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-parse",
+      "from": "sql",
+      "to": "parse",
+      "label": "text",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -22
+    },
+    {
+      "id": "f-ast",
+      "from": "parse",
+      "to": "preflight",
+      "label": "AST",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -22
+    },
+    {
+      "id": "f-bind",
+      "from": "preflight",
+      "to": "bind",
+      "label": "accepted",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -22
+    },
+    {
+      "id": "f-result",
+      "from": "bind",
+      "to": "result",
+      "label": "identities",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -22
+    },
+    {
+      "id": "f-lookup",
+      "from": "bind",
+      "to": "catalog",
+      "label": "lookups",
+      "classification": "may perform I/O",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelDy": 24
+    },
+    {
+      "id": "f-ceiling-pre",
+      "from": "policy",
+      "to": "preflight",
+      "label": "ceiling + request options",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "f-ceiling-bind",
+      "from": "policy",
+      "to": "bind",
+      "label": "authorize lookups",
+      "variant": "security",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Main path",
+      "items": [
+        "Parse, preflight, and bind run once per statement",
+        "Nothing is executed; only allowed = true and code = 'ok' mean success",
+        "objects and functions list what the query actually bound to"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Two policy layers",
+      "items": [
+        "The global policy is a ceiling set by trusted setup and lockable",
+        "Request options start from that ceiling and can only narrow it",
+        "Every check must pass both layers; either layer's block wins"
+      ]
+    }
+  ]
+}

@@ -32,22 +32,14 @@ for building/loading the extension and the excluded MVP/threads targets.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    SQL[SQL text] --> P[Parse]
-    P --> A["AST preflight<br/>functions, capabilities,<br/>file-shaped names, limits"]
-    A --> B["Bind on caller connection<br/>resolve tables, views, types,<br/>functions; authorize each"]
-    B --> R["Result STRUCT<br/>allowed, code, violations,<br/>objects, functions"]
-    G[("Global policy<br/>CALL gatekeeper_configure")] -. ceiling .-> A
-    G -. ceiling .-> B
-    Q[Request options] -. narrow only .-> A
-    Q -. narrow only .-> B
-```
+![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result STRUCT is returned](docs/pipeline.svg)
 
-Every check runs twice, once against the global policy and once against the request
-layer (global policy plus the request's named options). Both must allow the query.
-Nothing is executed, but **binding can perform I/O** through trusted catalogs and
-explicitly admitted readers.
+Gatekeeper parses the statement, checks the syntax the caller wrote (functions,
+capabilities, limits), then binds it on your connection and authorizes every table,
+view, type, and function it resolves to. Each check runs against both the global policy
+and the request layer (global policy plus the request's named options); both must allow
+the query. Nothing is executed, but **binding can perform I/O** through trusted catalogs
+and explicitly admitted readers.
 
 ## Quickstart
 
@@ -97,7 +89,8 @@ parameters (`?`, `$1`), so policies never need to be spliced into SQL text.
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
 | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
-| `error_type`, `error_message` | VARCHAR | Nonempty only for `parser`/`binding`/`invalid_input`. |
+| `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...). Nonempty only for `parser`/`binding`/`invalid_input`. |
+| `error_message` | VARCHAR | The engine's message for that error; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
 | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`) the query bound to. Empty unless `ok`. |
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
@@ -110,6 +103,32 @@ fields, not on message text.
 `objects` and `functions` are sorted, deduplicated binding evidence: views appear with
 their underlying tables; CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
+
+What the three failure shapes look like:
+
+```jsonc
+// Policy denial: code 'forbidden', structured violations, no error text.
+// SELECT * FROM hr.salaries   with   allowed_schemas := ['reporting']
+{ "allowed": false, "code": "forbidden",
+  "violations": [{ "rule": "schema", "message": "schema is not allowed",
+                   "catalog": "memory", "schema": "hr", "table": "salaries",
+                   "function_name": "", "position": null }],
+  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
+
+// Function not in the defaults (md5 is; current_date is not).
+// SELECT md5('x'), current_date
+{ "allowed": false, "code": "forbidden",
+  "violations": [{ "rule": "function", "message": "resolved function is not allowed: current_date",
+                   "catalog": "", "schema": "", "table": "", "function_name": "current_date",
+                   "position": null }],
+  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
+
+// Engine error: code names the phase, violations are empty, the message is DuckDB's.
+// SELECT * FROM missing_table
+{ "allowed": false, "code": "binding", "violations": [],
+  "error_type": "Catalog", "error_message": "Table with name missing_table does not exist!",
+  "position": null, "objects": [], "functions": [] }
+```
 
 ### Options
 
@@ -153,8 +172,9 @@ Things that surprise people:
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
 - `::JSON` and `::INET` casts need `allowed_types := [{catalog: 'system', schema: 'main', type: 'json'}]`.
-- Host-language and implicit replacement scans (`SELECT * FROM 'x.parquet'`) are always
-  rejected; admit an explicit reader function instead.
+- Implicit file scans (`SELECT * FROM 'x.parquet'`) and host-language replacement scans
+  (DataFrames in scope) are currently rejected. Call the reader explicitly
+  (`read_parquet('x.parquet')`) and admit it in the global policy.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
 - Caller expressions in bind-time positions (LIMIT, table-function arguments, type

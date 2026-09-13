@@ -46,6 +46,10 @@ make test_release     # sqllogictests in test/sql
 order against a fresh database and checks the results, so README examples must stay
 runnable and their expected values must match.
 
+The pipeline diagram in the README is `docs/pipeline.svg`, exported from the
+[Archify](https://github.com/tt-a1i/archify) specification `docs/pipeline.dataflow.json`.
+Edit the JSON, re-render, and export the SVG rather than editing the SVG by hand.
+
 ### Lakehouse integration
 
 Disposable localhost Iceberg/MinIO and DuckLake fixtures. Ports 18181 and 19000 must be
