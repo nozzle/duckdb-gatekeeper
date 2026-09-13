@@ -1,38 +1,51 @@
 # Gatekeeper for DuckDB
 
-[API reference](docs/api.md) · [Security model](docs/security.md) · [Function inventories](inventories/README.md)
+[Security model](docs/security.md) · [Function inventories](inventories/README.md) · [Contributing](CONTRIBUTING.md)
 
-A DuckDB extension for checking SQL against a configurable policy before running it.
-Gatekeeper checks caller-authored syntax/functions, then binds references to authorize
-actual tables and views. Results are native STRUCTs with structured diagnostics.
+A DuckDB extension that checks untrusted SQL against a policy before you run it.
+Gatekeeper parses the statement, inspects the syntax and functions the caller wrote,
+then binds it on your connection to authorize the actual tables and views it resolves
+to, the types and functions the caller requested, and explicit blocks inside trusted
+views and macros. The result is a native STRUCT with structured diagnostics.
 
-- **864 reviewed function defaults**, with exact-name additions and blocks.
+- **864 reviewed function defaults**, plus exact-name allow and block lists.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
-- **Read-only statements**, type/collation permissions, capability restrictions, and AST limits.
-- **Replaceable, lockable global policy** and narrowing-only typed request overrides.
+- **Read-only statements only**, with type, collation, and capability controls and AST limits.
+- **A lockable global policy** that request options can narrow but never widen.
 
-> Early development. Targets **DuckDB 1.5.5 only**. Not yet published in the community
-> repository. No wildcard matching, public syntax-only mode, or automatic execution
-> hook. See [the security model](docs/security.md) for limitations.
+> Early development. Targets **DuckDB 1.5.5 only** and is not yet published in the
+> community repository. Gatekeeper is a pre-execution validator, not a sandbox: read
+> the [security model](docs/security.md) before integrating.
 
 ## Installation
 
-[Build from source](#building-from-source), start `duckdb -unsigned` for the local
-development artifact, and load its absolute path:
+[Build from source](CONTRIBUTING.md#building), start `duckdb -unsigned`, and load the artifact:
 
 ```sql
 LOAD '/absolute/path/to/duckdb-gatekeeper/build/release/extension/gatekeeper/gatekeeper.duckdb_extension';
 ```
 
-Signed packages and `INSTALL gatekeeper FROM community` are not available yet.
+`INSTALL gatekeeper FROM community` is not available yet.
 
 **Browser/Wasm:** the EH bundle is supported with a pinned DuckDB-Wasm runtime
 embedding DuckDB 1.5.5. See [Wasm installation and browser tests](test/wasm/README.md)
 for building/loading the extension and the excluded MVP/threads targets.
 
-## Quickstart
+## How it works
 
-Provision data through trusted initialization:
+![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result STRUCT is returned](docs/pipeline.svg)
+
+Gatekeeper parses the statement, checks the syntax the caller wrote (functions,
+capabilities, limits), then binds it on your connection and authorizes every table and
+view it resolves to, plus the types and functions the caller requested. Functions that
+trusted views and macros introduce internally are exempt from the caller allowlist but
+still subject to explicit blocks and the never-bind list; types they introduce internally
+are not caller capabilities and are not checked. Each check
+runs against both the global policy and the request layer (global policy plus the
+request's named options); both must allow the query. Nothing is executed, but **binding
+can perform I/O** through trusted catalogs and explicitly admitted readers.
+
+## Quickstart
 
 ```sql
 CREATE SCHEMA reporting;
@@ -45,82 +58,200 @@ SELECT gatekeeper_validate(
     'SELECT customer_id, sum(amount) FROM reporting.orders GROUP BY customer_id',
     allowed_schemas := ['reporting'],
     allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]
-).allowed AS allowed;
+).allowed;
 -- true
 ```
 
 ```sql
-SELECT gatekeeper_validate('DROP TABLE reporting.orders').code AS code;
+SELECT gatekeeper_validate('DROP TABLE reporting.orders').code;
 -- unsupported
 ```
 
 ```sql
-SELECT gatekeeper_validate('SELECT * FROM missing_table').code AS code;
+SELECT gatekeeper_validate('SELECT * FROM missing_table').code;
 -- binding
 ```
 
-Your application must require `allowed = true` and `code = 'ok'`, then execute the
-same SQL. Validation does not execute the submitted query plan, but **binding may
-perform I/O** through trusted catalog implementations and explicitly admitted readers.
+Require `allowed = true` **and** `code = 'ok'`, treat exceptions and missing results as
+denials, then execute the same SQL text on the same connection.
 
-## Typed options
+## Functions
 
-There is no JSON options string. Pass native booleans, lists, integers, and table structs:
+```text
+gatekeeper_validate(sql VARCHAR, option := value, ...)   -- returns the result STRUCT
+CALL gatekeeper_configure(option := value, ...)          -- replaces the global policy
+```
+
+Options are named DuckDB values. Unknown or duplicate names and wrong types raise a
+DuckDB error while the statement is bound, for both functions. Invalid runtime values
+(`max_statements := 0`, a NULL list member) differ: `gatekeeper_validate` returns a
+result with `code = 'invalid_input'`, while `CALL gatekeeper_configure` raises and
+leaves the active policy unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
+spliced into SQL text.
+
+### Result
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
+| `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
+| `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when one is available; may be empty for `invalid_input`. Always empty for `ok`/`forbidden`/`unsupported`. |
+| `error_message` | VARCHAR | The engine's message for that error; empty for policy denials. |
+| `position` | BIGINT | Zero-based parser byte offset, or NULL. |
+| `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`) the query bound to. Empty unless `ok`. |
+| `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
+
+Violation `rule` values: `function`, `catalog`, `schema`, `table`, `type`, `internal_object`,
+`dynamic_sql`, `table_function`, `recursive_cte`, `file_table`, `replacement_scan`,
+`bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
+fields, not on message text.
+
+`objects` and `functions` are sorted, deduplicated binding evidence: views appear with
+their underlying tables; CTE names do not. They help detect search-path surprises but do
+not prove definitions are unchanged between validation and execution.
+
+What the three failure shapes look like:
+
+```jsonc
+// Policy denial: code 'forbidden', structured violations, no error text.
+// SELECT * FROM hr.salaries   with   allowed_schemas := ['reporting']
+{ "allowed": false, "code": "forbidden",
+  "violations": [{ "rule": "schema", "message": "schema is not allowed",
+                   "catalog": "memory", "schema": "hr", "table": "salaries",
+                   "function_name": "", "position": null }],
+  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
+
+// Function not in the defaults (md5 is; current_date is not).
+// SELECT md5('x'), current_date
+{ "allowed": false, "code": "forbidden",
+  "violations": [{ "rule": "function", "message": "resolved function is not allowed: current_date",
+                   "catalog": "", "schema": "", "table": "", "function_name": "current_date",
+                   "position": null }],
+  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
+
+// Engine error: code names the phase, violations are empty, the message is DuckDB's.
+// SELECT * FROM missing_table
+{ "allowed": false, "code": "binding", "violations": [],
+  "error_type": "Catalog", "error_message": "Table with name missing_table does not exist!",
+  "position": null, "objects": [], "functions": [] }
+```
+
+### Options
+
+| Option | Type | Built-in default | Notes |
+| --- | --- | --- | --- |
+| `check_functions` | BOOLEAN | `true` | `false` skips the allowlist; blocks and the never-bind list still apply. |
+| `use_default_functions` | BOOLEAN | `true` | Admit the 864 reviewed compute functions. |
+| `allowed_functions` | VARCHAR[] | `[]` | Exact leaf names, ASCII case-folded. `'*'` is multiplication, not a wildcard. |
+| `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
+| `allowed_catalogs` | VARCHAR[] | unrestricted | `[]` denies every catalog object. |
+| `allowed_schemas` | VARCHAR[] | unrestricted | `[]` denies every schema object. |
+| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; omitted catalog matches any. `[]` denies all tables and views. |
+| `allowed_types` | STRUCT[] | built-in types only | `{catalog?, schema, type}`. Extension and user types (JSON, INET, enums) need an entry. |
+| `allow_recursive_ctes` | BOOLEAN | `true` | |
+| `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
+| `allow_dynamic_sql` | BOOLEAN | `false` | Only gates `json_serialize_plan`; `query`/`query_table` can never be admitted. |
+| `allow_file_table_references` | BOOLEAN | `false` | Permit catalog objects with file-shaped names (`x.parquet`, `a/b`). Never authorizes implicit file scans. |
+| `max_statements` | BIGINT | `1` | Positive; at most 1000. |
+| `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
+| `max_ast_nodes` | BIGINT | `100000` | Positive; at most the default. |
+| `max_ast_depth` | BIGINT | `512` | Positive; at most the default. |
 
 ```sql
-SELECT gatekeeper_validate(
-    'SELECT md5(''hello'')',
-    blocked_functions := ['md5']
-).allowed AS allowed;
+SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']).allowed;
 -- false
 ```
 
 ```sql
-SELECT gatekeeper_validate(
-    'SELECT 1+2',
-    use_default_functions := false,
-    allowed_functions := ['+']
-).allowed AS allowed;
+SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']).allowed;
 -- true
 ```
 
-`allowed_functions` adds names within a policy layer; `blocked_functions` wins.
-Requests must also satisfy the global policy: new capabilities must first be granted
-by trusted configuration, and request options can only narrow that ceiling.
-Functions match exact ASCII-case-folded leaf names. `'*'` names multiplication—it is
-not a wildcard. Object policies intersect and use resolved identities. Empty object
-lists deny objects; omitted options inherit effective defaults.
+Things that surprise people:
 
-Most callers need no function overrides. `{}` JSON and `resolve_objects` are not
-accepted. Missing tables or invalid columns fail binding instead of passing syntax-only
-validation. All [options and limits](docs/api.md) apply to the same complete path.
+- Objects are authorized by their **resolved** identity after binding, using the caller's
+  search path and transaction. Views and the tables behind them must both pass.
+- Internal metadata views (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`) are
+  denied regardless of options; their readers are on the non-overridable
+  [never-bind list](docs/security.md#never-bind-functions), along with dynamic SQL and
+  sequence/storage functions.
+- `current_date`, `current_user`, and other session-value functions are **not** defaults.
+  Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
+- Collations `binary`/`c`/`posix`, `nocase`, `noaccent`, and `nfc` are available by default
+  and still honor `blocked_functions`. Any other collation (`COLLATE de`) needs its name in
+  `allowed_functions` with `check_functions` on.
+- Extension types need a matching `allowed_types` entry per type: `::JSON` needs
+  `{catalog: 'system', schema: 'main', type: 'json'}`, `::INET` needs
+  `{catalog: 'system', schema: 'main', type: 'inet'}` and the `inet` extension loaded
+  first. A `json` entry does not admit `inet`.
+- Implicit file scans (`SELECT * FROM 'x.parquet'`) and host-language replacement scans
+  (DataFrames in scope) are currently rejected. Call the reader explicitly
+  (`read_parquet('x.parquet')`) and admit it in the global policy.
+- Prepared parameters validate only when DuckDB can finish binding without values
+  (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
+- Caller expressions in bind-time positions (LIMIT, reader arguments, type parameters,
+  PIVOT values) must be literals or parameters; arithmetic there is rejected, including
+  `range(1+2)`. The one exception is a **correlated** call to the system table-in-out
+  functions `unnest`, `range`, or `generate_series`, whose arguments DuckDB evaluates per
+  row at execution time: `FROM t, unnest(list_transform(t.arr, lambda x: x + 1))` is
+  accepted, while the same call over a literal list is not.
 
-## Database-wide policy
+## Global policy
 
 ```sql
-CALL gatekeeper_configure(
-    allowed_schemas := ['reporting'],
-    blocked_functions := ['md5']
-);
+CALL gatekeeper_configure(allowed_schemas := ['reporting'], blocked_functions := ['md5']);
 -- true
 ```
 
 ```sql
-SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []).allowed AS allowed;
--- false
+SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []).allowed;
+-- false: the request cannot clear a global block
 ```
 
-Configuration is shared by all connections in one instance, not persisted, and not
-undone by rollback. Each `CALL` atomically replaces the whole policy, starting from
-built-in defaults for omitted options. Inspect it with
-`SELECT current_setting('gatekeeper_policy')`; reset with `RESET gatekeeper_policy`.
-After trusted setup, `SET lock_configuration=true` prevents changes unless the host
-explicitly included `gatekeeper_policy` in `allowed_configs`.
+```sql
+SELECT current_setting('gatekeeper_policy').blocked_functions;
+-- [md5]
+```
 
-Request lists replace inherited lists in the request layer, but **both the global and
-request layers must authorize the query**. Limits use the stricter value. Use the
-parameterized `CALL` authoring API; direct STRUCT `SET` has DuckDB casting limitations.
-See [configuration and migration](docs/api.md#global-policy-and-configuration).
+The global policy is a ceiling. Each `CALL` **replaces** it atomically, starting from the
+built-in defaults for any option you omit; an invalid call leaves the previous policy in
+place. It is global-only: shared by every connection of the database instance, not
+persisted, not undone by rollback, and `SET SESSION`/`RESET SESSION` are rejected.
+
+| Dimension | How the layers combine |
+| --- | --- |
+| Blocks and the never-bind list | Either layer's deny wins. |
+| Allowlists (functions, catalogs, schemas, tables, types) | Each layer must allow the resolved identity. |
+| Capability flags | Both layers must grant. |
+| Limits | The stricter value applies. |
+
+An otherwise valid request that tries to widen access does not error; it simply cannot
+authorize anything the global policy denies. Conflicting options are still rejected as
+`invalid_input`, for example `check_functions := false` with a nonempty
+`allowed_functions := ['md5']` (an empty list or `use_default_functions := false` is
+compatible with disabled checks). So grant capabilities (`read_parquet`, custom types, higher
+statement limits) in `CALL gatekeeper_configure`, and use request options to narrow per
+tenant.
+
+| Operation | SQL |
+| --- | --- |
+| Inspect | `SELECT current_setting('gatekeeper_policy')` |
+| Reset to built-ins | `RESET gatekeeper_policy` (or `CALL gatekeeper_configure()`) |
+| Freeze | `SET lock_configuration = true` after trusted setup |
+| Allow later changes while locked | `SET allowed_configs = ['gatekeeper_policy']` before locking |
+
+Prefer `CALL` for authoring: it validates option names, types, and nested identity fields
+before DuckDB's casts, and fills omitted options from the built-in defaults.
+`SET gatekeeper_policy = <STRUCT>` also works but requires the **complete canonical
+STRUCT**: every option plus the `restrict_catalogs`/`restrict_schemas`/`restrict_tables`
+flags, with no NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails
+with `NULL policy field: check_functions`; start from
+`current_setting('gatekeeper_policy')` and `struct_update` it instead. DuckDB silently
+drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''` means
+any catalog) means a typo that displaces a required field fails closed. Check the readback.
+`gatekeeper_configure` itself is never admitted in validated SQL, including through views
+or macros.
 
 ## Python
 
@@ -131,132 +262,31 @@ db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
 db.execute("LOAD '/absolute/path/to/gatekeeper.duckdb_extension'")
 db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
+
+# Trusted setup: install the ceiling, then lock it.
 db.execute("CALL gatekeeper_configure(allowed_schemas := ?)", [["reporting"]])
-db.execute("SET lock_configuration=true")
+db.execute("SET lock_configuration = true")
+
 sql = "SELECT sum(amount) FROM reporting.orders"
 decision = db.execute(
-    "SELECT gatekeeper_validate(?, allowed_schemas := ?)",
-    [sql, ["reporting"]],
+    "SELECT gatekeeper_validate(?, allowed_schemas := ?)", [sql, ["reporting"]]
 ).fetchone()[0]
 if not decision["allowed"] or decision["code"] != "ok":
-    raise ValueError(decision)
-expected_objects = [{"catalog": "memory", "schema": "reporting", "table": "orders", "type": "table"}]
-if decision["objects"] != expected_objects:
-    raise ValueError("Unexpected binding dependencies", decision["objects"])
-print("Validated dependencies:", decision["objects"], decision["functions"])
+    raise PermissionError(decision["violations"] or decision["error_message"])
 rows = db.execute(sql).fetchall()
 ```
 
-Reject validation exceptions/missing results too. Keep the catalog trusted between
-validation and execution. Each violation has a stable `rule`, human `message`,
-object/function identifiers, and an optional parser byte `position`. See the
-[result contract](docs/api.md#result) rather than parsing English messages.
-Dependency lists are sorted, deduplicated binding evidence, empty on failure; they
-do not prove unchanged definitions or close TOCTOU. Parameterized SQL is supported
-when binding can finish without values (e.g. typed predicates and LIMIT parameters).
-Computed expressions in reviewed bind-time positions are rejected before binding;
-see the [connection profiles](docs/security.md#validating-connection-profiles).
+Recommended validating-connection settings (`autoload_known_extensions = false`, memory
+and thread limits, `lock_configuration`) are in the
+[security model](docs/security.md#validating-connection-profiles).
 
-## Trusted objects and readers
+## Limitations
 
-Views **and** their underlying tables must pass object policy, including views
-backed only by reader functions. Authorized attached Iceberg/DuckLake tables may
-use their internal Parquet readers without exposing those functions to callers.
-Explicit admitted readers are capabilities whose resource access the application
-controls. Host-language and implicit replacement scans are rejected; use explicit
-admitted readers or trusted catalog objects.
-Explicit function blocks also apply inside trusted expansions. A non-overridable
-[never-bind list](docs/security.md#never-bind-functions) excludes dynamic SQL,
-metadata bypasses and sequence/storage operations. User-defined/extension cast
-types require `allowed_types`; nondefault collations require explicit permission.
-Provision extensions before disabling autoload/autoinstall on validation connections.
-
-Gatekeeper is not a sandbox: no row authorization, execution deadlines, memory
-budgets, or filesystem/network isolation. Trusted macros and extensions can perform
-binding-time work. Read [security boundaries](docs/security.md) before integrating.
-
-## Building from source
-
-Requires Git, Python 3.10+, and a C++17 compiler. Python's standard library is
-sufficient to generate and build Gatekeeper: inventory validation at build time uses the
-bundled `scripts/schema_check.py`, so community distribution images need no extra
-packages. Development tests additionally use the pinned `jsonschema` (via
-`requirements-dev.txt`) as an oracle to verify that validator. The standard C++ template
-layout uses pinned DuckDB and extension-ci-tools submodules.
-
-```sh
-git clone --recurse-submodules https://github.com/nozzle/duckdb-gatekeeper.git
-cd duckdb-gatekeeper
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python scripts/build.py --jobs 4
-```
-
-For existing clones, run `git submodule update --init --recursive`. The artifact is
-`build/release/extension/gatekeeper/gatekeeper.duckdb_extension`. Add `--shell` for
-the CLI. Generation derives the grammar from the exact pinned revision and compiles
-reviewed inventories into the build tree; unsupported engine revisions are rejected at
-configure time, and the extension also refuses to load into any other DuckDB release.
-
-`requirements-dev.txt`, `requirements-inventory.txt`, and `test/integration/requirements.txt`
-are hash-pinned, platform-universal lock files generated from the matching `.in` files. Edit
-the `.in` file, then regenerate with
-`uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt <name>.in`
-(from [uv](https://docs.astral.sh/uv/)); the universal resolution keeps Windows-only and
-Python-version-conditional dependencies such as `colorama`. Plain `pip install -r` verifies
-the hashes automatically.
-
-The community-extension build path (`make release` with the pinned `extension-ci-tools`
-Makefile, then `make test_release` for the sqllogictests in `test/sql`) also works and is
-exercised on CI together with the multi-platform distribution pipeline.
-
-## Development
-
-```sh
-.venv/bin/python -m pytest test -q
-.venv/bin/python scripts/audit_inventory.py
-.venv/bin/python scripts/benchmark.py --iterations 1000
-.venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp
-.venv/bin/python scripts/test_sanitized.py
-```
-
-Tests exercise typed binding, structured errors, policy composition, actual catalog
-fixtures, CTE scoping, view dependencies, prepared statements, concurrency, and
-adversarial inputs.
-
-For disposable localhost Iceberg/MinIO and local DuckLake integration tests:
-
-```sh
-.venv/bin/python -m pip install -r test/integration/requirements.txt
-.venv/bin/python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL iceberg; INSTALL ducklake; INSTALL httpfs')"
-.venv/bin/python scripts/test_lakehouses.py
-```
-
-Ports 18181 and 19000 must be free. The runner removes its test containers and data
-afterward. Setup downloads images/extensions; catalog and storage operations are local.
-
-For coverage-guided native fuzzing with Docker:
-
-```sh
-python3 scripts/generate.py
-docker build -t gatekeeper-fuzz -f test/fuzz/Dockerfile .
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" gatekeeper-fuzz --seconds 60
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint python3 gatekeeper-fuzz scripts/fuzz_sql.py --seconds 60
-```
-
-The first target exercises the AST walker/yyjson; the second builds DuckDB and
-exercises SQL parsing, typed options, and catalog binding. The image is built from the
-repository root so it can install the hashed lock file; sources are bind-mounted at run
-time. Corpus, logs, and crash artifacts stay in ignored `build/` directories. The linked
-fuzzer also runs weekly on CI. See the sanitizer scope in
-[security.md](docs/security.md#adversarial-regression-coverage).
-
-## Maintaining defaults
-
-Core and 29 extension inventories contain compute, elevated, and unreviewed names.
-Only compute names become defaults. Runtime audits detect changes without admitting
-functions automatically. Every supported major/minor update requires review; follow
-the [inventory workflow](inventories/README.md) and [agent guidance](inventories/AGENTS.md).
+Gatekeeper authorizes what a statement references; it does not filter rows or columns,
+enforce execution deadlines or memory budgets, or isolate the filesystem and network.
+Binding may perform I/O before a denial is returned. Function defaults are a reviewed
+name inventory, not a proof that every overload is harmless. The full list of boundaries
+is in [docs/security.md](docs/security.md#remaining-boundaries).
 
 ## License
 

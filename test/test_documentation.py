@@ -13,11 +13,11 @@ def test_readme_sql_examples(db):
         rows = db.execute(block).fetchall()
         if rows:
             observed.append(rows)
-    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(False,)]]
+    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(False,)], [(["md5"],)]]
 
 
 def test_documentation_links():
-    for path in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
+    for path in [ROOT / "README.md", ROOT / "CONTRIBUTING.md", *sorted((ROOT / "docs").glob("*.md"))]:
         for target in re.findall(r"\]\(([^)]+)\)", path.read_text()):
             if target.startswith(("http://", "https://", "#")):
                 continue
