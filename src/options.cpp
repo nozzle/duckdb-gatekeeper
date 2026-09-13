@@ -8,19 +8,27 @@ using duckdb::LogicalTypeId;
 using duckdb::Value;
 
 const std::vector<std::string> &OptionNames() {
-	static const std::vector<std::string> names = {
-	    "check_functions",       "use_default_functions", "allow_recursive_ctes",
-	    "allow_table_functions", "allow_dynamic_sql",     "allow_file_table_references",
-	    "allowed_functions",     "blocked_functions",     "allowed_catalogs",
-	    "allowed_schemas",       "allowed_tables",        "allowed_types",
-	    "max_statements",        "max_ast_bytes",         "max_ast_nodes",
-	    "max_ast_depth"};
+	static const std::vector<std::string> names = {"check_functions",
+	                                               "use_default_functions",
+	                                               "allow_recursive_ctes",
+	                                               "allow_table_functions",
+	                                               "allow_file_table_references",
+	                                               "allowed_functions",
+	                                               "blocked_functions",
+	                                               "allowed_catalogs",
+	                                               "allowed_schemas",
+	                                               "allowed_tables",
+	                                               "allowed_types",
+	                                               "max_statements",
+	                                               "max_ast_bytes",
+	                                               "max_ast_nodes",
+	                                               "max_ast_depth"};
 	return names;
 }
 
 LogicalType OptionType(const std::string &name) {
 	if (name == "check_functions" || name == "use_default_functions" || name == "allow_recursive_ctes" ||
-	    name == "allow_table_functions" || name == "allow_dynamic_sql" || name == "allow_file_table_references")
+	    name == "allow_table_functions" || name == "allow_file_table_references")
 		return LogicalType::BOOLEAN;
 	if (name == "allowed_functions" || name == "blocked_functions" || name == "allowed_catalogs" ||
 	    name == "allowed_schemas")
@@ -69,8 +77,6 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				policy.recursive = flag;
 			if (name == "allow_table_functions")
 				policy.table_functions = flag;
-			if (name == "allow_dynamic_sql")
-				policy.dynamic_sql = flag;
 			if (name == "allow_file_table_references")
 				policy.file_tables = flag;
 		} else if (name == "allowed_functions")
@@ -185,7 +191,6 @@ Value PolicyValue(const Policy &policy) {
 	                      {"use_default_functions", Value::BOOLEAN(policy.defaults)},
 	                      {"allow_recursive_ctes", Value::BOOLEAN(policy.recursive)},
 	                      {"allow_table_functions", Value::BOOLEAN(policy.table_functions)},
-	                      {"allow_dynamic_sql", Value::BOOLEAN(policy.dynamic_sql)},
 	                      {"allow_file_table_references", Value::BOOLEAN(policy.file_tables)},
 	                      {"allowed_functions", strings(policy.allowed_functions)},
 	                      {"blocked_functions", strings(policy.blocked_functions)},

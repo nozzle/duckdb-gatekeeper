@@ -199,8 +199,7 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"allow_recursive_ctes": False}, {"allow_recursive_ctes": True},
      "WITH RECURSIVE t AS (SELECT 1 x UNION ALL SELECT x+1 FROM t WHERE x<3) SELECT * FROM t", "recursive_cte"),
     ({"allow_file_table_references": False}, {"allow_file_table_references": True}, "SELECT * FROM 'missing.csv'", "file_table"),
-    ({"allow_dynamic_sql": False}, {"allow_dynamic_sql": True, "allowed_functions": ["json_serialize_plan"]},
-     "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
+    ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
 def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, rule):
     configure(db, global_options)

@@ -448,11 +448,12 @@ struct Walker {
 			    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
 				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
 				                   name);
-			if (!Both([](const Policy &p) { return p.dynamic_sql; }) &&
-			    ((edge == "function" &&
-			      (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
-			     name == "json_serialize_plan"))
-				violations.emplace("dynamic_sql", "dynamic SQL is disabled: " + name, Field(value, "catalog"),
+			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this
+			// validation. They are on the never-bind list; this is the earlier, more specific diagnostic.
+			if ((edge == "function" &&
+			     (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
+			    name == "json_serialize_plan")
+				violations.emplace("dynamic_sql", "dynamic SQL is never allowed: " + name, Field(value, "catalog"),
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}

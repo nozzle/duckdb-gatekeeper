@@ -90,7 +90,7 @@ def test_view_and_underlying_table_must_both_pass(db):
 
 def test_dynamic_table_lookup_keeps_object_policy(db):
     db.execute("CREATE TABLE secret(x INT)")
-    options={"allow_dynamic_sql":True,"allowed_functions":["query_table","query"],"allowed_tables":[]}
+    options={"allowed_functions":["query_table","query"],"allowed_tables":[]}
     for sql in ["SELECT * FROM query_table('secret')", "SELECT * FROM query('SELECT * FROM secret')"]:
         result=validate(db,sql,options)
         assert not result["allowed"], (sql,result)

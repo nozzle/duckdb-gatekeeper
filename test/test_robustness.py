@@ -34,7 +34,7 @@ def test_random_invalid_sql(db):
 def test_random_option_types(db):
     rng = random.Random(99)
     values = [None, True, False, 1, -1, 1.5, "x", [], {}, ["x"]]
-    keys = ["check_functions", "allowed_functions", "allowed_tables", "limits", "reader_paths", "allow_dynamic_sql"]
+    keys = ["check_functions", "allowed_functions", "allowed_tables", "limits", "reader_paths", "allow_dynamic_sql"]  # last three are unknown names
     for _ in range(100):
         options = {rng.choice(keys): rng.choice(values)}
         try:
