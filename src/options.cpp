@@ -231,6 +231,8 @@ Policy ReadPolicy(const Value &value) {
 	}
 	Policy policy;
 	ApplyOptions(policy, options);
+	if (!tables && !policy.allowed_tables.empty())
+		throw std::invalid_argument("nonempty allowed_tables requires restrict_tables = true");
 	policy.tables = tables;
 	return policy;
 }

@@ -222,6 +222,18 @@ static void CheckNativeSettingBypass() {
 	auto denied = connection.Query("SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
 	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
 		std::abort();
+	// Native setters must not install an ignored nonempty table restriction.
+	auto inconsistent =
+	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "
+		                 "[{catalog: 'memory', schema: 'main', \"table\": 'v'}], restrict_tables := false)");
+	if (inconsistent->HasError())
+		std::abort();
+	config.SetOption("gatekeeper_policy", inconsistent->GetValue(0, 0));
+	auto ignored = connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t')");
+	if (StructValue::GetChildren(Decision(*ignored))[1].GetValue<string>() != "invalid_input")
+		std::abort();
+	if (connection.Query("RESET gatekeeper_policy")->HasError())
+		std::abort();
 	// The canonical value is NULL-free at every depth, so a NULL nested catalog installed through a native
 	// setter (or DuckDB's lossy STRUCT cast) must fail closed instead of matching any catalog.
 	auto widened = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "

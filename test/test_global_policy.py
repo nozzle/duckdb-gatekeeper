@@ -120,6 +120,27 @@ def test_set_drops_extra_nested_keys_without_widening(db):
     assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
 
 
+def test_set_requires_consistent_table_restriction(db):
+    db.execute("CREATE TABLE t(x INT); CREATE TABLE secret(x INT)")
+    before = policy(db)
+    entry = "[{catalog:'memory', schema:'main', 'table':'t'}]"
+    with pytest.raises(duckdb.Error, match="nonempty allowed_tables requires restrict_tables"):
+        db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := " + entry + ")")
+    assert policy(db) == before
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), "
+               "restrict_tables := true, allowed_tables := " + entry + ")")
+    assert validate(db, "SELECT * FROM t")["allowed"]
+    assert not validate(db, "SELECT * FROM secret")["allowed"]
+    before = policy(db)
+    with pytest.raises(duckdb.Error, match="nonempty allowed_tables requires restrict_tables"):
+        db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), restrict_tables := false)")
+    assert policy(db) == before
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := [])")
+    assert not validate(db, "SELECT * FROM t")["allowed"]
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), restrict_tables := false)")
+    assert validate(db, "SELECT * FROM secret")["allowed"]
+
+
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
                                      "max_ast_nodes := NULL::INTEGER",
                                      "blocked_functions := [], blocked_functions := ['md5']",

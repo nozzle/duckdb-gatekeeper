@@ -295,6 +295,10 @@ with `NULL policy field: check_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead. DuckDB silently
 drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''` means
 any catalog) means a typo that displaces a required field fails closed. Check the readback.
+When setting `allowed_tables` directly, also set `restrict_tables := true`;
+a nonempty list with `restrict_tables = false` is rejected. With an empty list,
+`restrict_tables = true` denies all tables/views and `false` is unrestricted
+for non-internal objects.
 `gatekeeper_configure` itself is never admitted in validated SQL, including through views
 or macros.
 
