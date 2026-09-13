@@ -245,3 +245,14 @@ def test_typed_reader_parameter_still_requires_value(db):
 def test_cast_does_not_admit_computation(db):
     result = validate(db, "SELECT 1 LIMIT len(repeat('x',200000000))::INT")
     assert result["code"] == "forbidden" and result["error_message"] == ""
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM unnest(repeat('x',200000000), recursive:=true)",
+    "SELECT * FROM unnest(repeat('x',200000000), recursive=true)",
+    "SELECT * FROM d, range(d.x, len(repeat('x',200000000)))",
+])
+def test_runtime_argument_exception_does_not_admit_other_computation(db, sql):
+    result = validate(db, sql)
+    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
