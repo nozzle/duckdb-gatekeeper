@@ -42,9 +42,9 @@ def test_configure_replacement_and_independent_limits(db):
     assert configure(db,{"blocked_functions":["md5"],"max_statements":2})
     assert validate(db,"SELECT 1; SELECT 2", {"max_ast_depth":100})["allowed"]
     assert not validate(db,"SELECT md5('x')")["allowed"]
-    assert validate(db,"SELECT md5('x')", {"blocked_functions":[]})["allowed"]
-    with pytest.raises(duckdb.Error,match="already configured"):
-        configure(db)
+    assert not validate(db,"SELECT md5('x')", {"blocked_functions":[]})["allowed"]
+    configure(db)
+    assert validate(db,"SELECT md5('x')")["allowed"]
 
 
 def test_struct_table_parameters(db):
@@ -136,6 +136,7 @@ def test_file_name_opt_in_only_authorizes_catalog_object(db, tmp_path, monkeypat
     monkeypatch.chdir(tmp_path)
     db.execute('CREATE TABLE "data.parquet"(x INT)')
     assert not validate(db, 'SELECT * FROM "data.parquet"')["allowed"]
+    configure(db, {"allow_file_table_references": True})
     assert validate(db, 'SELECT * FROM "data.parquet"', {"allow_file_table_references": True})["allowed"]
     result = validate(db, "SELECT * FROM 'missing.duckdb'", {"allow_file_table_references": True})
     assert not result["allowed"] and result["code"] == "forbidden"
@@ -174,6 +175,7 @@ def test_internal_views_require_explicit_permission(db, name):
 def test_internal_view_explicit_permission_intersects_other_policies(db):
     table = {"catalog": "SYSTEM", "schema": "MAIN", "table": "DuckDB_Tables"}
     options = {"allowed_tables": [table], "allowed_schemas": ["main"], "allowed_catalogs": ["system"]}
+    configure(db, options)
     result = validate(db, "SELECT * FROM duckdb_tables", options)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"
     assert not validate(db, "SELECT * FROM duckdb_views", options)["allowed"]
@@ -188,6 +190,7 @@ def test_object_identifiers_are_ascii_case_insensitive(db):
     assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_schemas": ["reporting"]})["allowed"]
     assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_catalogs": ["memory"]})["allowed"]
     db.execute("CREATE MACRO local_abs(x) AS abs(x)")
+    configure(db, {"allowed_functions": ["local_abs"]})
     assert validate(db, "SELECT MEMORY.main.local_abs(-1)", {
         "allowed_catalogs": ["MeMoRy"], "allowed_functions": ["local_abs"]
     })["allowed"]
@@ -235,8 +238,10 @@ def test_qualified_suffix_catalog_table_requires_file_opt_in(db, name):
         result = validate(db, sql)
         assert result["code"] == "forbidden" and result["error_message"] == ""
         assert result["violations"][0]["rule"] == "file_table"
+        configure(db, {"allow_file_table_references": True})
         assert validate(db, sql, {"allow_file_table_references": True})["allowed"]
         assert not validate(db, sql, {"allow_file_table_references": True, "allowed_tables": []})["allowed"]
+        configure(db)
 
 
 def test_internal_dependency_of_trusted_view_requires_opt_in(db):
@@ -244,5 +249,6 @@ def test_internal_dependency_of_trusted_view_requires_opt_in(db):
     assert validate(db, "SELECT * FROM my_tables")["violations"][0]["rule"] == "internal_object"
     options = {"allowed_tables": [{"schema": "main", "table": "my_tables"},
                                   {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
+    configure(db, options)
     result = validate(db, "SELECT * FROM my_tables", options)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"

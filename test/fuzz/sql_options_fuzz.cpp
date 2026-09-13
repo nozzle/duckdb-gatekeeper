@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "duckdb/main/config.hpp"
 #include "engine_errors.hpp"
 #include <cstdlib>
 #include <string>
@@ -146,13 +147,13 @@ static Value Run(Connection &connection, const std::string &sql, const Value &te
 }
 
 static Value Configured(const std::string &options, const Value &text, int64_t limit) {
-	// Configuration is one-shot and shared by connections: isolate each replay in a fresh instance.
+	// Configuration is shared by connections: isolate each replay in a fresh instance.
 	DuckDB database(nullptr);
 	Connection connection(database);
 	Setup(connection);
-	auto result = connection.Query("WITH input AS (SELECT $1::VARCHAR AS text, $2::BIGINT AS n) "
-	                               "SELECT gatekeeper_configure(" +
-	                                   options + ") FROM input",
+	// The VALUES clause consumes both host parameters even when the option is literal.
+	auto result = connection.Query("SELECT cfg.* FROM gatekeeper_configure(" + options +
+	                                   ") cfg CROSS JOIN (VALUES ($1::VARCHAR, $2::BIGINT)) input(text,n)",
 	                               text, limit);
 	Value configured;
 	if (result->HasError()) {
@@ -169,7 +170,34 @@ static Value Configured(const std::string &options, const Value &text, int64_t l
 	auto decision = Run(connection, "SELECT gatekeeper_validate('SELECT * FROM v') FROM input", text, limit);
 	auto overridden = Run(
 	    connection, "SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []) FROM input", text, limit);
+	auto baseline = Run(connection, "SELECT gatekeeper_validate('SELECT md5(''x'')') FROM input", text, limit);
+	if (!StructValue::GetChildren(baseline)[0].GetValue<bool>() &&
+	    StructValue::GetChildren(overridden)[0].GetValue<bool>())
+		std::abort();
 	return Value::STRUCT({{"configured", configured}, {"decision", decision}, {"overridden", overridden}});
+}
+
+static void CheckNativeSettingBypass() {
+	DuckDB database(nullptr);
+	Connection connection(database);
+	Setup(connection);
+	auto &config = DBConfig::GetConfig(*database.instance);
+	// Native host APIs skip SQL SET callbacks. Enforcement must decode the actual value.
+	config.SetOption("gatekeeper_policy", Value("invalid"));
+	auto invalid = connection.Query("SELECT gatekeeper_validate('SELECT 1')");
+	auto decision = Decision(*invalid);
+	if (StructValue::GetChildren(decision)[1].GetValue<string>() != "invalid_input")
+		std::abort();
+	if (connection.Query("RESET gatekeeper_policy")->HasError())
+		std::abort();
+	auto canonical =
+	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_functions := ['md5'])");
+	if (canonical->HasError())
+		std::abort();
+	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
+	auto denied = connection.Query("SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
+	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
+		std::abort();
 }
 
 static int Fuzz(const uint8_t *data, size_t size) {
@@ -179,6 +207,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	static Connection connection(database);
 	static bool initialized = false;
 	if (!initialized) {
+		CheckNativeSettingBypass();
 		Setup(connection);
 		auto allow = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
 		auto deny =

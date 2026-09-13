@@ -11,16 +11,24 @@ returns nonsensitive data, or cannot have side effects through admitted function
    Provision required extensions first, then set `autoload_known_extensions=false`
    and `autoinstall_known_extensions=false` on validation connections. Gatekeeper
    does not temporarily mutate those settings.
-2. Construct policy from authenticated application context. Do not allow an untrusted
-   caller to replace deployment restrictions with weaker options.
+2. Install the global policy through trusted `CALL gatekeeper_configure`, then lock
+   configuration. Construct any further request restrictions from authenticated context.
 3. Call `gatekeeper_validate` with the exact SQL to execute.
 4. Require an explicit successful result; reject missing results, NULLs, and exceptions.
 5. Execute the same SQL under controlled database/process settings.
 
-`gatekeeper_configure` installs database-scoped defaults once. Request overrides
-replace values and may relax restrictions; these defaults are not a security
-baseline. Only trusted bootstrap should configure the instance. Request state is
-local to each scalar call. All effective restrictions intersect and blocks win.
+`CALL gatekeeper_configure` atomically replaces a database-scoped authorization ceiling.
+Request overrides can only narrow it: both policy layers must authorize the query,
+and either layer's blocks win. Only trusted bootstrap should configure the instance.
+After setup, `SET lock_configuration=true` blocks configuration through `CALL`, `SET`,
+and `RESET`, unless the host deliberately exempts `gatekeeper_policy` in `allowed_configs`.
+This protects Gatekeeper's policy, not arbitrary SQL execution: the application must
+still require validation and control access to the raw connection/native APIs.
+Configuration is nontransactional; a surrounding rollback does not undo replacement.
+Each validation chunk takes one coherent snapshot. Lock before exposing the instance.
+Use strict parameterized `CALL` for authoring; direct STRUCT `SET` can silently drop
+unknown fields during DuckDB casting, including a misspelled nullable catalog field.
+See [the configuration contract](api.md#global-policy-and-configuration).
 
 ## Function enforcement and trusted expansion
 
@@ -53,7 +61,7 @@ when combining lambdas with trusted JSON expansions.
 The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
-checkpoint currval force_checkpoint nextval
+checkpoint currval force_checkpoint nextval gatekeeper_configure
 query query_table json_execute_serialized_sql read_duckdb seq_scan which_secret
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
@@ -72,6 +80,8 @@ reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
 state outside table authorization; `checkpoint.cpp` and `scalar/sequence/nextval.cpp`
 mutate or inspect storage/sequence state. `seq_scan` is the internal scan entry,
 not a caller capability (normal physical scans retain object authorization).
+`gatekeeper_configure` mutates the global policy and is always forbidden in submitted
+SQL, including resolved table-function uses inside trusted views/macros.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling from the issue; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
@@ -155,6 +165,7 @@ SET autoinstall_known_extensions=false;
 SET memory_limit='512MB';
 SET threads=1;
 SET search_path='memory.reporting';
+CALL gatekeeper_configure(allowed_catalogs := ['memory'], allowed_schemas := ['reporting']);
 SET lock_configuration=true;
 ```
 
@@ -197,8 +208,9 @@ remain required before deployment against hostile callers.
 `test_redteam.py` checks nested table references in filters, windows, LIMIT/ORDER BY,
 CTEs, views and macros; search-path and temporary-table shadowing; dynamic SQL;
 write-containing batches; duplicate/escaped JSON keys; invalid limits; and prepared
-validation after catalog/default changes. Policy opt-outs are verified to be
-request-local. `test_adversarial_generated.py` combines nested queries and function
+validation after catalog/policy changes. `test_global_policy.py` checks locking,
+atomic replacement, strict configuration, and non-bypassable policy layers.
+`test_adversarial_generated.py` combines nested queries and function
 spellings deterministically and checks mixed NULL/allow/deny vectorized results.
 
 A confirmed issue was fixed during this review: DuckDB can wrap policy exceptions

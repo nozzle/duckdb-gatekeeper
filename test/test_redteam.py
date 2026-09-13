@@ -120,15 +120,16 @@ def test_preflight_denies_before_reader_binding(db):
     sql = "SELECT * FROM read_parquet('missing-gatekeeper-test.parquet')"
     result = validate(db, sql)
     assert result["code"] == "forbidden" and not result["error_message"]
+    configure(db, {"allowed_functions": ["read_parquet"]})
     result = validate(db, sql, {"allowed_functions": ["read_parquet"]})
     assert not result["allowed"] and result["code"] == "binding"
 
 
-def test_opt_out_is_not_sticky(catalog):
+def test_request_cannot_opt_out_of_ceiling(catalog):
     configure(catalog,{"blocked_functions":["md5"],"allowed_schemas":["allowed"]})
-    assert validate(catalog, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
+    assert not validate(catalog, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
     assert not validate(catalog, "SELECT md5('x')")["allowed"]
-    assert validate(catalog, "SELECT * FROM secret.t", {"allowed_schemas": ["secret"]})["allowed"]
+    assert not validate(catalog, "SELECT * FROM secret.t", {"allowed_schemas": ["secret"]})["allowed"]
     assert not validate(catalog, "SELECT * FROM secret.t")["allowed"]
 
 
@@ -160,6 +161,7 @@ def test_quoted_names_and_exact_catalog(db):
 
 
 def test_trusted_implementation_is_not_caller_code(catalog):
+    configure(catalog, {"allowed_functions": ["trusted_abs"]})
     options = {"allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]}
     assert validate(catalog, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
     assert not validate(catalog, "SELECT trusted_abs(-1)", options)["allowed"]
@@ -173,6 +175,7 @@ def test_validation_cannot_execute_configuration(db):
 
 
 def test_mixed_batch_rejected_before_binding(catalog):
+    configure(catalog, {"max_statements": 2})
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
     result = validate(catalog, sql, {"max_statements": 2, "check_functions": False})
     assert not result["allowed"] and result["code"] == "unsupported"
@@ -187,6 +190,7 @@ def test_mixed_batch_rejected_before_binding(catalog):
     "WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d",
 ])
 def test_write_smuggling(db, sql):
+    configure(db, {"max_statements": 10})
     result = validate(db, sql, {"max_statements": 10, "check_functions": False, "allow_dynamic_sql": True})
     assert not result["allowed"]
     assert result["code"] in {"parser", "unsupported"}

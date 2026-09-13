@@ -7,10 +7,12 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -310,7 +312,7 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 }
 
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
-                               const gatekeeper::Policy &ceiling, const string &sql) {
+                                const gatekeeper::Policy &ceiling, const string &sql) {
 	gatekeeper::Result result;
 	bool binding = false;
 	try {
@@ -448,7 +450,8 @@ static void GatekeeperValidate(DataChunk &args, ExpressionState &state, Vector &
 		auto sql = args.data[0].GetValue(row);
 		gatekeeper::Result decision;
 		try {
-			if (!configuration_error.empty()) throw std::invalid_argument(configuration_error);
+			if (!configuration_error.empty())
+				throw std::invalid_argument(configuration_error);
 			auto policy = defaults;
 			gatekeeper::ApplyOptions(policy, Options(args, expression.bind_info->Cast<OptionBinding>(), row, 1));
 			if (sql.IsNull())
@@ -469,21 +472,27 @@ struct ConfigureBinding : FunctionData {
 	bool Equals(const FunctionData &other) const override { return policy == other.Cast<ConfigureBinding>().policy; }
 };
 
-struct ConfigureState : GlobalTableFunctionState { bool finished = false; };
+struct ConfigureState : GlobalTableFunctionState {
+	bool finished = false;
+};
 
 static unique_ptr<GlobalTableFunctionState> InitConfigure(ClientContext &, TableFunctionInitInput &) {
 	return make_uniq<ConfigureState>();
 }
 
 static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
-                                            vector<LogicalType> &types, vector<string> &names) {
+                                              vector<LogicalType> &types, vector<string> &names) {
 	try {
+		// DuckDB overwrites duplicate named parameters in its map before calling bind.
+		if (input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
+			throw std::invalid_argument("duplicate Gatekeeper configuration option");
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
 		for (const auto &option : input.named_parameters) {
 			auto value = option.second;
 			// ANY preserves original types and nested field names; only integer widening is permitted.
-			if (gatekeeper::OptionType(option.first) == LogicalType::BIGINT && value.type().IsIntegral())
+			if (!value.IsNull() && gatekeeper::OptionType(option.first) == LogicalType::BIGINT &&
+			    value.type().IsIntegral())
 				value = Value::BIGINT(value.GetValue<int64_t>());
 			options.emplace_back(option.first, std::move(value));
 		}
@@ -498,7 +507,8 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 
 static void Configure(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &state = input.global_state->Cast<ConfigureState>();
-	if (state.finished) return;
+	if (state.finished)
+		return;
 	auto &config = DBConfig::GetConfig(context);
 	config.CheckLock(POLICY_SETTING);
 	auto value = input.bind_data->Cast<ConfigureBinding>().policy;
@@ -530,7 +540,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	validate.stability = FunctionStability::VOLATILE;
 	loader.RegisterFunction(validate);
 	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitConfigure);
-	for (const auto &name : gatekeeper::OptionNames()) configure.named_parameters[name] = LogicalType::ANY;
+	for (const auto &name : gatekeeper::OptionNames())
+		configure.named_parameters[name] = LogicalType::ANY;
 	loader.RegisterFunction(configure);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

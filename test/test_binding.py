@@ -29,6 +29,7 @@ def test_binding_errors_and_no_execution(db):
 
 
 def test_trusted_views_and_macros(db):
+    configure(db, {"allowed_functions": ["report"]})
     db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
     assert not validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["reporting"]})["allowed"]
     assert validate(db,"SELECT * FROM reporting.v",{"allowed_schemas":["reporting","secret"]})["allowed"]
@@ -49,15 +50,15 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
     assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]
 
 
-def test_defaults_shared_and_override_replaces(db):
+def test_ceiling_shared_and_replacement_is_global(db):
     configure(db,{"blocked_functions":["md5"],"max_statements":2})
     with db.cursor() as other:
         assert not validate(other,"SELECT md5('x')")["allowed"]
-        assert validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
+        assert not validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
         assert validate(other,"SELECT 1;SELECT 2")["allowed"]
         assert validate(other,"SELECT 1;SELECT 2",{"max_ast_depth":100})["allowed"]
-        with pytest.raises(duckdb.Error):
-            configure(other)
+        configure(other)
+        assert validate(db,"SELECT md5('x')")["allowed"]
     with connect() as independent:
         assert validate(independent,"SELECT md5('x')")["allowed"]
 
@@ -66,8 +67,7 @@ def test_invalid_configuration_does_not_lock(db):
     with pytest.raises(duckdb.Error):
         configure(db,{"unknown":True})
     assert configure(db) is True
-    with pytest.raises(duckdb.Error):
-        configure(db)
+    assert configure(db) is True
 
 
 def test_prepared_validation_observes_defaults(db):
@@ -86,7 +86,9 @@ def test_configuration_race(db):
             except duckdb.Error:
                 return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        assert sum(pool.map(attempt,range(8)))==1
+        assert sum(pool.map(attempt,range(8)))==8
+    policy = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
+    assert policy["allowed_functions"] in [[f"custom_{i}"] for i in range(8)]
 
 
 def test_binding_preserves_temp_and_transaction_context(db):
@@ -111,5 +113,5 @@ def test_bound_cte_and_policy_override(db):
     sql="SELECT * FROM secret WHERE EXISTS (WITH secret AS (SELECT 1) SELECT * FROM secret)"
     assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
     configure(db,{"allowed_tables":[],"allowed_functions":["custom"]})
-    assert validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
-    assert validate(db,"SELECT mystery(1)",{"check_functions":False})["code"]=="binding"
+    assert not validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
+    assert validate(db,"SELECT mystery(1)",{"check_functions":False})["code"]=="forbidden"

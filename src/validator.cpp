@@ -165,7 +165,8 @@ struct Walker {
 		while (!work.empty()) {
 			auto expr = work.back();
 			work.pop_back();
-			if (++visited > policy.nodes)
+			++visited;
+			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
 				return false;
 			auto kind = Field(expr, "class");
 			if (kind == "CONSTANT" || kind == "PARAMETER")
@@ -207,7 +208,8 @@ struct Walker {
 		while (!work.empty()) {
 			auto expr = work.back();
 			work.pop_back();
-			if (++visited > policy.nodes)
+			++visited;
+			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
 				return false;
 			if (yyjson_is_arr(expr)) {
 				size_t i, n;
@@ -255,7 +257,9 @@ struct Walker {
 			                             : name == "noaccent" ? "strip_accents"
 			                             : name == "nfc"      ? "nfc_normalize"
 			                                                  : name;
-			if (!Both([&](const Policy &p) { return !FunctionDenied(p, name) && (builtin || p.allowed_functions.count(name)); }))
+			if (!Both([&](const Policy &p) {
+				    return !FunctionDenied(p, name) && (builtin || p.allowed_functions.count(name));
+			    }))
 				Reject("function", "collation is not allowed: " + name, value, name);
 			if (implementation != name && !Both([&](const Policy &p) { return !FunctionDenied(p, implementation); }))
 				Reject("function", "collation function is not allowed: " + implementation, value, implementation);
@@ -440,12 +444,14 @@ struct Walker {
 					function_positions[name] = position;
 			}
 			auto catalog = Field(value, "catalog");
-			if (!catalog.empty() && !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
+			if (!catalog.empty() &&
+			    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
 				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
 				                   name);
-			if (!Both([](const Policy &p) { return p.dynamic_sql; }) && ((edge == "function" && (name == "query" || name == "query_table" ||
-			                                                    name == "json_execute_serialized_sql")) ||
-			                            name == "json_serialize_plan"))
+			if (!Both([](const Policy &p) { return p.dynamic_sql; }) &&
+			    ((edge == "function" &&
+			      (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
+			     name == "json_serialize_plan"))
 				violations.emplace("dynamic_sql", "dynamic SQL is disabled: " + name, Field(value, "catalog"),
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
@@ -465,14 +471,17 @@ struct Walker {
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
 		     table = Field(value, "table_name");
-		if (!catalog.empty() && !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
+		if (!catalog.empty() &&
+		    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
 			Reject("catalog", "catalog is not allowed: " + catalog, value);
 		if (kind == "ShowRef") {
 			if (yyjson_obj_get(value, "query"))
 				return;
 			if (!Both([](const Policy &p) { return !p.tables; }))
 				Reject("table", "schema-wide SHOW is disabled by table policy", value);
-			if (!Both([&](const Policy &p) { return !p.schemas || (!schema.empty() && p.allowed_schemas.count(Lower(schema))); }))
+			if (!Both([&](const Policy &p) {
+				    return !p.schemas || (!schema.empty() && p.allowed_schemas.count(Lower(schema)));
+			    }))
 				Reject("schema", "SHOW requires an allowed schema", value);
 			return;
 		}
