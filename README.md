@@ -226,15 +226,19 @@ flowchart LR
     nb -- yes --> deny([deny])
     nb -- no --> blk{in blocked_functions<br/>global or request?}
     blk -- yes --> deny
-    blk -- no --> allow{"in defaults ∪ allowed_functions<br/>for both layers?"}
-    allow -- yes --> ok([allow])
-    allow -- no --> deny
+    blk -- no --> allow{"for each layer:<br/>in allowed_functions, or in defaults<br/>when use_default_functions = true?"}
+    allow -- both yes --> ok([allow])
+    allow -- either no --> deny
 ```
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
   `FROM read_parquet(...)`) all use the same policy, by leaf name.
-- Functions that trusted **views and macros** introduce internally skip the allowlist
-  but still honor `blocked_functions` and the never-bind list.
+- Functions that trusted **views and macros** introduce internally are normally exempt
+  from the allowlist but always honor `blocked_functions` and the never-bind list. The
+  exemption is not unconditional: ambiguous caller syntax such as `t.x` or `list[i]`
+  triggers a query-wide implementation check that can also reach a trusted expansion
+  using the same function (for example `struct_extract`). See
+  [function enforcement and trusted expansion](docs/security.md#function-enforcement-and-trusted-expansion).
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
 
