@@ -316,10 +316,11 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	}
 	// No callback claimed the name. Returning nullptr would let DuckDB run every callback a second
 	// time outside this authorization, so raise the engine's own missing-table error here instead.
-	// The lookup throws for every catalog with transactional DDL; if it finds the entry after all,
-	// DuckDB's second lookup will bind it as an ordinary object under the catalog callback.
+	// The lookup throws for every catalog with transactional DDL. If a catalog without it finds the
+	// entry after all, returning nullptr would still resume DuckDB's callback loop rather than the
+	// later catalog lookup, so fail closed and let the caller retry.
 	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
-	return nullptr;
+	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
 }
 
 // Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
