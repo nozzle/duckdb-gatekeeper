@@ -141,6 +141,10 @@ struct Walker {
 	const Inventory &inventory;
 	const Policy &policy;
 	BindingPolicy *binding;
+	const Policy *ceiling;
+	template <class Predicate> bool Both(Predicate predicate) const {
+		return predicate(policy) && (!ceiling || predicate(*ceiling));
+	}
 	std::set<Violation> violations;
 	std::map<std::string, size_t> functions;
 	std::map<std::string, int64_t> function_positions;
@@ -161,7 +165,8 @@ struct Walker {
 		while (!work.empty()) {
 			auto expr = work.back();
 			work.pop_back();
-			if (++visited > policy.nodes)
+			++visited;
+			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
 				return false;
 			auto kind = Field(expr, "class");
 			if (kind == "CONSTANT" || kind == "PARAMETER")
@@ -203,7 +208,8 @@ struct Walker {
 		while (!work.empty()) {
 			auto expr = work.back();
 			work.pop_back();
-			if (++visited > policy.nodes)
+			++visited;
+			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
 				return false;
 			if (yyjson_is_arr(expr)) {
 				size_t i, n;
@@ -251,9 +257,11 @@ struct Walker {
 			                             : name == "noaccent" ? "strip_accents"
 			                             : name == "nfc"      ? "nfc_normalize"
 			                                                  : name;
-			if (FunctionDenied(policy, name) || (!builtin && !policy.allowed_functions.count(name)))
+			if (!Both([&](const Policy &p) {
+				    return !FunctionDenied(p, name) && (builtin || p.allowed_functions.count(name));
+			    }))
 				Reject("function", "collation is not allowed: " + name, value, name);
-			if (implementation != name && FunctionDenied(policy, implementation))
+			if (implementation != name && !Both([&](const Policy &p) { return !FunctionDenied(p, implementation); }))
 				Reject("function", "collation function is not allowed: " + implementation, value, implementation);
 			if (end == std::string::npos)
 				break;
@@ -273,7 +281,7 @@ struct Walker {
 				auto name = Field(info, "name"), catalog = Field(info, "catalog"), schema = Field(info, "schema");
 				if (name.empty())
 					throw Stop{"missing type name"};
-				if (!TypeAllowed(policy, catalog, schema, name, false))
+				if (!Both([&](const Policy &p) { return TypeAllowed(p, catalog, schema, name, false); }))
 					violations.emplace("type", "type is not allowed: " + name, catalog, schema);
 			}
 			return;
@@ -329,7 +337,7 @@ struct Walker {
 			auto name = Field(value, "type_name"), catalog = Field(value, "catalog"), schema = Field(value, "schema");
 			if (binding)
 				binding->caller_types.insert(Lower(name));
-			if (!TypeAllowed(policy, catalog, schema, name, false))
+			if (!Both([&](const Policy &p) { return TypeAllowed(p, catalog, schema, name, false); }))
 				violations.emplace("type", "type is not allowed: " + name, catalog, schema);
 			auto children = yyjson_obj_get(value, "children");
 			size_t i, n;
@@ -436,20 +444,22 @@ struct Walker {
 					function_positions[name] = position;
 			}
 			auto catalog = Field(value, "catalog");
-			if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(Lower(catalog)))
+			if (!catalog.empty() &&
+			    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
 				violations.emplace("catalog", "catalog is not allowed: " + catalog, catalog, Field(value, "schema"), "",
 				                   name);
-			if (!policy.dynamic_sql && ((edge == "function" && (name == "query" || name == "query_table" ||
-			                                                    name == "json_execute_serialized_sql")) ||
-			                            name == "json_serialize_plan"))
+			if (!Both([](const Policy &p) { return p.dynamic_sql; }) &&
+			    ((edge == "function" &&
+			      (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
+			     name == "json_serialize_plan"))
 				violations.emplace("dynamic_sql", "dynamic SQL is disabled: " + name, Field(value, "catalog"),
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}
-		if (kind == "RecursiveCTENode" && !policy.recursive)
+		if (kind == "RecursiveCTENode" && !Both([](const Policy &p) { return p.recursive; }))
 			Reject("recursive_cte", "recursive CTEs are disabled", value);
 		if (kind == "TableFunctionRef") {
-			if (!policy.table_functions) {
+			if (!Both([](const Policy &p) { return p.table_functions; })) {
 				auto function = yyjson_obj_get(value, "function");
 				auto location = yyjson_obj_get(function, "query_location");
 				violations.emplace("table_function", "table functions are disabled", Field(function, "catalog"),
@@ -461,14 +471,17 @@ struct Walker {
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
 		     table = Field(value, "table_name");
-		if (policy.catalogs && !catalog.empty() && !policy.allowed_catalogs.count(Lower(catalog)))
+		if (!catalog.empty() &&
+		    !Both([&](const Policy &p) { return !p.catalogs || p.allowed_catalogs.count(Lower(catalog)); }))
 			Reject("catalog", "catalog is not allowed: " + catalog, value);
 		if (kind == "ShowRef") {
 			if (yyjson_obj_get(value, "query"))
 				return;
-			if (policy.tables)
+			if (!Both([](const Policy &p) { return !p.tables; }))
 				Reject("table", "schema-wide SHOW is disabled by table policy", value);
-			if (policy.schemas && (schema.empty() || !policy.allowed_schemas.count(Lower(schema))))
+			if (!Both([&](const Policy &p) {
+				    return !p.schemas || (!schema.empty() && p.allowed_schemas.count(Lower(schema)));
+			    }))
 				Reject("schema", "SHOW requires an allowed schema", value);
 			return;
 		}
@@ -483,7 +496,7 @@ struct Walker {
 				path += ".";
 			path += part;
 		}
-		if (!policy.file_tables && (FileName(table) || FileName(path)))
+		if (!Both([](const Policy &p) { return p.file_tables; }) && (FileName(table) || FileName(path)))
 			Reject("file_table", "file table reference is disabled: " + path, value);
 	}
 	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
@@ -495,7 +508,8 @@ struct Walker {
 		}
 	}
 	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
-		if (++nodes > policy.nodes || depth > policy.depth)
+		++nodes;
+		if (!Both([&](const Policy &p) { return nodes <= p.nodes && depth <= p.depth; }))
 			throw Stop{"AST size or depth limit exceeded", "limit"};
 		if (expected == "logical_type") {
 			Type(value, depth);
@@ -599,9 +613,9 @@ struct Walker {
 	}
 };
 
-Result Validate(Json *root, const Policy &policy, BindingPolicy *binding) {
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling) {
 	auto &inventory = GetInventory();
-	Walker walker{inventory, policy, binding};
+	Walker walker{inventory, policy, binding, ceiling};
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {
@@ -609,7 +623,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding) {
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
-		if (!FunctionAllowed(policy, name)) {
+		if (!walker.Both([&](const Policy &p) { return FunctionAllowed(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;
 			if (entry.second > 1)

@@ -59,6 +59,7 @@ def test_allowed_and_denied_tables(lake):
     policy = {"allowed_catalogs": ["lake"], "allowed_schemas": [schema],
               "allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}],
               "allow_table_functions": False}
+    db.execute("CALL gatekeeper_configure(" + ",".join(name + " := ?" for name in policy) + ")", list(policy.values()))
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
     assert db.execute(sql).fetchone() == (50.0,)
@@ -72,6 +73,8 @@ def test_allowed_and_denied_tables(lake):
     db.execute(f"USE lake.{schema}")
     assert validate(db, "SELECT * FROM orders", policy)["allowed"]
     assert not validate(db, "SELECT * FROM secret", policy)["allowed"]
+    assert not validate(db, "SELECT * FROM secret", {**policy, "allowed_tables": [
+        {"catalog": "lake", "schema": schema, "table": "secret"}]})["allowed"]
     assert not validate(db, "SELECT * FROM orders WHERE EXISTS (SELECT * FROM secret)", policy)["allowed"]
     assert not validate(db, "SELECT * FROM read_parquet('s3://warehouse/untrusted.parquet')", policy)["allowed"]
 

@@ -9,7 +9,7 @@ actual tables and views. Results are native STRUCTs with structured diagnostics.
 - **864 reviewed function defaults**, with exact-name additions and blocks.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
 - **Read-only statements**, type/collation permissions, capability restrictions, and AST limits.
-- **One-time database defaults** and typed per-request overrides.
+- **Replaceable, lockable global policy** and narrowing-only typed request overrides.
 
 > Early development. Targets **DuckDB 1.5.5 only**. Not yet published in the community
 > repository. No wildcard matching, public syntax-only mode, or automatic execution
@@ -80,7 +80,9 @@ SELECT gatekeeper_validate(
 -- true
 ```
 
-`allowed_functions` adds names to the reviewed defaults; `blocked_functions` wins.
+`allowed_functions` adds names within a policy layer; `blocked_functions` wins.
+Requests must also satisfy the global policy: new capabilities must first be granted
+by trusted configuration, and request options can only narrow that ceiling.
 Functions match exact ASCII-case-folded leaf names. `'*'` names multiplication—it is
 not a wildcard. Object policies intersect and use resolved identities. Empty object
 lists deny objects; omitted options inherit effective defaults.
@@ -89,10 +91,10 @@ Most callers need no function overrides. `{}` JSON and `resolve_objects` are not
 accepted. Missing tables or invalid columns fail binding instead of passing syntax-only
 validation. All [options and limits](docs/api.md) apply to the same complete path.
 
-## Database-wide defaults
+## Database-wide policy
 
 ```sql
-SELECT gatekeeper_configure(
+CALL gatekeeper_configure(
     allowed_schemas := ['reporting'],
     blocked_functions := ['md5']
 );
@@ -101,12 +103,20 @@ SELECT gatekeeper_configure(
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []).allowed AS allowed;
--- true
+-- false
 ```
 
-Configuration is shared by all connections in one instance, set once, not persisted,
-and not undone by rollback. Request lists replace inherited lists; limits override
-individually. Overrides can relax defaults: the application controls their provenance.
+Configuration is shared by all connections in one instance, not persisted, and not
+undone by rollback. Each `CALL` atomically replaces the whole policy, starting from
+built-in defaults for omitted options. Inspect it with
+`SELECT current_setting('gatekeeper_policy')`; reset with `RESET gatekeeper_policy`.
+After trusted setup, `SET lock_configuration=true` prevents changes unless the host
+explicitly included `gatekeeper_policy` in `allowed_configs`.
+
+Request lists replace inherited lists in the request layer, but **both the global and
+request layers must authorize the query**. Limits use the stricter value. Use the
+parameterized `CALL` authoring API; direct STRUCT `SET` has DuckDB casting limitations.
+See [configuration and migration](docs/api.md#global-policy-and-configuration).
 
 ## Python
 
@@ -117,6 +127,8 @@ db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
 db.execute("LOAD '/absolute/path/to/gatekeeper.duckdb_extension'")
 db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
+db.execute("CALL gatekeeper_configure(allowed_schemas := ?)", [["reporting"]])
+db.execute("SET lock_configuration=true")
 sql = "SELECT sum(amount) FROM reporting.orders"
 decision = db.execute(
     "SELECT gatekeeper_validate(?, allowed_schemas := ?)",

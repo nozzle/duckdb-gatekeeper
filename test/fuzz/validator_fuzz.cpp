@@ -48,6 +48,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			return 0;
 		gatekeeper::BindingPolicy binding;
 		auto result = gatekeeper::Validate(ast, policy, &binding);
+		gatekeeper::Policy ceiling;
+		ceiling.recursive = data[4] & 1;
+		ceiling.table_functions = data[4] & 2;
+		ceiling.blocked_functions = {"abs", "md5"};
+		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling);
+		if (layered.allowed && (!result.allowed || !gatekeeper::Validate(ast, ceiling).allowed))
+			std::abort();
 		if ((result.code != "ok" && result.code != "forbidden" && result.code != "unsupported") ||
 		    result.allowed != (result.code == "ok") || result.allowed != result.violations.empty() ||
 		    !result.error_message.empty() || !result.error_type.empty())

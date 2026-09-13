@@ -53,7 +53,7 @@ def test_vectorized_policy_overrides_and_nulls(db):
             CASE WHEN i%3=0 THEN NULL ELSE 'SELECT md5(''x'')' END,
             blocked_functions := CASE WHEN i%3=1 THEN []::VARCHAR[] ELSE ['md5'] END) r
         FROM range(12000) t(i)) GROUP BY ALL ORDER BY 1""").fetchall()
-    assert result == [("forbidden", False, 4000), ("invalid_input", False, 4000), ("ok", True, 4000)]
+    assert result == [("forbidden", False, 8000), ("invalid_input", False, 4000)]
 
 
 def test_limits_at_edges_and_recovery(db):

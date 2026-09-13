@@ -2,7 +2,7 @@
 
 ```sql
 gatekeeper_validate(sql VARCHAR, option := value, ...)
-gatekeeper_configure(option := value, ...)
+CALL gatekeeper_configure(option := value, ...)
 ```
 
 Options are named, native DuckDB values, not JSON. Unknown names, duplicate names,
@@ -10,6 +10,12 @@ unnamed options, and incompatible types raise binder errors. Runtime invalid val
 and NULL validation inputs return `invalid_input`. Configuration errors raise a
 DuckDB error. There is no `resolve_objects` option or public syntax-only function.
 All successful validation includes binding on the calling connection.
+
+Every validation enforces the global `gatekeeper_policy` ceiling as well as request
+options. Request options retain their named-argument syntax. Omitted fields inherit
+the global policy; explicit values modify the request layer, and both layers must
+allow the query. Requests cannot grant new capabilities beyond the global policy,
+including when the global policy is still the registered built-in default.
 
 ## Result
 
@@ -135,8 +141,9 @@ that implementation check query-wide.
 
 **Compatibility:** bare `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIME`,
 `LOCALTIME`, `LOCALTIMESTAMP`, and other SQL-value functions now follow their inventory
-classification. Current-time/session functions are denied by default; opt in using
-their resolved names, e.g. `allowed_functions := ['current_date']` (timestamp/time use
+classification. Current-time/session functions are denied by default; grant them in
+trusted `CALL gatekeeper_configure`, using their resolved names, e.g.
+`allowed_functions := ['current_date']` (timestamp/time use
 `get_current_timestamp`/`get_current_time`, local forms use `current_localtime`/
 `current_localtimestamp`). Casts `::JSON` and `::INET` require `allowed_types`.
 
@@ -155,7 +162,7 @@ resource access, not an argument-level sandbox. Inventories live in
 
 ## Object options
 
-| Option | Type | Omitted | [] |
+| Option | Type | Built-in configuration default | [] |
 | --- | --- | --- | --- |
 | `allowed_catalogs` | VARCHAR[] | Unrestricted catalogs | Deny catalog objects |
 | `allowed_schemas` | VARCHAR[] | Unrestricted schemas | Deny schema objects |
@@ -227,9 +234,10 @@ when needed. This API does not filter metadata rows.
 optional `catalog` (omitted/NULL matches any catalog). Identifiers are ASCII-case-folded.
 Omitted options inherit defaults; `[]` removes additional type permissions. Built-in
 DuckDB types and their nested constructors remain available. Extension/user-defined
-types—including JSON and INET—require explicit entries:
+types—including JSON and INET—require explicit global grants before requests can use them:
 
 ```sql
+CALL gatekeeper_configure(allowed_types := [{catalog: 'system', schema: 'main', type: 'json'}]);
 SELECT gatekeeper_validate('SELECT ''{}''::JSON',
     allowed_types := [{catalog: 'system', schema: 'main', type: 'json'}]);
 ```
@@ -320,17 +328,98 @@ and binder work occur before some limits can be checked; these are not execution
 budgets or a complete resource-exhaustion defense. Limit violations use `forbidden`
 with rule `limit`, separate from unsupported syntax.
 
-## Database defaults and parameters
+## Global policy and configuration
 
 ```sql
-SELECT gatekeeper_configure(blocked_functions := ['md5'], max_statements := 2);
+CALL gatekeeper_configure(blocked_functions := ['md5'], max_statements := 2);
 SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []);
+-- forbidden: the global block still applies
+SELECT current_setting('gatekeeper_policy');
+RESET GLOBAL gatekeeper_policy;
 ```
 
-Configuration is one-time per database instance, shared across connections, not
-durable or transactional. There is no reset; invalid configuration leaves the slot
-available. Request lists replace configured lists; each limit overrides independently.
-Defaults may be relaxed by requests, so the application must control who supplies them.
+`CALL` accepts the same named options as validation, including host-bound parameters.
+It strictly validates types and original nested table/type field names before casting,
+builds a replacement starting from built-in defaults, and atomically publishes it at
+execution. Omitted options do **not** retain previous configuration. An invalid call
+leaves the active policy unchanged. `CALL gatekeeper_configure()` restores built-ins.
+The result is one `Success BOOLEAN` row containing true.
+Empty lists are accepted as empty permission sets; nonempty list members are validated.
+This includes typed empty lists because DuckDB materializes untyped empty lists as
+INTEGER[] on the table-function path. Unknown nested STRUCT field names are rejected
+even when the list has no entries.
+
+Configuration is global to one database instance, shared across connections,
+nonpersistent and nontransactional. `RESET [GLOBAL] gatekeeper_policy` restores the
+non-NULL built-in policy. `SET SESSION` and `RESET SESSION` are rejected. Bare `SET`
+and `RESET` default to GLOBAL. `current_setting('gatekeeper_policy')` exposes the
+normalized policy: ASCII-folded/deduplicated permission lists and explicit restriction
+flags. A validation execution reads and validates a coherent global snapshot once per
+input chunk, not once at preparation. Concurrent replacements cannot mix policy fields;
+different chunks can observe different policies until the host locks configuration.
+
+### Ceiling semantics
+
+The request layer starts as a copy of the global snapshot, then applies named overrides.
+Both policies are checked in the same parse/preflight/bind pipeline, including resolved
+objects and function blocks within trusted expansions. Qualified identities match
+independently in each layer; raw permission lists are not intersected. Resource limits
+use the minimum, capability flags require both grants, and either layer's deny wins.
+An otherwise valid broader override does not raise a special error; it simply cannot
+authorize anything the global policy denies. A replacement can both narrow some access
+and attempt to broaden other access. Malformed/conflicting options remain errors.
+
+With built-ins active, requesting `allowed_functions := ['read_csv']`, `allowed_types`
+for a custom type, `allow_file_table_references := true`, or `max_statements := 2`
+cannot grant those capabilities. Trusted configuration must first admit them.
+
+### Canonical setting and locking
+
+`gatekeeper_policy` is a single typed STRUCT containing every option above plus
+`restrict_catalogs`, `restrict_schemas`, and `restrict_tables` BOOLEANs. Every top-level
+field is mandatory and non-NULL. A false restriction flag means unrestricted ordinary
+objects in that dimension; true plus an empty corresponding list denies them.
+Internal objects still require explicit permission. Nested identities are canonical
+`STRUCT(catalog VARCHAR, schema VARCHAR, table/type VARCHAR)[]`; catalog may be NULL
+(any catalog), while schema and leaf must be nonempty. There is no type restriction
+toggle: built-in types are always available, additional types need explicit grants.
+
+Prefer `CALL` for authoring. Direct `SET [GLOBAL] gatekeeper_policy = <complete STRUCT>`
+is supported for integration but **DuckDB casts before the extension sees the value**:
+unknown fields are dropped, missing fields become NULL, and compatible values may be
+coerced. Required-field checks reject missing top-level fields and missing nested
+schema/leaf fields, but cannot detect extra unknown keys alongside a complete policy.
+A misspelled nested catalog can become NULL and broaden catalog matching. Never treat
+direct `SET` as strict validation of an authored policy. Inspect normalized readback.
+
+Trusted bootstrap order is: `LOAD` required extensions, provision catalogs/credentials
+and other host settings, `CALL gatekeeper_configure(...)`, then
+`SET lock_configuration=true`. Both `CALL` and setting `SET`/`RESET` obey DuckDB's lock,
+including a deliberate `allowed_configs=['gatekeeper_policy']` exception. Do not add
+that exception if the policy must stay frozen. The setting is registered on LOAD;
+it is not an autoload-discoverable startup `duckdb.connect(config=...)` option.
+Native embedding APIs are trusted and may bypass SQL callbacks/locking; validation
+still defensively decodes the actual global setting and rejects invalid values.
+
+### Migration and prepared configuration
+
+Replace scalar `SELECT gatekeeper_configure(...)` with `CALL gatekeeper_configure(...)`.
+Repeated configuration now replaces the policy rather than raising a one-shot error.
+Move capability grants out of request options into trusted global configuration.
+Request options can still narrow permissions, and parameterized validation is unchanged.
+
+```python
+db.execute("CALL gatekeeper_configure(blocked_functions := ?, max_statements := ?)",
+           [["md5"], 2])
+```
+
+DuckDB 1.5.5 rejects parameters in `SET`. Host-parameterized `CALL` works, but SQL
+`PREPARE ... AS CALL` is not in its grammar; explicit SQL preparation can use the
+equivalent `PREPARE cfg AS SELECT * FROM gatekeeper_configure(blocked_functions := $1)`.
+Preparation, binding, and plain `EXPLAIN` do not mutate policy. Execution (including
+`EXPLAIN ANALYZE`) performs the change and rechecks the lock. Use standalone `CALL`:
+embedding the table function in arbitrary SELECT plans can suppress its execution.
+Configuration is never allowed in submitted SQL, including table/view/macro forms.
 
 Prepared arguments and per-row options are supported:
 

@@ -1,7 +1,7 @@
 import pytest
 
 from test_gatekeeper import db
-from typed_helpers import validate
+from typed_helpers import validate, configure
 
 
 @pytest.mark.parametrize("sql", [
@@ -64,6 +64,7 @@ def test_parameter_does_not_override_function_policy(db):
     result = validate(db, "SELECT * FROM read_csv(?)")
     assert result["code"] == "forbidden"
     assert any(v["function_name"] == "read_csv" for v in result["violations"])
+    configure(db, {"allowed_functions": ["read_csv"]})
     result = validate(db, "SELECT * FROM read_csv(?)", {"allowed_functions": ["read_csv"]})
     assert result["code"] == "binding"
 
@@ -82,6 +83,7 @@ def test_objects_and_functions_are_resolved_deduplicated_sorted(db):
     for field, leaf in [("objects", "table"), ("functions", "name")]:
         tuples = [(v["catalog"], v["schema"], v[leaf], v["type"]) for v in result[field]]
         assert tuples == sorted(set(tuples))
+    configure(db, {"allowed_functions": ["report"]})
     macro = validate(db, "SELECT * FROM report()", {"allowed_functions": ["report"]})
     assert macro["allowed"] and macro["objects"] == result["objects"][:1]
     assert {"catalog": "memory", "schema": "main", "name": "report", "type": "table_macro"} in macro["functions"]
@@ -94,6 +96,7 @@ def test_objects_and_functions_are_resolved_deduplicated_sorted(db):
     ("SELECT * FROM", {}), (None, {}), ("SELECT 1", {"max_statements": 0}),
 ])
 def test_failed_results_never_expose_partial_dependencies(db, sql, options):
+    configure(db, {"max_statements": 2})
     db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql, options)
     assert not result["allowed"]
@@ -127,6 +130,7 @@ def test_quoted_dependency_identities_are_not_dotted_strings(db):
 
 
 def test_table_macro_cte_shadowing_differs_from_view(db):
+    configure(db, {"allowed_functions": ["m"]})
     db.execute("CREATE TABLE t AS SELECT 1 x; CREATE MACRO m() AS TABLE SELECT * FROM t; CREATE VIEW v AS SELECT * FROM t")
     macro = validate(db, "WITH t AS (SELECT 2 x) SELECT * FROM m()", {"allowed_functions": ["m"]})
     view = validate(db, "WITH t AS (SELECT 2 x) SELECT * FROM v")
@@ -160,6 +164,7 @@ def test_enum_permission_allows_label_introspection(db):
     db.execute("CREATE TYPE status AS ENUM ('pending','done')")
     sql = "SELECT enum_range(NULL::status)"
     assert not validate(db, sql)["allowed"]
+    configure(db, {"allowed_types": [{"catalog": "memory", "schema": "main", "type": "status"}]})
     result = validate(db, sql, {"allowed_types": [{"catalog": "memory", "schema": "main", "type": "status"}]})
     assert result["allowed"]
     assert db.execute(sql).fetchone() == (["pending", "done"],)

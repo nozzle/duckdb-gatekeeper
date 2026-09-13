@@ -43,10 +43,12 @@ def test_resolution_does_not_confuse_columns_with_functions(expressions):
 def test_variant_requires_explicit_function_permission(expressions):
     result = validate(expressions, "SELECT v['a'] FROM t")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "variant_extract"
+    configure(expressions, {"allowed_functions": ["variant_extract"]})
     assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": ["variant_extract"]})["allowed"]
 
 
 def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
+    configure(expressions, {"allowed_functions": ["trusted_abs"]})
     assert validate(expressions, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
     assert not validate(expressions, "SELECT trusted_abs(-1)", {
         "allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]})["allowed"]
@@ -86,6 +88,8 @@ def test_builtin_nested_types(db, typ):
 def test_allowed_types_resolve_identity_and_inherit(db):
     db.execute("CREATE SCHEMA Reporting; CREATE TYPE Reporting.Customer AS ENUM ('a','b'); SET search_path='Reporting'")
     permission = {"catalog": "MeMoRy", "schema": "REPORTING", "type": "CUSTOMER"}
+    assert not validate(db, "SELECT 'a'::Customer", {"allowed_types": [permission]})["allowed"]
+    configure(db, {"allowed_types": [permission]})
     assert validate(db, "SELECT 'a'::Customer", {"allowed_types": [permission]})["allowed"]
     assert not validate(db, "SELECT 'a'::Customer", {
         "allowed_types": [{"schema": "wrong", "type": "Customer"}]})["allowed"]
@@ -112,6 +116,7 @@ def test_builtin_collations_obey_explicit_blocks(db, name):
 def test_nondefault_collation_requires_explicit_permission(db):
     result = validate(db, "SELECT 'a' COLLATE de")
     assert result["code"] == "forbidden" and result["error_message"] == ""
+    configure(db, {"allowed_functions": ["de"]})
     assert validate(db, "SELECT 'a' COLLATE de", {"allowed_functions": ["de"]})["allowed"]
 
 
@@ -128,6 +133,7 @@ def test_type_permission_does_not_allow_shadowing_builtin(db):
 
 
 def test_json_type_explicit_permission(db):
+    configure(db, {"allowed_types": [{"catalog": "system", "schema": "main", "type": "json"}]})
     result = validate(db, "SELECT '{}'::JSON", {"allowed_types": [{"catalog": "system", "schema": "main", "type": "json"}]})
     assert result["allowed"], result
 
@@ -147,6 +153,7 @@ def test_named_pivot_enum_is_conservatively_rejected(db):
 def test_conservative_synthesis_overlap_with_trusted_macro(expressions):
     expressions.execute("CREATE MACRO hidden_extract(x) AS struct_extract(x, 'a')")
     options = {"use_default_functions": False, "allowed_functions": ["hidden_extract"]}
+    configure(expressions, {"allowed_functions": ["hidden_extract"]})
     assert validate(expressions, "SELECT hidden_extract(st) FROM t", options)["allowed"]
     # The callback has no expression provenance: a qualified caller column marks
     # struct extraction as a possible implementation, including trusted expansions.
@@ -158,7 +165,9 @@ def test_default_non_compute_value_functions_require_opt_in(db):
     for name in ["current_schema", "current_catalog", "current_user", "current_date"]:
         result = validate(db, "SELECT " + name)
         assert result["code"] == "forbidden", (name, result)
+        configure(db, {"allowed_functions": [name]})
         assert validate(db, "SELECT " + name, {"allowed_functions": [name]})["allowed"]
+        configure(db)
 
 
 def test_type_denial_does_not_autoload_inet(db):
@@ -203,6 +212,7 @@ def test_nonaggregate_windows_in_trusted_view(db, name):
 def test_allowed_types_intersect_namespace_policy(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a')")
     options = {"allowed_types": [{"schema": "private", "type": "customer"}]}
+    configure(db, options)
     assert validate(db, "SELECT 'a'::private.customer", options)["allowed"]
     assert not validate(db, "SELECT 'a'::private.customer", {**options, "allowed_schemas": ["public"]})["allowed"]
     options = {"allowed_types": [{"schema": "main", "type": "json"}], "allowed_catalogs": ["memory"]}

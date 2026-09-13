@@ -5,7 +5,7 @@ from pathlib import Path
 
 import duckdb
 import pytest
-from typed_helpers import validate as check
+from typed_helpers import validate as check, configure
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
@@ -80,17 +80,18 @@ def test_no_execution_or_binding(db, tmp_path):
     assert db.execute("SELECT * FROM existing").fetchone() == (42,)
     assert check(db, "SELECT * FROM nonexistent")["code"] == "binding"
     missing = str(tmp_path / "missing.parquet")
+    configure(db, {"allowed_functions": ["read_parquet"]})
     assert check(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["code"] == "binding"
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT custom(1)", {}, False),
-    ("SELECT custom(1)", {"allowed_functions": ["CUSTOM"]}, True),
+    ("SELECT custom(1)", {"allowed_functions": ["CUSTOM"]}, False),
     ("SELECT md5('x')", {"blocked_functions": ["MD5"]}, False),
     ("SELECT md5('x')", {"allowed_functions": ["md5"], "blocked_functions": ["md5"]}, False),
     ("SELECT sum(x) FROM t", {"use_default_functions": False}, False),
     ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": ["sum"]}, True),
-    ("SELECT custom(1)", {"check_functions": False}, True),
+    ("SELECT custom(1)", {"check_functions": False}, False),
     ("SELECT custom(1)", {"check_functions": False, "blocked_functions": ["custom"]}, False),
     ("SELECT * FROM read_parquet('local')", {}, False),
     ("SELECT 2*3", {"blocked_functions": ["*"]}, False),
@@ -184,6 +185,8 @@ def test_paths(db, sql, opts, allowed):
 def test_limits(db):
     assert not check(db, "")["allowed"]
     assert not check(db, "SELECT 1; SELECT 2")["allowed"]
+    assert not check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
+    configure(db, {"max_statements": 2})
     assert check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
     assert not check(db, "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t", {"max_statements": 2, "allowed_tables": []})["allowed"]
     for limits in [{"max_ast_nodes": 1}, {"max_ast_depth": 1}, {"max_ast_bytes": 50}]:
