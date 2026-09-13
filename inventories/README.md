@@ -5,21 +5,20 @@ Gatekeeper owns its function classifications here:
 - `core.json`: built-in groups (operators, aggregates, windows, syntax helpers,
   generators, scalars), default compute names, and excluded names.
 - `extensions/*.json`: one file for each reviewed core extension, preserving
-  `compute` and `elevated` groups, source links, and migrated review notes/pins.
+  `compute` and `elevated` groups, source links, and review notes/pins.
 - `baselines/duckdb-1.5.5.json`: runtime signatures and loaded-extension versions
   captured from the pinned Python DuckDB runtime. This includes Python-specific
   functions; it does not claim that all extensions were loaded or audited live.
 
-The initial classifications came from Mosaic `functionset` at `3eb74ea8` (NOTICE).
-Gatekeeper maintains them independently; the original migration helpers have been
-removed. Update the reviewed files here rather than re-importing an upstream snapshot.
+Types, casts, and collations are supplied by the database owner and have no
+Gatekeeper allowlist or mandatory inventory audit.
 
 ## Adjusting defaults
 
 Move exact normalized names between `compute` and `elevated` after source review.
 Only compute names are compiled into defaults. If a core function moves, update
-its descriptive `groups` membership too. `unreviewed` records baseline names that
-were absent from the imported review; these remain excluded and must not be promoted
+its descriptive `groups` membership too. `unreviewed` records baseline names without
+a completed source review; these remain excluded and must not be promoted
 automatically. Unreviewed is not a claim of elevated behavior.
 
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
@@ -40,9 +39,6 @@ version/revision and baseline filename. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
 Inventory notes retain provenance, non-obvious classification traps, and coverage limitations.
-Migration helpers `migrate_unreviewed.py` and `migrate_signature_baseline.py` are
-import-safe and dry-run by default; `--write` is required to modify canonical files.
-Signature migration still requires the unchanged-signature verification to pass.
 
 ## Version update procedure
 

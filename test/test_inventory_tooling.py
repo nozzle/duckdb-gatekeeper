@@ -1,4 +1,3 @@
-import importlib
 import json
 import os
 import re
@@ -14,7 +13,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from generate import header, pinned_revision
 import schema_check
 from inventory import load
-from versions import BASELINE_FILENAME
 
 
 @pytest.mark.parametrize("key,value", [
@@ -161,27 +159,3 @@ def test_schema_check_rejects_unsupported_keywords_anywhere(schema):
     # Each schema would accept "x" if the unsupported keyword were ignored; the pre-scan must refuse it.
     with pytest.raises(schema_check.SchemaError):
         schema_check.validate(schema, "x")
-
-
-@pytest.mark.parametrize("module", ["migrate_unreviewed", "migrate_signature_baseline"])
-def test_migrations_import_safe_and_dry_run(module, tmp_path, monkeypatch):
-    imported = importlib.import_module(module)
-    fixture = tmp_path / "inventories"
-    shutil.copytree(ROOT / "inventories", fixture)
-    paths = [fixture / "core.json", fixture / "baselines" / BASELINE_FILENAME]
-    before = [path.read_bytes() for path in paths]
-    monkeypatch.setattr(imported, "ROOT", tmp_path)
-    monkeypatch.setattr(sys, "argv", [module])
-    if module == "migrate_signature_baseline":
-        snapshot = json.loads(paths[1].read_text())
-        monkeypatch.setattr(imported, "capture", lambda: snapshot)
-    imported.main()
-    assert [path.read_bytes() for path in paths] == before
-    # Importing either migration must not call the loader/capture or open output files.
-    import inventory
-    import audit_inventory
-    def unexpected(*args, **kwargs):
-        pytest.fail("migration did work at import time")
-    monkeypatch.setattr(inventory, "load", unexpected)
-    monkeypatch.setattr(audit_inventory, "capture", unexpected)
-    importlib.reload(imported)

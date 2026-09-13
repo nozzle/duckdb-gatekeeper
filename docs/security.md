@@ -2,7 +2,7 @@
 
 Gatekeeper phase one is a pre-execution validator, not an enforcement hook or a
 database sandbox. A successful decision means the SQL conforms to the selected
-syntax, caller-function/type/collation and resolved-deny/object policies on the pinned parser/binder. It does not mean the SQL is cheap,
+syntax, caller-function and resolved-deny/object policies on the pinned parser/binder. It does not mean the SQL is cheap,
 returns nonsensitive data, or cannot have side effects through admitted functions.
 
 ## Integrating
@@ -39,8 +39,8 @@ caller spellings or CTE names. Wildcards cover future objects as well as existin
 ones. Internal objects require exact schema/table names in a matching rule; a
 wildcard catalog is permitted. Metadata readers remain independently forbidden,
 and schema-wide `SHOW` is denied under any configured table restriction.
-Table rules do not restrict or authorize function/type namespaces. Use exact
-`allowed_types` identities and the leaf-name function policies for those capabilities;
+Table rules do not restrict or authorize function/type namespaces. Functions use
+leaf-name policies; types are supplied by the host without separate authorization;
 see [table matching](../README.md#table-matching).
 
 ## Function enforcement and trusted expansion
@@ -59,8 +59,8 @@ that reader is blocked. The callback exposes no expression origin or reliable
 macro/view boundary: when caller syntax requires an implementation check, a trusted
 expansion using the same implementation must also pass it. This conservative
 query-wide restriction can deny a mixed caller/view expression; it does not grant
-an exception to caller code. Caller type names are similarly checked at resolution;
-unrelated types inside trusted expansions retain the trusted boundary.
+an exception to caller code. Type names, casts, and collations are trusted host
+database configuration and are not authorized separately.
 Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
@@ -96,7 +96,7 @@ not a caller capability (normal physical scans retain object authorization).
 `gatekeeper_configure` mutates the global policy and is always forbidden in submitted
 SQL, including resolved table-function uses inside trusted views/macros.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
-reserved defensive spelling from the issue; the pinned registration is `duckdb_table_sample`.
+reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
 All listed names are excluded from defaults and cannot be admitted by options.
 Metadata views expanding to these readers are denied even with `allowed_tables`.
@@ -107,15 +107,21 @@ execution time, outside this validation.
 
 ### Callback bypasses
 
+Gatekeeper does not restrict type or collation names, or authorize cast implementations.
+The database owner controls extension loading and definitions. Table/view catalog
+and schema restrictions do not restrict type lookup. There is no mandatory type audit.
+Built-in temporal casts can use ICU timezone/calendar settings; GEOMETRY CRS binding
+can consult trusted CRS providers and `ignore_unknown_crs`.
+
 - `bind_pivot.cpp` performs direct aggregate and enum lookups. Explicit aggregate
-  names pass preflight; named PIVOT enums are conservatively unsupported (use IN values).
+  names pass preflight; named PIVOT enums use the host's type definitions.
 - `bind_window_expression.cpp` and `function_binder.cpp` contain direct aggregate/
   function lookup paths. Caller names pass preflight; surviving bound scalar,
   aggregate, window and table functions also pass a resolved-deny plan walk.
 - `collation_binding.cpp` directly loads collation entries and binds their scalar
-  functions. Explicit collation names are checked before binding; known built-in
-  implementations (`lower`, `strip_accents`, `nfc_normalize`) honor explicit blocks.
-  The plan walk catches surviving implementations, including implicit collations.
+  functions. Collation names and inferred implementations are not checked in preflight.
+  The generic resolved-function deny walk still applies to surviving bound functions,
+  including implementations introduced by collations; it is not a collation policy.
 - The plan walk cannot undo bind-time work or see functions already folded away.
   Host default collations, trusted extension callbacks, custom casts/type binders,
   macro expansion internals and optimizer rewrites are not a complete execution
@@ -158,7 +164,7 @@ execution time, outside this validation.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.
-- Explicitly admitting eligible elevated readers/types/collations transfers responsibility
+- Explicitly admitting eligible elevated readers transfers responsibility
   for their resources and trusted implementation to the application. The never-bind
   list cannot be overridden by any option.
 - AST validation occurs after parsing and serialization; traversal limits do not
@@ -210,16 +216,16 @@ extension work, and do not hash definitions or identify overloads. Failed decisi
 return empty lists to avoid presenting an incomplete dependency set as authorization.
 Omitted/NULL catalogs and `catalog: '*'` in `allowed_tables` include `temp` shadow tables. Table macros may
 inherit caller CTEs whereas views do not; compare actual resolved objects rather than
-assuming definition-time bindings. Admitted enum types can expose their labels via
-`enum_range`; type permission does not authorize only a subset of labels.
+assuming definition-time bindings. User-defined enum types can expose all their labels
+via `enum_range`, even when no table is read; type definitions are host-trusted data.
 
 ## Compatibility and review
 
 Only the pinned DuckDB 1.5.5 revision is supported. Internal C++ and serializer APIs
 require rebuilding/reviewing for other versions. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
-including nested type parameters. Computed type parameters and named PIVOT enums
-are conservatively unsupported. Ordinary literal payloads remain data, not executable nodes.
+including nested type parameters. Computed type parameters remain conservatively
+unsupported. Ordinary literal payloads remain data, not executable nodes.
 The local tests and randomized-input checks are not a complete security audit.
 DuckDB builds and signs binaries distributed through its community repository;
 Gatekeeper's community publication is pending. Local builds, CI artifacts, and this

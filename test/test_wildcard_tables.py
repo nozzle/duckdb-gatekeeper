@@ -112,16 +112,13 @@ def test_unknown_namespace_options_are_rejected_by_both_apis(db, name):
     assert db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0] == before
 
 
-def test_table_wildcards_do_not_grant_functions_or_types(db):
+def test_table_wildcards_are_independent_of_functions_and_types(db):
     db.execute("CREATE MACRO custom(x) AS abs(x); CREATE TYPE customer AS ENUM ('a')")
     broad = {"allowed_tables": [rule()]}
     assert not validate(db, "SELECT custom(1)", broad)["allowed"]
-    assert not validate(db, "SELECT NULL::customer", broad)["allowed"]
-    configure(db, {"allowed_tables": [], "allowed_functions": ["custom"],
-                   "allowed_types": [{"catalog": "memory", "schema": "main", "type": "customer"}]})
+    assert validate(db, "SELECT NULL::customer", broad)["allowed"]
+    configure(db, {"allowed_tables": [], "allowed_functions": ["custom"]})
     assert validate(db, "SELECT memory.main.custom(1), NULL::memory.main.customer")["allowed"]
     assert not validate(db, "SELECT custom(1)", {"blocked_functions": ["custom"]})["allowed"]
-    # Type identities and function names use exact matching.
-    assert not validate(db, "SELECT NULL::customer", {
-        "allowed_types": [{"catalog": "*", "schema": "main", "type": "customer"}]})["allowed"]
+    # Function names use exact matching.
     assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": ["*"]})["allowed"]

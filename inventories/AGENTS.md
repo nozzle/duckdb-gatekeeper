@@ -2,6 +2,8 @@
 
 When changing inventories or their audit/generation tooling:
 
+- Types, casts, and collations are host-trusted; they have no runtime allowlist or mandatory inventory audit. Preserve generic checks on executable bind-time expressions, including type parameters.
+
 - Treat the pinned `duckdb` submodule revision as the engine source of truth. Inspect its function registrations, parser rewrites, and macro bodies. Use `duckdb_functions()` to discover changes and cross-check coverage, never to generate an allowlist automatically.
 - Keep function names lowercase, sorted, unique, and grouped by the serialized `function_name`. Review side effects, volatility, resource I/O, dynamic SQL/dispatch, catalog/session access, and macro/type/name collisions. A name is authorized across signatures: classify it by its most capable overload.
 - Put reviewed local computation or embedded static data without resource or state effects in `compute`. Put resource access, mutation, dynamic dispatch, catalog/session inspection, current-time, and source-limited runtime-verified names in `elevated`. Treat volatility as elevated unless the exact pinned source proves purity by argument. Keep uncertain or unaudited names in `unreviewed`; both elevated and unreviewed names remain excluded from defaults.

@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -145,13 +144,13 @@ static unique_ptr<FunctionData> BindOptions(ClientContext &, ScalarFunction &fun
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires VARCHAR[]", name);
-			if ((name == "allowed_tables" || name == "allowed_types") &&
+			if (name == "allowed_tables" &&
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires STRUCT[]", name);
 		}
 		// Preserve table-entry field sets rather than silently coercing away unknown fields.
-		function.arguments.push_back(name == "allowed_tables" || name == "allowed_types" ? actual : expected);
+		function.arguments.push_back(name == "allowed_tables" ? actual : expected);
 		result->names.push_back(name);
 	}
 	function.varargs = LogicalType::INVALID;
@@ -210,19 +209,6 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 		              : entry.type == CatalogType::TABLE_MACRO_ENTRY        ? "table_macro"
 		                                                                    : "pragma";
 		result.functions.insert({function.schema.catalog.GetName(), function.schema.name, entry.name, type});
-		return;
-	}
-	case CatalogType::TYPE_ENTRY: {
-		auto &type = entry.Cast<TypeCatalogEntry>();
-		if (!binding.caller_types.count(gatekeeper::Lower(type.name)))
-			return; // Types inside trusted expansions are not caller-requested capabilities.
-		if (type.internal && gatekeeper::BuiltinTypes().count(gatekeeper::Lower(type.name)))
-			return; // DefaultTypeGenerator installs built-ins in each catalog's main schema.
-		auto catalog = type.schema.catalog.GetName(), schema = type.schema.name;
-		if (!gatekeeper::TypeAllowed(policy, catalog, schema, type.name, true)) {
-			result.violations.emplace("type", "resolved type is not allowed: " + type.name, catalog, schema);
-			throw PermissionException("resolved type is not allowed");
-		}
 		return;
 	}
 	default:

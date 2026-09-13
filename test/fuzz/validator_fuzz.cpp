@@ -29,8 +29,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			policy.allowed_tables.insert({"*", "main", "*"});
 		if (data[1] & 8)
 			policy.allowed_tables.insert({"", "main", "t"});
-		if (data[1] & 64)
-			policy.allowed_types = {{"system", "main", "json"}, {"", "main", "custom"}};
 		if (data[1] & 16)
 			policy.blocked_functions = {"md5", "read_csv"};
 		if (policy.functions && (data[1] & 32))
@@ -59,7 +57,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		gatekeeper::BindingPolicy again_binding;
 		auto again = gatekeeper::Validate(ast, policy, &again_binding);
 		if (binding.synthesized_functions != again_binding.synthesized_functions ||
-		    binding.caller_types != again_binding.caller_types ||
 		    binding.literal_constructors != again_binding.literal_constructors ||
 		    binding.runtime_table_functions != again_binding.runtime_table_functions)
 			std::abort();

@@ -69,12 +69,9 @@ def test_never_bind_names_absent_from_defaults_and_non_overridable(db):
             assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
 
 
-@pytest.mark.parametrize("typ", ["INET", "JSON", "private_schema.no_such_type", "STRUCT(x INTEGER, y INET[])",
-                                 "MAP(VARCHAR, INET)", "UNION(x INTEGER, y INET)"])
-def test_type_preflight_blocks_before_lookup(db, typ):
-    result = validate(db, "SELECT NULL::" + typ)
-    assert result["code"] == "forbidden" and result["error_message"] == "", result
-    assert any(v["rule"] == "type" for v in result["violations"])
+def test_missing_type_returns_binding_error(db):
+    result = validate(db, "SELECT NULL::main.no_such_type")
+    assert result["code"] == "binding" and result["violations"] == [], result
 
 
 @pytest.mark.parametrize("typ", ["INTEGER", "DECIMAL(10,2)", "STRUCT(x INTEGER, y VARCHAR[])",
@@ -85,56 +82,45 @@ def test_builtin_nested_types(db, typ):
     assert result["allowed"], result
 
 
-def test_allowed_types_resolve_identity_and_inherit(db):
+def test_user_types_use_connection_search_path(db):
     db.execute("CREATE SCHEMA Reporting; CREATE TYPE Reporting.Customer AS ENUM ('a','b'); SET search_path='Reporting'")
-    permission = {"catalog": "MeMoRy", "schema": "REPORTING", "type": "CUSTOMER"}
-    assert not validate(db, "SELECT 'a'::Customer", {"allowed_types": [permission]})["allowed"]
-    configure(db, {"allowed_types": [permission]})
-    assert validate(db, "SELECT 'a'::Customer", {"allowed_types": [permission]})["allowed"]
-    assert not validate(db, "SELECT 'a'::Customer", {
-        "allowed_types": [{"schema": "wrong", "type": "Customer"}]})["allowed"]
-    configure(db, {"allowed_types": [permission]})
     assert validate(db, "SELECT 'a'::Customer")["allowed"]
-    assert not validate(db, "SELECT 'a'::Customer", {"allowed_types": []})["allowed"]
+    assert db.execute("SELECT 'a'::Customer").fetchone() == ('a',)
 
 
-@pytest.mark.parametrize("entries", [None, [None], [{"type": "foo"}], [{"schema": "main", "type": None}],
-                                      [{"schema": "main", "type": "foo", "extra": "x"}]])
-def test_allowed_types_invalid_values(db, entries):
-    result = validate(db, "SELECT 1", {"allowed_types": entries})
-    assert result["code"] == "invalid_input", result
-
-
-@pytest.mark.parametrize("name", ["nocase", "noaccent", "nfc", "binary"])
-def test_builtin_collations_obey_explicit_blocks(db, name):
+@pytest.mark.parametrize("name", ["nocase", "noaccent", "nfc", "binary", "de", "nocase.noaccent"])
+def test_collations_need_no_name_permission(db, name):
     sql = f"SELECT 'a' COLLATE \"{name}\""
     assert validate(db, sql)["allowed"]
     result = validate(db, sql, {"blocked_functions": [name]})
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
+    assert result["allowed"], result
+    assert validate(db, sql, {"use_default_functions": False})["allowed"]
 
 
-def test_nondefault_collation_requires_explicit_permission(db):
-    result = validate(db, "SELECT 'a' COLLATE de")
-    assert result["code"] == "forbidden" and result["error_message"] == ""
-    configure(db, {"allowed_functions": ["de"]})
-    assert validate(db, "SELECT 'a' COLLATE de", {"allowed_functions": ["de"]})["allowed"]
+def test_host_collations_in_comparisons_sorting_and_types(db):
+    db.execute("CREATE TABLE collated(s VARCHAR COLLATE de); INSERT INTO collated VALUES ('b'), ('a')")
+    for sql in ("SELECT s FROM collated ORDER BY s COLLATE de",
+                "SELECT s = 'a' COLLATE de FROM collated",
+                "SELECT CAST(s AS VARCHAR) COLLATE de FROM collated"):
+        assert validate(db, sql, {"use_default_functions": False})["allowed"], validate(db, sql)
+        db.execute(sql).fetchall()
 
 
 @pytest.mark.parametrize("collation,function", [("nocase", "lower"), ("noaccent", "strip_accents"), ("nfc", "nfc_normalize")])
-def test_collation_implementation_blocks_before_binding(db, collation, function):
+def test_collation_does_not_infer_function_call(db, collation, function):
     result = validate(db, f"SELECT 'a' COLLATE {collation}", {"blocked_functions": [function]})
-    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert result["allowed"], result
+    assert not validate(db, f"SELECT {function}('a')", {"blocked_functions": [function]})["allowed"]
 
 
-def test_type_permission_does_not_allow_shadowing_builtin(db):
+def test_host_created_type_can_shadow_builtin(db):
     db.execute("CREATE SCHEMA custom; CREATE TYPE custom.integer AS VARCHAR; SET search_path='custom'")
     result = validate(db, 'SELECT \'a\'::custom."integer"')
-    assert not result["allowed"] and result["violations"][0]["rule"] == "type", result
+    assert result["allowed"], result
 
 
-def test_json_type_explicit_permission(db):
-    configure(db, {"allowed_types": [{"catalog": "system", "schema": "main", "type": "json"}]})
-    result = validate(db, "SELECT '{}'::JSON", {"allowed_types": [{"catalog": "system", "schema": "main", "type": "json"}]})
+def test_json_type_needs_no_permission(db):
+    result = validate(db, "SELECT '{}'::JSON")
     assert result["allowed"], result
 
 
@@ -144,10 +130,11 @@ def test_pivot_and_window_blocks(expressions):
         assert result["code"] == "forbidden" and result["error_message"] == "", result
 
 
-def test_named_pivot_enum_is_conservatively_rejected(db):
+def test_named_pivot_enum_uses_host_type(db):
     db.execute("CREATE TYPE pivot_values AS ENUM ('a'); CREATE TABLE p(k VARCHAR, x INTEGER)")
     result = validate(db, "PIVOT p ON k IN pivot_values USING sum(x)")
-    assert result["code"] == "unsupported" and result["error_message"] == "", result
+    assert result["allowed"], result
+    db.execute("PIVOT p ON k IN pivot_values USING sum(x)").fetchall()
 
 
 def test_conservative_synthesis_overlap_with_trusted_macro(expressions):
@@ -170,11 +157,12 @@ def test_default_non_compute_value_functions_require_opt_in(db):
         configure(db)
 
 
-def test_type_denial_does_not_autoload_inet(db):
+def test_host_can_disable_type_autoload(db):
+    db.execute("SET autoload_known_extensions=false; SET autoinstall_known_extensions=false")
     before = db.execute("SELECT loaded FROM duckdb_extensions() WHERE extension_name='inet'").fetchone()
     assert before == (False,)
     result = validate(db, "SELECT '127.0.0.1'::INET")
-    assert result["code"] == "forbidden" and result["error_message"] == ""
+    assert result["code"] == "binding"
     assert db.execute("SELECT loaded FROM duckdb_extensions() WHERE extension_name='inet'").fetchone() == before
 
 
@@ -209,21 +197,19 @@ def test_nonaggregate_windows_in_trusted_view(db, name):
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
 
 
-def test_allowed_types_are_independent_of_table_policy(db):
+def test_types_are_independent_of_table_policy(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a')")
-    options = {"allowed_types": [{"schema": "private", "type": "customer"}]}
+    options = {"allowed_tables": []}
     configure(db, options)
-    assert validate(db, "SELECT 'a'::private.customer", options)["allowed"]
-    assert validate(db, "SELECT 'a'::private.customer", {**options, "allowed_tables": []})["allowed"]
-    options = {"allowed_types": [{"schema": "main", "type": "json"}], "allowed_tables": []}
-    assert not validate(db, "SELECT '{}'::JSON", options)["allowed"]
+    assert validate(db, "SELECT 'a'::private.customer")["allowed"]
+    assert validate(db, "SELECT '{}'::JSON")["allowed"]
     # Builtins are namespace-independent; adding a cast does not require system catalog access.
     assert validate(db, "SELECT 1::INTEGER", {"allowed_tables": []})["allowed"]
 
 
-def test_collation_permission_remains_separate_capability(db):
+def test_collation_with_function_checks_disabled(db):
     result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False})
-    assert result["code"] == "forbidden"
+    assert result["allowed"], result
     # Function allowlist options cannot be supplied while function checks are disabled.
     result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False, "allowed_functions": ["de"]})
     assert result["code"] == "invalid_input"

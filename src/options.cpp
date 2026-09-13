@@ -9,11 +9,9 @@ using duckdb::Value;
 
 const std::vector<std::string> &OptionNames() {
 	static const std::vector<std::string> names = {
-	    "check_functions",       "use_default_functions",   "allow_recursive_ctes",
-	    "allow_table_functions", "allow_replacement_scans", "allowed_functions",
-	    "blocked_functions",     "allowed_tables",          "allowed_types",
-	    "max_statements",        "max_ast_bytes",           "max_ast_nodes",
-	    "max_ast_depth"};
+	    "check_functions",         "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
+	    "allow_replacement_scans", "allowed_functions",     "blocked_functions",    "allowed_tables",
+	    "max_statements",          "max_ast_bytes",         "max_ast_nodes",        "max_ast_depth"};
 	return names;
 }
 
@@ -23,7 +21,7 @@ LogicalType OptionType(const std::string &name) {
 		return LogicalType::BOOLEAN;
 	if (name == "allowed_functions" || name == "blocked_functions")
 		return LogicalType::LIST(LogicalType::VARCHAR);
-	if (name == "allowed_tables" || name == "allowed_types")
+	if (name == "allowed_tables")
 		return LogicalType::ANY;
 	if (name == "max_statements" || name == "max_ast_bytes" || name == "max_ast_nodes" || name == "max_ast_depth")
 		return LogicalType::BIGINT;
@@ -73,9 +71,8 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			policy.allowed_functions = Strings(value, true);
 		else if (name == "blocked_functions")
 			policy.blocked_functions = Strings(value, true);
-		else if (name == "allowed_tables" || name == "allowed_types") {
-			bool is_type = name == "allowed_types";
-			std::string leaf = is_type ? "type" : "table";
+		else if (name == "allowed_tables") {
+			std::string leaf = "table";
 			if (value.type().id() != LogicalTypeId::LIST)
 				throw std::invalid_argument(name + " requires a list of structs");
 			const auto &entry_type = duckdb::ListType::GetChildType(value.type());
@@ -89,9 +86,8 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				if (!fields.count("schema") || !fields.count(leaf))
 					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
 			}
-			if (!is_type)
-				policy.tables = true;
-			auto &identities = is_type ? policy.allowed_types : policy.allowed_tables;
+			policy.tables = true;
+			auto &identities = policy.allowed_tables;
 			identities.clear();
 			for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
 				if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT)
@@ -179,7 +175,6 @@ Value PolicyValue(const Policy &policy) {
 	                      {"allowed_functions", strings(policy.allowed_functions)},
 	                      {"blocked_functions", strings(policy.blocked_functions)},
 	                      {"allowed_tables", identities(policy.allowed_tables, "table")},
-	                      {"allowed_types", identities(policy.allowed_types, "type")},
 	                      {"max_statements", Value::BIGINT(policy.statements)},
 	                      {"max_ast_bytes", Value::BIGINT(policy.bytes)},
 	                      {"max_ast_nodes", Value::BIGINT(policy.nodes)},
@@ -224,7 +219,7 @@ Policy ReadPolicy(const Value &value) {
 			throw std::invalid_argument("NULL policy field: " + name);
 		if (name == "restrict_tables")
 			tables = values[i].GetValue<bool>();
-		else if (name == "allowed_tables" || name == "allowed_types")
+		else if (name == "allowed_tables")
 			options.emplace_back(name, CanonicalIdentities(name, values[i]));
 		else
 			options.emplace_back(name, values[i]);

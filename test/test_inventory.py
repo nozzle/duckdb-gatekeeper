@@ -8,7 +8,6 @@ from test_gatekeeper import ROOT, check, db
 sys.path.insert(0, str(ROOT / "scripts"))
 from inventory import load
 from audit_inventory import compare, coverage
-from migrate_signature_baseline import verify_migration
 from versions import BASELINE_FILENAME
 from typed_helpers import never_bind_names
 
@@ -77,29 +76,6 @@ def test_audit_named_arguments_and_positional_order():
     candidate = json.loads(json.dumps(baseline))
     candidate["functions"][0]["parameters"].reverse()
     assert compare(baseline, candidate)["changed"] == ["reader"]
-
-
-def test_migration_preserves_positional_prefix():
-    old = {"duckdb_version": "v1.5.5", "loaded_extensions": [], "functions": [
-        {"name": "reader", "kind": "table", "parameters": ["VARCHAR", "INTEGER", "BOOLEAN", "DOUBLE"]}
-    ]}
-    new = {**old, "functions": [{"name": "reader", "kind": "table", "parameters": ["VARCHAR", "INTEGER"],
-                                 "named_parameters": {"scale": "DOUBLE", "strict": "BOOLEAN"}}]}
-    verify_migration(old, new)
-    changed = json.loads(json.dumps(new))
-    changed["functions"][0]["parameters"].reverse()
-    with pytest.raises(ValueError, match="Changed or ambiguous"):
-        verify_migration(old, changed)
-    changed = json.loads(json.dumps(new))
-    changed["functions"][0]["named_parameters"]["strict"] = "INTEGER"
-    with pytest.raises(ValueError, match="Changed or ambiguous"):
-        verify_migration(old, changed)
-    ambiguous = {**new, "functions": new["functions"] + [
-        {"name": "reader", "kind": "table", "parameters": ["VARCHAR"],
-         "named_parameters": {"n": "INTEGER", "strict": "BOOLEAN", "scale": "DOUBLE"}}
-    ]}
-    with pytest.raises(ValueError, match="Changed or ambiguous"):
-        verify_migration(old, ambiguous)
 
 
 @pytest.mark.parametrize("sql, name", [
