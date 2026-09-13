@@ -41,7 +41,7 @@ wildcard catalog is permitted. Metadata readers remain independently forbidden,
 and schema-wide `SHOW` is denied under any configured table restriction.
 Table rules do not restrict or authorize function/type namespaces. Use exact
 `allowed_types` identities and the leaf-name function policies for those capabilities;
-see the [migration notes](../README.md#table-matching-and-migration).
+see [table matching](../README.md#table-matching).
 
 ## Function enforcement and trusted expansion
 
@@ -103,8 +103,7 @@ Metadata views expanding to these readers are denied even with `allowed_tables`.
 This is deliberate: metadata readers enumerate across catalogs and cannot be row-
 filtered by object callbacks. Tenant introspection must use a host-controlled API.
 `json_serialize_plan` is listed because it binds and plans caller-supplied SQL at
-execution time, outside this validation; the former `allow_dynamic_sql` option was
-removed because every function it gated is on this list.
+execution time, outside this validation.
 
 ### Callback bypasses
 
@@ -239,28 +238,24 @@ atomic replacement, strict configuration, and non-bypassable policy layers.
 `test_adversarial_generated.py` combines nested queries and function
 spellings deterministically and checks mixed NULL/allow/deny vectorized results.
 
-A confirmed issue was fixed during this review: DuckDB can wrap policy exceptions
-while binding a table macro. Such denials now retain `forbidden`, and all exception
-exits explicitly clear `allowed` so successful preflight cannot leak into an error
+DuckDB can wrap policy exceptions while binding a table macro. Such denials retain
+`forbidden`, and all exception exits explicitly clear `allowed` so successful
+preflight cannot leak into an error
 result. Tests cover this independently of the error's DuckDB exception type.
 
-A repeat mixed-runtime sanitizer run crashed during deep-nesting coverage after
-an earlier pass. Gatekeeper's recursive walk was replaced by an explicit work
-stack, preserving per-node scope snapshots and depth checks. Release tests and two
-subsequent full sanitizer runs passed; the exact cause of the earlier crash was
-not established. DuckDB parsing/serialization still has its own stack behavior.
+Gatekeeper's AST walk uses an explicit work stack with per-node scope snapshots
+and depth checks. DuckDB parsing/serialization still has its own stack behavior.
 
-The full 223-test suite passed with AddressSanitizer and UndefinedBehaviorSanitizer
-instrumenting Gatekeeper and its compiled JsonSerializer on macOS arm64. The Python
-DuckDB engine and bundled yyjson library were not sanitizer-instrumented. Leak
-detection and vptr checks were disabled for this mixed-runtime setup. This is
-regression testing, not coverage-guided fuzzing or a full engine memory-safety audit.
-Run `.venv/bin/python scripts/test_sanitized.py` to reproduce the instrumented suite.
+The Python-wheel sanitizer runner uses AddressSanitizer and UndefinedBehaviorSanitizer
+to instrument Gatekeeper and its compiled JsonSerializer. The Python DuckDB engine
+and bundled yyjson library are not sanitizer-instrumented. Leak detection and vptr
+checks are disabled for this mixed-runtime setup. This is regression testing,
+not coverage-guided fuzzing or a full engine memory-safety audit.
+Run `.venv/bin/python scripts/test_sanitized.py` for the instrumented suite.
 
 The linked SQL/typed-option fuzz target exercises the public entry point against
 fixed local catalog fixtures. Gatekeeper uses coverage and ASan/UBSan instrumentation;
 the linked DuckDB engine is exercised but not fully instrumented. The macOS
 Python-wheel sanitizer runner also disables libc++ container annotations because
 containers cross instrumented and uninstrumented code. This is qualified
-mixed-runtime coverage, not a whole-engine clean sanitizer bill. Earlier counts
-above describe historical runs rather than the current test count.
+mixed-runtime coverage, not a whole-engine clean sanitizer bill.

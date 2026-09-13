@@ -30,7 +30,7 @@ def test_inspection_reset_and_complete_replacement(db):
 
 
 def test_canonical_policy_shape_is_pinned(db):
-    """The setting's field set is public API; a removed option must disappear from it and be rejected."""
+    """The canonical setting has exactly the supported policy fields."""
     expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
                 "allow_replacement_scans", "allowed_functions", "blocked_functions",
                 "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
@@ -38,7 +38,7 @@ def test_canonical_policy_shape_is_pinned(db):
     assert set(policy(db)) == expected
     assert "allow_dynamic_sql" not in policy(db)
     before = policy(db)
-    # The pre-removal shape (extra allow_dynamic_sql key) is cast away by DuckDB and cannot re-add the field.
+    # DuckDB discards extra STRUCT keys, while CALL rejects unknown options.
     db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), allow_dynamic_sql := true)")
     assert policy(db) == before
     with pytest.raises(duckdb.Error):
@@ -46,7 +46,7 @@ def test_canonical_policy_shape_is_pinned(db):
     assert policy(db) == before
 
 
-def test_configuration_is_nontransactional_and_scalar_api_is_retired(db):
+def test_configuration_is_nontransactional_and_requires_table_function(db):
     db.execute("BEGIN")
     configure(db, {"blocked_functions": ["md5"]})
     db.execute("ROLLBACK")

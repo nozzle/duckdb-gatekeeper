@@ -173,7 +173,7 @@ SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed
 -- true
 ```
 
-### Table matching and migration
+### Table matching
 
 Each `allowed_tables` rule matches all three components of a **resolved** table/view
 identity; any matching rule grants access within that policy layer. Both global and
@@ -194,8 +194,8 @@ SELECT gatekeeper_validate(
 For catalog-wide access use `{catalog: 'warehouse', schema: '*', 'table': '*'}`.
 Multiple entries can pair different catalogs and schemas without granting their
 cross-product. Omit the option for unrestricted non-internal tables/views; supply
-`[]` to deny them all. Use explicit `*` in new policies; omitted/NULL `catalog`
-remains the compatible any-catalog shorthand. Schema and table are required.
+`[]` to deny them all. Omitted/NULL `catalog` is shorthand for any catalog.
+Schema and table are required.
 
 Internal objects require a matching rule with **exact schema and table names** in
 each policy layer; catalog may match any. Broad wildcards never grant that opt-in.
@@ -204,17 +204,9 @@ Schema-wide `SHOW` is denied whenever a table restriction is configured, includi
 `*/*/*`; this option does not filter metadata rows. `DESCRIBE table` still checks the
 resolved table normally.
 
-**Breaking change:** `allowed_catalogs` and `allowed_schemas` have been removed.
-Translate their table/view restrictions into `allowed_tables` rules, preserving the
-intersection with any existing table rules. They formerly also restricted custom-type
-namespaces and explicitly qualified function catalogs. Those checks are now governed
-solely by `allowed_types` and the function policies: table rules neither grant nor
-restrict types/functions, and those options do not acquire wildcard matching.
-Preserve custom-type namespace limits with exact `allowed_types` identities; function
-permissions remain leaf-name-based and assume trusted catalog definitions.
-`catalog`/`schema` violation rules are replaced by `table` for object denials.
-Recreate canonical settings through `CALL`; the removed options and their
-`restrict_catalogs`/`restrict_schemas` fields are no longer part of the setting.
+Table rules neither grant nor restrict types/functions. Use exact `allowed_types`
+identities and leaf-name function policies for those capabilities; their matching
+does not support wildcards. Function permissions assume trusted catalog definitions.
 
 Things that surprise people:
 

@@ -1,4 +1,4 @@
-"""Resolved wildcard matching, independent policy layers, and migration boundaries."""
+"""Resolved wildcard matching, independent policy layers, and capability boundaries."""
 import itertools
 
 import duckdb
@@ -102,7 +102,7 @@ def test_show_is_not_authorized_by_a_broad_wildcard(db, sql):
 
 
 @pytest.mark.parametrize("name", ["allowed_catalogs", "allowed_schemas"])
-def test_retired_options_are_rejected_by_both_apis(db, name):
+def test_unknown_namespace_options_are_rejected_by_both_apis(db, name):
     configure(db, {"allowed_tables": []})
     before = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
     for sql in [f"CALL gatekeeper_configure({name} := ['memory'])",
@@ -121,7 +121,7 @@ def test_table_wildcards_do_not_grant_functions_or_types(db):
                    "allowed_types": [{"catalog": "memory", "schema": "main", "type": "customer"}]})
     assert validate(db, "SELECT memory.main.custom(1), NULL::memory.main.customer")["allowed"]
     assert not validate(db, "SELECT custom(1)", {"blocked_functions": ["custom"]})["allowed"]
-    # Type identities and function names have not acquired wildcard semantics.
+    # Type identities and function names use exact matching.
     assert not validate(db, "SELECT NULL::customer", {
         "allowed_types": [{"catalog": "*", "schema": "main", "type": "customer"}]})["allowed"]
     assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": ["*"]})["allowed"]
