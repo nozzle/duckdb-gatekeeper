@@ -145,13 +145,13 @@ static unique_ptr<FunctionData> BindOptions(ClientContext &, ScalarFunction &fun
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires VARCHAR[]", name);
-			if (name == "allowed_tables" &&
+			if ((name == "allowed_tables" || name == "blocked_tables") &&
 			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
 			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
 				throw BinderException("%s requires STRUCT[]", name);
 		}
 		// Preserve table-entry field sets rather than silently coercing away unknown fields.
-		function.arguments.push_back(name == "allowed_tables" ? actual : expected);
+		function.arguments.push_back(name == "allowed_tables" || name == "blocked_tables" ? actual : expected);
 		result->names.push_back(name);
 	}
 	function.varargs = LogicalType::INVALID;
@@ -220,7 +220,9 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 	auto &object = entry.Cast<StandardEntry>();
 	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
 	if (!gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
-		if (entry.internal)
+		if (gatekeeper::TableBlocked(policy, catalog, schema, name))
+			result.violations.emplace("table", "object is blocked", catalog, schema, name);
+		else if (entry.internal)
 			result.violations.emplace("internal_object", "internal object requires exact schema/table permission",
 			                          catalog, schema, name);
 		else
@@ -234,8 +236,7 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 // Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
 // construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
 // first callback at LOAD and, while a validation is binding on this thread, decides before that
-// bind happens: with replacement scans disabled in either layer, any claimed name is denied; with
-// them enabled, the resolved reader is authorized like a caller-written table function.
+// bind happens: the resolved reader is authorized like a caller-written table function in both layers.
 struct ValidationScope {
 	ClientContext &context; // the connection this validation binds on
 	const gatekeeper::Policy &policy;
@@ -270,8 +271,6 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		auto replacement = scan.function(context, input, scan.data.get());
 		if (!replacement)
 			continue;
-		if (!scope->policy.replacement_scans || !scope->ceiling.replacement_scans)
-			deny("replacement_scan", "replacement scans are disabled: " + path);
 		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
 			deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path);
 		auto &function = replacement->Cast<TableFunctionRef>().function;

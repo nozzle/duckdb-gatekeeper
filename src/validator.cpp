@@ -23,23 +23,31 @@ std::string Lower(std::string value) {
 	return value;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
-bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
-                  bool internal) {
-	if (!policy.tables && !internal)
-		return true;
+static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const std::string &schema,
+                         const std::string &table, bool internal = false) {
 	auto folded_catalog = Lower(catalog), folded_schema = Lower(schema), folded_table = Lower(table);
 	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
 	if (internal && (folded_schema == "*" || folded_table == "*"))
 		return false;
 	for (const auto &c : {folded_catalog, std::string("*"), std::string()}) {
-		if (policy.allowed_tables.count({c, folded_schema, folded_table}))
+		if (rules.count({c, folded_schema, folded_table}))
 			return true;
 		if (!internal &&
-		    (policy.allowed_tables.count({c, "*", folded_table}) ||
-		     policy.allowed_tables.count({c, folded_schema, "*"}) || policy.allowed_tables.count({c, "*", "*"})))
+		    (rules.count({c, "*", folded_table}) || rules.count({c, folded_schema, "*"}) || rules.count({c, "*", "*"})))
 			return true;
 	}
 	return false;
+}
+
+bool TableBlocked(const Policy &policy, const std::string &catalog, const std::string &schema,
+                  const std::string &table) {
+	return TableMatches(policy.blocked_tables, catalog, schema, table);
+}
+
+bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
+                  bool internal) {
+	return !TableBlocked(policy, catalog, schema, table) &&
+	       ((!policy.tables && !internal) || TableMatches(policy.allowed_tables, catalog, schema, table, internal));
 }
 
 static Names Strings(Json *value, bool lower = false) {
@@ -121,24 +129,12 @@ static const Inventory &GetInventory() {
 
 bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	auto &inventory = GetInventory();
+	auto canonical = CanonicalFunction(name);
+	// Only Parquet gets bidirectional allow aliases here. Preserve the existing JSON allow semantics.
 	return !FunctionDenied(policy, name) &&
-	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(CanonicalFunction(name)) ||
+	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
+	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
 	        (policy.defaults && inventory.defaults.count(Lower(name))));
-}
-
-static bool FileName(const std::string &name) {
-	auto lower = Lower(name);
-	if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
-	    name.find("://") != std::string::npos)
-		return true;
-	for (auto suffix : {".parquet", ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".gz", ".zst", ".xlsx", ".db", ".ddb",
-	                    ".duckdb", ".avro", ".shp", ".gpkg", ".fgb"}) {
-		if (lower.size() >= strlen(suffix) && lower.compare(lower.size() - strlen(suffix), strlen(suffix), suffix) == 0)
-			return true;
-		if (lower.find(std::string(suffix) + "?") != std::string::npos)
-			return true;
-	}
-	return false;
 }
 struct Stop {
 	std::string message;
@@ -160,7 +156,6 @@ struct Walker {
 	struct Work {
 		Json *value;
 		std::string expected;
-		Names scope;
 		size_t depth;
 		std::string edge;
 	};
@@ -262,7 +257,7 @@ struct Walker {
 			if (expr) {
 				if (Field(expr, "class") != "TYPE")
 					throw Stop{"computed type expressions are unsupported"};
-				pending.push_back({expr, "ParsedExpression", {}, depth + 1, "type"});
+				pending.push_back({expr, "ParsedExpression", depth + 1, "type"});
 			} else {
 				if (Field(info, "name").empty())
 					throw Stop{"missing type name"};
@@ -275,7 +270,7 @@ struct Walker {
 			return;
 		auto child = yyjson_obj_get(info, "child_type");
 		if (child)
-			pending.push_back({child, "logical_type", {}, depth + 1, "type"});
+			pending.push_back({child, "logical_type", depth + 1, "type"});
 		auto children = yyjson_obj_get(info, "child_types");
 		if (children) {
 			if (!yyjson_is_arr(children))
@@ -283,7 +278,7 @@ struct Walker {
 			size_t i, n;
 			Json *entry;
 			yyjson_arr_foreach(children, i, n, entry)
-			    pending.push_back({yyjson_obj_get(entry, "second"), "logical_type", {}, depth + 1, "type"});
+			    pending.push_back({yyjson_obj_get(entry, "second"), "logical_type", depth + 1, "type"});
 		}
 	}
 	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
@@ -293,7 +288,7 @@ struct Walker {
 		                   Field(node, "table_name"), function,
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
-	void References(Json *value, const std::string &kind, const Names &scope, const std::string &edge) {
+	void References(Json *value, const std::string &kind, const std::string &edge) {
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
@@ -417,42 +412,22 @@ struct Walker {
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}
-		if (kind != "BaseTableRef" && kind != "ShowRef")
+		if (kind != "ShowRef")
 			return;
-		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
-		     table = Field(value, "table_name");
-		if (kind == "ShowRef") {
-			if (yyjson_obj_get(value, "query"))
-				return;
-			if (!Both([](const Policy &p) { return !p.tables; }))
-				Reject("table", "schema-wide SHOW is disabled by table policy", value);
+		if (yyjson_obj_get(value, "query"))
 			return;
-		}
-		if (catalog.empty() && schema.empty() && scope.count(Lower(table)))
-			return;
-		// Match ReplacementScanInput::GetFullPath, including unquoted dotted names.
-		std::string path;
-		for (const auto &part : {catalog, schema, table}) {
-			if (part.empty())
-				continue;
-			if (!path.empty())
-				path += ".";
-			path += part;
-		}
-		// Preflight: file-shaped names cannot be catalog objects unless replacement scans are enabled.
-		// The authoritative check is the Gatekeeper replacement scan installed at LOAD.
-		if (!Both([](const Policy &p) { return p.replacement_scans; }) && (FileName(table) || FileName(path)))
-			Reject("replacement_scan", "replacement scans are disabled: " + path, value);
+		if (!Both([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
+			Reject("table", "schema-wide SHOW is disabled by table policy", value);
 	}
-	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
-		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});
+	void Check(Json *value, std::string expected, size_t depth = 0, std::string edge = {}) {
+		pending.push_back({value, std::move(expected), depth, std::move(edge)});
 		while (!pending.empty()) {
 			auto work = std::move(pending.back());
 			pending.pop_back();
-			CheckNode(work.value, std::move(work.expected), std::move(work.scope), work.depth, std::move(work.edge));
+			CheckNode(work.value, std::move(work.expected), work.depth, std::move(work.edge));
 		}
 	}
-	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
+	void CheckNode(Json *value, std::string expected, size_t depth, std::string edge) {
 		++nodes;
 		if (nodes > limits.nodes || depth > limits.depth)
 			throw Stop{"AST size or depth limit exceeded", "limit"};
@@ -462,7 +437,7 @@ struct Walker {
 		}
 		// TYPE constants carry nested type expressions too; literal payloads otherwise remain opaque.
 		if (expected == "opaque" && Field(yyjson_obj_get(value, "type"), "id") == "TYPE") {
-			pending.push_back({yyjson_obj_get(value, "value"), "logical_type", {}, depth + 1, "type"});
+			pending.push_back({yyjson_obj_get(value, "value"), "logical_type", depth + 1, "type"});
 			return;
 		}
 		if (expected == "opaque")
@@ -473,7 +448,7 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			yyjson_arr_foreach(value, i, n, child)
-			    pending.push_back({child, expected.substr(0, expected.size() - 2), scope, depth + 1, {}});
+			    pending.push_back({child, expected.substr(0, expected.size() - 2), depth + 1, {}});
 			return;
 		}
 		if (expected == "string" || expected == "boolean" || expected == "number") {
@@ -538,23 +513,19 @@ struct Walker {
 				throw Stop{"invalid CTE entries"};
 			Names declared;
 			yyjson_arr_foreach(entries, i, n, child) {
-				pending.push_back({child, "cte_entry", scope, depth + 1, {}});
+				pending.push_back({child, "cte_entry", depth + 1, {}});
 				auto name = Lower(Field(child, "key"));
 				if (!declared.insert(name).second)
 					throw Stop{"duplicate CTE"};
-				scope.insert(name);
 			}
 		}
 		yyjson_obj_foreach(value, i, n, key, child) {
 			auto name = Text(key);
 			if (name == "cte_map")
 				continue;
-			auto next = scope;
-			if (expected == "RecursiveCTENode" && name == "right")
-				next.insert(Lower(Field(value, "cte_name")));
-			pending.push_back({child, rule.fields.at(name), std::move(next), depth + 1, name});
+			pending.push_back({child, rule.fields.at(name), depth + 1, name});
 		}
-		References(value, expected, scope, edge);
+		References(value, expected, edge);
 	}
 };
 

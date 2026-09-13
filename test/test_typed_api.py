@@ -24,6 +24,8 @@ def test_named_prepared_and_row_varying_options(db):
     "blocked_functions := [], blocked_functions := ['md5']",
     "allow_dynamic_sql := true",  # unknown option
     "allow_table_functions := true", "allow_table_functions := false",  # removed option
+    "allow_replacement_scans := true", "allow_replacement_scans := false",
+    "blocked_tables := [1]", "blocked_tables := ['main.t']",
     "check_functions := true", "check_functions := false",
     "allow_recursive_ctes := true", "allow_recursive_ctes := false",
     "max_ast_bytes := 8388608", "max_ast_nodes := 100000", "max_ast_depth := 512",
@@ -106,12 +108,12 @@ def test_dynamic_table_lookup_keeps_object_policy(db):
 
 def test_python_replacement_scan_rejected(db):
     # A relation replacement scan is local and needs no optional pandas dependency. It resolves to a
-    # subquery, not a table function, so it is denied even when replacement scans are enabled.
+    # subquery, not a table function, so it cannot be authorized through reader permissions.
     db.execute("SET threads=1")
     host_data=db.sql("SELECT 1 AS x")
     assert db.execute("SELECT * FROM host_data").fetchone()==(1,)
     # The Python scan resolves names in the calling frame, so validate from this frame directly.
-    for options in ["allowed_tables := []", "allow_replacement_scans := true"]:
+    for options in ["allowed_tables := []", "blocked_tables := []"]:
         db.execute("CALL gatekeeper_configure(" + options + ")")
         result=db.execute("SELECT gatekeeper_validate('SELECT * FROM host_data', " + options + ")").fetchone()[0]
         assert not result["allowed"] and result["code"]=="forbidden", result
@@ -133,7 +135,7 @@ def test_bind_callback_input_errors_have_binding_code(db):
     assert not result["allowed"] and result["code"]=="invalid_input", result
 
 
-@pytest.mark.parametrize("name", ["exists.duckdb", "missing.duckdb", "x.db", "x.ddb", "x.avro", "x.shp", "x.gpkg", "x.fgb",
+@pytest.mark.parametrize("name", ["exists.duckdb", "missing.duckdb", "x.db", "x.ddb",
                                   "data.parquet?", "nope.parquet?", "x.json?", "x.jsonl?", "x.ndjson?", "x.csv?", "x.tsv?"])
 def test_relative_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, name):
     with duckdb.connect(str(tmp_path / "exists.duckdb")) as local:
@@ -142,17 +144,19 @@ def test_relative_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, 
     monkeypatch.chdir(tmp_path)
     result = validate(db, "SELECT * FROM '" + name + "'")
     assert result["code"] == "forbidden" and result["error_message"] == "", result
-    assert result["violations"][0]["rule"] == "replacement_scan"
+    assert result["violations"][0]["rule"] == "function"
 
 
-def test_file_name_opt_in_only_authorizes_catalog_object(db, tmp_path, monkeypatch):
+def test_file_shaped_catalog_name_uses_table_policy(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     db.execute('CREATE TABLE "data.parquet"(x INT)')
-    assert not validate(db, 'SELECT * FROM "data.parquet"')["allowed"]
-    configure(db, {"allow_replacement_scans": True})
-    result = validate(db, 'SELECT * FROM "data.parquet"', {"allow_replacement_scans": True})
+    result = validate(db, 'SELECT * FROM "data.parquet"')
     assert result["allowed"] and result["objects"][0]["type"] == "table"
-    result = validate(db, "SELECT * FROM 'missing.duckdb'", {"allow_replacement_scans": True})
+    assert not validate(db, 'SELECT * FROM "data.parquet"', {"allowed_tables": []})["allowed"]
+    assert not validate(db, 'SELECT * FROM "data.parquet"', {
+        "blocked_tables": [{"schema": "main", "table": "data.parquet"}]
+    })["allowed"]
+    result = validate(db, "SELECT * FROM 'missing.duckdb'")
     assert not result["allowed"] and result["code"] == "forbidden"
     assert result["violations"][0]["function_name"] == "read_duckdb"
 
@@ -161,15 +165,14 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     monkeypatch.chdir(tmp_path)
     db.execute("COPY (SELECT 1 AS x) TO 'data.parquet'")
     (tmp_path / "data.csv").write_text("x\n42\n")
-    configure(db, {"allow_replacement_scans": True})
-    # Enabled but reader not admitted: denied at the callback, so a missing path never binds.
+    # Reader not admitted: denied at the callback, so a missing path never binds.
     for name in ["data.parquet", "/does/not/exist.parquet", "data.csv", "s3://bucket/key.parquet"]:
         result = validate(db, f"SELECT * FROM '{name}'")
         assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
         violation = result["violations"][0]
         assert violation["rule"] == "function" and violation["table"] == name
-        assert violation["function_name"] in {"parquet_scan", "read_csv_auto"}
-    configure(db, {"allow_replacement_scans": True, "allowed_functions": ["parquet_scan", "read_csv_auto"]})
+        assert violation["function_name"] in {"read_parquet", "read_csv_auto"}
+    configure(db, {"allowed_functions": ["parquet_scan", "read_csv_auto"]})
     for name, function in [("data.parquet", "parquet_scan"), ("data.csv", "read_csv_auto")]:
         result = validate(db, f"SELECT * FROM '{name}'")
         assert result["allowed"], (name, result)
@@ -177,24 +180,26 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
         assert [f["name"] for f in result["functions"]] == [function]
     # An admitted reader still surfaces real binding errors for missing files.
     assert validate(db, "SELECT * FROM '/does/not/exist.parquet'")["code"] == "binding"
-    # Requests narrow only: they cannot enable scans the global policy disables, and can disable them.
-    assert not validate(db, "SELECT * FROM 'data.parquet'", {"allow_replacement_scans": False})["allowed"]
+    # Requests can narrow reader permissions but cannot escape the global allowlist.
+    assert not validate(db, "SELECT * FROM 'data.parquet'", {
+        "use_default_functions": False, "allowed_functions": []
+    })["allowed"]
     assert not validate(db, "SELECT * FROM 'data.parquet'", {"blocked_functions": ["parquet_scan"]})["allowed"]
-    configure(db, {"allowed_functions": ["parquet_scan"]})
-    result = validate(db, "SELECT * FROM 'data.parquet'", {"allow_replacement_scans": True})
-    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "replacement_scan"
+    configure(db)
+    result = validate(db, "SELECT * FROM 'data.parquet'", {"allowed_functions": ["read_parquet"]})
+    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # allowed_tables governs catalog objects, not reader capabilities, matching range().
-    configure(db, {"allow_replacement_scans": True, "allowed_functions": ["parquet_scan"], "allowed_tables": []})
+    configure(db, {"allowed_functions": ["parquet_scan"], "allowed_tables": [],
+                   "blocked_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})
     assert validate(db, "SELECT * FROM 'data.parquet'")["allowed"]
 
 
 def test_replacement_scan_inside_view_requires_admitted_reader(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     db.execute("COPY (SELECT 1 AS x) TO 'data.parquet'; CREATE VIEW v AS SELECT * FROM 'data.parquet'")
-    configure(db, {"allow_replacement_scans": True})
     result = validate(db, "SELECT * FROM v")
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "parquet_scan"
-    configure(db, {"allow_replacement_scans": True, "allowed_functions": ["parquet_scan"]})
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
+    configure(db, {"allowed_functions": ["parquet_scan"]})
     result = validate(db, "SELECT * FROM v")
     assert result["allowed"] and {o["table"] for o in result["objects"]} == {"v", "data.parquet"}
 
@@ -210,8 +215,8 @@ def test_replacement_scan_callback_is_inert_outside_validation(db, tmp_path, mon
     assert validate(db, "SELECT * FROM missing_table")["code"] == "binding"
 
 
-@pytest.mark.parametrize("name", ["data.csv", "missing.csv", "exists.duckdb", "x.db", "x.ddb", "x.avro",
-                                  "x.shp", "x.gpkg", "x.fgb", "data.parquet", "x.json", "x.tsv",
+@pytest.mark.parametrize("name", ["data.csv", "missing.csv", "exists.duckdb", "x.ddb",
+                                  "data.parquet", "x.json", "x.tsv",
                                   "catalog.data.csv", 'data."csv?"'])
 def test_unquoted_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, name):
     (tmp_path / "data.csv").write_text("x\n42\n")
@@ -221,13 +226,20 @@ def test_unquoted_file_forms_rejected_before_binding(db, tmp_path, monkeypatch, 
     monkeypatch.chdir(tmp_path)
     result = validate(db, "SELECT * FROM " + name)
     assert result["code"] == "forbidden" and result["error_message"] == "", result
-    assert result["violations"][0]["rule"] == "replacement_scan"
+    assert result["violations"][0]["rule"] == "function"
 
 
 def test_qualified_file_name_is_not_cte_exempt(db):
     assert validate(db, 'WITH "data.csv" AS (SELECT 1) SELECT * FROM "data.csv"')["allowed"]
     result = validate(db, "WITH csv AS (SELECT 1) SELECT * FROM data.csv")
-    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "replacement_scan"
+    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
+
+
+@pytest.mark.parametrize("name", ["x.avro", "x.shp", "x.gpkg", "x.fgb"])
+def test_unclaimed_file_names_return_missing_table_without_autoload(db, name):
+    result = validate(db, "SELECT * FROM '" + name + "'")
+    assert result["code"] == "binding" and not result["allowed"], result
+    assert result["objects"] == result["functions"] == []
 
 
 @pytest.mark.parametrize("name", ["duckdb_views", "duckdb_tables", "duckdb_columns", "duckdb_logs",
@@ -297,17 +309,12 @@ def test_latest_ast_serialization(db, sql):
 
 
 @pytest.mark.parametrize("name", ["csv", "json", "db", "gz"])
-def test_qualified_suffix_catalog_table_requires_file_opt_in(db, name):
+def test_qualified_suffix_catalog_table_uses_table_policy(db, name):
     db.execute(f'CREATE TABLE main."{name}"(x INT)')
     assert validate(db, f'SELECT * FROM "{name}"')["allowed"]
     for sql in [f"SELECT * FROM main.{name}", f'SELECT * FROM "main"."{name}"']:
-        result = validate(db, sql)
-        assert result["code"] == "forbidden" and result["error_message"] == ""
-        assert result["violations"][0]["rule"] == "replacement_scan"
-        configure(db, {"allow_replacement_scans": True})
-        assert validate(db, sql, {"allow_replacement_scans": True})["allowed"]
-        assert not validate(db, sql, {"allow_replacement_scans": True, "allowed_tables": []})["allowed"]
-        configure(db)
+        assert validate(db, sql)["allowed"]
+        assert not validate(db, sql, {"allowed_tables": []})["allowed"]
 
 
 def test_internal_dependency_of_trusted_view_requires_opt_in(db):

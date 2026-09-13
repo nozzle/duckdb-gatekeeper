@@ -171,7 +171,7 @@ def test_recursive_cte_obeys_function_and_table_policy(db):
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM 'mine.parquet'", {}, False),
-    ("SELECT * FROM 'mine.parquet'", {"allow_replacement_scans": True}, False),
+    ("SELECT * FROM parquet_scan('mine.parquet')", {}, False),
     ("SELECT * FROM 's3://bucket/data'", {}, False),
     ("SELECT * FROM read_parquet('local.parquet')", {}, False),
     ("SELECT * FROM read_parquet('s3://bucket/file')", {}, False),

@@ -93,9 +93,9 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	// Keep removed selectors to exercise unknown-option rejection and preserve corpus mappings.
+	// Reuse the retired replacement-scan slot for blocks; other retired names still exercise rejection.
 	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
-	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
+	                              "allow_table_functions", "blocked_tables", "allowed_functions",
 	                              // Unknown namespace options exercise rejection.
 	                              "blocked_functions", "allowed_catalogs", "allowed_schemas", "allowed_tables",
 	                              "max_statements", "max_ast_bytes", "max_ast_nodes", "max_ast_depth", "allowed_types"};
@@ -216,6 +216,17 @@ static void CheckNativeSettingBypass() {
 		std::abort();
 	if (connection.Query("RESET gatekeeper_policy")->HasError())
 		std::abort();
+	// A deny-only canonical setting must remain effective without restrict_tables.
+	auto blocked = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_tables := "
+	                                "[{catalog: '', schema: 'main', \"table\": 'v'}])");
+	if (blocked->HasError())
+		std::abort();
+	config.SetOption("gatekeeper_policy", blocked->GetValue(0, 0));
+	auto blocked_view = connection.Query("SELECT gatekeeper_validate('SELECT * FROM v', blocked_tables := [])");
+	if (StructValue::GetChildren(Decision(*blocked_view))[1].GetValue<string>() != "forbidden")
+		std::abort();
+	if (connection.Query("RESET gatekeeper_policy")->HasError())
+		std::abort();
 	auto canonical =
 	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_functions := ['md5'])");
 	if (canonical->HasError())
@@ -300,8 +311,7 @@ static void CheckReplacementCallbacks() {
 	auto &probe = *data;
 	probe.other = &other;
 	config.replacement_scans.emplace_back(ProbeCallback, std::move(data));
-	if (connection.Query("CALL gatekeeper_configure(allow_replacement_scans := true, allowed_functions := ['range'])")
-	        ->HasError())
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'])")->HasError())
 		std::abort();
 	// A stateful callback cannot be reached a second time outside authorization.
 	probe.calls = 0;

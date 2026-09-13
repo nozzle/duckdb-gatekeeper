@@ -36,8 +36,13 @@ See [global policy](../README.md#global-policy) in the README.
 an intersection between layers. A whole-component `*` matches any identifier;
 other text is exact and ASCII case-folded. Matching uses resolved identities, not
 caller spellings or CTE names. Wildcards cover future objects as well as existing
-ones. Internal objects require exact schema/table names in a matching rule; a
-wildcard catalog is permitted. Metadata readers remain independently forbidden,
+ones. `blocked_tables` uses the same matching rules, defaults to no blocks, and
+works independently of the allowlist. A matching block in either layer always wins,
+including on underlying tables/views introduced by trusted views and macros.
+Blocks match resolved objects, not CTE names or reader paths/arguments.
+Internal objects require exact schema/table names in a matching allow rule; a
+wildcard catalog is permitted. Block wildcards also match internal objects, even
+when an exact allow rule exists. Metadata readers remain independently forbidden,
 and schema-wide `SHOW` is denied under any configured table restriction.
 Table rules do not restrict or authorize function/type namespaces. Functions use
 leaf-name policies; types are supplied by the host without separate authorization;
@@ -55,6 +60,13 @@ treated as functions. `->>` and JSON path aliases share canonical extraction blo
 Function allowlisting cannot be disabled. Each policy layer admits its explicit
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
 explicit blocks and the never-bind list always take precedence.
+
+The Parquet reader names `read_parquet` and `parquet_scan` share allow/block
+permission. This explicit pair is source-reviewed in
+`duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
+`ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
+discovery. CSV/JSON reader names are not grouped. Parquet violations use the canonical
+name `read_parquet`; successful dependency lists retain observed function names.
 
 The callback applies explicit blocks and the non-overridable never-bind list below
 to scalar, aggregate, table, macro, table-macro and pragma-function entries, including
@@ -159,7 +171,8 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   thread; ordinary connections are unaffected. Other callbacks only construct a table
   reference, so a denial happens before the substituted reader binds and no file is
   opened. Readers substituted by DuckDB are authorized by their resolved names
-  (`parquet_scan`, `read_csv_auto`, `read_json_auto`), not by `read_parquet`/`read_csv`.
+  (`parquet_scan`, `read_csv_auto`, `read_json_auto`), with `parquet_scan` sharing
+  permission with `read_parquet`. No separate replacement-scan toggle exists.
   Host-language scans that resolve to subqueries are always denied. When no callback
   claims a name, Gatekeeper raises the engine's missing-table error itself rather than
   returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and
@@ -167,7 +180,8 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   run. If a catalog without transactional DDL finds the object on that lookup, the
   validation fails closed with a `binding` retry error rather than resuming the loop. The callback is keyed to the validating connection and nested validations
   restore the outer scope, so reentrant host callbacks cannot disable interception.
-  The file-shaped-name preflight remains as an earlier diagnostic.
+  Catalog objects with file-shaped names use ordinary object policy; unclaimed
+  names return binding errors without file-name heuristics.
 - Direct readers are controlled by function policy. There is no reader-argument
   inventory or local/remote path policy; admitting a reader permits its resource
   access. Resolved bindings do not provide an argument-level sandbox.
