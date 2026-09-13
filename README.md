@@ -36,11 +36,13 @@ for building/loading the extension and the excluded MVP/threads targets.
 ![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result STRUCT is returned](docs/pipeline.svg)
 
 Gatekeeper parses the statement, checks the syntax the caller wrote (functions,
-capabilities, limits), then binds it on your connection and authorizes every table,
-view, type, and function it resolves to. Each check runs against both the global policy
-and the request layer (global policy plus the request's named options); both must allow
-the query. Nothing is executed, but **binding can perform I/O** through trusted catalogs
-and explicitly admitted readers.
+capabilities, limits), then binds it on your connection and authorizes every table and
+view it resolves to, plus the types and functions the caller requested. Functions and
+types that trusted views and macros introduce internally are exempt from the caller
+allowlists, but explicit blocks and the never-bind list still apply to them. Each check
+runs against both the global policy and the request layer (global policy plus the
+request's named options); both must allow the query. Nothing is executed, but **binding
+can perform I/O** through trusted catalogs and explicitly admitted readers.
 
 ## Quickstart
 
@@ -222,7 +224,9 @@ undone by rollback.
 
 An otherwise valid request that tries to widen access does not error; it simply cannot
 authorize anything the global policy denies. Conflicting options are still rejected as
-`invalid_input`, for example `check_functions := false` with `allowed_functions`. So grant capabilities (`read_parquet`, custom types, higher
+`invalid_input`, for example `check_functions := false` with a nonempty
+`allowed_functions := ['md5']` (an empty list or `use_default_functions := false` is
+compatible with disabled checks). So grant capabilities (`read_parquet`, custom types, higher
 statement limits) in `CALL gatekeeper_configure`, and use request options to narrow per
 tenant.
 
