@@ -146,6 +146,18 @@ static Value Run(Connection &connection, const std::string &sql, const Value &te
 	return Decision(*result);
 }
 
+// Every canonical policy value must be NULL-free at every depth.
+static void CheckNullFree(const Value &value) {
+	if (value.IsNull())
+		std::abort();
+	if (value.type().id() == LogicalTypeId::STRUCT)
+		for (const auto &child : StructValue::GetChildren(value))
+			CheckNullFree(child);
+	if (value.type().id() == LogicalTypeId::LIST)
+		for (const auto &child : ListValue::GetChildren(value))
+			CheckNullFree(child);
+}
+
 static Value Configured(const std::string &options, const Value &text, int64_t limit) {
 	// Configuration is shared by connections: isolate each replay in a fresh instance.
 	DuckDB database(nullptr);
@@ -167,6 +179,10 @@ static Value Configured(const std::string &options, const Value &text, int64_t l
 		if (configured.IsNull() || !configured.GetValue<bool>())
 			std::abort();
 	}
+	auto published = connection.Query("SELECT current_setting('gatekeeper_policy')");
+	if (published->HasError())
+		std::abort();
+	CheckNullFree(published->GetValue(0, 0));
 	auto decision = Run(connection, "SELECT gatekeeper_validate('SELECT * FROM v') FROM input", text, limit);
 	auto overridden = Run(
 	    connection, "SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []) FROM input", text, limit);
@@ -197,6 +213,19 @@ static void CheckNativeSettingBypass() {
 	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
 	auto denied = connection.Query("SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
 	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
+		std::abort();
+	// The canonical value is NULL-free at every depth, so a NULL nested catalog installed through a native
+	// setter (or DuckDB's lossy STRUCT cast) must fail closed instead of matching any catalog.
+	auto widened = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "
+	                                "[{catalog: NULL, schema: 'main', \"table\": 'v'}]::STRUCT(catalog VARCHAR, "
+	                                "schema VARCHAR, \"table\" VARCHAR)[])");
+	if (widened->HasError())
+		std::abort();
+	config.SetOption("gatekeeper_policy", widened->GetValue(0, 0));
+	auto closed = connection.Query("SELECT gatekeeper_validate('SELECT * FROM v')");
+	if (StructValue::GetChildren(Decision(*closed))[1].GetValue<string>() != "invalid_input")
+		std::abort();
+	if (connection.Query("RESET gatekeeper_policy")->HasError())
 		std::abort();
 }
 

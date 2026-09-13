@@ -26,8 +26,10 @@ This protects Gatekeeper's policy, not arbitrary SQL execution: the application 
 still require validation and control access to the raw connection/native APIs.
 Configuration is nontransactional; a surrounding rollback does not undo replacement.
 Each validation chunk takes one coherent snapshot. Lock before exposing the instance.
-Use strict parameterized `CALL` for authoring; direct STRUCT `SET` can silently drop
-unknown fields during DuckDB casting, including a misspelled nullable catalog field.
+Use strict parameterized `CALL` for authoring; direct STRUCT `SET` silently drops
+unknown extra keys at any depth during DuckDB casting. The canonical setting is
+NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled nested
+`catalog`, `schema`, or leaf) fails closed instead of widening catalog matching.
 See [the configuration contract](api.md#global-policy-and-configuration).
 
 ## Function enforcement and trusted expansion

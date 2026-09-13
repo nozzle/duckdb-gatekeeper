@@ -380,17 +380,23 @@ cannot grant those capabilities. Trusted configuration must first admit them.
 field is mandatory and non-NULL. A false restriction flag means unrestricted ordinary
 objects in that dimension; true plus an empty corresponding list denies them.
 Internal objects still require explicit permission. Nested identities are canonical
-`STRUCT(catalog VARCHAR, schema VARCHAR, table/type VARCHAR)[]`; catalog may be NULL
-(any catalog), while schema and leaf must be nonempty. There is no type restriction
-toggle: built-in types are always available, additional types need explicit grants.
+`STRUCT(catalog VARCHAR, schema VARCHAR, table/type VARCHAR)[]` and are NULL-free: an
+empty `catalog` (`''`) means any catalog, while schema and leaf must be nonempty. `CALL`
+and request options still accept an omitted or NULL `catalog`; readback shows `''`.
+There is no type restriction toggle: built-in types are always available, additional
+types need explicit grants.
 
 Prefer `CALL` for authoring. Direct `SET [GLOBAL] gatekeeper_policy = <complete STRUCT>`
 is supported for integration but **DuckDB casts before the extension sees the value**:
 unknown fields are dropped, missing fields become NULL, and compatible values may be
-coerced. Required-field checks reject missing top-level fields and missing nested
-schema/leaf fields, but cannot detect extra unknown keys alongside a complete policy.
-A misspelled nested catalog can become NULL and broaden catalog matching. Never treat
-direct `SET` as strict validation of an authored policy. Inspect normalized readback.
+coerced. Because the canonical value contains no NULL at any depth, any NULL produced
+by that cast is rejected: a missing or NULL-filled field at any depth, including a
+nested `catalog` whose key was misspelled, fails with `NULL policy field` and leaves the
+active policy unchanged. Extra unknown keys alongside a complete top-level policy or a
+complete nested identity are still dropped silently: at the top level an intended
+restriction may simply not apply; inside an identity the entry keeps its canonical
+fields and cannot widen. Never treat direct `SET` as strict validation of an authored
+policy. Inspect normalized readback.
 
 Trusted bootstrap order is: `LOAD` required extensions, provision catalogs/credentials
 and other host settings, `CALL gatekeeper_configure(...)`, then

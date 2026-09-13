@@ -174,10 +174,11 @@ Value PolicyValue(const Policy &policy) {
 		auto type = LogicalType::STRUCT(
 		    {{"catalog", LogicalType::VARCHAR}, {"schema", LogicalType::VARCHAR}, {leaf, LogicalType::VARCHAR}});
 		duckdb::vector<Value> values;
+		// The canonical setting is NULL-free at every depth: an empty catalog means any catalog. A NULL
+		// produced by DuckDB's lossy STRUCT cast (for example a misspelled catalog key on direct SET) is
+		// therefore always distinguishable from an intentional any-catalog entry and is rejected on read.
 		for (const auto &entry : entries)
-			values.push_back(
-			    Value::STRUCT(type, {entry.catalog.empty() ? Value(LogicalType::VARCHAR) : Value(entry.catalog),
-				                     Value(entry.schema), Value(entry.table)}));
+			values.push_back(Value::STRUCT(type, {Value(entry.catalog), Value(entry.schema), Value(entry.table)}));
 		return Value::LIST(type, values);
 	};
 	return Value::STRUCT({{"check_functions", Value::BOOLEAN(policy.functions)},
@@ -201,6 +202,28 @@ Value PolicyValue(const Policy &policy) {
 	                      {"restrict_tables", Value::BOOLEAN(policy.tables)}});
 }
 
+// Decode one canonical identity list. Unlike request options, the canonical form never contains NULL: a
+// NULL here means DuckDB's STRUCT cast dropped or NULL-filled a field, so fail instead of widening.
+static Value CanonicalIdentities(const std::string &name, const Value &value) {
+	auto &entry_type = duckdb::ListType::GetChildType(value.type());
+	duckdb::vector<Value> entries;
+	for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
+		if (entry.IsNull())
+			throw std::invalid_argument("NULL policy field: " + name + " entry");
+		auto &fields = duckdb::StructType::GetChildTypes(entry.type());
+		auto values = duckdb::StructValue::GetChildren(entry);
+		for (size_t i = 0; i < fields.size(); i++) {
+			if (values[i].IsNull())
+				throw std::invalid_argument("NULL policy field: " + name + "." + fields[i].first);
+			// The canonical any-catalog spelling is '', which request decoding expresses as NULL.
+			if (fields[i].first == "catalog" && values[i].GetValue<std::string>().empty())
+				values[i] = Value(LogicalType::VARCHAR);
+		}
+		entries.push_back(Value::STRUCT(entry_type, values));
+	}
+	return Value::LIST(entry_type, entries);
+}
+
 Policy ReadPolicy(const Value &value) {
 	// Recheck at use time: host configuration APIs can bypass extension SET callbacks.
 	static const auto type = PolicyValue(Policy()).type();
@@ -220,6 +243,8 @@ Policy ReadPolicy(const Value &value) {
 			schemas = values[i].GetValue<bool>();
 		else if (name == "restrict_tables")
 			tables = values[i].GetValue<bool>();
+		else if (name == "allowed_tables" || name == "allowed_types")
+			options.emplace_back(name, CanonicalIdentities(name, values[i]));
 		else
 			options.emplace_back(name, values[i]);
 	}

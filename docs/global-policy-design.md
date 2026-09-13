@@ -17,18 +17,23 @@ This is a breaking pre-1.0 API and authorization change.
    with a non-NULL built-in default. Include every option plus explicit BOOLEAN
    `restrict_catalogs`, `restrict_schemas`, `restrict_tables` fields. All top-level
    fields are mandatory/non-NULL. False flags mean unrestricted ordinary objects;
-   true flags with empty lists deny access. Nested table/type identities retain nullable
-   `catalog` (any catalog) and required nonempty `schema` and leaf names. Types and
-   internal objects retain their existing explicit-permission rules.
+   true flags with empty lists deny access. Nested table/type identities are NULL-free
+   in the canonical value: `catalog = ''` means any catalog (CALL/request input may still
+   omit it or pass NULL), and `schema` and leaf names are required and nonempty. Types
+   and internal objects retain their existing explicit-permission rules. (Revised after
+   #14: the original design kept a nullable canonical catalog; see #15.)
 
 3. **Strict authoring, explicit SET limitations.** CALL sees original argument types
    and rejects unknown top-level and nested identity fields before lossy casts.
    Direct SET accepts a complete canonical STRUCT, but DuckDB casts it before the
    callback: unmatched source fields disappear, missing target fields become NULL,
-   and compatible values are coerced. Mandatory fields mitigate replacement typos,
-   not extra-key typos. A misspelled nested catalog can become NULL and broaden access.
-   Document CALL as the strict authoring path; SET is an integration surface with this
-   limitation. Read back the normalized setting for inspection.
+   and compatible values are coerced. Because the canonical value is NULL-free at
+   every depth, any NULL the cast produces is rejected on read, so a typo that displaces
+   a canonical field at any depth fails closed. Extra keys alongside a complete policy
+   or a complete nested identity are still dropped silently; nested extras cannot widen
+   because the canonical fields remain intact. Document CALL as the strict authoring
+   path; SET is an integration surface with this limitation. Read back the normalized
+   setting for inspection.
 
 4. **The setting is the sole source of truth.** Do not publish a separate policy
    cache in the SET callback. Native setting APIs and registration/startup paths may
@@ -87,12 +92,14 @@ This is a breaking pre-1.0 API and authorization change.
 ## Acceptance evidence
 
 Regression coverage must exercise atomic replacement and readback across connections,
-instance isolation, reset, invalid-input preservation, nullable catalog semantics,
+instance isolation, reset, invalid-input preservation, NULL-free any-catalog semantics,
 strict unknown-key/type checks, documented SET casting, SESSION rejection, every writer
 under lock and allowed_configs exceptions, prepared lifecycle, two-layer identity and
 capability checks, trusted expansion denies, and configuration-function denial.
-The linked fuzz harness must check native setter callback bypasses and the invariant
-that clearing request blocks cannot override a configured denial. Native AST fuzzing
+The linked fuzz harness must check native setter callback bypasses, the invariant
+that clearing request blocks cannot override a configured denial, and that every
+published canonical policy is NULL-free at every depth while a NULL nested catalog
+installed natively fails closed. Native AST fuzzing
 must check that a successful layered decision is allowed by each standalone policy.
 
 Run release and sanitizer suites, inventory audit, formatting, lakehouse integration,
