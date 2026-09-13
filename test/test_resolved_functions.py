@@ -64,7 +64,7 @@ def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
 def test_never_bind_names_absent_from_defaults_and_non_overridable(db):
     names = never_bind_names()
     for name in names:
-        for options in [{"allowed_functions": [name], "allow_dynamic_sql": True}, {"check_functions": False}]:
+        for options in [{"allowed_functions": [name]}, {"check_functions": False}]:
             result = validate(db, f'SELECT "{name}"(1)', options)
             assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
 

@@ -191,7 +191,7 @@ def test_mixed_batch_rejected_before_binding(catalog):
 ])
 def test_write_smuggling(db, sql):
     configure(db, {"max_statements": 10})
-    result = validate(db, sql, {"max_statements": 10, "check_functions": False, "allow_dynamic_sql": True})
+    result = validate(db, sql, {"max_statements": 10, "check_functions": False})
     assert not result["allowed"]
     assert result["code"] in {"parser", "unsupported"}
 

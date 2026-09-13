@@ -29,6 +29,23 @@ def test_inspection_reset_and_complete_replacement(db):
     assert policy(db) == defaults
 
 
+def test_canonical_policy_shape_is_pinned(db):
+    """The setting's field set is public API; a removed option must disappear from it and be rejected."""
+    expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
+                "allow_file_table_references", "allowed_functions", "blocked_functions", "allowed_catalogs",
+                "allowed_schemas", "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
+                "max_ast_nodes", "max_ast_depth", "restrict_catalogs", "restrict_schemas", "restrict_tables"}
+    assert set(policy(db)) == expected
+    assert "allow_dynamic_sql" not in policy(db)
+    before = policy(db)
+    # The pre-removal shape (extra allow_dynamic_sql key) is cast away by DuckDB and cannot re-add the field.
+    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), allow_dynamic_sql := true)")
+    assert policy(db) == before
+    with pytest.raises(duckdb.Error):
+        db.execute("CALL gatekeeper_configure(allow_dynamic_sql := true)")
+    assert policy(db) == before
+
+
 def test_configuration_is_nontransactional_and_scalar_api_is_retired(db):
     db.execute("BEGIN")
     configure(db, {"blocked_functions": ["md5"]})
@@ -199,8 +216,7 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"allow_recursive_ctes": False}, {"allow_recursive_ctes": True},
      "WITH RECURSIVE t AS (SELECT 1 x UNION ALL SELECT x+1 FROM t WHERE x<3) SELECT * FROM t", "recursive_cte"),
     ({"allow_file_table_references": False}, {"allow_file_table_references": True}, "SELECT * FROM 'missing.csv'", "file_table"),
-    ({"allow_dynamic_sql": False}, {"allow_dynamic_sql": True, "allowed_functions": ["json_serialize_plan"]},
-     "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
+    ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
 def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, rule):
     configure(db, global_options)

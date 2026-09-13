@@ -64,7 +64,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure
-query query_table json_execute_serialized_sql read_duckdb seq_scan which_secret
+query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
 duckdb_approx_database_count duckdb_columns duckdb_connection_count duckdb_constraints
@@ -91,8 +91,9 @@ All listed names are excluded from defaults and cannot be admitted by options.
 Metadata views expanding to these readers are denied even with `allowed_tables`.
 This is deliberate: metadata readers enumerate across catalogs and cannot be row-
 filtered by object callbacks. Tenant introspection must use a host-controlled API.
-`allow_dynamic_sql` remains accepted for compatibility but is deprecated; it no
-longer enables execution and only retains its plan-inspection gate.
+`json_serialize_plan` is listed because it binds and plans caller-supplied SQL at
+execution time, outside this validation; the former `allow_dynamic_sql` option was
+removed because every function it gated is on this list.
 
 ### Callback bypasses
 
@@ -141,7 +142,7 @@ longer enables execution and only retains its plan-inspection gate.
   access. Resolved bindings do not provide an argument-level sandbox.
 - Explicitly admitting eligible elevated readers/types/collations transfers responsibility
   for their resources and trusted implementation to the application. The never-bind
-  list cannot be overridden, including with `allow_dynamic_sql`.
+  list cannot be overridden by any option.
 - AST validation occurs after parsing and serialization; traversal limits do not
   replace process limits against parser/serializer resource exhaustion.
 

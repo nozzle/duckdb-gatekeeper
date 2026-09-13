@@ -151,7 +151,6 @@ What the three failure shapes look like:
 | `allowed_types` | STRUCT[] | built-in types only | `{catalog?, schema, type}`. Extension and user types (JSON, INET, enums) need an entry. |
 | `allow_recursive_ctes` | BOOLEAN | `true` | |
 | `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
-| `allow_dynamic_sql` | BOOLEAN | `false` | Only gates `json_serialize_plan`; `query`/`query_table` can never be admitted. |
 | `allow_file_table_references` | BOOLEAN | `false` | Permit catalog objects with file-shaped names (`x.parquet`, `a/b`). Never authorizes implicit file scans. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 | `max_ast_bytes` | BIGINT | `8388608` | Positive; at most the default. Also bounds the input text. |
@@ -172,10 +171,10 @@ Things that surprise people:
 
 - Objects are authorized by their **resolved** identity after binding, using the caller's
   search path and transaction. Views and the tables behind them must both pass.
-- Internal metadata views (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`) are
-  denied regardless of options; their readers are on the non-overridable
-  [never-bind list](docs/security.md#never-bind-functions), along with dynamic SQL and
-  sequence/storage functions.
+- Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`, `json_serialize_plan`),
+  internal metadata views (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), and
+  sequence/storage functions are denied regardless of options; they are on the
+  non-overridable [never-bind list](docs/security.md#never-bind-functions).
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
 - Collations `binary`/`c`/`posix`, `nocase`, `noaccent`, and `nfc` are available by default

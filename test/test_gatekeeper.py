@@ -104,8 +104,8 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT * FROM query('SELECT 1')", {"check_functions": False}, False),
     ("SELECT * FROM query_table('t')", {"check_functions": False}, False),
     ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": ["json_serialize_plan"]}, False),
-    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"], "allow_dynamic_sql": True}, False),
-    ("SELECT * FROM query('SELECT 1')", {"allow_dynamic_sql": True}, False),
+    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"]}, False),
+    ("SELECT * FROM query('SELECT 1')", {}, False),
 ])
 def test_functions(populated, sql, opts, allowed):
     result = check(populated, sql, opts)
