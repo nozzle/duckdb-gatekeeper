@@ -13,6 +13,10 @@ using Names = std::set<std::string>;
 constexpr uint64_t MAX_AST_BYTES = 8388608;
 constexpr uint64_t MAX_AST_NODES = 100000;
 constexpr uint64_t MAX_AST_DEPTH = 512;
+// Internal injection point for fuzzing; SQL entry points always use these defaults.
+struct Limits {
+	uint64_t bytes = MAX_AST_BYTES, nodes = MAX_AST_NODES, depth = MAX_AST_DEPTH;
+};
 struct Table {
 	std::string catalog, schema, table;
 	bool operator<(const Table &other) const {
@@ -63,5 +67,6 @@ std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
 bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
                   bool internal = false);
-Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr);
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr,
+                const Limits &limits = Limits());
 } // namespace gatekeeper

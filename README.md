@@ -161,17 +161,13 @@ What the three failure shapes look like:
 | `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 
-Function allowlisting always applies to caller-authored functions. With
-`use_default_functions := true`, the allowed set is **defaults ∪ allowed_functions**;
-with `false`, it is just `allowed_functions`. Explicit blocks and the never-bind list
-win either way. Global and request policies each must grant permission: a request
-cannot add a function that the global policy denies.
+Function allowlisting always applies to caller-authored functions:
 
-Recursive CTEs are supported and undergo the same function and table checks as other
-queries. Fixed internal guardrails bound SQL input and serialized AST size to 8 MiB,
-AST traversal to 100,000 nodes, and AST depth to 512. These are not configurable and
-do not bound recursive iterations, execution time, memory, or result size. Parsing
-and serialization precede the AST traversal checks; enforce resource budgets in the host.
+- `use_default_functions := true`: **defaults ∪ allowed_functions**.
+- `use_default_functions := false`: only `allowed_functions`.
+- Explicit blocks and the never-bind list win either way.
+- Global and request policies each must grant permission: a request cannot add a
+  function that the global policy denies.
 
 Caller-written table functions (`FROM range(...)`, `FROM read_parquet(...)`) use
 the same function policy as scalar and aggregate calls. Readers are not defaults;

@@ -149,6 +149,7 @@ struct Walker {
 	const Policy &policy;
 	BindingPolicy *binding;
 	const Policy *ceiling;
+	const Limits &limits;
 	template <class Predicate> bool Both(Predicate predicate) const {
 		return predicate(policy) && (!ceiling || predicate(*ceiling));
 	}
@@ -173,7 +174,7 @@ struct Walker {
 			auto expr = work.back();
 			work.pop_back();
 			++visited;
-			if (visited > MAX_AST_NODES)
+			if (visited > limits.nodes)
 				return false;
 			auto kind = Field(expr, "class");
 			if (kind == "CONSTANT" || kind == "PARAMETER")
@@ -216,7 +217,7 @@ struct Walker {
 			auto expr = work.back();
 			work.pop_back();
 			++visited;
-			if (visited > MAX_AST_NODES)
+			if (visited > limits.nodes)
 				return false;
 			if (yyjson_is_arr(expr)) {
 				size_t i, n;
@@ -453,7 +454,7 @@ struct Walker {
 	}
 	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
 		++nodes;
-		if (nodes > MAX_AST_NODES || depth > MAX_AST_DEPTH)
+		if (nodes > limits.nodes || depth > limits.depth)
 			throw Stop{"AST size or depth limit exceeded", "limit"};
 		if (expected == "logical_type") {
 			Type(value, depth);
@@ -557,9 +558,9 @@ struct Walker {
 	}
 };
 
-Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling) {
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling, const Limits &limits) {
 	auto &inventory = GetInventory();
-	Walker walker{inventory, policy, binding, ceiling};
+	Walker walker{inventory, policy, binding, ceiling, limits};
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {

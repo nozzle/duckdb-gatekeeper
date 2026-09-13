@@ -152,7 +152,6 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   caller allowlist. Lookup-triggered autoload can occur before the callback; use
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
-  Recursive CTEs are supported; their iterations are not bounded by AST depth.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
   every overload, argument, or future version.
 - Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's

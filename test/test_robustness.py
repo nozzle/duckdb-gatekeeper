@@ -24,6 +24,8 @@ def test_depth_and_width(db):
     ("SELECT " + "abs(" * 260 + "1" + ")" * 260, "AST size or depth limit exceeded"),
 ], ids=["input-bytes", "serialized-bytes", "nodes", "depth"])
 def test_fixed_ast_guardrails_and_recovery(db, sql, message):
+    if message == "serialized AST exceeds fixed size limit":
+        assert len(sql.encode()) == 8388608
     result = check(db, sql)
     assert result["code"] == "forbidden" and not result["allowed"], result
     assert result["violations"][0]["rule"] == "limit"

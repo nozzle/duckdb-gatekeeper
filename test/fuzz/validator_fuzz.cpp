@@ -7,7 +7,7 @@
 using namespace duckdb_yyjson;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-	// Fixed prefix keeps policy mutations independent of the JSON document.
+	// Preserve the six-byte corpus prefix, including retired flag bits and byte 5.
 	if (size < 6 || size > 65536)
 		return 0;
 	std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
@@ -30,25 +30,27 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			policy.blocked_functions = {"md5", "read_csv"};
 		if (data[1] & 32)
 			policy.allowed_functions = {"md5", "range", "query_table"};
-		// Statement counts are checked by the linked SQL harness.
-		policy.statements = data[5] ? data[5] : 1;
+		gatekeeper::Limits limits;
+		limits.nodes = data[2] ? data[2] : gatekeeper::MAX_AST_NODES;
+		limits.depth = data[3] ? data[3] : gatekeeper::MAX_AST_DEPTH;
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
 			return 0;
 		gatekeeper::BindingPolicy binding;
-		auto result = gatekeeper::Validate(ast, policy, &binding);
+		auto result = gatekeeper::Validate(ast, policy, &binding, nullptr, limits);
 		gatekeeper::Policy ceiling;
 		ceiling.defaults = data[4] & 1;
 		ceiling.blocked_functions = {"abs", "md5"};
-		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling);
-		if (layered.allowed && (!result.allowed || !gatekeeper::Validate(ast, ceiling).allowed))
+		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling, limits);
+		if (layered.allowed &&
+		    (!result.allowed || !gatekeeper::Validate(ast, ceiling, nullptr, nullptr, limits).allowed))
 			std::abort();
 		if ((result.code != "ok" && result.code != "forbidden" && result.code != "unsupported") ||
 		    result.allowed != (result.code == "ok") || result.allowed != result.violations.empty() ||
 		    !result.error_message.empty() || !result.error_type.empty())
 			std::abort();
 		gatekeeper::BindingPolicy again_binding;
-		auto again = gatekeeper::Validate(ast, policy, &again_binding);
+		auto again = gatekeeper::Validate(ast, policy, &again_binding, nullptr, limits);
 		if (binding.synthesized_functions != again_binding.synthesized_functions ||
 		    binding.literal_constructors != again_binding.literal_constructors ||
 		    binding.runtime_table_functions != again_binding.runtime_table_functions)
