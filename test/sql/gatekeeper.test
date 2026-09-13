@@ -1,22 +1,22 @@
 require gatekeeper
 
 query I
-SELECT gatekeeper_validate('SELECT 1').allowed;
+SELECT allowed FROM gatekeeper_validate('SELECT 1');
 ----
 true
 
 query T
-SELECT gatekeeper_validate('DROP TABLE t').code;
+SELECT code FROM gatekeeper_validate('DROP TABLE t');
 ----
 unsupported
 
 query I
-SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']).allowed;
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']);
 ----
 false
 
 query I
-SELECT gatekeeper_validate('SELECT * FROM other.t', allowed_tables := [{catalog:'*', schema:'tenant', 'table':'*'}]).allowed;
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM other.t', allowed_tables := [{catalog:'*', schema:'tenant', 'table':'*'}]);
 ----
 false
 
@@ -26,7 +26,7 @@ CALL gatekeeper_configure(blocked_functions := ['md5']);
 true
 
 query I
-SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []).allowed;
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []);
 ----
 false
 
@@ -34,7 +34,7 @@ statement ok
 RESET gatekeeper_policy;
 
 query I
-SELECT gatekeeper_validate('SELECT md5(''x'')').allowed;
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')');
 ----
 true
 

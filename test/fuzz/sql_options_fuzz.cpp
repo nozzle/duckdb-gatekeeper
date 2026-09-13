@@ -38,8 +38,14 @@ static Value Decision(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!chunk || chunk->size() != 1)
 		std::abort();
-	auto value = chunk->GetValue(0, 0);
-	if (value.IsNull())
+	if (chunk->ColumnCount() != 8)
+		std::abort();
+	child_list_t<Value> columns;
+	for (idx_t i = 0; i < chunk->ColumnCount(); i++)
+		columns.emplace_back(result.names[i], chunk->GetValue(i, 0));
+	auto value = Value::STRUCT(std::move(columns));
+	auto extra = result.Fetch();
+	if (extra && extra->size())
 		std::abort();
 	auto &fields = StructValue::GetChildren(value);
 	if (fields.size() != 8)
@@ -193,10 +199,10 @@ static Value Configured(const std::string &options, const Value &text, int64_t l
 	if (published->HasError())
 		std::abort();
 	CheckNullFree(published->GetValue(0, 0));
-	auto decision = Run(connection, "SELECT gatekeeper_validate('SELECT * FROM v') FROM input", text, limit);
-	auto overridden = Run(
-	    connection, "SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := []) FROM input", text, limit);
-	auto baseline = Run(connection, "SELECT gatekeeper_validate('SELECT md5(''x'')') FROM input", text, limit);
+	auto decision = Run(connection, "SELECT * FROM gatekeeper_validate('SELECT * FROM v')", text, limit);
+	auto overridden =
+	    Run(connection, "SELECT * FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])", text, limit);
+	auto baseline = Run(connection, "SELECT * FROM gatekeeper_validate('SELECT md5(''x'')')", text, limit);
 	if (!StructValue::GetChildren(baseline)[0].GetValue<bool>() &&
 	    StructValue::GetChildren(overridden)[0].GetValue<bool>())
 		std::abort();
@@ -210,7 +216,7 @@ static void CheckNativeSettingBypass() {
 	auto &config = DBConfig::GetConfig(*database.instance);
 	// Native host APIs skip SQL SET callbacks. Enforcement must decode the actual value.
 	config.SetOption("gatekeeper_policy", Value("invalid"));
-	auto invalid = connection.Query("SELECT gatekeeper_validate('SELECT 1')");
+	auto invalid = connection.Query("SELECT * FROM gatekeeper_validate('SELECT 1')");
 	auto decision = Decision(*invalid);
 	if (StructValue::GetChildren(decision)[1].GetValue<string>() != "invalid_input")
 		std::abort();
@@ -222,7 +228,7 @@ static void CheckNativeSettingBypass() {
 	if (blocked->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", blocked->GetValue(0, 0));
-	auto blocked_view = connection.Query("SELECT gatekeeper_validate('SELECT * FROM v', blocked_tables := [])");
+	auto blocked_view = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM v', blocked_tables := [])");
 	if (StructValue::GetChildren(Decision(*blocked_view))[1].GetValue<string>() != "forbidden")
 		std::abort();
 	if (connection.Query("RESET gatekeeper_policy")->HasError())
@@ -232,7 +238,7 @@ static void CheckNativeSettingBypass() {
 	if (canonical->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
-	auto denied = connection.Query("SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
+	auto denied = connection.Query("SELECT * FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
 	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
 		std::abort();
 	// Native setters must not install an ignored nonempty table restriction.
@@ -242,7 +248,7 @@ static void CheckNativeSettingBypass() {
 	if (inconsistent->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", inconsistent->GetValue(0, 0));
-	auto ignored = connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t')");
+	auto ignored = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM secret.t')");
 	if (StructValue::GetChildren(Decision(*ignored))[1].GetValue<string>() != "invalid_input")
 		std::abort();
 	if (connection.Query("RESET gatekeeper_policy")->HasError())
@@ -255,7 +261,7 @@ static void CheckNativeSettingBypass() {
 	if (widened->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", widened->GetValue(0, 0));
-	auto closed = connection.Query("SELECT gatekeeper_validate('SELECT * FROM v')");
+	auto closed = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM v')");
 	if (StructValue::GetChildren(Decision(*closed))[1].GetValue<string>() != "invalid_input")
 		std::abort();
 	if (connection.Query("RESET gatekeeper_policy")->HasError())
@@ -285,7 +291,7 @@ static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput 
 		return probe.calls % 2 == 0 ? Reader("read_csv_auto", Value("/gatekeeper/missing/second.csv")) : nullptr;
 	// Validates on another connection mid-bind, then yields an admitted reader.
 	if (input.table_name == "nested_probe") {
-		auto nested = probe.other->Query("SELECT gatekeeper_validate('SELECT 1')");
+		auto nested = probe.other->Query("SELECT * FROM gatekeeper_validate('SELECT 1')");
 		if (nested->HasError() || !StructValue::GetChildren(Decision(*nested))[0].GetValue<bool>())
 			std::abort();
 		return Reader("range", Value::BIGINT(1));
@@ -296,7 +302,7 @@ static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput 
 }
 
 static std::string Code(Connection &connection, const std::string &sql) {
-	auto result = connection.Query("SELECT gatekeeper_validate($1)", Value(sql));
+	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
 	if (result->HasError())
 		std::abort();
 	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
@@ -360,9 +366,9 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckReplacementCallbacks();
 		Setup(connection);
 		CheckFuzzLimits(connection);
-		auto allow = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
+		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
-		    connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := []).allowed");
+		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
 		if (allow->HasError() || deny->HasError() || !allow->GetValue(0, 0).GetValue<bool>() ||
 		    deny->GetValue(0, 0).GetValue<bool>())
 			std::abort();
@@ -392,10 +398,9 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	if (data[0] % 16 == 14) {
 		// A resolved function denial must also reject its explicit caller spelling.
-		auto first =
-		    Run(connection,
-			    "SELECT gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract']) FROM input",
-			    text, limit);
+		auto first = Run(
+		    connection, "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
+		    text, limit);
 		if (StructValue::GetChildren(first).size() == 8) {
 			for (const auto &violation : ListValue::GetChildren(StructValue::GetChildren(first)[2])) {
 				auto &fields = StructValue::GetChildren(violation);
@@ -408,10 +413,10 @@ static int Fuzz(const uint8_t *data, size_t size) {
 						quoted += '"';
 					quoted += c;
 				}
-				auto explicit_result = Run(
-				    connection,
-				    "SELECT gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract']) FROM input",
-				    Value("SELECT \"" + quoted + "\"(1)"), limit);
+				auto explicit_result =
+				    Run(connection,
+					    "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
+					    Value("SELECT \"" + quoted + "\"(1)"), limit);
 				auto &decision = StructValue::GetChildren(explicit_result);
 				if (decision.size() != 8 || decision[1].GetValue<string>() != "forbidden")
 					std::abort();
@@ -421,10 +426,10 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	std::string sql;
 	if (data[0] % 4 == 0) {
-		sql = "SELECT gatekeeper_validate($1, max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
+		sql = "SELECT * FROM gatekeeper_validate($1, max_statements := " + std::to_string(1 + data[1] % 4) + ")";
 	} else {
-		sql = "SELECT gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
-		      options + ") FROM input";
+		sql = "SELECT * FROM gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
+		      options + ")";
 	}
 	if (Run(connection, sql, text, limit) != Run(connection, sql, text, limit))
 		std::abort();

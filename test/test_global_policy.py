@@ -37,7 +37,7 @@ def test_canonical_policy_shape_is_pinned(db):
                 "allowed_tables", "blocked_tables", "max_statements", "restrict_tables"}
     assert set(policy(db)) == expected
     for statement in ("CALL gatekeeper_configure(allowed_types := [])",
-                      "SELECT gatekeeper_validate('SELECT 1', allowed_types := [])"):
+                      "SELECT * FROM gatekeeper_validate('SELECT 1', allowed_types := [])"):
         with pytest.raises(duckdb.Error, match="allowed_types"):
             db.execute(statement)
     assert "allow_dynamic_sql" not in policy(db)
@@ -229,13 +229,13 @@ def test_set_validation_and_cast_limitations(db):
 
 
 def test_prepare_validation_reads_global_at_execution(db):
-    db.execute("PREPARE v AS SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])")
-    assert db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    db.execute("PREPARE v AS SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])")
+    assert db.execute("EXECUTE v").fetchone()[0]
     with db.cursor() as other:
         configure(other, {"blocked_functions": ["md5"]})
-    assert not db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    assert not db.execute("EXECUTE v").fetchone()[0]
     db.execute("RESET gatekeeper_policy")
-    assert db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    assert db.execute("EXECUTE v").fetchone()[0]
 
 
 @pytest.mark.parametrize("global_options,overrides,sql,rule", [

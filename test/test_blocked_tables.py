@@ -137,9 +137,8 @@ def test_canonical_blocks_reject_null_or_misspelled_fields(db, entry):
                    + entry + "])")
 
 
-def test_row_varying_block_structs(db):
+def test_prepared_block_structs(db):
     db.execute("CREATE TABLE t(x INT)")
-    rows = db.execute("""SELECT gatekeeper_validate('SELECT * FROM t', blocked_tables :=
-        CASE WHEN i=0 THEN [] ELSE [{schema:'main', 'table':'t'}] END).allowed
-        FROM range(2) r(i) ORDER BY i""").fetchall()
-    assert rows == [(True,), (False,)]
+    for blocks, allowed in [([], True), ([{"schema": "main", "table": "t"}], False), ([], True)]:
+        assert db.execute("SELECT allowed FROM gatekeeper_validate('SELECT * FROM t', blocked_tables := ?)",
+                          [blocks]).fetchall() == [(allowed,)]

@@ -57,7 +57,7 @@ try {
       await con.query('SET autoload_known_extensions=false; SET autoinstall_known_extensions=false');
       await con.query(`LOAD '${location.origin}/gatekeeper.duckdb_extension.wasm'`);
       const decision = async (sql, options = '') => JSON.parse(JSON.stringify(
-        (await rows(`SELECT gatekeeper_validate('${sql.replaceAll("'", "''")}'${options}) AS result`))[0].result,
+        (await rows(`SELECT * FROM gatekeeper_validate('${sql.replaceAll("'", "''")}'${options})`))[0],
         (_, v) => typeof v === 'bigint' ? Number(v) : v));
       const rejects = async (sql, message) => {
         try {await con.query(sql);} catch (e) {return e.message.includes(message);}
@@ -78,11 +78,11 @@ try {
       d = await decision('SELECT * FROM v');
       check('view dependencies', d.allowed && d.objects.some(o => o.table === 'v') && d.objects.some(o => o.table === 't'));
       check('submitted parameter binding', (await decision('SELECT * FROM t WHERE x = $1')).allowed);
-      const prepared = await con.prepare('SELECT gatekeeper_validate(?) AS result');
+      const prepared = await con.prepare('SELECT * FROM gatekeeper_validate(?)');
       try {
-        check('host prepared validation', (await prepared.query('SELECT 1')).toArray()[0].result.allowed);
+        check('host prepared validation', (await prepared.query('SELECT 1')).toArray()[0].allowed);
         await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'], allowed_tables := [{schema:'main', 'table':'t'}, {schema:'main', 'table':'v'}])");
-        check('prepared validation observes new policy', !(await prepared.query("SELECT md5('x')")).toArray()[0].result.allowed);
+        check('prepared validation observes new policy', !(await prepared.query("SELECT md5('x')")).toArray()[0].allowed);
       } finally {await prepared.close();}
       d = await decision("SELECT md5('x')", ', blocked_functions := []::VARCHAR[]');
       check('function ceiling', !d.allowed && d.code === 'forbidden');
@@ -93,7 +93,7 @@ try {
       check('request narrowing', !(await decision('SELECT * FROM t', ', allowed_tables := []')).allowed);
       const second = await db.connect();
       try {
-        check('policy shared across connections', !(await second.query("SELECT gatekeeper_validate('SELECT md5(''x'')') AS result")).toArray()[0].result.allowed);
+        check('policy shared across connections', !(await second.query("SELECT * FROM gatekeeper_validate('SELECT md5(''x'')')")).toArray()[0].allowed);
       } finally {await second.close();}
       check('malformed configuration rejected', await rejects("CALL gatekeeper_configure(allowed_tables := [{catlog:'x', schema:'main', 'table':'t'}])", 'unknown table field'));
       check('invalid replacement atomic', !(await decision("SELECT md5('x')")).allowed);

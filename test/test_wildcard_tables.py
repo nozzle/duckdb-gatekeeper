@@ -106,7 +106,7 @@ def test_unknown_namespace_options_are_rejected_by_both_apis(db, name):
     configure(db, {"allowed_tables": []})
     before = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
     for sql in [f"CALL gatekeeper_configure({name} := ['memory'])",
-                f"SELECT gatekeeper_validate('SELECT 1', {name} := ['memory'])"]:
+                f"SELECT * FROM gatekeeper_validate('SELECT 1', {name} := ['memory'])"]:
         with pytest.raises(duckdb.Error, match="unknown option|Invalid named parameter"):
             db.execute(sql)
     assert db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0] == before

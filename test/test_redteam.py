@@ -112,8 +112,8 @@ def test_function_hidden_positions(catalog, expression):
 ])
 def test_policy_parser_confusion(db, options):
     import duckdb
-    with pytest.raises(duckdb.BinderException, match="named typed arguments"):
-        db.execute("SELECT gatekeeper_validate('SELECT 1',?)", [options])
+    with pytest.raises(duckdb.BinderException, match="No function matches"):
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1',?)", [options])
 
 
 def test_preflight_denies_before_reader_binding(db):
@@ -135,10 +135,10 @@ def test_request_cannot_opt_out_of_ceiling(catalog):
 
 def test_catalog_changes_rechecked(catalog):
     catalog.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    catalog.execute("PREPARE validation AS SELECT gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
-    assert catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
+    catalog.execute("PREPARE validation AS SELECT allowed FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
+    assert catalog.execute("EXECUTE validation").fetchone()[0]
     catalog.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
-    assert not catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
+    assert not catalog.execute("EXECUTE validation").fetchone()[0]
 
 
 def test_search_path_and_temp_shadowing(catalog):
