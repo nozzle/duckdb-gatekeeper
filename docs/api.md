@@ -103,9 +103,12 @@ resource access, not an argument-level sandbox. Inventories live in
 | `allowed_catalogs` | VARCHAR[] | Unrestricted catalogs | Deny catalog objects |
 | `allowed_schemas` | VARCHAR[] | Unrestricted schemas | Deny schema objects |
 | `allowed_tables` | STRUCT[] | Unrestricted non-internal objects | Deny tables and views |
+| `allowed_types` | STRUCT[] | Built-in types only | Built-in types only (removes inherited entries) |
 
 Table structs require nonempty `schema` and `table` strings; optional `catalog` may
 be omitted or NULL. An omitted catalog matches that schema/name in any catalog.
+`allowed_types` structs use `schema` and `type` with the same optional `catalog`; see
+[Types and collations](#types-and-collations).
 No wildcard or dotted-string parsing is performed. Unknown table fields are invalid.
 Use `allowed_catalogs` or explicit entry catalogs to constrain cross-catalog access.
 

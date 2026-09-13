@@ -152,9 +152,12 @@ binding-time work. Read [security boundaries](docs/security.md) before integrati
 
 ## Building from source
 
-Requires Git, Python 3.10+, and a C++17 compiler. Install the pinned Python tooling
-in `requirements-dev.txt` (including JSON Schema validation). The standard C++ template layout uses
-pinned DuckDB and extension-ci-tools submodules.
+Requires Git, Python 3.10+, and a C++17 compiler. Python's standard library is
+sufficient to generate and build Gatekeeper: inventory validation at build time uses the
+bundled `scripts/schema_check.py`, so community distribution images need no extra
+packages. Development tests additionally use the pinned `jsonschema` (via
+`requirements-dev.txt`) as an oracle to verify that validator. The standard C++ template
+layout uses pinned DuckDB and extension-ci-tools submodules.
 
 ```sh
 git clone --recurse-submodules https://github.com/nozzle/duckdb-gatekeeper.git

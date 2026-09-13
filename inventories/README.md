@@ -23,11 +23,15 @@ were absent from the imported review; these remain excluded and must not be prom
 automatically. Unreviewed is not a claim of elevated behavior.
 
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
-and invalid group shapes. It is evaluated by `scripts/schema_check.py`, a standard-library
-validator for exactly the keywords the schema uses (it refuses unknown keywords), so the
-build needs no third-party Python packages in the community distribution images. The test
-suite cross-checks that validator against the `jsonschema` package from
-`requirements-inventory.txt`. `scripts/inventory.py` then checks version/source metadata,
+and invalid group shapes. The contract is: **Python's standard library is sufficient to
+generate and build Gatekeeper; development tests additionally use `jsonschema` to verify
+the validator.** `scripts/schema_check.py` evaluates exactly the JSON Schema keywords the
+schema uses and refuses any other keyword anywhere in the schema (including `$defs` and
+unselected conditional branches), so a schema edit that needs an unsupported keyword fails
+clearly rather than being ignored. The test suite runs generation under `python -S`,
+checks that malformed inventories are still rejected there, and cross-checks the validator
+against the pinned `jsonschema` package (from `requirements-inventory.txt`) on the real
+inventories and on mutated documents. `scripts/inventory.py` then checks version/source metadata,
 sorting, duplicates, and classification conflicts, including conflicts across extensions.
 The build consumes this same loader. Tests exercise every default and every excluded name.
 

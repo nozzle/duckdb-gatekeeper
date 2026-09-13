@@ -82,6 +82,21 @@ def test_generation_needs_only_the_standard_library(tmp_path):
     assert (tmp_path / "inventory.hpp").exists() and (tmp_path / "grammar.hpp").exists()
 
 
+@pytest.mark.parametrize("key,value", [("unexpected", True), ("source", "not a URL"), ("notes", [])])
+def test_standard_library_validation_still_rejects_malformed_inventories(tmp_path, key, value):
+    # The same strictness without jsonschema: -S ensures only the bundled validator is available.
+    shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
+    path = tmp_path / "inventories/core.json"
+    entry = json.loads(path.read_text())
+    entry[key] = value
+    path.write_text(json.dumps(entry))
+    code = ("import sys, pathlib; sys.path.insert(0, 'scripts'); from inventory import load; "
+            f"load(pathlib.Path({str(tmp_path)!r}))")
+    result = subprocess.run([sys.executable, "-S", "-c", code], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "invalid inventory core.json" in result.stderr and "jsonschema" not in result.stderr
+
+
 MUTATIONS = [
     ("unexpected", True), ("notes", "not a list"), ("notes", [42]), ("notes", []), ("notes", [""]),
     ("source", {}), ("source", "not a URL"), ("source", "https://"), ("source", "https://host/a b"),
