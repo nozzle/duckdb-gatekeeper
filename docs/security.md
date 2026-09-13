@@ -110,6 +110,9 @@ execution time, outside this validation.
 Gatekeeper does not restrict type or collation names, or authorize cast implementations.
 The database owner controls extension loading and definitions. Table/view catalog
 and schema restrictions do not restrict type lookup. There is no mandatory type audit.
+Type resolution can autoload or autoinstall extensions when enabled; hosts must
+provision extensions during trusted setup and disable `autoload_known_extensions`
+and `autoinstall_known_extensions` on validation connections.
 Built-in temporal casts can use ICU timezone/calendar settings; GEOMETRY CRS binding
 can consult trusted CRS providers and `ignore_unknown_crs`.
 

@@ -111,6 +111,13 @@ def test_collation_does_not_infer_function_call(db, collation, function):
     result = validate(db, f"SELECT 'a' COLLATE {collation}", {"blocked_functions": [function]})
     assert result["allowed"], result
     assert not validate(db, f"SELECT {function}('a')", {"blocked_functions": [function]})["allowed"]
+    for sql in (f"SELECT 'a' COLLATE {collation} = 'A'",
+                f"SELECT s FROM (VALUES ('a'),('b')) v(s) ORDER BY s COLLATE {collation}"):
+        assert validate(db, sql)["allowed"], validate(db, sql)
+        result = validate(db, sql, {"blocked_functions": [function]})
+        assert result["code"] == "forbidden", result
+        assert any(v["rule"] == "function" and v["function_name"] == function
+                   for v in result["violations"]), result
 
 
 def test_host_created_type_can_shadow_builtin(db):

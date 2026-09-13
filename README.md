@@ -97,7 +97,7 @@ result with `code = 'invalid_input'`, while `CALL gatekeeper_configure` raises a
 leaves the active policy unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
 spliced into SQL text.
 For `CALL gatekeeper_configure`, an empty non-STRUCT list supplied to
-`allowed_tables` or `allowed_types` means an empty restriction regardless of its
+`allowed_tables` means an empty restriction regardless of its
 element type: DuckDB converts even an untyped `[]` to `INTEGER[]` before the
 configuration callback. Nonempty lists require structs, and typed STRUCT lists
 have their field names checked even when empty.
@@ -208,9 +208,9 @@ Schema-wide `SHOW` is denied whenever a table restriction is configured, includi
 `*/*/*`; this option does not filter metadata rows. `DESCRIBE table` still checks the
 resolved table normally.
 
-Table rules neither grant nor restrict types/functions. Use exact `allowed_types`
-identities and leaf-name function policies for those capabilities; their matching
-does not support wildcards. Function permissions assume trusted catalog definitions.
+Table rules neither grant nor restrict types/functions. Types are supplied by the
+host without separate authorization. Functions use exact leaf-name policies, not
+wildcards, and assume trusted catalog definitions.
 
 Things that surprise people:
 
@@ -229,7 +229,10 @@ Things that surprise people:
   types are available when DuckDB can resolve them. The database owner controls
   extension loading and type definitions. Table rules restrict table
   and view access, not type names. Expressions in type parameters still undergo
-  the usual bind-time expression checks.
+  the usual bind-time expression checks. Type resolution can autoload or autoinstall
+  extensions when those settings are enabled; provision extensions during trusted
+  setup and disable `autoload_known_extensions` and `autoinstall_known_extensions`
+  on validation connections.
 - `SELECT * FROM 'x.parquet'` needs `allow_replacement_scans := true` **and** the reader
   DuckDB substitutes admitted by name: `parquet_scan` for Parquet, `read_csv_auto` for
   CSV, `read_json_auto` for JSON. The decision happens before the reader binds, so a
