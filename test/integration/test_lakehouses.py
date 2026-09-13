@@ -56,8 +56,7 @@ def initialize_lake(db, kind, tmp_path):
 def test_allowed_and_denied_tables(lake):
     db, schema, kind = lake
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
-    policy = {"allowed_catalogs": ["lake"], "allowed_schemas": [schema],
-              "allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}],
+    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}],
               "allow_table_functions": False}
     db.execute("CALL gatekeeper_configure(" + ",".join(name + " := ?" for name in policy) + ")", list(policy.values()))
     result = validate(db, sql, policy)
@@ -67,7 +66,8 @@ def test_allowed_and_denied_tables(lake):
         blocked = validate(db, sql, {**policy, "blocked_functions": ["iceberg_scan"]})
         assert blocked["code"] == "forbidden"
         assert any(v["function_name"] == "iceberg_scan" for v in blocked["violations"])
-    for changes in [{"allowed_catalogs": ["other"]}, {"allowed_schemas": ["other"]}, {"allowed_tables": []}]:
+    for changes in [{"allowed_tables": [{"catalog": "other", "schema": "*", "table": "*"}]},
+                    {"allowed_tables": [{"catalog": "*", "schema": "other", "table": "*"}]}, {"allowed_tables": []}]:
         denied = validate(db, sql, {**policy, **changes})
         assert not denied["allowed"] and denied["code"] == "forbidden", (kind, denied)
     db.execute(f"USE lake.{schema}")
@@ -82,7 +82,8 @@ def test_allowed_and_denied_tables(lake):
 def test_trusted_view_and_no_writes(lake):
     db, schema, kind = lake
     db.execute(f"CREATE VIEW main.allowed_view AS SELECT * FROM lake.{schema}.orders")
-    policy = {"allowed_catalogs": ["lake", "memory"], "allowed_schemas": [schema,"main"], "allow_table_functions": False}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "*"},
+                                 {"catalog": "memory", "schema": "main", "table": "*"}], "allow_table_functions": False}
     assert validate(db, "SELECT * FROM main.allowed_view", policy)["allowed"]
     assert not validate(db, "SELECT * FROM main.allowed_view", {**policy, "allowed_tables": []})["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)

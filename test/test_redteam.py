@@ -60,7 +60,7 @@ def catalog(db):
     "SUMMARIZE secret.t",
 ])
 def test_hidden_table_references(catalog, sql):
-    options = {"allowed_schemas": ["allowed"], "allowed_functions": ["secret_scalar", "secret_table"]}
+    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}], "allowed_functions": ["secret_scalar", "secret_table"]}
     result = validate(catalog, sql, options)
     assert not result["allowed"], (sql, result)
     assert result["code"] == "forbidden", (sql, result)
@@ -76,7 +76,7 @@ def test_hidden_table_references(catalog, sql):
 ])
 def test_cte_binding_scope(catalog, sql):
     catalog.execute("SET schema='secret'; CREATE TABLE secret.b AS SELECT 3 x")
-    result = validate(catalog, sql, {"allowed_schemas": ["allowed"]})
+    result = validate(catalog, sql, {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]})
     assert not result["allowed"], (sql, result)
 
 
@@ -126,16 +126,16 @@ def test_preflight_denies_before_reader_binding(db):
 
 
 def test_request_cannot_opt_out_of_ceiling(catalog):
-    configure(catalog,{"blocked_functions":["md5"],"allowed_schemas":["allowed"]})
+    configure(catalog,{"blocked_functions":["md5"],"allowed_tables":[{"catalog":"*","schema":"allowed","table":"*"}]})
     assert not validate(catalog, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
     assert not validate(catalog, "SELECT md5('x')")["allowed"]
-    assert not validate(catalog, "SELECT * FROM secret.t", {"allowed_schemas": ["secret"]})["allowed"]
+    assert not validate(catalog, "SELECT * FROM secret.t", {"allowed_tables": [{"catalog": "*", "schema": "secret", "table": "*"}]})["allowed"]
     assert not validate(catalog, "SELECT * FROM secret.t")["allowed"]
 
 
 def test_catalog_changes_rechecked(catalog):
     catalog.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    catalog.execute("PREPARE validation AS SELECT gatekeeper_validate('SELECT * FROM allowed.changing',allowed_schemas := ['allowed'])")
+    catalog.execute("PREPARE validation AS SELECT gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
     assert catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
     catalog.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
     assert not catalog.execute("EXECUTE validation").fetchone()[0]["allowed"]
@@ -143,13 +143,13 @@ def test_catalog_changes_rechecked(catalog):
 
 def test_search_path_and_temp_shadowing(catalog):
     catalog.execute("SET schema='allowed'")
-    options = {"allowed_schemas": ["allowed"]}
+    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]}
     assert validate(catalog, "SELECT * FROM t", options)["allowed"]
     catalog.execute("SET schema='secret'")
     assert not validate(catalog, "SELECT * FROM t", options)["allowed"]
     catalog.execute("CREATE TEMP TABLE t(x INT)")
-    assert not validate(catalog, "SELECT * FROM t", {"allowed_catalogs": ["memory"]})["allowed"]
-    assert validate(catalog, "SELECT * FROM t", {"allowed_catalogs": ["temp"], "allowed_schemas": ["main"]})["allowed"]
+    assert not validate(catalog, "SELECT * FROM t", {"allowed_tables": [{"catalog": "memory", "schema": "*", "table": "*"}]})["allowed"]
+    assert validate(catalog, "SELECT * FROM t", {"allowed_tables": [{"catalog": "temp", "schema": "main", "table": "*"}]})["allowed"]
 
 
 def test_quoted_names_and_exact_catalog(db):

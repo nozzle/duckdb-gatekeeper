@@ -14,11 +14,11 @@ def policy(db):
 
 def test_inspection_reset_and_complete_replacement(db):
     defaults = policy(db)
-    assert defaults["restrict_schemas"] is False
-    assert defaults["allowed_schemas"] == []
+    assert defaults["restrict_tables"] is False
+    assert defaults["allowed_tables"] == []
     assert all(value is not None for value in defaults.values())
-    configure(db, {"allowed_schemas": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
-    assert policy(db)["restrict_schemas"] is True
+    configure(db, {"allowed_tables": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
+    assert policy(db)["restrict_tables"] is True
     assert policy(db)["blocked_functions"] == ["md5"]
     configure(db, {"max_statements": 3})
     assert policy(db) == {**defaults, "max_statements": 3}
@@ -30,15 +30,15 @@ def test_inspection_reset_and_complete_replacement(db):
 
 
 def test_canonical_policy_shape_is_pinned(db):
-    """The setting's field set is public API; a removed option must disappear from it and be rejected."""
+    """The canonical setting has exactly the supported policy fields."""
     expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
-                "allow_replacement_scans", "allowed_functions", "blocked_functions", "allowed_catalogs",
-                "allowed_schemas", "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
-                "max_ast_nodes", "max_ast_depth", "restrict_catalogs", "restrict_schemas", "restrict_tables"}
+                "allow_replacement_scans", "allowed_functions", "blocked_functions",
+                "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
+                "max_ast_nodes", "max_ast_depth", "restrict_tables"}
     assert set(policy(db)) == expected
     assert "allow_dynamic_sql" not in policy(db)
     before = policy(db)
-    # The pre-removal shape (extra allow_dynamic_sql key) is cast away by DuckDB and cannot re-add the field.
+    # DuckDB discards extra STRUCT keys, while CALL rejects unknown options.
     db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), allow_dynamic_sql := true)")
     assert policy(db) == before
     with pytest.raises(duckdb.Error):
@@ -46,7 +46,7 @@ def test_canonical_policy_shape_is_pinned(db):
     assert policy(db) == before
 
 
-def test_configuration_is_nontransactional_and_scalar_api_is_retired(db):
+def test_configuration_is_nontransactional_and_requires_table_function(db):
     db.execute("BEGIN")
     configure(db, {"blocked_functions": ["md5"]})
     db.execute("ROLLBACK")
@@ -120,6 +120,27 @@ def test_set_drops_extra_nested_keys_without_widening(db):
     assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
 
 
+def test_set_requires_consistent_table_restriction(db):
+    db.execute("CREATE TABLE t(x INT); CREATE TABLE secret(x INT)")
+    before = policy(db)
+    entry = "[{catalog:'memory', schema:'main', 'table':'t'}]"
+    with pytest.raises(duckdb.Error, match="nonempty allowed_tables requires restrict_tables"):
+        db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := " + entry + ")")
+    assert policy(db) == before
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), "
+               "restrict_tables := true, allowed_tables := " + entry + ")")
+    assert validate(db, "SELECT * FROM t")["allowed"]
+    assert not validate(db, "SELECT * FROM secret")["allowed"]
+    before = policy(db)
+    with pytest.raises(duckdb.Error, match="nonempty allowed_tables requires restrict_tables"):
+        db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), restrict_tables := false)")
+    assert policy(db) == before
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := [])")
+    assert not validate(db, "SELECT * FROM t")["allowed"]
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), restrict_tables := false)")
+    assert validate(db, "SELECT * FROM secret")["allowed"]
+
+
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
                                      "max_ast_nodes := NULL::INTEGER",
                                      "blocked_functions := [], blocked_functions := ['md5']",
@@ -127,6 +148,17 @@ def test_set_drops_extra_nested_keys_without_widening(db):
 def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument):
     with pytest.raises(duckdb.Error):
         db.execute("CALL gatekeeper_configure(" + argument + ")")
+
+
+@pytest.mark.parametrize("empty", ["[]", "[]::INTEGER[]", "[]::VARCHAR[]"])
+def test_call_empty_lists_deny_all_identities(db, empty):
+    db.execute("CREATE TABLE t(x INT); CREATE TYPE customer AS ENUM ('a')")
+    configure(db, {"allowed_types": [{"schema": "main", "type": "customer"}]})
+    db.execute(f"CALL gatekeeper_configure(allowed_tables := {empty}, allowed_types := {empty})")
+    assert policy(db)["restrict_tables"]
+    assert policy(db)["allowed_tables"] == policy(db)["allowed_types"] == []
+    assert not validate(db, "SELECT * FROM t")["allowed"]
+    assert not validate(db, "SELECT NULL::customer")["allowed"]
 
 
 def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
@@ -240,15 +272,16 @@ def test_identity_layers_match_independently_and_request_can_narrow(db):
     assert not validate(db, "SELECT * FROM u", broader)["allowed"]
 
 
-def test_types_and_namespaces_remain_ceilings(db):
+def test_type_and_table_ceilings_are_independent(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a'); CREATE TABLE private.t(x INT)")
     grant = {"allowed_types": [{"schema": "private", "type": "customer"}]}
     assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
-    configure(db, {**grant, "allowed_schemas": ["main"]})
-    assert not validate(db, "SELECT NULL::private.customer", {"allowed_schemas": ["private"]})["allowed"]
-    assert not validate(db, "SELECT * FROM private.t", {"allowed_schemas": ["private"]})["allowed"]
-    configure(db, {**grant, "allowed_catalogs": []})
-    assert not validate(db, "SELECT NULL::private.customer", {"allowed_catalogs": ["memory"]})["allowed"]
+    configure(db, {**grant, "allowed_tables": []})
+    assert validate(db, "SELECT NULL::private.customer")["allowed"]
+    assert not validate(db, "SELECT NULL::private.customer", {"allowed_types": []})["allowed"]
+    assert not validate(db, "SELECT * FROM private.t", {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})["allowed"]
+    configure(db, {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})
+    assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
 
 
 def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):

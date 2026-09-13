@@ -209,16 +209,16 @@ def test_nonaggregate_windows_in_trusted_view(db, name):
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
 
 
-def test_allowed_types_intersect_namespace_policy(db):
+def test_allowed_types_are_independent_of_table_policy(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a')")
     options = {"allowed_types": [{"schema": "private", "type": "customer"}]}
     configure(db, options)
     assert validate(db, "SELECT 'a'::private.customer", options)["allowed"]
-    assert not validate(db, "SELECT 'a'::private.customer", {**options, "allowed_schemas": ["public"]})["allowed"]
-    options = {"allowed_types": [{"schema": "main", "type": "json"}], "allowed_catalogs": ["memory"]}
+    assert validate(db, "SELECT 'a'::private.customer", {**options, "allowed_tables": []})["allowed"]
+    options = {"allowed_types": [{"schema": "main", "type": "json"}], "allowed_tables": []}
     assert not validate(db, "SELECT '{}'::JSON", options)["allowed"]
     # Builtins are namespace-independent; adding a cast does not require system catalog access.
-    assert validate(db, "SELECT 1::INTEGER", {"allowed_catalogs": [], "allowed_schemas": []})["allowed"]
+    assert validate(db, "SELECT 1::INTEGER", {"allowed_tables": []})["allowed"]
 
 
 def test_collation_permission_remains_separate_capability(db):

@@ -119,26 +119,21 @@ def test_occurrences(db):
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
-    ("SELECT * FROM db.s.t", {"allowed_catalogs": []}, False),
-    ("SELECT * FROM db.s.t", {"allowed_catalogs": ["db"]}, True),
-    ("SELECT * FROM other.s.t", {"allowed_catalogs": ["db"]}, False),
-    ("SELECT * FROM s.t", {"allowed_catalogs": []}, False),
-    ("SELECT db.main.md5('x')", {"allowed_catalogs": []}, False),
-    ("SELECT db.main.md5('x')", {"allowed_catalogs": ["db"]}, True),
-    ("SELECT * FROM s.t", {"allowed_schemas": ["s"]}, True),
-    ("SELECT * FROM t", {"allowed_schemas": ["s"]}, False),
-    ("SELECT * FROM s.t", {"allowed_schemas": []}, False),
-    ("SELECT 1", {"allowed_schemas": []}, True),
+    ("SELECT * FROM db.s.t", {"allowed_tables": []}, False),
+    ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "*", "table": "*"}]}, True),
+    ("SELECT * FROM other.s.t", {"allowed_tables": [{"catalog": "db", "schema": "*", "table": "*"}]}, False),
+    ("SELECT db.main.md5('x')", {"allowed_tables": []}, True),
+    ("SELECT * FROM s.t", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, True),
+    ("SELECT * FROM t", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "s", "table": "t"}]}, True),
     ("SELECT * FROM s.t", {"allowed_tables": []}, False),
     ("SELECT 1", {"allowed_tables": []}, True),
-    ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "*"}]}, False),
+    ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "*"}]}, True),
     ('SELECT * FROM s."*"', {"allowed_tables": [{"schema": "s", "table": "*"}]}, True),
-    ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "t"}], "allowed_schemas": ["other"]}, False),
-    ("SHOW TABLES FROM s", {"allowed_schemas": ["s"]}, False),
-    ("SHOW ALL TABLES", {"allowed_schemas": ["s"]}, False),
+    ("SHOW TABLES FROM s", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
+    ("SHOW ALL TABLES", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
     ("SHOW TABLES FROM s", {"allowed_tables": [{"schema": "s", "table": "t"}]}, False),
     ("DESCRIBE s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
 ])
@@ -160,7 +155,7 @@ def test_objects(populated, sql, opts, allowed):
     ('WITH "mine.parquet" AS (SELECT 1) SELECT * FROM "mine.parquet"', True),
 ])
 def test_ctes(db, sql, allowed):
-    result = check(db, sql, {"allowed_schemas": [], "allowed_tables": []})
+    result = check(db, sql, {"allowed_tables": []})
     assert result["allowed"] == allowed, result
 
 
@@ -224,7 +219,7 @@ def test_concurrent_policies():
         def worker(i):
             with db.cursor() as conn:
                 for j in range(30):
-                    policy = {"allowed_schemas": [f"tenant_{i}" if j%2 == 0 else "other"]}
+                    policy = {"allowed_tables": [{"catalog": "*", "schema": f"tenant_{i}" if j%2 == 0 else "other", "table": "*"}]}
                     result = check(conn, f"SELECT sum(x) FROM tenant_{i}.t", policy)
                     assert result["allowed"] == (j%2 == 0), result
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:

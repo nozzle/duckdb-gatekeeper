@@ -92,11 +92,11 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	static const char *names[] = {"check_functions",       "use_default_functions",   "allow_recursive_ctes",
+	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
 	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
-	                              "blocked_functions",     "allowed_catalogs",        "allowed_schemas",
-	                              "allowed_tables",        "max_statements",          "max_ast_bytes",
-	                              "max_ast_nodes",         "max_ast_depth",           "allowed_types"};
+	                              // Unknown namespace options exercise rejection.
+	                              "blocked_functions", "allowed_catalogs", "allowed_schemas", "allowed_tables",
+	                              "max_statements", "max_ast_bytes", "max_ast_nodes", "max_ast_depth", "allowed_types"};
 	if (selector % 16 < 15)
 		return names[selector % 16];
 	// Arbitrary option names remain one quoted identifier, never executable SQL.
@@ -110,36 +110,41 @@ static std::string Option(uint8_t selector, const std::string &text) {
 }
 
 static std::string Argument(uint8_t selector) {
-	static const char *values[] = {"$1",
-	                               "NULL",
-	                               "true",
-	                               "false",
-	                               "$2",
-	                               "0",
-	                               "-1",
-	                               "1.5",
-	                               "[]::VARCHAR[]",
-	                               "[$1]",
-	                               "[NULL]",
-	                               "[1]",
-	                               "[{schema:'main', 'table':$1}]",
-	                               "[{catalog:'memory', schema:'main', 'table':$1}]",
-	                               "[{catalog:NULL, schema:'main', 'table':$1}]",
-	                               "[{schema:NULL, 'table':$1}]",
-	                               "[{'table':$1}]",
-	                               "[{schema:'main', 'table':$1, extra:'x'}]",
-	                               "[{schema:'main', 'table':[$1]}]",
-	                               "[{schema:'main', 'table':{nested:$1}}]",
-	                               "[{schema:'main', 'table':1}]",
-	                               "[NULL::STRUCT(schema VARCHAR, \"table\" VARCHAR)]",
-	                               "{schema:'main', 'table':$1}",
-	                               "['main','secret']",
-	                               "['md5','read_csv','query_table']",
-	                               "8388609",
-	                               "[{schema:'main', type:$1}]",
-	                               "[{catalog:'system', schema:'main', type:$1}]",
-	                               "[{schema:'main', type:NULL}]",
-	                               "[{schema:'main', type:{nested:$1}}]"};
+	static const char *values[] = {
+	    "$1",
+	    "NULL",
+	    "true",
+	    "false",
+	    "$2",
+	    "0",
+	    "-1",
+	    "1.5",
+	    "[]::VARCHAR[]",
+	    "[$1]",
+	    "[NULL]",
+	    "[1]",
+	    "[{schema:'main', 'table':$1}]",
+	    "[{catalog:'memory', schema:'main', 'table':$1}]",
+	    "[{catalog:NULL, schema:'main', 'table':$1}]",
+	    "[{schema:NULL, 'table':$1}]",
+	    "[{'table':$1}]",
+	    "[{schema:'main', 'table':$1, extra:'x'}]",
+	    "[{schema:'main', 'table':[$1]}]",
+	    "[{schema:'main', 'table':{nested:$1}}]",
+	    "[{schema:'main', 'table':1}]",
+	    "[NULL::STRUCT(schema VARCHAR, \"table\" VARCHAR)]",
+	    "{schema:'main', 'table':$1}",
+	    "['main','secret']",
+	    "['md5','read_csv','query_table']",
+	    "8388609",
+	    "[{schema:'main', type:$1}]",
+	    "[{catalog:'system', schema:'main', type:$1}]",
+	    "[{schema:'main', type:NULL}]",
+	    "[{schema:'main', type:{nested:$1}}]",
+	    "[{catalog:'*', schema:'main', 'table':'*'}]",
+	    "[{catalog:'memory', schema:'*', 'table':$1}]",
+	    "[{catalog:'*', schema:'*', 'table':'*'}]",
+	    "[{catalog:'memory', schema:'main', 'table':'*'}, {catalog:'*', schema:'secret', 'table':$1}]"};
 	return values[selector % (sizeof(values) / sizeof(values[0]))];
 }
 
@@ -216,6 +221,18 @@ static void CheckNativeSettingBypass() {
 	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
 	auto denied = connection.Query("SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
 	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
+		std::abort();
+	// Native setters must not install an ignored nonempty table restriction.
+	auto inconsistent =
+	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "
+		                 "[{catalog: 'memory', schema: 'main', \"table\": 'v'}], restrict_tables := false)");
+	if (inconsistent->HasError())
+		std::abort();
+	config.SetOption("gatekeeper_policy", inconsistent->GetValue(0, 0));
+	auto ignored = connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t')");
+	if (StructValue::GetChildren(Decision(*ignored))[1].GetValue<string>() != "invalid_input")
+		std::abort();
+	if (connection.Query("RESET gatekeeper_policy")->HasError())
 		std::abort();
 	// The canonical value is NULL-free at every depth, so a NULL nested catalog installed through a native
 	// setter (or DuckDB's lossy STRUCT cast) must fail closed instead of matching any catalog.

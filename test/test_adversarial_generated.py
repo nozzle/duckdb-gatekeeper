@@ -25,7 +25,7 @@ def test_generated_nested_reference_positions(db):
         for _ in range(rng.randrange(1, 7)):
             wrap = rng.choice(wrappers)
             allowed, denied = wrap(allowed), wrap(denied)
-        policy = {"allowed_schemas": ["visible"]}
+        policy = {"allowed_tables": [{"catalog": "*", "schema": "visible", "table": "*"}]}
         assert validate(db, allowed, policy)["allowed"], allowed
         result = validate(db, denied, policy)
         assert not result["allowed"] and result["code"] == "forbidden", (denied, result)
@@ -74,9 +74,12 @@ def test_limits_at_edges_and_recovery(db):
 
 
 def test_embedded_nul_policy_does_not_truncate(db):
-    for key in ["allowed_functions", "blocked_functions", "allowed_schemas"]:
+    for key in ["allowed_functions", "blocked_functions"]:
         policy = {key: ["md5\0suffix"]}
         result = validate(db, "SELECT md5('x')", policy)
         assert result["code"] == "invalid_input"
+    for field in ["catalog", "schema", "table"]:
+        entry = {"catalog": "*", "schema": "main", "table": "*", field: "name\0suffix"}
+        assert validate(db, "SELECT 1", {"allowed_tables": [entry]})["code"] == "invalid_input"
     with pytest.raises(duckdb.Error):
         db.execute("SELECT gatekeeper_validate('SELECT 1', ?)", ['{"check_functions":false}\0{}'])

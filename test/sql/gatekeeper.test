@@ -16,7 +16,7 @@ SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']).al
 false
 
 query I
-SELECT gatekeeper_validate('SELECT * FROM other.t', allowed_schemas := ['tenant']).allowed;
+SELECT gatekeeper_validate('SELECT * FROM other.t', allowed_tables := [{catalog:'*', schema:'tenant', 'table':'*'}]).allowed;
 ----
 false
 

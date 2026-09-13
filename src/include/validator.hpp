@@ -16,11 +16,11 @@ struct Table {
 	}
 };
 struct Policy {
-	bool functions = true, defaults = true, catalogs = false, schemas = false, tables = false;
+	bool functions = true, defaults = true, tables = false;
 	bool recursive = true, table_functions = true, replacement_scans = false;
-	Names allowed_functions, blocked_functions, allowed_catalogs, allowed_schemas;
+	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables;
-	// Type identities share catalog/schema/leaf matching; table stores the type leaf.
+	// Type identities remain exact (apart from an omitted catalog); table stores the type leaf.
 	std::set<Table> allowed_types;
 	uint64_t statements = 1, bytes = 8388608, nodes = 100000, depth = 512;
 };
@@ -61,5 +61,7 @@ struct BindingPolicy {
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
+bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
+                  bool internal = false);
 Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr);
 } // namespace gatekeeper

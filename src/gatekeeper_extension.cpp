@@ -219,16 +219,10 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 		if (type.internal && gatekeeper::BuiltinTypes().count(gatekeeper::Lower(type.name)))
 			return; // DefaultTypeGenerator installs built-ins in each catalog's main schema.
 		auto catalog = type.schema.catalog.GetName(), schema = type.schema.name;
-		if (policy.catalogs && !policy.allowed_catalogs.count(gatekeeper::Lower(catalog)))
-			result.violations.emplace("catalog", "type catalog is not allowed", catalog, schema);
-		if (policy.schemas && !policy.allowed_schemas.count(gatekeeper::Lower(schema)))
-			result.violations.emplace("schema", "type schema is not allowed", catalog, schema);
 		if (!gatekeeper::TypeAllowed(policy, catalog, schema, type.name, true)) {
 			result.violations.emplace("type", "resolved type is not allowed: " + type.name, catalog, schema);
 			throw PermissionException("resolved type is not allowed");
 		}
-		if (!result.violations.empty())
-			throw PermissionException("resolved type namespace is not allowed");
 		return;
 	}
 	default:
@@ -238,19 +232,13 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 		return;
 	auto &object = entry.Cast<StandardEntry>();
 	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
-	auto folded_catalog = gatekeeper::Lower(catalog), folded_schema = gatekeeper::Lower(schema),
-	     folded_name = gatekeeper::Lower(name);
-	bool explicit_table = policy.allowed_tables.count({folded_catalog, folded_schema, folded_name}) ||
-	                      policy.allowed_tables.count({"", folded_schema, folded_name});
-	if (entry.internal && !explicit_table)
-		result.violations.emplace("internal_object", "internal object requires explicit allowed_tables permission",
-		                          catalog, schema, name);
-	if (policy.catalogs && !policy.allowed_catalogs.count(folded_catalog))
-		result.violations.emplace("catalog", "catalog is not allowed", catalog, schema, name);
-	if (policy.schemas && !policy.allowed_schemas.count(folded_schema))
-		result.violations.emplace("schema", "schema is not allowed", catalog, schema, name);
-	if (policy.tables && !explicit_table)
-		result.violations.emplace("table", "object is not allowed", catalog, schema, name);
+	if (!gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
+		if (entry.internal)
+			result.violations.emplace("internal_object", "internal object requires exact schema/table permission",
+			                          catalog, schema, name);
+		else
+			result.violations.emplace("table", "object is not allowed", catalog, schema, name);
+	}
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
 	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
