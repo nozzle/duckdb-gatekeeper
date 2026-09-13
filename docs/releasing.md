@@ -42,6 +42,10 @@ a GitHub Release.
 Only stable `vMAJOR.MINOR.PATCH` tag pushes trigger distribution; prerelease and test
 tags are excluded. The package gate validates the exact stable version again before
 the tag-only publish job can run, including the version in the load-time error message.
+It also checks `community/description.yml`'s `extension.version` and `repo.ref`, and
+the C++ engine pin against `scripts/versions.py`. Keep the descriptor's version/ref
+as unquoted scalars with two-space indentation; the standard-library-only packaging
+check deliberately rejects changes to that local format.
 
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers

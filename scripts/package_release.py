@@ -30,6 +30,25 @@ def release_version(tag):
                               source, "src/gatekeeper_extension.cpp Version()")
     error_version = extract(r'"Gatekeeper ([^" ]+) supports DuckDB %s only;',
                             source, "src/gatekeeper_extension.cpp load-error message")
+    engine_version = extract(r'SUPPORTED_DUCKDB_VERSION\s*=\s*"([^"]+)";',
+                             source, "src/gatekeeper_extension.cpp engine pin")
+    if engine_version != f"v{SUPPORTED_DUCKDB}":
+        raise ValueError(f"C++ engine pin {engine_version} and scripts/versions.py v{SUPPORTED_DUCKDB} must agree")
+
+    descriptor = (ROOT / "community/description.yml").read_text()
+
+    def descriptor_pin(section, key):
+        # These two pins use canonical two-space, unquoted scalar syntax in the
+        # local descriptor. Reject layout drift rather than guessing at arbitrary YAML.
+        location = f"community/description.yml {section}.{key}"
+        block = extract(rf"(?m)^{section}:[ \t]*\n((?:[ \t]+[^\n]*\n|\n)*)", descriptor, location)
+        return extract(rf"(?m)^  {key}:[ \t]*([^\s#\"']+)[ \t]*(?:#.*)?$", block, location)
+
+    descriptor_version = descriptor_pin("extension", "version")
+    descriptor_ref = descriptor_pin("repo", "ref")
+    if descriptor_version != version or descriptor_ref != f"v{version}":
+        raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
+                         f"and release v{version} must agree")
     if (tag and tag != f"v{version}") or runtime_version != version or error_version != version:
         raise ValueError(f"Tag {tag!r}, CMake version {version}, runtime version {runtime_version}, "
                          f"and load-error version {error_version} must agree")
