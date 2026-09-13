@@ -26,6 +26,10 @@ LOAD '/absolute/path/to/duckdb-gatekeeper/build/release/extension/gatekeeper/gat
 
 Signed packages and `INSTALL gatekeeper FROM community` are not available yet.
 
+**Browser/Wasm:** the EH bundle is supported with a pinned DuckDB-Wasm runtime
+embedding DuckDB 1.5.5. See [Wasm installation and browser tests](test/wasm/README.md)
+for building/loading the extension and the excluded MVP/threads targets.
+
 ## Quickstart
 
 Provision data through trusted initialization:

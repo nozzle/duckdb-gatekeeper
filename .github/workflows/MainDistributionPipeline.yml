@@ -2,8 +2,8 @@ name: Extension distribution
 # Builds and tests Gatekeeper on every community-extension platform through the reusable
 # extension-ci-tools pipeline (linux amd64/arm64 glibc and musl, macOS amd64/arm64, Windows MSVC
 # and MinGW). This is the same path the DuckDB community repository uses, so it doubles as the
-# Windows/musl platform matrix for CI. Wasm is excluded until yyjson linkage for side modules is
-# verified (see issue #8). Both refs below are pinned to the commit tracked by the
+# Windows/musl platform matrix for CI. Wasm EH is browser-tested in wasm.yml; MVP and threads
+# remain excluded (see test/wasm/README.md). Both refs below are pinned to the commit tracked by the
 # extension-ci-tools submodule; upstream publishes 1.5.x tooling on the v1.5-variegata branch.
 on:
   push:
@@ -27,4 +27,4 @@ jobs:
       extra_toolchains: python3
       # Both musl targets are opt-in at this extension-ci-tools revision.
       opt_in_archs: 'linux_amd64_musl;linux_arm64_musl'
-      exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads'
+      exclude_archs: 'wasm_mvp;wasm_threads'
