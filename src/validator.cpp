@@ -23,23 +23,31 @@ std::string Lower(std::string value) {
 	return value;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
-bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
-                  bool internal) {
-	if (!policy.tables && !internal)
-		return true;
+static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const std::string &schema,
+                         const std::string &table, bool internal = false) {
 	auto folded_catalog = Lower(catalog), folded_schema = Lower(schema), folded_table = Lower(table);
 	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
 	if (internal && (folded_schema == "*" || folded_table == "*"))
 		return false;
 	for (const auto &c : {folded_catalog, std::string("*"), std::string()}) {
-		if (policy.allowed_tables.count({c, folded_schema, folded_table}))
+		if (rules.count({c, folded_schema, folded_table}))
 			return true;
 		if (!internal &&
-		    (policy.allowed_tables.count({c, "*", folded_table}) ||
-		     policy.allowed_tables.count({c, folded_schema, "*"}) || policy.allowed_tables.count({c, "*", "*"})))
+		    (rules.count({c, "*", folded_table}) || rules.count({c, folded_schema, "*"}) || rules.count({c, "*", "*"})))
 			return true;
 	}
 	return false;
+}
+
+bool TableBlocked(const Policy &policy, const std::string &catalog, const std::string &schema,
+                  const std::string &table) {
+	return TableMatches(policy.blocked_tables, catalog, schema, table);
+}
+
+bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
+                  bool internal) {
+	return !TableBlocked(policy, catalog, schema, table) &&
+	       ((!policy.tables && !internal) || TableMatches(policy.allowed_tables, catalog, schema, table, internal));
 }
 
 static Names Strings(Json *value, bool lower = false) {
@@ -121,24 +129,11 @@ static const Inventory &GetInventory() {
 
 bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	auto &inventory = GetInventory();
+	auto canonical = CanonicalFunction(name);
 	return !FunctionDenied(policy, name) &&
-	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(CanonicalFunction(name)) ||
+	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
+	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
 	        (policy.defaults && inventory.defaults.count(Lower(name))));
-}
-
-static bool FileName(const std::string &name) {
-	auto lower = Lower(name);
-	if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
-	    name.find("://") != std::string::npos)
-		return true;
-	for (auto suffix : {".parquet", ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".gz", ".zst", ".xlsx", ".db", ".ddb",
-	                    ".duckdb", ".avro", ".shp", ".gpkg", ".fgb"}) {
-		if (lower.size() >= strlen(suffix) && lower.compare(lower.size() - strlen(suffix), strlen(suffix), suffix) == 0)
-			return true;
-		if (lower.find(std::string(suffix) + "?") != std::string::npos)
-			return true;
-	}
-	return false;
 }
 struct Stop {
 	std::string message;
@@ -293,7 +288,7 @@ struct Walker {
 		                   Field(node, "table_name"), function,
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
-	void References(Json *value, const std::string &kind, const Names &scope, const std::string &edge) {
+	void References(Json *value, const std::string &kind, const std::string &edge) {
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
@@ -417,32 +412,12 @@ struct Walker {
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}
-		if (kind != "BaseTableRef" && kind != "ShowRef")
+		if (kind != "ShowRef")
 			return;
-		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
-		     table = Field(value, "table_name");
-		if (kind == "ShowRef") {
-			if (yyjson_obj_get(value, "query"))
-				return;
-			if (!Both([](const Policy &p) { return !p.tables; }))
-				Reject("table", "schema-wide SHOW is disabled by table policy", value);
+		if (yyjson_obj_get(value, "query"))
 			return;
-		}
-		if (catalog.empty() && schema.empty() && scope.count(Lower(table)))
-			return;
-		// Match ReplacementScanInput::GetFullPath, including unquoted dotted names.
-		std::string path;
-		for (const auto &part : {catalog, schema, table}) {
-			if (part.empty())
-				continue;
-			if (!path.empty())
-				path += ".";
-			path += part;
-		}
-		// Preflight: file-shaped names cannot be catalog objects unless replacement scans are enabled.
-		// The authoritative check is the Gatekeeper replacement scan installed at LOAD.
-		if (!Both([](const Policy &p) { return p.replacement_scans; }) && (FileName(table) || FileName(path)))
-			Reject("replacement_scan", "replacement scans are disabled: " + path, value);
+		if (!Both([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
+			Reject("table", "schema-wide SHOW is disabled by table policy", value);
 	}
 	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
 		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});
@@ -554,7 +529,7 @@ struct Walker {
 				next.insert(Lower(Field(value, "cte_name")));
 			pending.push_back({child, rule.fields.at(name), std::move(next), depth + 1, name});
 		}
-		References(value, expected, scope, edge);
+		References(value, expected, edge);
 	}
 };
 

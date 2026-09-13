@@ -24,9 +24,9 @@ struct Table {
 	}
 };
 struct Policy {
-	bool defaults = true, tables = false, replacement_scans = false;
+	bool defaults = true, tables = false;
 	Names allowed_functions, blocked_functions;
-	std::set<Table> allowed_tables;
+	std::set<Table> allowed_tables, blocked_tables;
 	uint64_t statements = 1;
 };
 struct Violation {
@@ -67,6 +67,8 @@ std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
 bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
                   bool internal = false);
+bool TableBlocked(const Policy &policy, const std::string &catalog, const std::string &schema,
+                  const std::string &table);
 Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr,
                 const Limits &limits = Limits());
 } // namespace gatekeeper

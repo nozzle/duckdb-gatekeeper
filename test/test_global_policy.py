@@ -16,6 +16,7 @@ def test_inspection_reset_and_complete_replacement(db):
     defaults = policy(db)
     assert defaults["restrict_tables"] is False
     assert defaults["allowed_tables"] == []
+    assert defaults["blocked_tables"] == []
     assert all(value is not None for value in defaults.values())
     configure(db, {"allowed_tables": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
     assert policy(db)["restrict_tables"] is True
@@ -32,8 +33,8 @@ def test_inspection_reset_and_complete_replacement(db):
 def test_canonical_policy_shape_is_pinned(db):
     """The canonical setting has exactly the supported policy fields."""
     expected = {"use_default_functions",
-                "allow_replacement_scans", "allowed_functions", "blocked_functions",
-                "allowed_tables", "max_statements", "restrict_tables"}
+                "allowed_functions", "blocked_functions",
+                "allowed_tables", "blocked_tables", "max_statements", "restrict_tables"}
     assert set(policy(db)) == expected
     for statement in ("CALL gatekeeper_configure(allowed_types := [])",
                       "SELECT gatekeeper_validate('SELECT 1', allowed_types := [])"):
@@ -243,7 +244,7 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"use_default_functions": False}, {"allowed_functions": ["abs"]}, "SELECT abs(1)", "function"),
     ({"max_statements": 1}, {"max_statements": 2}, "SELECT 1; SELECT 2", "limit"),
     ({"blocked_functions": ["range"]}, {"blocked_functions": []}, "SELECT * FROM range(3)", "function"),
-    ({"allow_replacement_scans": False}, {"allow_replacement_scans": True}, "SELECT * FROM 'missing.csv'", "replacement_scan"),
+    ({}, {"allowed_functions": ["read_csv_auto"]}, "SELECT * FROM 'missing.csv'", "function"),
     ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
 def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, rule):

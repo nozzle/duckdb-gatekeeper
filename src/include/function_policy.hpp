@@ -56,6 +56,9 @@ inline const Names &NeverBindFunctions() {
 
 inline std::string CanonicalFunction(std::string name) {
 	name = Lower(std::move(name));
+	// Explicit aliases reviewed in DuckDB's Parquet registration; no runtime discovery.
+	if (name == "parquet_scan")
+		return "read_parquet";
 	if (name == "->>" || name == "json_extract_path_text")
 		return "json_extract_string";
 	if (name == "->" || name == "json_extract_path")

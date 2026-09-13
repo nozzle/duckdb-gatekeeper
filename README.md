@@ -155,10 +155,10 @@ What the three failure shapes look like:
 | Option | Type | Built-in default | Notes |
 | --- | --- | --- | --- |
 | `use_default_functions` | BOOLEAN | `true` | `true`: the 864 reviewed compute defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | VARCHAR[] | `[]` | Exact leaf names, ASCII case-folded. `'*'` is multiplication, not a wildcard. |
+| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded, with explicit aliases described below. `'*'` is multiplication, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
-| `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
+| `blocked_tables` | STRUCT[] | `[]` | Same identity rules as `allowed_tables`; a match always denies, including inside views/macros. |
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 
 Function allowlisting always applies to caller-authored functions:
@@ -168,6 +168,16 @@ Function allowlisting always applies to caller-authored functions:
 - Explicit blocks and the never-bind list win either way.
 - Global and request policies each must grant permission: a request cannot add a
   function that the global policy denies.
+
+`read_parquet` and `parquet_scan` share one permission: allowing either admits both,
+and blocking either denies both, including Parquet file-name shorthand. This pair is
+hard-coded from reviewed DuckDB source; there is no alias discovery. Other reader
+names remain independent, including `read_csv`/`read_csv_auto` and
+`read_json`/`read_json_auto`.
+
+The former `allow_replacement_scans` option has been removed. Remove it from calls
+and authorize the reader through function policy instead. Existing policies that
+allow a reader now also permit shorthand resolving to that reader.
 
 Caller-written table functions (`FROM range(...)`, `FROM read_parquet(...)`) use
 the same function policy as scalar and aggregate calls. Readers are not defaults;
@@ -190,9 +200,11 @@ SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed
 
 ### Table matching
 
-Each `allowed_tables` rule matches all three components of a **resolved** table/view
-identity; any matching rule grants access within that policy layer. Both global and
-request layers must independently grant the object. Names are ASCII case-insensitive.
+Each `allowed_tables` or `blocked_tables` rule matches all three components of a
+**resolved** table/view identity. Within each layer, any matching allow rule grants
+access, but any matching block wins. Both global and request layers must independently
+grant the object; a request cannot override a global block. Names are ASCII
+case-insensitive.
 Only a whole-component `'*'` is special: `sales_*`, `?`, and `%` are literal names,
 not glob/SQL patterns. There is no escape for a literal name consisting solely of `*`.
 Wildcards include objects created or attached later and, for `catalog: '*'`, temporary
@@ -212,16 +224,24 @@ cross-product. Omit the option for unrestricted non-internal tables/views; suppl
 `[]` to deny them all. Omitted/NULL `catalog` is shorthand for any catalog.
 Schema and table are required.
 
+`blocked_tables` defaults to `[]` (no blocks) and works without an allowlist: all
+non-internal objects remain accessible except those blocked. Combine a broad allow
+with a narrower block to express exceptions—for example, allow `warehouse.reporting.*`
+and block `warehouse.reporting.sensitive_orders`. Blocks apply to views and their
+underlying tables, including references introduced by macros. They match resolved
+objects, not CTE names, file paths, or reader arguments.
+
 Internal objects require a matching rule with **exact schema and table names** in
 each policy layer; catalog may match any. Broad wildcards never grant that opt-in.
+Block wildcards do match internal objects, even when exact permission was granted.
 Metadata readers remain on the never-bind list even with exact object permission.
 Schema-wide `SHOW` is denied whenever a table restriction is configured, including
-`*/*/*`; this option does not filter metadata rows. `DESCRIBE table` still checks the
-resolved table normally.
+`*/*/*` or nonempty `blocked_tables`; these options do not filter metadata rows.
+`DESCRIBE table` still checks the resolved table normally.
 
 Table rules neither grant nor restrict types/functions. Types are supplied by the
-host without separate authorization. Functions use exact leaf-name policies, not
-wildcards, and assume trusted catalog definitions.
+host without separate authorization. Functions use leaf-name policies with explicit
+aliases, not wildcards, and assume trusted catalog definitions.
 
 Things that surprise people:
 
@@ -244,11 +264,14 @@ Things that surprise people:
   extensions when those settings are enabled; provision extensions during trusted
   setup and disable `autoload_known_extensions` and `autoinstall_known_extensions`
   on validation connections.
-- `SELECT * FROM 'x.parquet'` needs `allow_replacement_scans := true` **and** the reader
-  DuckDB substitutes admitted by name: `parquet_scan` for Parquet, `read_csv_auto` for
-  CSV, `read_json_auto` for JSON. The decision happens before the reader binds, so a
-  denied path is never opened. `objects` then lists the path with type `replacement`.
+- `SELECT * FROM 'x.parquet'` needs the substituted reader admitted: `read_parquet`
+  (or its alias `parquet_scan`) for Parquet, `read_csv_auto` for CSV, `read_json_auto`
+  for JSON. There is no separate replacement-scan toggle. The decision happens before
+  the reader binds, so a denied path is never opened. `objects` then lists the path
+  with type `replacement`.
   Host-language scans (DataFrames, relations in scope) are always denied.
+  File-shaped catalog names such as `"data.parquet"` use ordinary table policy when
+  they resolve to a catalog object. Unclaimed names return binding errors.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
 - Caller expressions in bind-time positions (LIMIT, reader arguments, type parameters,
@@ -314,8 +337,9 @@ drops unknown keys during the cast; the NULL-free canonical value (`catalog: ''`
 any catalog) means a typo that displaces a required field fails closed. Check the readback.
 When setting `allowed_tables` directly, also set `restrict_tables := true`;
 a nonempty list with `restrict_tables = false` is rejected. With an empty list,
-`restrict_tables = true` denies all tables/views and `false` is unrestricted
-for non-internal objects.
+`restrict_tables = true` denies all tables/views and `false` disables the allowlist
+for non-internal objects. `blocked_tables` applies regardless of `restrict_tables`;
+setting blocks directly needs no additional flag.
 `gatekeeper_configure` itself is never admitted in validated SQL, including through views
 or macros.
 

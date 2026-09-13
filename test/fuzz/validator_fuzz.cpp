@@ -19,7 +19,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		gatekeeper::Policy policy;
 		policy.defaults = data[0] & 2;
 		policy.tables = data[0] & 16;
-		policy.replacement_scans = data[1] & 1;
+		if (data[1] & 1)
+			policy.blocked_tables.insert({"*", "main", "t"});
 		if (data[1] & 2)
 			policy.allowed_tables.insert({"memory", "*", "*"});
 		if (data[1] & 4)
