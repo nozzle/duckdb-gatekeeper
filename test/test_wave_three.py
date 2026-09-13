@@ -250,9 +250,21 @@ def test_cast_does_not_admit_computation(db):
 @pytest.mark.parametrize("sql", [
     "SELECT * FROM unnest(repeat('x',200000000), recursive:=true)",
     "SELECT * FROM unnest(repeat('x',200000000), recursive=true)",
-    "SELECT * FROM d, range(d.x, len(repeat('x',200000000)))",
 ])
 def test_runtime_argument_exception_does_not_admit_other_computation(db, sql):
     result = validate(db, sql)
     assert result["code"] == "forbidden" and result["error_message"] == "", result
     assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT range(3) FROM d, range(d.x)",
+    "SELECT generate_series(1,3) FROM d, generate_series(1,d.x)",
+    "SELECT * FROM d, range(d.x,len(repeat('x',3)))",
+    "SELECT 1 LIMIT TRY_CAST('5' AS INT)",
+])
+def test_runtime_call_and_scalar_names_coexist(db, sql):
+    db.execute("CREATE TABLE d AS SELECT 1 x")
+    db.execute(sql).fetchall()
+    result = validate(db, sql)
+    assert result["allowed"], result

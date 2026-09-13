@@ -81,9 +81,9 @@ in bind-time positions: `INTERVAL 1 DAY` expands to arithmetic helper functions.
 Correlated column/subquery arguments are allowed for pinned system table-in-out
 functions `unnest`, `range`, and `generate_series`, whose non-scalar arguments are
 evaluated at execution time. Standard readers do not get this exception; a bare
-identifier in a named-argument key is not a runtime reference. The exception applies
-per argument: other arguments still require literal forms even when DuckDB selects
-an in-out binding path for the whole call. A bare
+identifier in a named-argument key is not a runtime reference. DuckDB selects the
+in-out binding path for the whole call, so companion scalar expressions also run
+at execution time in this case. A bare
 identifier in a reader argument can be converted into a string by DuckDB's binder.
 The exception is checked against the resolved system table-function identity;
 same-named table macros cannot claim it. Each scalar UNNEST option is still checked.

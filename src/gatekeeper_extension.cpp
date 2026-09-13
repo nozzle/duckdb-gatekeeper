@@ -169,7 +169,8 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
 		AuthorizeFunction(policy, binding, entry.name, result);
 		auto &function = entry.Cast<StandardEntry>();
-		if (binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
+		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
+		    binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
 		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
 		     function.schema.name != "main")) {
 			result.violations.emplace("bind_time_expression",

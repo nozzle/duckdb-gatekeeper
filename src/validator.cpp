@@ -394,16 +394,25 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			if (edge == "function") {
+				bool runtime = false;
+				if (Names{"unnest", "range", "generate_series"}.count(name)) {
+					yyjson_arr_foreach(children, i, n, child) {
+						auto argument = child;
+						if (Field(child, "type") == "COMPARE_EQUAL" &&
+						    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
+						    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
+							argument = yyjson_obj_get(child, "right");
+						runtime = runtime || HasRuntimeReference(argument);
+					}
+				}
+				if (runtime && binding)
+					binding->runtime_table_functions.insert(name);
 				yyjson_arr_foreach(children, i, n, child) {
 					auto argument = child;
 					if (Field(child, "type") == "COMPARE_EQUAL" &&
 					    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
 					    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
 						argument = yyjson_obj_get(child, "right");
-					bool runtime =
-					    Names{"unnest", "range", "generate_series"}.count(name) && HasRuntimeReference(argument);
-					if (runtime && binding)
-						binding->runtime_table_functions.insert(name);
 					if (!runtime)
 						BindTime(argument, "table-function argument", true);
 				}
