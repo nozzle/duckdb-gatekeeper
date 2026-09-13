@@ -30,7 +30,7 @@ Use strict parameterized `CALL` for authoring; direct STRUCT `SET` silently drop
 unknown extra keys at any depth during DuckDB casting. The canonical setting is
 NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled nested
 `catalog`, `schema`, or leaf) fails closed instead of widening catalog matching.
-See [the configuration contract](api.md#global-policy-and-configuration).
+See [global policy](../README.md#global-policy) in the README.
 
 ## Function enforcement and trusted expansion
 
