@@ -28,3 +28,26 @@ jobs:
       # Both musl targets are opt-in at this extension-ci-tools revision.
       opt_in_archs: 'linux_amd64_musl;linux_arm64_musl'
       exclude_archs: 'wasm_mvp;wasm_threads'
+
+  browser-test:
+    name: Distribution Wasm EH Chromium
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: test/wasm/package-lock.json
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: gatekeeper-v1.5.5-extension-wasm_eh
+          path: build/wasm_eh/extension/gatekeeper
+      - run: npm ci --ignore-scripts
+        working-directory: test/wasm
+      - run: npx playwright install --with-deps chromium
+        working-directory: test/wasm
+      - run: npm test
+        working-directory: test/wasm

@@ -97,4 +97,5 @@ version assertion in `smoke.mjs`, this documentation, and Emscripten compatibili
 with `extension-ci-tools`. DuckDB-Wasm is excluded from routine Dependabot updates.
 Other npm test dependencies receive monthly updates. Browser CI builds and tests
 EH on every PR; the distribution workflow also builds the standard `wasm_eh`
-artifact through the community tooling.
+artifact through the community tooling, downloads that exact artifact, and runs
+the same browser checks against it.
