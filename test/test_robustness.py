@@ -20,8 +20,10 @@ def test_depth_and_width(db):
     ("SELECT '" + "x" * 8388608 + "'", "SQL exceeds fixed input size limit"),
     # The input fits, but AST serialization adds enough overhead to exceed 8 MiB.
     ("SELECT '" + "x" * (8388608 - 9) + "'", "serialized AST exceeds fixed size limit"),
-    ("SELECT " + ",".join("1" for _ in range(20000)), "AST size or depth limit exceeded"),
-    ("SELECT " + "abs(" * 260 + "1" + ")" * 260, "AST size or depth limit exceeded"),
+    # Traversal counts fields/arrays too; leave margin above node/depth thresholds
+    # while staying below the serialized-byte and connection parser limits.
+    ("SELECT " + ",".join("1" for _ in range(40000)), "AST size or depth limit exceeded"),
+    ("SELECT " + "abs(" * 400 + "1" + ")" * 400, "AST size or depth limit exceeded"),
 ], ids=["input-bytes", "serialized-bytes", "nodes", "depth"])
 def test_fixed_ast_guardrails_and_recovery(db, sql, message):
     if message == "serialized AST exceeds fixed size limit":
