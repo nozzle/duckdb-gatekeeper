@@ -130,6 +130,7 @@ static const Inventory &GetInventory() {
 bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	auto &inventory = GetInventory();
 	auto canonical = CanonicalFunction(name);
+	// Only Parquet gets bidirectional allow aliases here. Preserve the existing JSON allow semantics.
 	return !FunctionDenied(policy, name) &&
 	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
 	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
@@ -155,7 +156,6 @@ struct Walker {
 	struct Work {
 		Json *value;
 		std::string expected;
-		Names scope;
 		size_t depth;
 		std::string edge;
 	};
@@ -257,7 +257,7 @@ struct Walker {
 			if (expr) {
 				if (Field(expr, "class") != "TYPE")
 					throw Stop{"computed type expressions are unsupported"};
-				pending.push_back({expr, "ParsedExpression", {}, depth + 1, "type"});
+				pending.push_back({expr, "ParsedExpression", depth + 1, "type"});
 			} else {
 				if (Field(info, "name").empty())
 					throw Stop{"missing type name"};
@@ -270,7 +270,7 @@ struct Walker {
 			return;
 		auto child = yyjson_obj_get(info, "child_type");
 		if (child)
-			pending.push_back({child, "logical_type", {}, depth + 1, "type"});
+			pending.push_back({child, "logical_type", depth + 1, "type"});
 		auto children = yyjson_obj_get(info, "child_types");
 		if (children) {
 			if (!yyjson_is_arr(children))
@@ -278,7 +278,7 @@ struct Walker {
 			size_t i, n;
 			Json *entry;
 			yyjson_arr_foreach(children, i, n, entry)
-			    pending.push_back({yyjson_obj_get(entry, "second"), "logical_type", {}, depth + 1, "type"});
+			    pending.push_back({yyjson_obj_get(entry, "second"), "logical_type", depth + 1, "type"});
 		}
 	}
 	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
@@ -419,15 +419,15 @@ struct Walker {
 		if (!Both([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
 			Reject("table", "schema-wide SHOW is disabled by table policy", value);
 	}
-	void Check(Json *value, std::string expected, Names scope = {}, size_t depth = 0, std::string edge = {}) {
-		pending.push_back({value, std::move(expected), std::move(scope), depth, std::move(edge)});
+	void Check(Json *value, std::string expected, size_t depth = 0, std::string edge = {}) {
+		pending.push_back({value, std::move(expected), depth, std::move(edge)});
 		while (!pending.empty()) {
 			auto work = std::move(pending.back());
 			pending.pop_back();
-			CheckNode(work.value, std::move(work.expected), std::move(work.scope), work.depth, std::move(work.edge));
+			CheckNode(work.value, std::move(work.expected), work.depth, std::move(work.edge));
 		}
 	}
-	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
+	void CheckNode(Json *value, std::string expected, size_t depth, std::string edge) {
 		++nodes;
 		if (nodes > limits.nodes || depth > limits.depth)
 			throw Stop{"AST size or depth limit exceeded", "limit"};
@@ -437,7 +437,7 @@ struct Walker {
 		}
 		// TYPE constants carry nested type expressions too; literal payloads otherwise remain opaque.
 		if (expected == "opaque" && Field(yyjson_obj_get(value, "type"), "id") == "TYPE") {
-			pending.push_back({yyjson_obj_get(value, "value"), "logical_type", {}, depth + 1, "type"});
+			pending.push_back({yyjson_obj_get(value, "value"), "logical_type", depth + 1, "type"});
 			return;
 		}
 		if (expected == "opaque")
@@ -448,7 +448,7 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			yyjson_arr_foreach(value, i, n, child)
-			    pending.push_back({child, expected.substr(0, expected.size() - 2), scope, depth + 1, {}});
+			    pending.push_back({child, expected.substr(0, expected.size() - 2), depth + 1, {}});
 			return;
 		}
 		if (expected == "string" || expected == "boolean" || expected == "number") {
@@ -513,21 +513,17 @@ struct Walker {
 				throw Stop{"invalid CTE entries"};
 			Names declared;
 			yyjson_arr_foreach(entries, i, n, child) {
-				pending.push_back({child, "cte_entry", scope, depth + 1, {}});
+				pending.push_back({child, "cte_entry", depth + 1, {}});
 				auto name = Lower(Field(child, "key"));
 				if (!declared.insert(name).second)
 					throw Stop{"duplicate CTE"};
-				scope.insert(name);
 			}
 		}
 		yyjson_obj_foreach(value, i, n, key, child) {
 			auto name = Text(key);
 			if (name == "cte_map")
 				continue;
-			auto next = scope;
-			if (expected == "RecursiveCTENode" && name == "right")
-				next.insert(Lower(Field(value, "cte_name")));
-			pending.push_back({child, rule.fields.at(name), std::move(next), depth + 1, name});
+			pending.push_back({child, rule.fields.at(name), depth + 1, name});
 		}
 		References(value, expected, edge);
 	}

@@ -93,11 +93,9 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	if (selector == 16)
-		return "blocked_tables";
-	// Keep removed selectors to exercise unknown-option rejection and preserve corpus mappings.
+	// Reuse the retired replacement-scan slot for blocks; other retired names still exercise rejection.
 	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
-	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
+	                              "allow_table_functions", "blocked_tables", "allowed_functions",
 	                              // Unknown namespace options exercise rejection.
 	                              "blocked_functions", "allowed_catalogs", "allowed_schemas", "allowed_tables",
 	                              "max_statements", "max_ast_bytes", "max_ast_nodes", "max_ast_depth", "allowed_types"};

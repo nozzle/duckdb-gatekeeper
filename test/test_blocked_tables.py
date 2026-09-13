@@ -89,6 +89,18 @@ def test_nonempty_blocks_disable_schema_wide_show(db, sql):
     assert any(v["rule"] == "table" for v in result["violations"])
 
 
+@pytest.mark.parametrize("statement", ["DESCRIBE", "SHOW"])
+def test_table_description_checks_resolved_blocks(db, statement):
+    db.execute("CREATE TABLE secret(x INT); CREATE TABLE other(x INT)")
+    options = {"blocked_tables": [rule("memory", "main", "secret")]}
+    result = validate(db, f"{statement} secret", options)
+    assert result["code"] == "forbidden", result
+    violation = result["violations"][0]
+    assert violation["message"] == "object is blocked"
+    assert (violation["catalog"], violation["schema"], violation["table"]) == ("memory", "main", "secret")
+    assert validate(db, f"{statement} other", options)["allowed"]
+
+
 def test_blocks_round_trip_without_enabling_allowlist(db):
     entries = [{"schema": "MAIN", "table": "T"}, {"catalog": None, "schema": "MAIN", "table": "T"}]
     configure(db, {"blocked_tables": entries})

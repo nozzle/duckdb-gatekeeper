@@ -155,7 +155,7 @@ What the three failure shapes look like:
 | Option | Type | Built-in default | Notes |
 | --- | --- | --- | --- |
 | `use_default_functions` | BOOLEAN | `true` | `true`: the 864 reviewed compute defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded, with explicit aliases described below. `'*'` is multiplication, not a wildcard. |
+| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `read_parquet`/`parquet_scan` share a permission as described below. `'*'` is multiplication, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules as `allowed_tables`; a match always denies, including inside views/macros. |
@@ -176,8 +176,10 @@ names remain independent, including `read_csv`/`read_csv_auto` and
 `read_json`/`read_json_auto`.
 
 The former `allow_replacement_scans` option has been removed. Remove it from calls
-and authorize the reader through function policy instead. Existing policies that
-allow a reader now also permit shorthand resolving to that reader.
+and authorize the substituted reader through function policy instead. Allowing
+`read_parquet` or `parquet_scan` now permits Parquet shorthand. CSV/JSON shorthand
+still requires `read_csv_auto`/`read_json_auto`, respectively; allowing `read_csv`
+or `read_json` alone does not authorize those substitutions.
 
 Caller-written table functions (`FROM range(...)`, `FROM read_parquet(...)`) use
 the same function policy as scalar and aggregate calls. Readers are not defaults;
