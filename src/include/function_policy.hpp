@@ -73,52 +73,5 @@ inline bool FunctionDenied(const Policy &policy, const std::string &name) {
 	return false;
 }
 
-inline const Names &BuiltinTypes() {
-	// default_types.cpp BUILTIN_TYPES at the pinned revision. JSON/INET are extension types.
-	static const Names names = {"decimal",      "dec",
-	                            "numeric",      "time",
-	                            "time_ns",      "date",
-	                            "timestamp",    "datetime",
-	                            "timestamp_us", "timestamp_ms",
-	                            "timestamp_ns", "timestamp_s",
-	                            "timestamptz",  "timestamp with time zone",
-	                            "timetz",       "time with time zone",
-	                            "interval",     "varchar",
-	                            "bpchar",       "string",
-	                            "char",         "nvarchar",
-	                            "text",         "blob",
-	                            "bytea",        "varbinary",
-	                            "binary",       "hugeint",
-	                            "int128",       "uhugeint",
-	                            "uint128",      "bigint",
-	                            "oid",          "long",
-	                            "int8",         "int64",
-	                            "ubigint",      "uint64",
-	                            "integer",      "int",
-	                            "int4",         "signed",
-	                            "integral",     "int32",
-	                            "uinteger",     "uint32",
-	                            "smallint",     "int2",
-	                            "short",        "int16",
-	                            "usmallint",    "uint16",
-	                            "tinyint",      "int1",
-	                            "utinyint",     "uint8",
-	                            "struct",       "row",
-	                            "list",         "array",
-	                            "map",          "union",
-	                            "bit",          "bitstring",
-	                            "variant",      "bignum",
-	                            "varint",       "boolean",
-	                            "bool",         "logical",
-	                            "uuid",         "guid",
-	                            "enum",         "null",
-	                            "float",        "real",
-	                            "float4",       "double",
-	                            "float8",       "geometry",
-	                            "type"};
-	return names;
-}
 bool FunctionAllowed(const Policy &policy, const std::string &name);
-bool TypeAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &name,
-                 bool resolved);
 } // namespace gatekeeper

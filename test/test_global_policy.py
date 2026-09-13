@@ -1,4 +1,4 @@
-"""Configuration lifecycle and non-bypassable policy layers (issue #9)."""
+"""Configuration lifecycle and non-bypassable policy layers."""
 import concurrent.futures
 
 import duckdb
@@ -33,9 +33,13 @@ def test_canonical_policy_shape_is_pinned(db):
     """The canonical setting has exactly the supported policy fields."""
     expected = {"check_functions", "use_default_functions", "allow_recursive_ctes", "allow_table_functions",
                 "allow_replacement_scans", "allowed_functions", "blocked_functions",
-                "allowed_tables", "allowed_types", "max_statements", "max_ast_bytes",
+                "allowed_tables", "max_statements", "max_ast_bytes",
                 "max_ast_nodes", "max_ast_depth", "restrict_tables"}
     assert set(policy(db)) == expected
+    for statement in ("CALL gatekeeper_configure(allowed_types := [])",
+                      "SELECT gatekeeper_validate('SELECT 1', allowed_types := [])"):
+        with pytest.raises(duckdb.Error, match="allowed_types"):
+            db.execute(statement)
     assert "allow_dynamic_sql" not in policy(db)
     before = policy(db)
     # DuckDB discards extra STRUCT keys, while CALL rejects unknown options.
@@ -75,12 +79,10 @@ def test_strict_parameterized_call_preserves_old_policy_on_failure(db, options):
 def test_any_catalog_is_canonically_empty_and_quoted_parameters(db):
     db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
     configure(db, {"allowed_tables": [{"catalog": None, "schema": "a'b", "table": "t"},
-                                      {"schema": "main", "table": "t"}],
-                   "allowed_types": [{"schema": "main", "type": "customer"}]})
+                                      {"schema": "main", "table": "t"}]})
     # The canonical setting never contains NULL; '' spells "any catalog".
     assert policy(db)["allowed_tables"] == [{"catalog": "", "schema": "a'b", "table": "t"},
                                             {"catalog": "", "schema": "main", "table": "t"}]
-    assert policy(db)["allowed_types"] == [{"catalog": "", "schema": "main", "type": "customer"}]
     assert validate(db, "SELECT * FROM memory.main.t")["allowed"]
     assert validate(db, "SELECT * FROM lake.main.t")["allowed"]
     # Round trip through direct SET is a no-op and preserves any-catalog matching.
@@ -153,12 +155,11 @@ def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument)
 @pytest.mark.parametrize("empty", ["[]", "[]::INTEGER[]", "[]::VARCHAR[]"])
 def test_call_empty_lists_deny_all_identities(db, empty):
     db.execute("CREATE TABLE t(x INT); CREATE TYPE customer AS ENUM ('a')")
-    configure(db, {"allowed_types": [{"schema": "main", "type": "customer"}]})
-    db.execute(f"CALL gatekeeper_configure(allowed_tables := {empty}, allowed_types := {empty})")
+    db.execute(f"CALL gatekeeper_configure(allowed_tables := {empty})")
     assert policy(db)["restrict_tables"]
-    assert policy(db)["allowed_tables"] == policy(db)["allowed_types"] == []
+    assert policy(db)["allowed_tables"] == []
     assert not validate(db, "SELECT * FROM t")["allowed"]
-    assert not validate(db, "SELECT NULL::customer")["allowed"]
+    assert validate(db, "SELECT NULL::customer")["allowed"]
 
 
 def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
@@ -272,16 +273,11 @@ def test_identity_layers_match_independently_and_request_can_narrow(db):
     assert not validate(db, "SELECT * FROM u", broader)["allowed"]
 
 
-def test_type_and_table_ceilings_are_independent(db):
+def test_table_ceiling_does_not_restrict_types(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a'); CREATE TABLE private.t(x INT)")
-    grant = {"allowed_types": [{"schema": "private", "type": "customer"}]}
-    assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
-    configure(db, {**grant, "allowed_tables": []})
+    configure(db, {"allowed_tables": []})
     assert validate(db, "SELECT NULL::private.customer")["allowed"]
-    assert not validate(db, "SELECT NULL::private.customer", {"allowed_types": []})["allowed"]
     assert not validate(db, "SELECT * FROM private.t", {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})["allowed"]
-    configure(db, {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})
-    assert not validate(db, "SELECT NULL::private.customer", grant)["allowed"]
 
 
 def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):

@@ -126,18 +126,6 @@ bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	                                         (policy.defaults && inventory.defaults.count(Lower(name))));
 }
 
-bool TypeAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &name,
-                 bool resolved) {
-	auto c = Lower(catalog), s = Lower(schema), n = Lower(name);
-	if (BuiltinTypes().count(n) && (c.empty() || c == "system") && (s.empty() || s == "main"))
-		return true;
-	for (const auto &entry : policy.allowed_types)
-		if (entry.table == n && (entry.catalog.empty() || entry.catalog == c || (!resolved && c.empty())) &&
-		    (entry.schema == s || (!resolved && s.empty())))
-			return true;
-	return false;
-}
-
 static bool FileName(const std::string &name) {
 	auto lower = Lower(name);
 	if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
@@ -265,28 +253,6 @@ struct Walker {
 		if (yyjson_is_uint(location))
 			function_positions.emplace(Lower(name), int64_t(yyjson_get_uint(location)));
 	}
-	void Collation(const std::string &collation, Json *value) {
-		size_t start = 0;
-		auto folded = Lower(collation);
-		while (start < folded.size()) {
-			auto end = folded.find('.', start);
-			auto name = folded.substr(start, end == std::string::npos ? end : end - start);
-			bool builtin = Names{"binary", "c", "posix", "nocase", "noaccent", "nfc"}.count(name);
-			std::string implementation = name == "nocase"     ? "lower"
-			                             : name == "noaccent" ? "strip_accents"
-			                             : name == "nfc"      ? "nfc_normalize"
-			                                                  : name;
-			if (!Both([&](const Policy &p) {
-				    return !FunctionDenied(p, name) && (builtin || p.allowed_functions.count(name));
-			    }))
-				Reject("function", "collation is not allowed: " + name, value, name);
-			if (implementation != name && !Both([&](const Policy &p) { return !FunctionDenied(p, implementation); }))
-				Reject("function", "collation function is not allowed: " + implementation, value, implementation);
-			if (end == std::string::npos)
-				break;
-			start = end + 1;
-		}
-	}
 	void Type(Json *value, size_t depth) {
 		auto id = Field(value, "id");
 		auto info = yyjson_obj_get(value, "type_info");
@@ -297,11 +263,8 @@ struct Walker {
 					throw Stop{"computed type expressions are unsupported"};
 				pending.push_back({expr, "ParsedExpression", {}, depth + 1, "type"});
 			} else {
-				auto name = Field(info, "name"), catalog = Field(info, "catalog"), schema = Field(info, "schema");
-				if (name.empty())
+				if (Field(info, "name").empty())
 					throw Stop{"missing type name"};
-				if (!Both([&](const Policy &p) { return TypeAllowed(p, catalog, schema, name, false); }))
-					violations.emplace("type", "type is not allowed: " + name, catalog, schema);
 			}
 			return;
 		}
@@ -309,9 +272,6 @@ struct Walker {
 			throw Stop{"missing logical type id"};
 		if (!info)
 			return;
-		auto collation = Field(info, "collation");
-		if (!collation.empty())
-			Collation(collation, value);
 		auto child = yyjson_obj_get(info, "child_type");
 		if (child)
 			pending.push_back({child, "logical_type", {}, depth + 1, "type"});
@@ -350,30 +310,15 @@ struct Walker {
 			    (!yyjson_is_obj(sample) || !yyjson_obj_get(sample, "type") || yyjson_obj_get(sample, "class")))
 				Reject("bind_time_expression", "sample size requires a literal", value);
 		}
-		if (kind == "PivotColumn" && !Field(value, "pivot_enum").empty())
-			throw Stop{"named PIVOT enums bypass type authorization; use explicit IN values"};
 		if (kind == "TypeExpression") {
-			auto name = Field(value, "type_name"), catalog = Field(value, "catalog"), schema = Field(value, "schema");
-			if (binding)
-				binding->caller_types.insert(Lower(name));
-			if (!Both([&](const Policy &p) { return TypeAllowed(p, catalog, schema, name, false); }))
-				violations.emplace("type", "type is not allowed: " + name, catalog, schema);
 			auto children = yyjson_obj_get(value, "children");
 			size_t i, n;
 			Json *child;
 			yyjson_arr_foreach(children, i, n, child) {
 				if (Field(child, "class") != "TYPE")
 					BindTime(child, "type parameter");
-				if (Names{"varchar", "bpchar", "string", "char", "nvarchar", "text"}.count(Lower(name)) &&
-				    Lower(Field(child, "alias")) == "collation") {
-					if (Field(child, "class") != "CONSTANT")
-						throw Stop{"computed type collations are unsupported"};
-					Collation(Field(yyjson_obj_get(child, "value"), "value"), child);
-				}
 			}
 		}
-		if (kind == "CollateExpression")
-			Collation(Field(value, "collation"), value);
 		if (kind == "OperatorExpression") {
 			auto type = Field(value, "type");
 			if (type == "ARRAY_CONSTRUCTOR")

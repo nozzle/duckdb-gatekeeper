@@ -62,3 +62,15 @@ def test_serialized_bind_time_sites(db, native_validator):
         "cast_type": {"id": "UNBOUND", "type_info": {"expr": {
             "class": "TYPE", "type": "TYPE", "type_name": "decimal", "children": [computation]}}}}]
     assert native_validator(candidate) == "forbidden"
+
+
+def test_serialized_type_collation_is_host_trusted(db, native_validator):
+    ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT 1', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])
+    literal = json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
+                                   ["SELECT 'de'"]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
+    literal["alias"] = "collation"
+    ast["statements"][0]["node"]["select_list"] = [{
+        "class": "CAST", "type": "OPERATOR_CAST", "child": literal,
+        "cast_type": {"id": "UNBOUND", "type_info": {"expr": {
+            "class": "TYPE", "type": "TYPE", "type_name": "varchar", "children": [literal]}}}}]
+    assert native_validator(ast) == "ok"

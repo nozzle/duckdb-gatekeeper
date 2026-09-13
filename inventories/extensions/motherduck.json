@@ -3,9 +3,9 @@
   "reviewed_duckdb": "1.5.5",
   "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/motherduck.go",
   "notes": [
-    "MotherDuck has no public source revision pinned by DuckDB 1.5.5. This elevated snapshot came from the",
+    "MotherDuck has no public source revision pinned by DuckDB 1.5.5. This elevated snapshot uses the",
     "v1.5.5-2026-08-22 implementation binary with SHA-256 9a6a53fd5332ac188feb8410ed71b3d8f71822cbfaca8024aec18f2892bf0743.",
-    "Core registrations read_csv, read_csv_auto, read_text, read_blob, glob, sniff_csv, read_duckdb, pragma_storage_info, duckdb_table_sample and which_secret from this runtime snapshot are now classified in core.json against the pinned DuckDB source. Their presence here was not evidence of proprietary ownership; all remaining proprietary/runtime-only limitations above still apply."
+    "Core function registrations are classified separately in core.json against the pinned DuckDB source. Presence in a runtime snapshot does not establish proprietary ownership or constitute source review of proprietary implementations."
   ],
   "compute": [],
   "elevated": [

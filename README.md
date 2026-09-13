@@ -5,12 +5,12 @@
 A DuckDB extension that checks untrusted SQL against a policy before you run it.
 Gatekeeper parses the statement, inspects the syntax and functions the caller wrote,
 then binds it on your connection to authorize the actual tables and views it resolves
-to, the types and functions the caller requested, and explicit blocks inside trusted
+to, the functions the caller requested, and explicit blocks inside trusted
 views and macros. The result is a native STRUCT with structured diagnostics.
 
 - **864 reviewed function defaults**, plus exact-name allow and block lists.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
-- **Read-only statements only**, with type, collation, and capability controls and AST limits.
+- **Read-only statements only**, with capability controls and AST limits.
 - **A lockable global policy** that request options can narrow but never widen.
 
 > Early development. Targets **DuckDB 1.5.5 only**; community publication is pending.
@@ -46,10 +46,10 @@ for building/loading the extension and the excluded MVP/threads targets.
 
 Gatekeeper parses the statement, checks the syntax the caller wrote (functions,
 capabilities, limits), then binds it on your connection and authorizes every table and
-view it resolves to, plus the types and functions the caller requested. Functions that
+view it resolves to, plus the functions the caller requested. Functions that
 trusted views and macros introduce internally are exempt from the caller allowlist but
-still subject to explicit blocks and the never-bind list; types they introduce internally
-are not caller capabilities and are not checked. Each check
+still subject to explicit blocks and the never-bind list. Types, casts, and collations are trusted
+as part of the host-configured database. Each check
 runs against both the global policy and the request layer (global policy plus the
 request's named options); both must allow the query. Nothing is executed, but **binding
 can perform I/O** through trusted catalogs and explicitly admitted readers.
@@ -97,7 +97,7 @@ result with `code = 'invalid_input'`, while `CALL gatekeeper_configure` raises a
 leaves the active policy unchanged. Both accept host-bound parameters (`?`, `$1`), so policies never need to be
 spliced into SQL text.
 For `CALL gatekeeper_configure`, an empty non-STRUCT list supplied to
-`allowed_tables` or `allowed_types` means an empty restriction regardless of its
+`allowed_tables` means an empty restriction regardless of its
 element type: DuckDB converts even an untyped `[]` to `INTEGER[]` before the
 configuration callback. Nonempty lists require structs, and typed STRUCT lists
 have their field names checked even when empty.
@@ -115,7 +115,7 @@ have their field names checked even when empty.
 | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`) the query bound to. Empty unless `ok`. |
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 
-Violation `rule` values: `function`, `table`, `type`, `internal_object`,
+Violation `rule` values: `function`, `table`, `internal_object`,
 `dynamic_sql`, `table_function`, `recursive_cte`, `replacement_scan`,
 `bind_time_expression`, `statement`, `limit`, `unsupported_structure`. Branch on these
 fields, not on message text.
@@ -159,7 +159,6 @@ What the three failure shapes look like:
 | `allowed_functions` | VARCHAR[] | `[]` | Exact leaf names, ASCII case-folded. `'*'` is multiplication, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`; `'*'` matches any complete component. Omitted/NULL catalog also matches any. `[]` denies all tables and views. |
-| `allowed_types` | STRUCT[] | built-in types only | `{catalog?, schema, type}`. Extension and user types (JSON, INET, enums) need an entry. |
 | `allow_recursive_ctes` | BOOLEAN | `true` | |
 | `allow_table_functions` | BOOLEAN | `true` | Table functions are still subject to function policy. |
 | `allow_replacement_scans` | BOOLEAN | `false` | Let `SELECT * FROM 'x.parquet'` and other unresolved names fall through to DuckDB replacement scans. The resolved reader is then authorized like any table function. |
@@ -209,9 +208,9 @@ Schema-wide `SHOW` is denied whenever a table restriction is configured, includi
 `*/*/*`; this option does not filter metadata rows. `DESCRIBE table` still checks the
 resolved table normally.
 
-Table rules neither grant nor restrict types/functions. Use exact `allowed_types`
-identities and leaf-name function policies for those capabilities; their matching
-does not support wildcards. Function permissions assume trusted catalog definitions.
+Table rules neither grant nor restrict types/functions. Types are supplied by the
+host without separate authorization. Functions use exact leaf-name policies, not
+wildcards, and assume trusted catalog definitions.
 
 Things that surprise people:
 
@@ -223,13 +222,17 @@ Things that surprise people:
   non-overridable [never-bind list](docs/security.md#never-bind-functions).
 - `current_date`, `current_user`, and other session-value functions are **not** defaults.
   Grant them by resolved name in the global policy (`allowed_functions := ['current_date']`).
-- Collations `binary`/`c`/`posix`, `nocase`, `noaccent`, and `nfc` are available by default
-  and still honor `blocked_functions`. Any other collation (`COLLATE de`) needs its name in
-  `allowed_functions` with `check_functions` on.
-- Extension types need a matching `allowed_types` entry per type: `::JSON` needs
-  `{catalog: 'system', schema: 'main', type: 'json'}`, `::INET` needs
-  `{catalog: 'system', schema: 'main', type: 'inet'}` and the `inet` extension loaded
-  first. A `json` entry does not admit `inet`.
+- Collations available on the connection (`COLLATE de`, `nocase`, etc.) need no
+  Gatekeeper permission. Function policy still applies to explicit function calls
+  and bound function implementations; there is no collation-specific allow/block check.
+- Types need no Gatekeeper permission: JSON, INET, Spatial types, and user-defined
+  types are available when DuckDB can resolve them. The database owner controls
+  extension loading and type definitions. Table rules restrict table
+  and view access, not type names. Expressions in type parameters still undergo
+  the usual bind-time expression checks. Type resolution can autoload or autoinstall
+  extensions when those settings are enabled; provision extensions during trusted
+  setup and disable `autoload_known_extensions` and `autoinstall_known_extensions`
+  on validation connections.
 - `SELECT * FROM 'x.parquet'` needs `allow_replacement_scans := true` **and** the reader
   DuckDB substitutes admitted by name: `parquet_scan` for Parquet, `read_csv_auto` for
   CSV, `read_json_auto` for JSON. The decision happens before the reader binds, so a
@@ -272,7 +275,7 @@ persisted, not undone by rollback, and `SET SESSION`/`RESET SESSION` are rejecte
 | Dimension | How the layers combine |
 | --- | --- |
 | Blocks and the never-bind list | Either layer's deny wins. |
-| Allowlists (functions, tables, types) | Each layer must allow the resolved identity. |
+| Allowlists (functions, tables) | Each layer must allow the resolved identity. |
 | Capability flags | Both layers must grant. |
 | Limits | The stricter value applies. |
 
@@ -280,7 +283,7 @@ An otherwise valid request that tries to widen access does not error; it simply 
 authorize anything the global policy denies. Conflicting options are still rejected as
 `invalid_input`, for example `check_functions := false` with a nonempty
 `allowed_functions := ['md5']` (an empty list or `use_default_functions := false` is
-compatible with disabled checks). So grant capabilities (`read_parquet`, custom types, higher
+compatible with disabled checks). So grant capabilities (`read_parquet`, higher
 statement limits) in `CALL gatekeeper_configure`, and use request options to narrow per
 tenant.
 

@@ -160,12 +160,10 @@ def test_typed_parameter_execution_uses_same_text(db):
     assert db.execute(sql, {"value": 42, "n": 1}).fetchall() == [(42,)]
 
 
-def test_enum_permission_allows_label_introspection(db):
+def test_host_enum_allows_label_introspection(db):
     db.execute("CREATE TYPE status AS ENUM ('pending','done')")
     sql = "SELECT enum_range(NULL::status)"
-    assert not validate(db, sql)["allowed"]
-    configure(db, {"allowed_types": [{"catalog": "memory", "schema": "main", "type": "status"}]})
-    result = validate(db, sql, {"allowed_types": [{"catalog": "memory", "schema": "main", "type": "status"}]})
+    result = validate(db, sql)
     assert result["allowed"]
     assert db.execute(sql).fetchone() == (["pending", "done"],)
 

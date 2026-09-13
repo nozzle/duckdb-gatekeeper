@@ -3,12 +3,11 @@
   "reviewed_duckdb": "1.5.5",
   "source": "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa",
   "notes": [
-    "Reviewed compute defaults migrated from Mosaic functionset/functionset.go at 3eb74ea8; this review does not add defaults. Unlisted names remain excluded pending review.",
-    "Core reader/metadata registrations observed in the MotherDuck snapshot belong here, not solely in its proprietary inventory. read_duckdb attaches a hidden database during binding (src/function/table/read_duckdb.cpp).",
+    "Unlisted names remain excluded pending source review.",
+    "read_duckdb attaches a hidden database during binding (src/function/table/read_duckdb.cpp).",
     "histogram shares a name with a table macro that calls query_table; classify the most capable overload, not only the compute aggregate. histogram_values has the same dynamic-table behavior (src/catalog/default/default_table_functions.cpp).",
     "aggregate/array_aggr/array_aggregate/list_aggr/list_aggregate dispatch an argument-selected catalog aggregate, unlike fixed-name list macros (extension/core_functions/scalar/list/list_aggregates.cpp). current_setting can autoload extensions during binding (scalar/generic/current_setting.cpp).",
-    "Constant PostgreSQL compatibility stubs and static duckdb_keywords/duckdb_optimizers are not automatically elevated by name. Remaining unaudited helpers and Python-specific registrations stay unreviewed. The Python baseline does not cover every optional extension; proprietary/runtime-only limits remain in extension inventories.",
-    "Detailed source findings for this correction: https://github.com/nozzle/duckdb-gatekeeper/pull/10#issuecomment-5649330468. Defaults and accepted runtime signatures were not expanded."
+    "Constant PostgreSQL compatibility stubs and static duckdb_keywords/duckdb_optimizers are not automatically elevated by name. Remaining unaudited helpers and Python-specific registrations stay unreviewed. The Python baseline does not cover every optional extension; proprietary/runtime-only limits remain in extension inventories."
   ],
   "groups": {
     "aggregates": [
@@ -1343,5 +1342,5 @@
     "vector_type",
     "version"
   ],
-  "unreviewed_reason": "Present in the initial runtime baseline but not classified by the migrated review. Excluded by default; human source review is required before promotion."
+  "unreviewed_reason": "Runtime baseline names without completed source review. Excluded by default; human source review is required before promotion."
 }

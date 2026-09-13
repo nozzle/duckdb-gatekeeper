@@ -20,8 +20,6 @@ struct Policy {
 	bool recursive = true, table_functions = true, replacement_scans = false;
 	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables;
-	// Type identities remain exact (apart from an omitted catalog); table stores the type leaf.
-	std::set<Table> allowed_types;
 	uint64_t statements = 1, bytes = 8388608, nodes = 100000, depth = 512;
 };
 struct Violation {
@@ -54,7 +52,6 @@ struct Result {
 struct BindingPolicy {
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
-	Names caller_types;
 	Names literal_constructors;
 	Names runtime_table_functions;
 };
