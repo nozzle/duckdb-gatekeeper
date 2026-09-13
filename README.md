@@ -4,8 +4,9 @@
 
 A DuckDB extension that checks untrusted SQL against a policy before you run it.
 Gatekeeper parses the statement, inspects the syntax and functions the caller wrote,
-then binds it on your connection to authorize the actual tables, views, types, and
-functions it resolves to. The result is a native STRUCT with structured diagnostics.
+then binds it on your connection to authorize the actual tables and views it resolves
+to, the types and functions the caller requested, and explicit blocks inside trusted
+views and macros. The result is a native STRUCT with structured diagnostics.
 
 - **864 reviewed function defaults**, plus exact-name allow and block lists.
 - **Resolved catalog/schema/table/view authorization**, including unqualified names.
@@ -184,10 +185,11 @@ Things that surprise people:
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
 - Caller expressions in bind-time positions (LIMIT, reader arguments, type parameters,
-  PIVOT values) must be literals or parameters; arithmetic there is rejected. The system
-  table-in-out functions `unnest`, `range`, and `generate_series` are the exception: their
-  arguments are evaluated at execution time, so correlated columns and computed lists
-  (`FROM t, unnest(list_transform(t.arr, x -> x + 1))`) are accepted.
+  PIVOT values) must be literals or parameters; arithmetic there is rejected, including
+  `range(1+2)`. The one exception is a **correlated** call to the system table-in-out
+  functions `unnest`, `range`, or `generate_series`, whose arguments DuckDB evaluates per
+  row at execution time: `FROM t, unnest(list_transform(t.arr, lambda x: x + 1))` is
+  accepted, while the same call over a literal list is not.
 
 ## Global policy
 
@@ -218,8 +220,9 @@ undone by rollback.
 | Capability flags | Both layers must grant. |
 | Limits | The stricter value applies. |
 
-A request that tries to widen access does not error; it simply cannot authorize anything
-the global policy denies. So grant capabilities (`read_parquet`, custom types, higher
+An otherwise valid request that tries to widen access does not error; it simply cannot
+authorize anything the global policy denies. Conflicting options are still rejected as
+`invalid_input`, for example `check_functions := false` with `allowed_functions`. So grant capabilities (`read_parquet`, custom types, higher
 statement limits) in `CALL gatekeeper_configure`, and use request options to narrow per
 tenant.
 

@@ -90,9 +90,10 @@ generated from the matching `.in` files. Edit the `.in` file, then regenerate wi
 uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt <name>.in
 ```
 
-Dependabot handles GitHub Actions, Docker, and pip updates monthly. DuckDB is excluded
-and bumped manually together with the submodule, version checks, fuzz image, and
-inventory baseline; see [AGENTS.md](AGENTS.md).
+Dependabot handles GitHub Actions, Docker, pip, and the `test/wasm` npm lock monthly.
+DuckDB and DuckDB-Wasm are excluded and bumped manually together with the submodule,
+version checks, fuzz image, Wasm runtime pin, and inventory baseline; see
+[AGENTS.md](AGENTS.md).
 
 ## Function inventories
 
