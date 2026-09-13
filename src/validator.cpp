@@ -121,9 +121,9 @@ static const Inventory &GetInventory() {
 
 bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	auto &inventory = GetInventory();
-	return !FunctionDenied(policy, name) && (!policy.functions || policy.allowed_functions.count(Lower(name)) ||
-	                                         policy.allowed_functions.count(CanonicalFunction(name)) ||
-	                                         (policy.defaults && inventory.defaults.count(Lower(name))));
+	return !FunctionDenied(policy, name) &&
+	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(CanonicalFunction(name)) ||
+	        (policy.defaults && inventory.defaults.count(Lower(name))));
 }
 
 static bool FileName(const std::string &name) {
@@ -149,6 +149,7 @@ struct Walker {
 	const Policy &policy;
 	BindingPolicy *binding;
 	const Policy *ceiling;
+	const Limits &limits;
 	template <class Predicate> bool Both(Predicate predicate) const {
 		return predicate(policy) && (!ceiling || predicate(*ceiling));
 	}
@@ -173,7 +174,7 @@ struct Walker {
 			auto expr = work.back();
 			work.pop_back();
 			++visited;
-			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
+			if (visited > limits.nodes)
 				return false;
 			auto kind = Field(expr, "class");
 			if (kind == "CONSTANT" || kind == "PARAMETER")
@@ -216,7 +217,7 @@ struct Walker {
 			auto expr = work.back();
 			work.pop_back();
 			++visited;
-			if (!Both([&](const Policy &p) { return visited <= p.nodes; }))
+			if (visited > limits.nodes)
 				return false;
 			if (yyjson_is_arr(expr)) {
 				size_t i, n;
@@ -416,8 +417,6 @@ struct Walker {
 				                   Field(value, "schema"), "", name,
 				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 		}
-		if (kind == "RecursiveCTENode" && !Both([](const Policy &p) { return p.recursive; }))
-			Reject("recursive_cte", "recursive CTEs are disabled", value);
 		if (kind != "BaseTableRef" && kind != "ShowRef")
 			return;
 		auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
@@ -455,7 +454,7 @@ struct Walker {
 	}
 	void CheckNode(Json *value, std::string expected, Names scope, size_t depth, std::string edge) {
 		++nodes;
-		if (!Both([&](const Policy &p) { return nodes <= p.nodes && depth <= p.depth; }))
+		if (nodes > limits.nodes || depth > limits.depth)
 			throw Stop{"AST size or depth limit exceeded", "limit"};
 		if (expected == "logical_type") {
 			Type(value, depth);
@@ -559,9 +558,9 @@ struct Walker {
 	}
 };
 
-Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling) {
+Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling, const Limits &limits) {
 	auto &inventory = GetInventory();
-	Walker walker{inventory, policy, binding, ceiling};
+	Walker walker{inventory, policy, binding, ceiling, limits};
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {

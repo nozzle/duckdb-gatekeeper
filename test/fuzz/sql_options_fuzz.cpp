@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "engine_errors.hpp"
+#include "fuzz_checks.hpp"
 #include <cstdlib>
 #include <string>
 
@@ -92,7 +93,7 @@ static Value Decision(QueryResult &result) {
 }
 
 static std::string Option(uint8_t selector, const std::string &text) {
-	// Keep the removed allow_table_functions selector to exercise unknown-option rejection.
+	// Keep removed selectors to exercise unknown-option rejection and preserve corpus mappings.
 	static const char *names[] = {"check_functions", "use_default_functions", "allow_recursive_ctes",
 	                              "allow_table_functions", "allow_replacement_scans", "allowed_functions",
 	                              // Unknown namespace options exercise rejection.
@@ -324,6 +325,20 @@ static void CheckReplacementCallbacks() {
 		std::abort();
 }
 
+static void CheckFuzzLimits(Connection &connection) {
+	for (const auto &limits : {gatekeeper::Limits{7, 100000, 512}, gatekeeper::Limits{8, 100000, 512},
+	                           gatekeeper::Limits{8388608, 1, 512}, gatekeeper::Limits{8388608, 100000, 1}}) {
+		auto value = GatekeeperCheckForFuzz(*connection.context, "SELECT 1", limits);
+		auto &fields = StructValue::GetChildren(value);
+		if (fields[0].GetValue<bool>() || fields[1].GetValue<string>() != "forbidden" ||
+		    StructValue::GetChildren(ListValue::GetChildren(fields[2]).at(0))[0].GetValue<string>() != "limit")
+			std::abort();
+	}
+	// The internal fuzz hook cannot change the limits used by the SQL entry point.
+	if (Code(connection, "SELECT 1") != "ok")
+		std::abort();
+}
+
 static int Fuzz(const uint8_t *data, size_t size) {
 	if (size < 4 || size > 4096)
 		return 0;
@@ -334,6 +349,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckNativeSettingBypass();
 		CheckReplacementCallbacks();
 		Setup(connection);
+		CheckFuzzLimits(connection);
 		auto allow = connection.Query("SELECT gatekeeper_validate('SELECT 1').allowed");
 		auto deny =
 		    connection.Query("SELECT gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := []).allowed");
@@ -344,6 +360,17 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	std::string bytes(reinterpret_cast<const char *>(data + 4), size - 4);
 	Value text(bytes);
+	// Exercise the production parser/serializer/walker with small internal budgets,
+	// without registering SQL options or mutating limits for other validations.
+	if (data[0] % 4 == 0) {
+		gatekeeper::Limits limits;
+		limits.bytes = data[1] ? data[1] * 32 : gatekeeper::MAX_AST_BYTES;
+		limits.nodes = data[2] ? data[2] : gatekeeper::MAX_AST_NODES;
+		limits.depth = data[3] ? data[3] : gatekeeper::MAX_AST_DEPTH;
+		if (GatekeeperCheckForFuzz(*connection.context, bytes, limits) !=
+		    GatekeeperCheckForFuzz(*connection.context, bytes, limits))
+			std::abort();
+	}
 	const int64_t limit = data[3];
 	auto options = Option(data[1], bytes) + " := " + Argument(data[2]);
 	if (data[0] & 128)
@@ -384,10 +411,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	std::string sql;
 	if (data[0] % 4 == 0) {
-		sql = "SELECT gatekeeper_validate($1, max_ast_bytes := " + std::to_string(data[1] ? data[1] * 32 : 65536) +
-		      ", max_ast_nodes := " + std::to_string(data[2] ? data[2] : 2000) +
-		      ", max_ast_depth := " + std::to_string(data[3] ? data[3] : 100) +
-		      ", max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
+		sql = "SELECT gatekeeper_validate($1, max_statements := " + std::to_string(1 + data[1] % 4) + ") FROM input";
 	} else {
 		sql = "SELECT gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
 		      options + ") FROM input";

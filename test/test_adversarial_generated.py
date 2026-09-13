@@ -59,18 +59,15 @@ def test_vectorized_policy_overrides_and_nulls(db):
 def test_limits_at_edges_and_recovery(db):
     assert validate(db, "SELECT 1", {"max_statements": 1})["allowed"]
     assert not validate(db, "SELECT 1; SELECT 2", {"max_statements": 1})["allowed"]
-    oversized = "SELECT '" + "x" * 1000 + "'"
-    assert not validate(db, oversized, {"max_ast_bytes": 100})["allowed"]
     for _ in range(20):
         assert validate(db, "SELECT 1")["allowed"]
-        assert not validate(db, "SELECT 1", {"max_ast_nodes": 1})["allowed"]
+        assert not validate(db, "SELECT 1; SELECT 2")["allowed"]
     for value in [0, -1, 0.5, True, None, "1", 2**64]:
-        for key in ["max_statements", "max_ast_nodes", "max_ast_depth", "max_ast_bytes"]:
-            try:
-                result = validate(db, "SELECT 1", {key: value})
-            except duckdb.Error:
-                continue
-            assert not result["allowed"] and result["code"] == "invalid_input", (key, value, result)
+        try:
+            result = validate(db, "SELECT 1", {"max_statements": value})
+        except duckdb.Error:
+            continue
+        assert not result["allowed"] and result["code"] == "invalid_input", (value, result)
 
 
 def test_embedded_nul_policy_does_not_truncate(db):

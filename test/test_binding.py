@@ -59,7 +59,7 @@ def test_ceiling_shared_and_replacement_is_global(db):
         assert not validate(other,"SELECT md5('x')")["allowed"]
         assert not validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
         assert validate(other,"SELECT 1;SELECT 2")["allowed"]
-        assert validate(other,"SELECT 1;SELECT 2",{"max_ast_depth":100})["allowed"]
+        assert validate(other,"SELECT 1;SELECT 2",{"use_default_functions":False})["allowed"]
         configure(other)
         assert validate(db,"SELECT md5('x')")["allowed"]
     with connect() as independent:
@@ -117,4 +117,4 @@ def test_bound_cte_and_policy_override(db):
     assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
     configure(db,{"allowed_tables":[],"allowed_functions":["custom"]})
     assert not validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
-    assert validate(db,"SELECT mystery(1)",{"check_functions":False})["code"]=="forbidden"
+    assert validate(db,"SELECT mystery(1)",{"allowed_functions":["mystery"]})["code"]=="forbidden"

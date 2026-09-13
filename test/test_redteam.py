@@ -177,7 +177,7 @@ def test_validation_cannot_execute_configuration(db):
 def test_mixed_batch_rejected_before_binding(catalog):
     configure(catalog, {"max_statements": 2})
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
-    result = validate(catalog, sql, {"max_statements": 2, "check_functions": False})
+    result = validate(catalog, sql, {"max_statements": 2, "allowed_functions": ["missing_file_reader"]})
     assert not result["allowed"] and result["code"] == "unsupported"
     assert catalog.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
@@ -191,7 +191,7 @@ def test_mixed_batch_rejected_before_binding(catalog):
 ])
 def test_write_smuggling(db, sql):
     configure(db, {"max_statements": 10})
-    result = validate(db, sql, {"max_statements": 10, "check_functions": False})
+    result = validate(db, sql, {"max_statements": 10})
     assert not result["allowed"]
     assert result["code"] in {"parser", "unsupported"}
 
@@ -203,5 +203,7 @@ def test_write_smuggling(db, sql):
     "SELECT system.main.json_serialize_plan('SELECT * FROM secret.t')",
 ])
 def test_dynamic_sql_independent_of_allowlist(catalog, sql):
-    result = validate(catalog, sql, {"check_functions": False})
+    options = {"allowed_functions": ["query", "query_table", "json_execute_serialized_sql", "json_serialize_plan"]}
+    configure(catalog, options)
+    result = validate(catalog, sql, options)
     assert not result["allowed"] and result["code"] == "forbidden"

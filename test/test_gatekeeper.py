@@ -91,8 +91,7 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT md5('x')", {"allowed_functions": ["md5"], "blocked_functions": ["md5"]}, False),
     ("SELECT sum(x) FROM t", {"use_default_functions": False}, False),
     ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": ["sum"]}, True),
-    ("SELECT custom(1)", {"check_functions": False}, False),
-    ("SELECT custom(1)", {"check_functions": False, "blocked_functions": ["custom"]}, False),
+    ("SELECT custom(1)", {"allowed_functions": ["custom"], "blocked_functions": ["custom"]}, False),
     ("SELECT * FROM read_parquet('local')", {}, False),
     ("SELECT 2*3", {"blocked_functions": ["*"]}, False),
     ("SELECT sum(y) FROM t", {"blocked_functions": ["*"]}, True),
@@ -105,8 +104,7 @@ def test_no_execution_or_binding(db, tmp_path):
     ("SELECT * FROM range(3)", {"use_default_functions": False, "allowed_functions": ["range"]}, True),
     ("SELECT * FROM range(3)", {"blocked_functions": ["range"]}, False),
     ("SELECT range(3)", {"blocked_functions": ["range"]}, False),
-    ("SELECT * FROM query('SELECT 1')", {"check_functions": False}, False),
-    ("SELECT * FROM query_table('t')", {"check_functions": False}, False),
+    ("SELECT * FROM query_table('t')", {"allowed_functions": ["query_table"]}, False),
     ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": ["json_serialize_plan"]}, False),
     ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"]}, False),
     ("SELECT * FROM query('SELECT 1')", {}, False),
@@ -163,9 +161,12 @@ def test_ctes(db, sql, allowed):
     assert result["allowed"] == allowed, result
 
 
-def test_recursive_toggle(db):
+def test_recursive_cte_obeys_function_and_table_policy(db):
     sql = "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t WHERE n<3) SELECT * FROM t"
-    assert not check(db, sql, {"allow_recursive_ctes": False})["allowed"]
+    assert check(db, sql, {"allowed_tables": []})["allowed"]
+    assert not check(db, sql, {"blocked_functions": ["+"]})["allowed"]
+    db.execute("CREATE TABLE secret(n INT)")
+    assert not check(db, sql.replace("SELECT 1 AS n", "SELECT n FROM secret"), {"allowed_tables": []})["allowed"]
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
@@ -188,8 +189,6 @@ def test_limits(db):
     configure(db, {"max_statements": 2})
     assert check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
     assert not check(db, "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t", {"max_statements": 2, "allowed_tables": []})["allowed"]
-    for limits in [{"max_ast_nodes": 1}, {"max_ast_depth": 1}, {"max_ast_bytes": 50}]:
-        assert not check(db, "SELECT 1", limits)["allowed"]
 
 
 @pytest.mark.parametrize("options", [

@@ -8,22 +8,20 @@ using duckdb::LogicalTypeId;
 using duckdb::Value;
 
 const std::vector<std::string> &OptionNames() {
-	static const std::vector<std::string> names = {
-	    "check_functions",   "use_default_functions", "allow_recursive_ctes", "allow_replacement_scans",
-	    "allowed_functions", "blocked_functions",     "allowed_tables",       "max_statements",
-	    "max_ast_bytes",     "max_ast_nodes",         "max_ast_depth"};
+	static const std::vector<std::string> names = {"use_default_functions", "allow_replacement_scans",
+	                                               "allowed_functions",     "blocked_functions",
+	                                               "allowed_tables",        "max_statements"};
 	return names;
 }
 
 LogicalType OptionType(const std::string &name) {
-	if (name == "check_functions" || name == "use_default_functions" || name == "allow_recursive_ctes" ||
-	    name == "allow_replacement_scans")
+	if (name == "use_default_functions" || name == "allow_replacement_scans")
 		return LogicalType::BOOLEAN;
 	if (name == "allowed_functions" || name == "blocked_functions")
 		return LogicalType::LIST(LogicalType::VARCHAR);
 	if (name == "allowed_tables")
 		return LogicalType::ANY;
-	if (name == "max_statements" || name == "max_ast_bytes" || name == "max_ast_nodes" || name == "max_ast_depth")
+	if (name == "max_statements")
 		return LogicalType::BIGINT;
 	throw std::invalid_argument("unknown option: " + name);
 }
@@ -57,12 +55,8 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			if (value.type() != type)
 				throw std::invalid_argument("expected BOOLEAN: " + name);
 			auto flag = value.GetValue<bool>();
-			if (name == "check_functions")
-				policy.functions = flag;
 			if (name == "use_default_functions")
 				policy.defaults = flag;
-			if (name == "allow_recursive_ctes")
-				policy.recursive = flag;
 			if (name == "allow_replacement_scans")
 				policy.replacement_scans = flag;
 		} else if (name == "allowed_functions")
@@ -121,30 +115,11 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			if (value.type() != LogicalType::BIGINT)
 				throw std::invalid_argument("expected integer limit");
 			auto limit = value.GetValue<int64_t>();
-			uint64_t ceiling = name == "max_statements"  ? 1000
-			                   : name == "max_ast_bytes" ? 8388608
-			                   : name == "max_ast_nodes" ? 100000
-			                                             : 512;
-			if (limit <= 0 || uint64_t(limit) > ceiling)
+			if (limit <= 0 || limit > 1000)
 				throw std::invalid_argument("invalid limit: " + name);
-			if (name == "max_statements")
-				policy.statements = limit;
-			if (name == "max_ast_bytes")
-				policy.bytes = limit;
-			if (name == "max_ast_nodes")
-				policy.nodes = limit;
-			if (name == "max_ast_depth")
-				policy.depth = limit;
+			policy.statements = limit;
 		}
 	}
-	if (seen.count("check_functions") && !seen.count("use_default_functions"))
-		policy.defaults = policy.functions;
-	if (!policy.functions && !seen.count("allowed_functions"))
-		policy.allowed_functions.clear();
-	if (!policy.functions && !seen.count("use_default_functions"))
-		policy.defaults = false;
-	if (!policy.functions && (policy.defaults || !policy.allowed_functions.empty()))
-		throw std::invalid_argument("allowlist options require check_functions");
 }
 
 Value PolicyValue(const Policy &policy) {
@@ -165,17 +140,12 @@ Value PolicyValue(const Policy &policy) {
 			values.push_back(Value::STRUCT(type, {Value(entry.catalog), Value(entry.schema), Value(entry.table)}));
 		return Value::LIST(type, values);
 	};
-	return Value::STRUCT({{"check_functions", Value::BOOLEAN(policy.functions)},
-	                      {"use_default_functions", Value::BOOLEAN(policy.defaults)},
-	                      {"allow_recursive_ctes", Value::BOOLEAN(policy.recursive)},
+	return Value::STRUCT({{"use_default_functions", Value::BOOLEAN(policy.defaults)},
 	                      {"allow_replacement_scans", Value::BOOLEAN(policy.replacement_scans)},
 	                      {"allowed_functions", strings(policy.allowed_functions)},
 	                      {"blocked_functions", strings(policy.blocked_functions)},
 	                      {"allowed_tables", identities(policy.allowed_tables, "table")},
 	                      {"max_statements", Value::BIGINT(policy.statements)},
-	                      {"max_ast_bytes", Value::BIGINT(policy.bytes)},
-	                      {"max_ast_nodes", Value::BIGINT(policy.nodes)},
-	                      {"max_ast_depth", Value::BIGINT(policy.depth)},
 	                      {"restrict_tables", Value::BOOLEAN(policy.tables)}});
 }
 

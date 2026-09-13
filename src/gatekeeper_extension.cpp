@@ -23,6 +23,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "engine_errors.hpp"
 #include "function_policy.hpp"
+#include "fuzz_checks.hpp"
 #include "json_serializer.hpp"
 #include "options.hpp"
 #include <map>
@@ -352,14 +353,15 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 }
 
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
-                                const gatekeeper::Policy &ceiling, const string &sql) {
+                                const gatekeeper::Policy &ceiling, const string &sql,
+                                const gatekeeper::Limits &limits = gatekeeper::Limits()) {
 	gatekeeper::Result result;
 	bool binding = false;
 	try {
 		if (sql.find('\0') != string::npos)
 			throw InvalidInputException("SQL contains a NUL byte");
-		if (sql.size() > std::min(policy.bytes, ceiling.bytes))
-			return {false, "forbidden", "", "", {{"limit", "SQL exceeds max_ast_bytes input bound"}}};
+		if (sql.size() > limits.bytes)
+			return {false, "forbidden", "", "", {{"limit", "SQL exceeds fixed input size limit"}}};
 		Parser parser(context.GetParserOptions());
 		parser.ParseQuery(sql);
 		if (parser.statements.empty())
@@ -391,10 +393,10 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		unique_ptr<char, decltype(&free)> serialized(yyjson_write(ast.get(), 0, &bytes), free);
 		if (!serialized)
 			throw std::bad_alloc();
-		if (bytes > std::min(policy.bytes, ceiling.bytes))
-			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds max_ast_bytes"}}};
+		if (bytes > limits.bytes)
+			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds fixed size limit"}}};
 		gatekeeper::BindingPolicy binding_policy;
-		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy, &ceiling);
+		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy, &ceiling, limits);
 		if (!result.allowed)
 			return result;
 		binding = true;
@@ -479,6 +481,17 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 	}
 	return result;
 }
+
+#ifdef GATEKEEPER_FUZZ
+Value GatekeeperCheckForFuzz(ClientContext &context, const string &sql, const gatekeeper::Limits &limits) {
+	Value result;
+	context.RunFunctionInTransaction([&]() {
+		auto policy = GlobalPolicy(context);
+		result = ResultValue(Check(context, policy, policy, sql, limits));
+	});
+	return result;
+}
+#endif
 
 static void GatekeeperValidate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &expression = state.expr.Cast<BoundFunctionExpression>();

@@ -7,7 +7,7 @@
 using namespace duckdb_yyjson;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-	// Fixed prefix keeps policy mutations independent of the JSON document.
+	// Preserve the six-byte corpus prefix, including retired flag bits and byte 5.
 	if (size < 6 || size > 65536)
 		return 0;
 	std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
@@ -17,10 +17,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	auto root = yyjson_doc_get_root(doc.get());
 	try {
 		gatekeeper::Policy policy;
-		policy.functions = data[0] & 1;
-		policy.defaults = policy.functions && (data[0] & 2);
+		policy.defaults = data[0] & 2;
 		policy.tables = data[0] & 16;
-		policy.recursive = data[0] & 32;
 		policy.replacement_scans = data[1] & 1;
 		if (data[1] & 2)
 			policy.allowed_tables.insert({"memory", "*", "*"});
@@ -30,30 +28,29 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			policy.allowed_tables.insert({"", "main", "t"});
 		if (data[1] & 16)
 			policy.blocked_functions = {"md5", "read_csv"};
-		if (policy.functions && (data[1] & 32))
+		if (data[1] & 32)
 			policy.allowed_functions = {"md5", "range", "query_table"};
-		policy.nodes = data[2] ? data[2] : 100000;
-		policy.depth = data[3] ? data[3] : 512;
-		// These are Check()-level limits; the linked SQL harness exercises them.
-		policy.bytes = data[4] ? data[4] : 8388608;
-		policy.statements = data[5] ? data[5] : 1;
+		gatekeeper::Limits limits;
+		limits.nodes = data[2] ? data[2] : gatekeeper::MAX_AST_NODES;
+		limits.depth = data[3] ? data[3] : gatekeeper::MAX_AST_DEPTH;
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
 			return 0;
 		gatekeeper::BindingPolicy binding;
-		auto result = gatekeeper::Validate(ast, policy, &binding);
+		auto result = gatekeeper::Validate(ast, policy, &binding, nullptr, limits);
 		gatekeeper::Policy ceiling;
-		ceiling.recursive = data[4] & 1;
+		ceiling.defaults = data[4] & 1;
 		ceiling.blocked_functions = {"abs", "md5"};
-		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling);
-		if (layered.allowed && (!result.allowed || !gatekeeper::Validate(ast, ceiling).allowed))
+		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling, limits);
+		if (layered.allowed &&
+		    (!result.allowed || !gatekeeper::Validate(ast, ceiling, nullptr, nullptr, limits).allowed))
 			std::abort();
 		if ((result.code != "ok" && result.code != "forbidden" && result.code != "unsupported") ||
 		    result.allowed != (result.code == "ok") || result.allowed != result.violations.empty() ||
 		    !result.error_message.empty() || !result.error_type.empty())
 			std::abort();
 		gatekeeper::BindingPolicy again_binding;
-		auto again = gatekeeper::Validate(ast, policy, &again_binding);
+		auto again = gatekeeper::Validate(ast, policy, &again_binding, nullptr, limits);
 		if (binding.synthesized_functions != again_binding.synthesized_functions ||
 		    binding.literal_constructors != again_binding.literal_constructors ||
 		    binding.runtime_table_functions != again_binding.runtime_table_functions)

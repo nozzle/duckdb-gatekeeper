@@ -24,7 +24,7 @@ def expressions(db):
     ("SELECT session_user", "session_user"), ("SELECT localtime", "current_localtime"),
 ])
 def test_synthesized_functions_obey_blocks_and_allowlist(expressions, sql, name):
-    for options in [{"blocked_functions": [name]}, {"check_functions": False, "blocked_functions": [name]},
+    for options in [{"blocked_functions": [name]}, {"allowed_functions": [name], "blocked_functions": [name]},
                     {"use_default_functions": False}]:
         result = validate(expressions, sql, options)
         assert result["code"] == "forbidden" and result["error_message"] == "", result
@@ -64,7 +64,8 @@ def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
 def test_never_bind_names_absent_from_defaults_and_non_overridable(db):
     names = never_bind_names()
     for name in names:
-        for options in [{"allowed_functions": [name]}, {"check_functions": False}]:
+        for options in [{"allowed_functions": [name]}, {"use_default_functions": False, "allowed_functions": [name]}]:
+            configure(db, options)
             result = validate(db, f'SELECT "{name}"(1)', options)
             assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
 
@@ -214,9 +215,16 @@ def test_types_are_independent_of_table_policy(db):
     assert validate(db, "SELECT 1::INTEGER", {"allowed_tables": []})["allowed"]
 
 
-def test_collation_with_function_checks_disabled(db):
-    result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False})
-    assert result["allowed"], result
-    # Function allowlist options cannot be supplied while function checks are disabled.
-    result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False, "allowed_functions": ["de"]})
-    assert result["code"] == "invalid_input"
+@pytest.mark.parametrize("defaults", [True, False])
+def test_defaults_combine_with_explicit_function_permissions(db, defaults):
+    db.execute("CREATE MACRO custom(x) AS x")
+    options = {"use_default_functions": defaults, "allowed_functions": ["custom"]}
+    configure(db, options)
+    assert validate(db, "SELECT custom(1)")["allowed"]
+    assert validate(db, "SELECT abs(1)")["allowed"] is defaults
+    assert validate(db, "SELECT custom(1), abs(1)", options)["allowed"] is defaults
+    assert validate(db, "SELECT 1", {"use_default_functions": False, "allowed_functions": []})["allowed"]
+    assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": []})["allowed"]
+    assert not validate(db, "SELECT custom(1)", {"blocked_functions": ["custom"]})["allowed"]
+    configure(db, {**options, "blocked_functions": ["custom"]})
+    assert not validate(db, "SELECT custom(1)", {"blocked_functions": []})["allowed"]
