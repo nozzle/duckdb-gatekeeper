@@ -40,6 +40,13 @@ expansion using the same implementation must also pass it. This conservative
 query-wide restriction can deny a mixed caller/view expression; it does not grant
 an exception to caller code. Caller type names are similarly checked at resolution;
 unrelated types inside trusted expansions retain the trusted boundary.
+Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
+`SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
+`SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
+query-wide check too. Legacy function-child `x -> ...` remains ambiguous: DuckDB
+can fall back to JSON binding even inside a function argument. Such syntax retains
+the conservative `json_extract` candidate. Use `lambda x: ...` to avoid that ambiguity
+when combining lambdas with trusted JSON expansions.
 
 ### Never-bind functions
 
@@ -70,6 +77,10 @@ reserved defensive spelling from the issue; the pinned registration is `duckdb_t
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
 All listed names are excluded from defaults and cannot be admitted by options.
 Metadata views expanding to these readers are denied even with `allowed_tables`.
+This is deliberate: metadata readers enumerate across catalogs and cannot be row-
+filtered by object callbacks. Tenant introspection must use a host-controlled API.
+`allow_dynamic_sql` remains accepted for compatibility but is deprecated; it no
+longer enables execution and only retains its plan-inspection gate.
 
 ### Callback bypasses
 

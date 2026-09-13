@@ -1,10 +1,9 @@
 import json
-import re
 
 import pytest
 
 from test_gatekeeper import ROOT, db
-from typed_helpers import validate, configure
+from typed_helpers import validate, configure, never_bind_names
 
 
 @pytest.fixture
@@ -61,13 +60,7 @@ def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
 
 
 def test_never_bind_names_absent_from_defaults_and_non_overridable(db):
-    header = (ROOT / "src/include/function_policy.hpp").read_text()
-    names = re.findall(r'"([a-z_]+)"', header.split("static const Names names =", 1)[1].split("return names;", 1)[0])
-    import sys
-    sys.path.insert(0, str(ROOT / "scripts"))
-    from inventory import load
-    _, defaults = load()
-    assert names and not set(names) & set(defaults)
+    names = never_bind_names()
     for name in names:
         for options in [{"allowed_functions": [name], "allow_dynamic_sql": True}, {"check_functions": False}]:
             result = validate(db, f'SELECT "{name}"(1)', options)
@@ -83,7 +76,8 @@ def test_type_preflight_blocks_before_lookup(db, typ):
 
 
 @pytest.mark.parametrize("typ", ["INTEGER", "DECIMAL(10,2)", "STRUCT(x INTEGER, y VARCHAR[])",
-                                 "MAP(VARCHAR, INTEGER)", "INTEGER[3]", "UNION(x INTEGER, y VARCHAR)"])
+                                 "MAP(VARCHAR, INTEGER)", "INTEGER[3]", "UNION(x INTEGER, y VARCHAR)",
+                                 'STRUCT("collation" INTEGER)', 'UNION("collation" INTEGER, b VARCHAR)'])
 def test_builtin_nested_types(db, typ):
     result = validate(db, "SELECT NULL::" + typ)
     assert result["allowed"], result
@@ -173,3 +167,53 @@ def test_type_denial_does_not_autoload_inet(db):
     result = validate(db, "SELECT '127.0.0.1'::INET")
     assert result["code"] == "forbidden" and result["error_message"] == ""
     assert db.execute("SELECT loaded FROM duckdb_extensions() WHERE extension_name='inet'").fetchone() == before
+
+
+def test_whole_row_reference_requires_struct_pack(expressions):
+    assert not validate(expressions, "SELECT t FROM t", {"use_default_functions": False})["allowed"]
+    assert validate(expressions, "SELECT t FROM t", {
+        "use_default_functions": False, "allowed_functions": ["struct_pack"]})["allowed"]
+
+
+def test_function_child_arrow_can_still_be_json(expressions):
+    options = {"use_default_functions": False, "allowed_functions": ["coalesce"]}
+    result = validate(expressions, "SELECT coalesce(j->'a', j) FROM t", options)
+    assert result["code"] == "forbidden"
+    assert any(v["function_name"] == "json_extract" for v in result["violations"])
+    assert validate(expressions, "SELECT j->>'a' FROM t", {
+        "use_default_functions": False, "allowed_functions": ["json_extract_string"]})["allowed"]
+
+
+def test_legacy_lambda_overlap_and_keyword_workaround(expressions):
+    expressions.execute("SET lambda_syntax='ENABLE_SINGLE_ARROW'; CREATE VIEW v_json AS SELECT json_extract(j, 'a') z FROM t")
+    options = {"use_default_functions": False, "allowed_functions": ["list_transform", "+"]}
+    sql = "SELECT list_transform(arr, x -> x + 1), z FROM t, v_json"
+    assert not validate(expressions, sql, options)["allowed"]
+    assert validate(expressions, sql.replace("x ->", "lambda x:"), options)["allowed"]
+
+
+@pytest.mark.parametrize("name", ["row_number", "rank", "dense_rank"])
+def test_nonaggregate_windows_in_trusted_view(db, name):
+    db.execute(f"CREATE VIEW w AS SELECT {name}() OVER () n")
+    assert validate(db, "SELECT * FROM w")["allowed"]
+    result = validate(db, "SELECT * FROM w", {"blocked_functions": [name]})
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
+
+
+def test_allowed_types_intersect_namespace_policy(db):
+    db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a')")
+    options = {"allowed_types": [{"schema": "private", "type": "customer"}]}
+    assert validate(db, "SELECT 'a'::private.customer", options)["allowed"]
+    assert not validate(db, "SELECT 'a'::private.customer", {**options, "allowed_schemas": ["public"]})["allowed"]
+    options = {"allowed_types": [{"schema": "main", "type": "json"}], "allowed_catalogs": ["memory"]}
+    assert not validate(db, "SELECT '{}'::JSON", options)["allowed"]
+    # Builtins are namespace-independent; adding a cast does not require system catalog access.
+    assert validate(db, "SELECT 1::INTEGER", {"allowed_catalogs": [], "allowed_schemas": []})["allowed"]
+
+
+def test_collation_permission_remains_separate_capability(db):
+    result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False})
+    assert result["code"] == "forbidden"
+    # Function allowlist options cannot be supplied while function checks are disabled.
+    result = validate(db, "SELECT 'a' COLLATE de", {"check_functions": False, "allowed_functions": ["de"]})
+    assert result["code"] == "invalid_input"

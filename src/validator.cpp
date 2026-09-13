@@ -243,7 +243,8 @@ struct Walker {
 			yyjson_arr_foreach(children, i, n, child) {
 				if (Field(child, "class") != "TYPE" && Field(child, "class") != "CONSTANT")
 					throw Stop{"computed type parameters are unsupported"};
-				if (Field(child, "alias") == "collation") {
+				if (Names{"varchar", "bpchar", "string", "char", "nvarchar", "text"}.count(Lower(name)) &&
+				    Lower(Field(child, "alias")) == "collation") {
 					if (Field(child, "class") != "CONSTANT")
 						throw Stop{"computed type collations are unsupported"};
 					Collation(Field(yyjson_obj_get(child, "value"), "value"), child);
@@ -273,6 +274,8 @@ struct Walker {
 				Implied({"struct_extract", "struct_pack", "union_extract", "map_extract_value", "json_extract",
 				         "variant_extract"});
 			else {
+				// An unresolved single-part table alias can become a whole-row struct.
+				Implied({"struct_pack"});
 				auto name = Lower(Text(yyjson_arr_get(columns, 0)));
 				static const std::map<std::string, std::string> sql_values = {
 				    {"current_catalog", "current_catalog"},

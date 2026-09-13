@@ -70,6 +70,18 @@ checked before binding; indexing, field extraction and SQL-value names are check
 against the implementation selected by DuckDB. Actual qualified columns remain
 columns. A query-wide conservative check also applies to matching implementations
 inside trusted expansions; see [the enforcement boundary](security.md#function-enforcement-and-trusted-expansion).
+For example, under `use_default_functions := false`, `SELECT * FROM v_st` can
+pass while `SELECT t.x FROM t, v_st` fails if the trusted view uses `struct_extract`
+and that name is not admitted. Single-part whole-row references (`SELECT t FROM t`)
+also require `struct_pack`, so ordinary column references conservatively enable
+that implementation check query-wide.
+
+**Compatibility:** bare `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIME`,
+`LOCALTIME`, `LOCALTIMESTAMP`, and other SQL-value functions now follow their inventory
+classification. Current-time/session functions are denied by default; opt in using
+their resolved names, e.g. `allowed_functions := ['current_date']` (timestamp/time use
+`get_current_timestamp`/`get_current_time`, local forms use `current_localtime`/
+`current_localtimestamp`). Casts `::JSON` and `::INET` require `allowed_types`.
 
 ```sql
 SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']);
@@ -122,6 +134,8 @@ options are omitted. A schema allowlist alone does not admit system metadata vie
 such as `duckdb_tables`, `duckdb_views`, `sqlite_master`, or `information_schema.tables`.
 An explicit entry satisfies object policy only: metadata views such as `duckdb_tables`
 still fail the never-bind layer when expanded to their underlying metadata functions.
+The standard internal metadata views cannot be admitted by object opt-in;
+`internal_object` provides an earlier diagnostic, not an escape from never-bind.
 Omitting the catalog in an explicit entry retains any-catalog matching.
 This also applies transitively: a trusted user view over `duckdb_tables` requires
 explicit permission for both the user view and that internal dependency.
@@ -156,13 +170,19 @@ SELECT gatekeeper_validate('SELECT ''{}''::JSON',
 
 Preflight inspects latest serialized type expressions and nested parameters; resolved
 identities must match. Computed type parameters, computed type expressions and named
-PIVOT enums are unsupported. The same type name occurring in a trusted expansion
+PIVOT enums are unsupported. Admitted nonbuiltin types also intersect `allowed_catalogs`
+and `allowed_schemas`; JSON in `system.main` requires that namespace if those lists
+are set. Built-in types remain exempt from namespace restrictions. The same type
+name occurring in a trusted expansion
 can be subject to this query-wide resolved check. Unknown fields, NULL entries and
 invalid identifier values are rejected like `allowed_tables`.
 
 Collations `binary` (also `c`/`posix`), `nocase`, `noaccent`, and `nfc` are available
 by default. Other collation components require explicit `allowed_functions` entries,
-even if function checking is disabled. Blocks win, including blocks on known built-in
+as a separate binding capability. Disabling function checks does not grant collation
+permission; because `allowed_functions` conflicts with `check_functions := false`,
+enable function checks to admit a nondefault collation. This avoids broadening type/
+collation lookup capabilities through the function-check toggle. Blocks win, including blocks on known built-in
 implementation functions. Dotted combinations are checked component by component.
 Disable autoload/autoinstall on validation connections; preflight and post-lookup
 callbacks are not a guarantee against extension loading.
@@ -182,6 +202,9 @@ Dynamic SQL covers table calls to `query`, `query_table`, and
 reviewed inventory, not recognition of arbitrary application functions.
 The never-bind functions `query`, `query_table` and `json_execute_serialized_sql`
 remain denied even if this flag and explicit function permission are supplied.
+`allow_dynamic_sql` is deprecated and retained for option compatibility; it no longer
+admits SQL execution. It still gates the explicitly admitted plan-inspection function
+`json_serialize_plan`.
 
 File-shaped names contain `/`, `\`, or `://`, or end in `.parquet`, `.csv`, `.tsv`,
 `.json`, `.jsonl`, `.ndjson`, `.gz`, `.zst`, `.xlsx`, `.db`, `.ddb`, `.duckdb`, `.avro`,

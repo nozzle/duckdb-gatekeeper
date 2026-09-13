@@ -20,6 +20,7 @@
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
 #include "options.hpp"
+#include <map>
 #include <mutex>
 
 namespace duckdb {
@@ -155,10 +156,16 @@ static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::
 		if (type.internal && gatekeeper::BuiltinTypes().count(gatekeeper::Lower(type.name)))
 			return; // DefaultTypeGenerator installs built-ins in each catalog's main schema.
 		auto catalog = type.schema.catalog.GetName(), schema = type.schema.name;
+		if (policy.catalogs && !policy.allowed_catalogs.count(gatekeeper::Lower(catalog)))
+			result.violations.emplace("catalog", "type catalog is not allowed", catalog, schema);
+		if (policy.schemas && !policy.allowed_schemas.count(gatekeeper::Lower(schema)))
+			result.violations.emplace("schema", "type schema is not allowed", catalog, schema);
 		if (!gatekeeper::TypeAllowed(policy, catalog, schema, type.name, true)) {
 			result.violations.emplace("type", "resolved type is not allowed: " + type.name, catalog, schema);
 			throw PermissionException("resolved type is not allowed");
 		}
+		if (!result.violations.empty())
+			throw PermissionException("resolved type namespace is not allowed");
 		return;
 	}
 	default:
@@ -208,6 +215,24 @@ static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::Bi
 					auto &window = child.Cast<BoundWindowExpression>();
 					if (window.aggregate)
 						AuthorizeFunction(policy, binding, window.aggregate->name, result);
+					else {
+						static const std::map<ExpressionType, string> windows = {
+						    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
+						    {ExpressionType::WINDOW_RANK, "rank"},
+						    {ExpressionType::WINDOW_RANK_DENSE, "dense_rank"},
+						    {ExpressionType::WINDOW_NTILE, "ntile"},
+						    {ExpressionType::WINDOW_PERCENT_RANK, "percent_rank"},
+						    {ExpressionType::WINDOW_CUME_DIST, "cume_dist"},
+						    {ExpressionType::WINDOW_FIRST_VALUE, "first_value"},
+						    {ExpressionType::WINDOW_LAST_VALUE, "last_value"},
+						    {ExpressionType::WINDOW_LEAD, "lead"},
+						    {ExpressionType::WINDOW_LAG, "lag"},
+						    {ExpressionType::WINDOW_NTH_VALUE, "nth_value"},
+						    {ExpressionType::WINDOW_FILL, "fill"}};
+						auto found = windows.find(window.GetExpressionType());
+						if (found != windows.end())
+							AuthorizeFunction(policy, binding, found->second, result);
+					}
 				}
 			});
 		});

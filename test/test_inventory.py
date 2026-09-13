@@ -1,7 +1,6 @@
 import json
 import sys
 import shutil
-import re
 import pytest
 
 from test_gatekeeper import ROOT, check, db
@@ -11,11 +10,11 @@ from inventory import load
 from audit_inventory import compare, coverage
 from migrate_signature_baseline import verify_migration
 from versions import BASELINE_FILENAME
+from typed_helpers import never_bind_names
 
 
 def test_never_bind_inventory_excluded_from_defaults():
-    header = (ROOT / "src/include/function_policy.hpp").read_text()
-    names = re.findall(r'"([a-z_]+)"', header.split("static const Names names =", 1)[1].split("return names;", 1)[0])
+    names = never_bind_names()
     _, defaults = load()
     assert names and not set(names) & set(defaults)
 
