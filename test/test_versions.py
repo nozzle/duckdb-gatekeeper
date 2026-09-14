@@ -144,19 +144,91 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
 
 
 def test_check_engine_stamp_script():
-    """The CI identity check derives the expectation from the engine checkout, not from a co-built shell."""
+    """The CI identity check derives the expectation from the engine checkout, not from a co-built shell. The
+    distributed-artifact jobs have no engine checkout, so the source comparison is used only when one exists."""
     import check_engine_stamp
+    from engine import checkout_revision
     version, source_id = _stamp(EXTENSION.read_bytes())
-    arguments = ["--extension", str(EXTENSION), "--engine-source", str(ROOT / "duckdb")]
-    if "-dev" in version:
-        pytest.skip("local artifact was built from an unpinned engine checkout")
+    arguments = ["--extension", str(EXTENSION)]
+    if checkout_revision(ROOT / "duckdb"):
+        arguments += ["--engine-source", str(ROOT / "duckdb")]
     assert check_engine_stamp.main(arguments + ["--expect-version", version]) == 0
+    assert check_engine_stamp.main(arguments + ["--expect-version", version + "x"]) == 1
     with pytest.raises(SystemExit):
-        check_engine_stamp.main(["--extension", str(ROOT / "versions.cmake"), "--engine-source", str(ROOT / "duckdb")])
-    assert check_engine_stamp.main(arguments + ["--expect-version", version + "-dev1"]) == 1
+        check_engine_stamp.main(["--extension", str(ROOT / "versions.cmake"), "--expect-version", version])
     data = EXTENSION.read_bytes()
-    assert check_engine_stamp.footer_field(data, 3) == version
     assert check_engine_stamp.footer_field(data, 1) == "4"
+    # DuckDB's footer holds the normalized version: the tag for releases, the source id for dev engines.
+    assert check_engine_stamp.footer_field(data, 3) == (source_id if "-dev" in version else version)
+
+
+def _synthetic_artifact(path, version, source_id, footer):
+    """A blob with exactly the fields the checker reads: one Gatekeeper stamp and a DuckDB metadata footer."""
+    fields = ["4", "linux_amd64", footer, EXTENSION_VERSION, "CPP", "", "", ""]
+    body = b"\0code\0GATEKEEPER_BUILD_ENGINE %s %s\0\0\0more\0" % (version.encode(), source_id.encode())
+    footer_bytes = b"".join(field.encode().ljust(32, b"\0") for field in reversed(fields)) + b"\0" * 256
+    path.write_bytes(body + footer_bytes)
+    return path
+
+
+def _engine_repo(path, tag, commits_after_tag):
+    """A throwaway engine checkout: a tag, then ``commits_after_tag`` commits, like a post-release snapshot."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    git = lambda *a: subprocess.run(["git", "-C", str(path), *a], check=True, env=env, capture_output=True, text=True)
+    git("commit", "-q", "--allow-empty", "-m", "release")
+    git("tag", "-a", tag, "-m", tag)
+    for i in range(commits_after_tag):
+        git("commit", "-q", "--allow-empty", "-m", f"dev {i}")
+    return git("rev-parse", "HEAD").stdout.strip()
+
+
+def test_check_engine_stamp_release_and_dev_footers(tmp_path):
+    """Release footers carry the tag and dev footers the source id; both must match the stamp and the checkout."""
+    import check_engine_stamp
+    release_commit = _engine_repo(tmp_path / "release", "v1.5.5", 0)
+    dev_commit = _engine_repo(tmp_path / "dev", "v1.5.5", 150)
+    release = _synthetic_artifact(tmp_path / "release.duckdb_extension", "v1.5.5", release_commit[:10], "v1.5.5")
+    dev = _synthetic_artifact(tmp_path / "dev.duckdb_extension", "v1.5.6-dev150", dev_commit[:10], dev_commit[:10])
+    assert check_engine_stamp.check(release, tmp_path / "release", "v1.5.5") == []
+    assert check_engine_stamp.check(dev, tmp_path / "dev") == []
+    assert check_engine_stamp.check(dev, None, "v1.5.6-dev150") == []
+    # A dev footer that carries the display version, or a release footer that carries a hash, is inconsistent.
+    wrong = _synthetic_artifact(tmp_path / "wrong.duckdb_extension", "v1.5.6-dev150", dev_commit[:10], "v1.5.6-dev150")
+    assert any("disagrees" in p for p in check_engine_stamp.check(wrong, tmp_path / "dev"))
+    # The mislabeling this check exists to catch: a newer checkout stamped as the pinned release.
+    mislabeled = _synthetic_artifact(tmp_path / "mislabeled.duckdb_extension", "v1.5.5", dev_commit[:10], "v1.5.5")
+    problems = check_engine_stamp.check(mislabeled, tmp_path / "dev")
+    assert any("-dev150" in p for p in problems), problems
+    # Swapped checkouts fail on the source id.
+    assert any("prefix" in p for p in check_engine_stamp.check(release, tmp_path / "dev"))
+    assert any("requested" in p for p in check_engine_stamp.check(release, tmp_path / "release", "v1.5.6"))
+
+
+def test_check_engine_stamp_accepts_the_pinned_shallow_checkout(tmp_path):
+    """CI initializes the submodule shallow and tagless; the pinned revision is still identified by its commit,
+    and only that revision. Any other undescribable checkout is refused rather than trusted."""
+    import check_engine_stamp
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+    for name, revision in (("pinned", SUPPORTED_DUCKDB_REVISION), ("other", "f" * 40)):
+        repo = tmp_path / name
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "shallow"], check=True, env=env)
+        (repo / ".git/HEAD").write_text(revision + "\n")  # detached at the wanted id; no tags, no history
+    pinned = _synthetic_artifact(tmp_path / "pinned.duckdb_extension", "v" + SUPPORTED_DUCKDB,
+                                 SUPPORTED_DUCKDB_REVISION[:10], "v" + SUPPORTED_DUCKDB)
+    assert check_engine_stamp.check(pinned, tmp_path / "pinned", "v" + SUPPORTED_DUCKDB) == []
+    other = _synthetic_artifact(tmp_path / "other.duckdb_extension", "v" + SUPPORTED_DUCKDB, "f" * 10,
+                                "v" + SUPPORTED_DUCKDB)
+    with pytest.raises(SystemExit, match="cannot be described"):
+        check_engine_stamp.check(other, tmp_path / "other")
+    # An uninitialized submodule directory is not a checkout, even though it lives inside this repository.
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(SystemExit, match="not a Git checkout"):
+        check_engine_stamp.check(pinned, tmp_path / "empty")
 
 
 def test_engine_guard_reads_the_builtin_engine_identity():

@@ -171,6 +171,10 @@ def test_engine_selection_defaults(tmp_path):
     # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.
     external = parser.parse_args(["--duckdb-source", str(tmp_path)])
     assert checkout_revision(tmp_path) is None
+    # A directory inside this repository that is not its own checkout (an uninitialized submodule, a build
+    # tree) must not resolve to Gatekeeper's own commit through Git's parent discovery.
+    assert checkout_revision(ROOT / "scripts") is None
+    assert checkout_revision(ROOT / "does-not-exist") is None
     assert engine_cmake_flags(external) == ["-DOVERRIDE_GIT_DESCRIBE="]
     assert engine_source(external) == tmp_path.resolve()
     assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.6"])) == [

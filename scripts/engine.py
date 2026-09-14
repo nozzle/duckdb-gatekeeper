@@ -28,8 +28,19 @@ def engine_source(args):
 
 
 def checkout_revision(source: Path):
-    """The commit checked out at ``source``, or None when it is not a Git checkout."""
+    """The commit checked out at ``source``, or None when ``source`` is not itself a Git checkout.
+
+    An uninitialized submodule directory is empty but sits inside this repository, so Git would otherwise
+    discover the parent checkout and report Gatekeeper's own commit as the engine revision.
+    """
+    source = Path(source)
+    if not source.is_dir():
+        return None
     try:
+        toplevel = subprocess.run(["git", "-C", str(source), "rev-parse", "--show-toplevel"], capture_output=True,
+                                  text=True)
+        if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != source.resolve():
+            return None
         result = subprocess.run(["git", "-C", str(source), "rev-parse", "HEAD"], capture_output=True, text=True)
     except OSError:
         return None
