@@ -12,7 +12,8 @@ import platform
 import shutil
 import subprocess
 import sys
-from engine import add_engine_arguments, engine_cmake_flags, engine_source
+from engine import add_engine_arguments, engine_cmake_flags, engine_source, engine_version
+from versions import SUPPORTED_DUCKDB
 
 
 def main():
@@ -20,6 +21,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_engine_arguments(parser)
     args = parser.parse_args()
+    # The instrumented loadable is exercised inside the pinned duckdb Python package, whose footer check and
+    # Gatekeeper's own engine guard refuse an artifact built for any other engine. An alternate checkout is
+    # only usable here when it really is that release; other engines need scripts/build.py plus their own host.
+    if engine_version(args) != "v" + SUPPORTED_DUCKDB:
+        parser.error(f"the sanitized suite runs in the pinned duckdb=={SUPPORTED_DUCKDB} Python package; "
+                     f"pass --duckdb-version v{SUPPORTED_DUCKDB} only for a checkout of that release")
 
     def tool(name):
         found = shutil.which(name, path=os.pathsep.join([str(root / ".venv/bin"), str(root / ".venv/Scripts"),

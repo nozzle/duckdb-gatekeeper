@@ -312,3 +312,13 @@ def test_schema_check_rejects_unsupported_keywords_anywhere(schema):
     # Each schema would accept "x" if the unsupported keyword were ignored; the pre-scan must refuse it.
     with pytest.raises(schema_check.SchemaError):
         schema_check.validate(schema, "x")
+
+
+def test_sanitized_runner_rejects_engines_the_pinned_package_cannot_load(tmp_path):
+    from versions import SUPPORTED_DUCKDB
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/test_sanitized.py"), "--duckdb-source", str(tmp_path)],
+                            capture_output=True, text=True)
+    assert result.returncode == 2 and f"pinned duckdb=={SUPPORTED_DUCKDB} Python package" in result.stderr
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/test_sanitized.py"), "--duckdb-version", "v1.5.4"],
+                            capture_output=True, text=True)
+    assert result.returncode == 2

@@ -93,13 +93,17 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
     whether or not DuckDB's footer check is disabled with allow_extensions_metadata_mismatch."""
     version, source_id = duckdb.connect().execute("PRAGMA version").fetchone()[:2]
     release = "-dev" not in version
-    # Release builds are identified by the version tag, dev builds by the source id.
-    old = version if release else f"{version} {source_id}"
-    new = old[:-1] + ("0" if old[-1] != "0" else "1")
+    # Release builds are identified by the version tag, dev builds by the source id; tamper the field the
+    # guard compares and expect it, formatted as the guard prints it, in the diagnostic.
+    altered = (version if release else source_id)
+    altered = altered[:-1] + ("0" if altered[-1] != "0" else "1")
+    old = f"{version} {source_id}"
+    new = f"{altered} {source_id}" if release else f"{version} {altered}"
+    expected = rf"was built for DuckDB {re.escape(altered)} \(" if release else rf"\({re.escape(altered)}\); this engine"
     tampered = _tampered_artifact(tmp_path, old, new)
     config = {"allow_unsigned_extensions": "true", "allow_extensions_metadata_mismatch": str(metadata_mismatch).lower()}
     db = duckdb.connect(config=config)
-    with pytest.raises(duckdb.InvalidInputException, match=rf"was built for DuckDB .*{re.escape(new)}"):
+    with pytest.raises(duckdb.InvalidInputException, match=expected):
         db.execute("LOAD '" + str(tampered).replace("'", "''") + "'")
     with pytest.raises(duckdb.Error):
         db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')")

@@ -31,7 +31,9 @@ the submodule:
 ```
 
 `scripts/build.py`, `scripts/test_sanitized.py`, `scripts/fuzz_sql.py`, and
-`scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options. The
+`scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options
+(`test_sanitized.py` runs its suite inside the pinned `duckdb` Python package, so it only
+accepts an engine identifying as that release). The
 pinned submodule is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because
 a shallow clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy
 `v0.0.1` that no real engine loads. Any other checkout uses its own Git metadata unless
