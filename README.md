@@ -38,9 +38,10 @@ Community binaries are built and signed by DuckDB and load with signature verifi
 enabled. Source builds and the binaries attached to GitHub Releases are unsigned
 development artifacts and require `allow_unsigned_extensions`.
 
-Each binary is specific to its DuckDB engine version. The community repository can
-rebuild Gatekeeper source for newer engines; compatibility is checked by builds and
-regression tests rather than an exact-version restriction. Default functions are a
+Each binary is specific to the DuckDB engine it was built from and refuses to load into
+any other, even when DuckDB's own footer check is disabled. The community repository
+can rebuild Gatekeeper source for newer engines; source compatibility is checked by
+builds and regression tests rather than a fixed release allowlist. Default functions are a
 name list: new names remain excluded until added, and existing implementations are
 trusted across DuckDB upgrades.
 For browsers, the DuckDB-Wasm EH bundle is supported; see

@@ -207,9 +207,10 @@ docs:
     Release binaries are built for **DuckDB 1.5.5**, source revision
     `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa`. Each binary must match its DuckDB engine;
     the community repository can rebuild this source for other engine versions.
-    Gatekeeper generates its AST grammar from the engine being compiled and uses
-    DuckDB's normal extension compatibility checks, without an additional exact-version
-    restriction. Builds and regression tests establish source compatibility.
+    Gatekeeper generates its AST grammar from the engine being compiled and records
+    that engine's identity: each artifact refuses any other release version or dev
+    source id even if DuckDB's footer check is disabled. There is no fixed release
+    allowlist in the source; builds and regression tests establish source compatibility.
 
     Default functions are an explicit list of names. New names remain excluded until
     classified or explicitly allowed; inventory updates improve coverage rather than

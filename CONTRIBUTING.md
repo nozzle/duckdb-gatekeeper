@@ -21,23 +21,35 @@ Generation (`scripts/generate.py`, run at CMake configure time) derives the SQL 
 from the DuckDB source actually being compiled and compiles the function name list into
 the build tree. It needs only the Python standard library. Our submodule and release
 tooling remain pinned for reproducibility, but community builds can use another engine.
-DuckDB's normal extension checks require a matching binary; Gatekeeper adds no fixed
-engine-version restriction. To test another checkout without changing the submodule:
+DuckDB's normal extension checks require a matching binary, and Gatekeeper re-checks
+the build engine at load time (see [Compatibility and review](docs/security.md#compatibility-and-review));
+there is no fixed engine-version restriction. To test another checkout without changing
+the submodule:
 
 ```sh
 .venv/bin/python scripts/build.py --duckdb-source /path/to/duckdb --build-dir build/candidate --shell
 ```
 
-The engine's Git metadata determines binary compatibility. `--duckdb-version vX.Y.Z`
-can explicitly override that metadata when building a release checkout. Compatibility
-requires the build and regression tests to pass; it does not require reclassifying
-existing function names. See [build-pin maintenance](inventories/README.md#repinning-the-engine).
+`scripts/build.py`, `scripts/test_sanitized.py`, `scripts/fuzz_sql.py`, and
+`scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options
+(`test_sanitized.py` runs its suite inside the pinned `duckdb` Python package, so it only
+accepts an engine identifying as that release). The
+pinned submodule is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because
+a shallow clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy
+`v0.0.1` that no real engine loads. Any other checkout uses its own Git metadata unless
+`--duckdb-version vX.Y.Z` overrides it. Compatibility requires the build and regression
+tests to pass; it does not require reclassifying existing function names. See
+[build-pin maintenance](inventories/README.md#repinning-the-engine). The
+`Engine rebuild compatibility` workflow rebuilds against a post-release engine snapshot
+and loads the resulting artifact into that engine's shell.
 
 The community-extension build path also works and runs on CI:
 
 ```sh
 make release          # pinned extension-ci-tools Makefile
 make test_release     # sqllogictests in test/sql
+make release OVERRIDE_GIT_DESCRIBE=v1.5.6   # another engine checked out in duckdb/
+OVERRIDE_GIT_DESCRIBE= make release         # use the checkout's own tags
 ```
 
 ### Loading unsigned builds

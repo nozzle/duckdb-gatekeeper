@@ -25,6 +25,7 @@
   "allOf": [
     {"if": {"properties": {"name": {"const": "motherduck"}}}, "then": {"required": ["binary_review"]},
      "else": {"not": {"required": ["binary_review"]}}},
+    {"if": {"required": ["binary_review"]}, "then": {"properties": {"compute": {"const": []}}}},
     {"if": {"properties": {"name": {"const": "core"}}}, "then": {"required": ["groups"]},
      "else": {"not": {"required": ["groups"]}}},
     {"if": {"required": ["unreviewed"], "properties": {"unreviewed": {"minItems": 1}}},

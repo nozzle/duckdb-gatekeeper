@@ -132,7 +132,8 @@ or minor release. To change our release build defaults, update together:
 
 - the `duckdb` submodule and engine version/revision in `versions.cmake`
    (release build metadata; not an engine allowlist);
-- `OVERRIDE_GIT_DESCRIBE` in `.github/workflows/test.yml`;
+- `OVERRIDE_GIT_DESCRIBE` in `.github/workflows/test.yml` and its overridable default
+  in the `Makefile`;
 - `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as

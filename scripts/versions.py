@@ -1,4 +1,5 @@
 """Read canonical release metadata without importing development dependencies."""
+import json
 from pathlib import Path
 import re
 
@@ -25,10 +26,19 @@ def load_versions(root=ROOT):
     return values
 
 
+def reviewed_duckdb(root=ROOT):
+    """The engine the core inventory was reviewed against; historical provenance, not a build pin."""
+    version = json.loads((root / "inventories/core.json").read_text()).get("reviewed_duckdb")
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise ValueError(f"Invalid core.json reviewed_duckdb: {version!r}")
+    return version
+
+
 VERSIONS = load_versions()
 EXTENSION_VERSION = VERSIONS["GATEKEEPER_VERSION"]
 # Release build defaults only; these do not restrict the engine used by community builds.
 SUPPORTED_DUCKDB = VERSIONS["GATEKEEPER_DUCKDB_VERSION"]
 SUPPORTED_DUCKDB_REVISION = VERSIONS["GATEKEEPER_DUCKDB_REVISION"]
 # Historical inventory provenance is independent of the release build engine.
-BASELINE_FILENAME = "duckdb-1.5.5.json"
+REVIEWED_DUCKDB = reviewed_duckdb()
+BASELINE_FILENAME = f"duckdb-{REVIEWED_DUCKDB}.json"

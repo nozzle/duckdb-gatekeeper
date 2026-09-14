@@ -126,6 +126,76 @@ def test_source_check_accepts_explicit_historical_checkout(monkeypatch, tmp_path
         check_sources(entries)
 
 
+def test_source_check_explains_missing_checkout(tmp_path):
+    entries, _ = load()
+    with pytest.raises(ValueError, match="clone with --recurse-submodules or pass --source-checkout"):
+        check_sources(entries, tmp_path)
+
+
+def test_binary_only_review_cannot_grant_defaults(tmp_path):
+    shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
+    path = tmp_path / "inventories/extensions/motherduck.json"
+    entry = json.loads(path.read_text())
+    assert "binary_review" in entry and entry["compute"] == []
+    entry["compute"] = ["md_version"]
+    entry["elevated"].remove("md_version")
+    path.write_text(json.dumps(entry))
+    with pytest.raises(ValueError, match="invalid inventory motherduck.json"):
+        load(tmp_path)
+
+
+def test_generation_bakes_build_engine_identity(tmp_path):
+    output = tmp_path / "generated"
+    subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                    "--duckdb-version", "v1.5.6-dev150", "--duckdb-source-id", "a3cd0deed1"], check=True)
+    text = (output / "version.hpp").read_text()
+    assert re.search(r'BUILD_ENGINE_STAMP\[\d+\] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"', text)
+    for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex"),
+                        ("--duckdb-source-id", "a"), ("--duckdb-source-id", "")]:
+        result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                                 flag, value], capture_output=True, text=True)
+        assert result.returncode != 0 and "Refusing to bake" in result.stderr
+
+
+def test_engine_selection_defaults(tmp_path):
+    import argparse
+    from engine import add_engine_arguments, engine_cmake_flags, engine_source
+    from versions import SUPPORTED_DUCKDB
+    parser = argparse.ArgumentParser()
+    add_engine_arguments(parser)
+    # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
+    assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
+    assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
+    # Other checkouts use their own Git metadata unless told otherwise. The cache entry is always
+    # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.
+    external = parser.parse_args(["--duckdb-source", str(tmp_path)])
+    assert engine_cmake_flags(external) == ["-DOVERRIDE_GIT_DESCRIBE="]
+    assert engine_source(external) == tmp_path.resolve()
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.6"])) == [
+        "-DOVERRIDE_GIT_DESCRIBE=v1.5.6"]
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-version", ""])) == ["-DOVERRIDE_GIT_DESCRIBE="]
+
+
+def test_engine_override_does_not_survive_reconfigure(tmp_path):
+    """Override -> automatic in a reused build directory must not keep the cached override."""
+    import argparse
+    from engine import add_engine_arguments, engine_cmake_flags
+    parser = argparse.ArgumentParser()
+    add_engine_arguments(parser)
+    (tmp_path / "CMakeLists.txt").write_text(
+        'cmake_minimum_required(VERSION 3.15)\nproject(probe NONE)\n'
+        'file(WRITE "${CMAKE_BINARY_DIR}/override.txt" "${OVERRIDE_GIT_DESCRIBE}")\n')
+    cmake = shutil.which("cmake", path=os.pathsep.join([str(ROOT / ".venv/bin"), os.environ.get("PATH", "")]))
+    if not cmake:
+        pytest.skip("cmake not installed")
+    build = tmp_path / "build"
+    for arguments in (["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.4"],
+                      ["--duckdb-source", str(tmp_path)]):
+        flags = engine_cmake_flags(parser.parse_args(arguments))
+        subprocess.run([cmake, "-S", str(tmp_path), "-B", str(build), *flags], check=True, capture_output=True)
+    assert (build / "override.txt").read_text() == ""
+
+
 def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp_path, capsys):
     import audit_inventory
     from versions import BASELINE_FILENAME
@@ -242,3 +312,37 @@ def test_schema_check_rejects_unsupported_keywords_anywhere(schema):
     # Each schema would accept "x" if the unsupported keyword were ignored; the pre-scan must refuse it.
     with pytest.raises(schema_check.SchemaError):
         schema_check.validate(schema, "x")
+
+
+def test_sanitized_runner_rejects_engines_the_pinned_package_cannot_load(tmp_path):
+    from versions import SUPPORTED_DUCKDB
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/test_sanitized.py"), "--duckdb-source", str(tmp_path)],
+                            capture_output=True, text=True)
+    assert result.returncode == 2 and f"pinned duckdb=={SUPPORTED_DUCKDB} Python package" in result.stderr
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/test_sanitized.py"), "--duckdb-version", "v1.5.4"],
+                            capture_output=True, text=True)
+    assert result.returncode == 2
+
+
+def test_wasm_container_mounts_engine_git_metadata(tmp_path):
+    """An engine linked as a worktree under root still needs its external Git common directory mounted."""
+    from build_wasm import container_mounts
+    git = lambda *args, cwd: subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+    for name in ("project", "engine"):
+        repo = tmp_path / name
+        repo.mkdir()
+        git("init", "-q", cwd=repo)
+        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init", cwd=repo)
+    root, engine = tmp_path / "project", tmp_path / "engine"
+    candidate = root / "build/candidate-source"
+    candidate.parent.mkdir(parents=True)
+    git("worktree", "add", "-q", str(candidate), cwd=engine)
+    root, engine, candidate = root.resolve(), engine.resolve(), candidate.resolve()
+    volumes = lambda mounts: [mounts[i + 1] for i in range(0, len(mounts), 2)]
+    # Under-root linked worktree: the source is already covered by root, but its metadata is not.
+    assert volumes(container_mounts(root, candidate)) == [f"{root}:{root}", f"{engine / '.git'}:{engine / '.git'}:ro"]
+    # External primary checkout: mount it, and its own metadata is inside it.
+    assert volumes(container_mounts(root, engine)) == [f"{root}:{root}", f"{engine}:{engine}"]
+    # The pinned submodule of the real primary checkout needs nothing beyond root and root's metadata.
+    real_root = ROOT.resolve()
+    assert volumes(container_mounts(real_root, real_root / "duckdb"))[0] == f"{real_root}:{real_root}"

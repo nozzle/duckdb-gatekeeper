@@ -5,17 +5,28 @@ at a different Clang). GCC's -fsanitize instrumentation odr-uses the ``static co
 LogicalType members and emits definitions that collide with the out-of-line ones DuckDB keeps in
 types.cpp when linking against libduckdb_static.a, so a GCC configuration is refused up front.
 """
+import argparse
 import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
 import sys
+from engine import add_engine_arguments, engine_cmake_flags, engine_source, engine_version
 from versions import SUPPORTED_DUCKDB
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_engine_arguments(parser)
+    args = parser.parse_args()
+    # The instrumented loadable is exercised inside the pinned duckdb Python package, whose footer check and
+    # Gatekeeper's own engine guard refuse an artifact built for any other engine. An alternate checkout is
+    # only usable here when it really is that release; other engines need scripts/build.py plus their own host.
+    if engine_version(args) != "v" + SUPPORTED_DUCKDB:
+        parser.error(f"the sanitized suite runs in the pinned duckdb=={SUPPORTED_DUCKDB} Python package; "
+                     f"pass --duckdb-version v{SUPPORTED_DUCKDB} only for a checkout of that release")
 
     def tool(name):
         found = shutil.which(name, path=os.pathsep.join([str(root / ".venv/bin"), str(root / ".venv/Scripts"),
@@ -34,10 +45,10 @@ def main():
         if version.returncode != 0 or "clang" not in version.stdout.lower():
             raise SystemExit(f"{compiler} is not Clang; the sanitized build requires Clang (see module docstring)")
     build = root / "build/sanitized"
-    subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
+    subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(engine_source(args)), "-B", str(build),
                     "-DCMAKE_C_COMPILER=" + cc, "-DCMAKE_CXX_COMPILER=" + cxx,
                     "-DPython3_EXECUTABLE=" + sys.executable,
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
+                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", *engine_cmake_flags(args),
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF", "-DGATEKEEPER_SANITIZE=ON"], check=True)
     subprocess.run([tool("cmake"), "--build", str(build), "--target", "gatekeeper_loadable_extension", "--parallel", "4"], check=True)

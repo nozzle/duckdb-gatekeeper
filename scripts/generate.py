@@ -7,10 +7,12 @@ if sys.version_info < (3, 10):
 import argparse
 import json
 from pathlib import Path
+import re
 from inventory import load
-from versions import EXTENSION_VERSION
+from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
+STAMP_WIDTH = 96
 
 
 def grammar(duckdb_source=ROOT / "duckdb"):
@@ -101,7 +103,16 @@ def main():
                         help="directory for generated headers (the build passes its binary dir)")
     parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
                         help="DuckDB source being compiled; defaults to the local submodule")
+    parser.add_argument("--duckdb-version", default="v" + SUPPORTED_DUCKDB,
+                        help="engine version tag DuckDB stamps into the build (CMake DUCKDB_VERSION)")
+    parser.add_argument("--duckdb-source-id", default=SUPPORTED_DUCKDB_REVISION[:10],
+                        help="engine source id DuckDB stamps into the build (CMake GIT_COMMIT_HASH)")
     args = parser.parse_args()
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?", args.duckdb_version):
+        raise SystemExit("Refusing to bake an unrecognised engine version into the guard: " + args.duckdb_version)
+    if not re.fullmatch(r"[0-9a-f]{7,40}", args.duckdb_source_id):
+        raise SystemExit("Refusing to bake an engine source id that is not a 7-40 hex commit id: "
+                         + repr(args.duckdb_source_id))
     _, defaults = load()
     inventory = {"defaults": defaults}
     build_grammar = grammar(args.duckdb_source)
@@ -113,8 +124,16 @@ def main():
         if not target.exists() or target.read_text() != content:
             target.write_text(content)
     target = args.output / "version.hpp"
+    # The engine guard in LoadInternal parses this stamp at load time and compares it with the host. It is one
+    # string so `strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE` shows which engine an
+    # artifact was built for, and so tests can rewrite it in place to prove the guard refuses a mismatch.
+    # The array is fixed-width and NUL padded so a rewritten stamp of a different length still fits in place.
+    stamp = f"GATEKEEPER_BUILD_ENGINE {args.duckdb_version} {args.duckdb_source_id}"
+    if len(stamp) >= STAMP_WIDTH:
+        raise SystemExit("Build engine stamp is too long: " + stamp)
     content = ('#pragma once\nnamespace gatekeeper {\n'
                f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
+               f'constexpr char BUILD_ENGINE_STAMP[{STAMP_WIDTH}] = "{stamp}";\n'
                '} // namespace gatekeeper\n')
     if not target.exists() or target.read_text() != content:
         target.write_text(content)

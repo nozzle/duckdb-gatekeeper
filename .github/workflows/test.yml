@@ -94,6 +94,17 @@ jobs:
         env:
           GEN: ninja
       - run: make test_release
+      - name: Loadable carries the release engine metadata
+        # Static linking hides a mis-stamped engine; the pinned Python package is the real release
+        # engine and refuses a loadable whose footer disagrees with it.
+        run: |
+          python - <<'EOF'
+          import duckdb
+          c = duckdb.connect(config={"allow_unsigned_extensions": "true"})
+          c.execute("LOAD 'build/release/extension/gatekeeper/gatekeeper.duckdb_extension'")
+          print(c.execute("PRAGMA version").fetchall())
+          assert c.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')").fetchone() == (True,)
+          EOF
 
   lock-windows:
     # The hashed locks are resolved universally; prove the Windows-only markers (colorama) and
