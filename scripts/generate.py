@@ -7,8 +7,9 @@ if sys.version_info < (3, 10):
 import argparse
 import json
 from pathlib import Path
+import re
 from inventory import load
-from versions import EXTENSION_VERSION
+from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -101,7 +102,15 @@ def main():
                         help="directory for generated headers (the build passes its binary dir)")
     parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
                         help="DuckDB source being compiled; defaults to the local submodule")
+    parser.add_argument("--duckdb-version", default="v" + SUPPORTED_DUCKDB,
+                        help="engine version tag DuckDB stamps into the build (CMake DUCKDB_VERSION)")
+    parser.add_argument("--duckdb-source-id", default=SUPPORTED_DUCKDB_REVISION[:10],
+                        help="engine source id DuckDB stamps into the build (CMake GIT_COMMIT_HASH)")
     args = parser.parse_args()
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?", args.duckdb_version):
+        raise SystemExit("Refusing to bake an unrecognised engine version into the guard: " + args.duckdb_version)
+    if not re.fullmatch(r"[0-9a-f]*", args.duckdb_source_id):
+        raise SystemExit("Refusing to bake a non-hex engine source id into the guard: " + args.duckdb_source_id)
     _, defaults = load()
     inventory = {"defaults": defaults}
     build_grammar = grammar(args.duckdb_source)
@@ -113,8 +122,11 @@ def main():
         if not target.exists() or target.read_text() != content:
             target.write_text(content)
     target = args.output / "version.hpp"
+    # The engine guard in LoadInternal compares these against the host at load time.
     content = ('#pragma once\nnamespace gatekeeper {\n'
                f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
+               f'constexpr const char *BUILD_DUCKDB_VERSION = "{args.duckdb_version}";\n'
+               f'constexpr const char *BUILD_DUCKDB_SOURCE_ID = "{args.duckdb_source_id}";\n'
                '} // namespace gatekeeper\n')
     if not target.exists() or target.read_text() != content:
         target.write_text(content)

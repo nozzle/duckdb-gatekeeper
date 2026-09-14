@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from versions import SUPPORTED_DUCKDB
+from engine import add_engine_arguments, engine_cmake_flags, engine_source
 
 IMAGE = "emscripten/emsdk@sha256:9922c93314b63a1d9ceba2e76f03737f1f9cc4b7350341211e2d3555633ffdd5"  # 3.1.71
 
@@ -13,10 +13,12 @@ IMAGE = "emscripten/emsdk@sha256:9922c93314b63a1d9ceba2e76f03737f1f9cc4b73503412
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=4)
+    add_engine_arguments(parser)
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
     root = Path(__file__).resolve().parents[1]
+    source = engine_source(args)
     build = root / "build/wasm_eh"
     build.mkdir(parents=True, exist_ok=True)
     common = Path(subprocess.check_output(
@@ -30,10 +32,13 @@ def main():
     # Linked worktrees and their submodules refer to metadata outside the worktree.
     if not common.is_relative_to(root):
         docker += ["-v", f"{common}:{common}:ro"]
+    # An external engine checkout must be visible inside the container at the same path.
+    if not source.is_relative_to(root):
+        docker += ["-v", f"{source}:{source}"]
     docker += [IMAGE]
-    subprocess.run(docker + ["emcmake", "cmake", "-S", "duckdb", "-B", str(build),
+    subprocess.run(docker + ["emcmake", "cmake", "-S", str(source), "-B", str(build),
                             "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
-                            "-DCMAKE_BUILD_TYPE=Release", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
+                            "-DCMAKE_BUILD_TYPE=Release", *engine_cmake_flags(args),
                             "-DDUCKDB_EXPLICIT_PLATFORM=wasm_eh", "-DWASM_LOADABLE_EXTENSIONS=1",
                             "-DBUILD_EXTENSIONS_ONLY=1", "-DBUILD_UNITTESTS=OFF",
                             "-DCMAKE_CXX_FLAGS=-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1"], check=True)

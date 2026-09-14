@@ -288,8 +288,12 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 Release binaries target DuckDB 1.5.5. Source builds may use another engine checkout;
 the grammar and serializer come from that checkout, and DuckDB enforces binary
-compatibility. Internal C++ API changes can require fixes, so compatibility is checked
-by compilation and functional regressions. Existing function classifications do not
+compatibility through the extension footer. That footer check can be disabled with
+`allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
+from (the version tag for releases, the source id for dev builds, mirroring DuckDB's own
+footer identity) and refuses to load into any other engine. A grammar generated from one
+engine must never validate statements for another. Internal C++ API changes can require
+fixes, so compatibility is checked by compilation and functional regressions. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively

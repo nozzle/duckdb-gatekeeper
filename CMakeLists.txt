@@ -12,11 +12,18 @@ file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     scripts/generate.py scripts/inventory.py scripts/schema_check.py scripts/versions.py versions.cmake
     ${INVENTORY_FILES} ${SERIALIZATION_FILES})
+# The engine identity DuckDB stamps into this artifact's footer; the extension re-checks it at load
+# time because the footer check itself can be disabled (see LoadInternal).
+if(NOT DUCKDB_VERSION)
+  message(FATAL_ERROR "DuckDB did not export DUCKDB_VERSION for the Gatekeeper engine guard")
+endif()
 # Generated headers live in the build tree so parallel configurations never race on shared files.
 set(GATEKEEPER_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
                         --output "${GATEKEEPER_GENERATED_DIR}"
                         --duckdb-source "${DuckDB_SOURCE_DIR}"
+                        --duckdb-version "${DUCKDB_VERSION}"
+                        --duckdb-source-id "${GIT_COMMIT_HASH}"
                 RESULT_VARIABLE GENERATE_RESULT)
 if(NOT GENERATE_RESULT EQUAL 0)
   message(FATAL_ERROR "Gatekeeper inventory generation failed")

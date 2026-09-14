@@ -126,6 +126,53 @@ def test_source_check_accepts_explicit_historical_checkout(monkeypatch, tmp_path
         check_sources(entries)
 
 
+def test_source_check_explains_missing_checkout(tmp_path):
+    entries, _ = load()
+    with pytest.raises(ValueError, match="clone with --recurse-submodules or pass --source-checkout"):
+        check_sources(entries, tmp_path)
+
+
+def test_binary_only_review_cannot_grant_defaults(tmp_path):
+    shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
+    path = tmp_path / "inventories/extensions/motherduck.json"
+    entry = json.loads(path.read_text())
+    assert "binary_review" in entry and entry["compute"] == []
+    entry["compute"] = ["md_version"]
+    entry["elevated"].remove("md_version")
+    path.write_text(json.dumps(entry))
+    with pytest.raises(ValueError, match="invalid inventory motherduck.json"):
+        load(tmp_path)
+
+
+def test_generation_bakes_build_engine_identity(tmp_path):
+    output = tmp_path / "generated"
+    subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                    "--duckdb-version", "v1.5.6-dev150", "--duckdb-source-id", "a3cd0deed1"], check=True)
+    text = (output / "version.hpp").read_text()
+    assert 'BUILD_DUCKDB_VERSION = "v1.5.6-dev150"' in text and 'BUILD_DUCKDB_SOURCE_ID = "a3cd0deed1"' in text
+    for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex")]:
+        result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                                 flag, value], capture_output=True, text=True)
+        assert result.returncode != 0 and "Refusing to bake" in result.stderr
+
+
+def test_engine_selection_defaults(tmp_path):
+    import argparse
+    from engine import add_engine_arguments, engine_cmake_flags, engine_source
+    from versions import SUPPORTED_DUCKDB
+    parser = argparse.ArgumentParser()
+    add_engine_arguments(parser)
+    # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
+    assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
+    assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
+    # Other checkouts use their own Git metadata unless told otherwise.
+    external = parser.parse_args(["--duckdb-source", str(tmp_path)])
+    assert engine_cmake_flags(external) == [] and engine_source(external) == tmp_path.resolve()
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.6"])) == [
+        "-DOVERRIDE_GIT_DESCRIBE=v1.5.6"]
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-version", ""])) == []
+
+
 def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp_path, capsys):
     import audit_inventory
     from versions import BASELINE_FILENAME

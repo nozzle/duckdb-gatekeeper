@@ -1,8 +1,19 @@
 name: Engine rebuild compatibility
+# Builds the full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
+# the build or engine-facing sources rather than every documentation change.
 on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - .github/workflows/compatibility.yml
+      - CMakeLists.txt
+      - extension_config.cmake
+      - versions.cmake
+      - inventories/**
+      - scripts/**
+      - src/**
+      - test/sql/**
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,7 +51,18 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
           -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
-          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF
-      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension --parallel 4
+          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON
+      - run: cmake --build build/candidate --target unittest shell gatekeeper_loadable_extension --parallel 4
       - name: SQL contract on the candidate engine
         run: build/candidate/test/unittest 'test/sql/*'
+      - name: Loadable artifact loads into the candidate engine
+        # The static unittest link above cannot prove the distributable artifact is usable: its
+        # footer and Gatekeeper's own engine guard must both accept the candidate engine.
+        run: |
+          build/candidate/duckdb -unsigned -bail <<'EOF'
+          PRAGMA version;
+          LOAD 'build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension';
+          SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper';
+          SELECT CASE WHEN allowed THEN 'ok' ELSE error('loadable did not validate') END FROM gatekeeper_validate('SELECT 1');
+          SELECT CASE WHEN allowed THEN error('loadable did not enforce') ELSE 'ok' END FROM gatekeeper_validate('DROP TABLE t');
+          EOF

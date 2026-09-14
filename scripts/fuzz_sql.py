@@ -4,21 +4,22 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from versions import SUPPORTED_DUCKDB
+from engine import add_engine_arguments, engine_cmake_flags, engine_source
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=int, default=60)
+    add_engine_arguments(parser)
     args = parser.parse_args()
     if args.seconds < 1:
         parser.error("--seconds must be positive")
     root = Path(__file__).resolve().parents[1]
     build = root / "build/sql-fuzz"
-    subprocess.run(["cmake", "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
+    subprocess.run(["cmake", "-G", "Ninja", "-S", str(engine_source(args)), "-B", str(build),
                     "-DPython3_EXECUTABLE=" + sys.executable,
                     "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Release",
-                    "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB, "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF",
+                    *engine_cmake_flags(args), "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF",
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DGATEKEEPER_FUZZ=ON", "-DGATEKEEPER_SANITIZE=ON"], check=True)
     subprocess.run(["cmake", "--build", str(build), "--target", "gatekeeper_sql_fuzz", "--parallel", "4"], check=True)

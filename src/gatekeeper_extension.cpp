@@ -439,8 +439,25 @@ static void Configure(ClientContext &context, TableFunctionInput &input, DataChu
 	output.SetValue(0, 0, Value::BOOLEAN(true));
 }
 
-// DuckDB checks extension binary compatibility against the engine used to build this artifact.
+// The grammar and serializer compiled into this artifact belong to exactly the engine it was built from.
+// DuckDB stamps that engine into the extension footer and refuses others, but that check can be disabled
+// with allow_extensions_metadata_mismatch, so refuse any other engine here as well. This mirrors the
+// footer identity rather than a hardcoded release: the version tag for releases, the source id for dev
+// builds, so community rebuilds against any engine checkout keep the guard without a source change.
+static void CheckBuildEngine() {
+	const string build_version = gatekeeper::BUILD_DUCKDB_VERSION;
+	const bool release = build_version.find("-dev") == string::npos;
+	const string expected = release ? build_version : string(gatekeeper::BUILD_DUCKDB_SOURCE_ID);
+	const string actual = release ? DuckDB::LibraryVersion() : DuckDB::SourceID();
+	if (actual != expected) {
+		throw InvalidInputException("Gatekeeper %s was built for DuckDB %s (%s); this engine is %s (%s)",
+		                            gatekeeper::VERSION, build_version, gatekeeper::BUILD_DUCKDB_SOURCE_ID,
+		                            DuckDB::LibraryVersion(), DuckDB::SourceID());
+	}
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
+	CheckBuildEngine();
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
