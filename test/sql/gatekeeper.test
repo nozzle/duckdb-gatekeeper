@@ -77,6 +77,16 @@ statement ok
 CREATE VIEW unnested AS SELECT unnest([1,2]) AS x;
 
 query T
+SELECT code FROM gatekeeper_validate('SELECT list_sum($1)', blocked_functions := ['sum']);
+----
+binding
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT list_sum($1::INTEGER[])', blocked_functions := ['sum']);
+----
+forbidden
+
+query T
 SELECT code FROM gatekeeper_validate('SELECT * FROM unnested', blocked_functions := ['unnest']);
 ----
 forbidden

@@ -70,6 +70,30 @@ def test_reviewed_sources_match_engine_descriptors():
         check_sources(entries)
 
 
+def test_source_check_rejects_conditional_pins(tmp_path):
+    entries, _ = load()
+    descriptor = tmp_path / "duckdb/.github/config/extensions/spatial.cmake"
+    descriptor.parent.mkdir(parents=True)
+    descriptor.write_text((ROOT / "duckdb/.github/config/extensions/spatial.cmake").read_text() +
+                          "\nif(WIN32)\n GIT_TAG " + "0" * 40 + "\nendif()\n")
+    with pytest.raises(ValueError, match="Ambiguous platform-conditional.*spatial"):
+        check_sources({"spatial": entries["spatial"]}, tmp_path)
+
+
+def test_audit_comparison_checks_reviewed_sources(monkeypatch, tmp_path):
+    import audit_inventory
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text("{}")
+    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--candidate", str(candidate)])
+
+    def reject(entries):
+        raise ValueError("source pin drift")
+
+    monkeypatch.setattr(audit_inventory, "check_sources", reject)
+    with pytest.raises(ValueError, match="source pin drift"):
+        audit_inventory.main()
+
+
 def test_inventory_uses_supplied_schema(tmp_path):
     shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
     path = tmp_path / "inventories/schema.json"

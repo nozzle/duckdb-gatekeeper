@@ -30,7 +30,8 @@ def main():
                                "SELECT * FROM t WHERE x=? LIMIT $n", "SELECT 1 LIMIT len(repeat('x',200000000))",
                                "SELECT $1", "SELECT * FROM range($1)", "SELECT 1; SELECT 2",
                                "SELECT 1;", "SELECT ';'", "SELECT * FROM missing; DROP TABLE t",
-                               "SELECT list_sum([1,2])", "SELECT unnest([1,2])",
+                               "SELECT list_sum([1,2])", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
+                               "SELECT list_unique($1)", "SELECT list_sort($1)", "SELECT unnest([1,2])",
                                "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())

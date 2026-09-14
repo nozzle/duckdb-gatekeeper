@@ -86,14 +86,18 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 // the actual bound aggregate without unsafe layout casts, evaluating arguments, or rebinding names.
 // Inspect only this documented shape, never arbitrary JSON payloads that can resemble expressions.
 static string ListAggregateImplementation(BoundFunctionExpression &expression) {
+	auto null_input =
+	    !expression.children.empty() && expression.children[0]->return_type.id() == LogicalTypeId::SQLNULL;
 	// These builtins use the fixed histogram implementation and have no serialization callbacks.
 	if (expression.function.name == "list_distinct" || expression.function.name == "list_unique" ||
 	    expression.function.name == "array_distinct" || expression.function.name == "array_unique")
-		return expression.return_type.id() == LogicalTypeId::SQLNULL ? "" : "histogram";
+		return null_input ? "" : "histogram";
 	static const gatekeeper::Names names = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
 	                                        "list_aggregate"};
-	if (!names.count(expression.function.name) || !expression.bind_info)
+	if (!names.count(expression.function.name))
 		return {};
+	if (!expression.bind_info)
+		throw BinderException("List aggregate requires resolved parameter types");
 	if (!expression.function.HasSerializationCallbacks())
 		throw BinderException("Cannot inspect list aggregate implementation");
 	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
@@ -106,7 +110,7 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 	auto data = yyjson_mut_obj_get(serializer.GetRootObject(), "bind_data");
 	// A NULL-list input uses VariableReturnBindData and carries no executable aggregate.
 	if (!data || yyjson_mut_is_null(data)) {
-		if (expression.return_type.id() == LogicalTypeId::SQLNULL)
+		if (null_input)
 			return {};
 		throw BinderException("Missing list aggregate bind data");
 	}

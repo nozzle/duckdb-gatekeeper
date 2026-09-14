@@ -462,6 +462,9 @@ non-internal objects. `blocked_tables` applies regardless of `restrict_tables`.
   must both pass.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
+  Deferred function binds (`list_sum($1)`) and incompatible uses of one parameter
+  (`WHERE integer_column = $1 LIMIT $1`) also return `binding`; use concrete casts
+  or separate parameters where appropriate.
 - Expressions in bind-time positions (LIMIT, reader arguments, type parameters, PIVOT
   values) must be literals or parameters; `range(1+2)` is rejected. The one exception is a
   **correlated** call to `unnest`, `range`, or `generate_series`, whose arguments DuckDB

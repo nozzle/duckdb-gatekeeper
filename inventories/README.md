@@ -40,10 +40,12 @@ reads it and derives the baseline filename. Generated C++ literals are split int
 8 KB-or-smaller pieces for MSVC compatibility.
 
 Inventory notes retain provenance, non-obvious classification traps, and coverage limitations.
-Generation cross-checks implementation source URLs against DuckDB's pinned extension
+Generation and audit comparisons cross-check implementation source URLs against DuckDB's pinned extension
 descriptors or in-tree source revision. UI has an independent source pin because no
 engine descriptor exists; MotherDuck records its binary version/hash in `binary_review`
 and cannot contribute defaults. Original attribution is retained in `NOTICE`.
+Capture-only mode remains available without submodules; comparison requires the pinned
+checkout and rejects descriptors with multiple distinct source URLs or revisions.
 
 ## Version update procedure
 

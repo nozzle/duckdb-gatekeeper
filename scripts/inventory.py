@@ -30,12 +30,15 @@ def check_sources(entries, root=ROOT):
             if not descriptor.is_file() and not (root / "duckdb/extension" / name / "CMakeLists.txt").is_file():
                 raise ValueError("Missing DuckDB extension source/descriptor: " + name)
             text = descriptor.read_text() if descriptor.is_file() else ""
-            repository = re.search(r"\bGIT_URL\s+(https://\S+)", text)
-            revision = re.search(r"\bGIT_TAG\s+([0-9a-f]{40})\b", text)
-            if repository:
-                if not revision:
+            text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+            repositories = set(re.findall(r"\bGIT_URL\s+(https://\S+)", text))
+            revisions = set(re.findall(r"\bGIT_TAG\s+(\S+)", text))
+            if len(repositories) > 1 or len(revisions) > 1:
+                raise ValueError("Ambiguous platform-conditional extension descriptor: " + name)
+            if repositories:
+                if not revisions or not re.fullmatch(r"[0-9a-f]{40}", next(iter(revisions))):
                     raise ValueError("Unpinned extension descriptor: " + name)
-                expected = repository[1].removesuffix(".git") + "/tree/" + revision[1]
+                expected = next(iter(repositories)).removesuffix(".git") + "/tree/" + next(iter(revisions))
             else:
                 expected = engine + "/extension/" + name
         if entry["source"] != expected:

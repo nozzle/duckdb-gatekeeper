@@ -295,6 +295,13 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			if (!bound.plan)
 				throw BinderException(
 				    "Validation requires a complete bound plan; parameter values or types may be needed");
+			// Some bind callbacks return placeholder plans instead of throwing ParameterNotResolved.
+			// Mirror Planner's bound_all_parameters type check: execution must not choose a different
+			// implementation after validation by resolving an UNKNOWN parameter for the first time.
+			for (const auto &entry : parameters.GetParameters())
+				if (!entry.second->return_type.IsValid())
+					throw BinderException(
+					    "Validation requires a complete bound plan; parameter values or types may be needed");
 			AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
 			AuthorizePlan(policy, binding_policy, *bound.plan, result);
 			// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.

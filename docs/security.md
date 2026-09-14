@@ -39,6 +39,8 @@ STRUCT elements. SQL text and options accept constant expressions or host-bound
 parameters, not correlated/lateral per-row expressions. For multiple SQL strings,
 make separate parameterized calls. Prepared executions read the current policy and
 bind the submitted SQL again; preparing a call does not cache an authorization decision.
+Validation also rejects non-null placeholder plans with unresolved parameter types;
+otherwise execution could rebind to an implementation the validator never authorized.
 
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.

@@ -81,6 +81,10 @@ try {
       check('lambda collation implementation blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])', ", blocked_functions := ['sum']");
       check('list aggregate implementation blocked', d.code === 'forbidden');
+      d = await decision('SELECT list_sum($1)', ", blocked_functions := ['sum']");
+      check('deferred aggregate binding rejected', !d.allowed && d.code === 'binding' && d.functions.length === 0);
+      d = await decision('SELECT list_sum($1::INTEGER[])', ", blocked_functions := ['sum']");
+      check('typed aggregate parameter still blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])');
       check('list aggregate dependency', d.allowed && d.functions.some(f => f.name === 'sum' && f.type === 'aggregate'));
       await con.query('CREATE TABLE t(x INT); CREATE TABLE secret(x INT); CREATE VIEW v AS SELECT * FROM t');

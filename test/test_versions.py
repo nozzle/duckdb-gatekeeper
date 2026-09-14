@@ -6,7 +6,13 @@ import sys
 from test_gatekeeper import ROOT, db
 
 sys.path.insert(0, str(ROOT / "scripts"))
-from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
+from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION, load_versions
+
+
+def test_metadata_whitespace_and_comments(tmp_path):
+    lines = (ROOT / "versions.cmake").read_text().splitlines()
+    (tmp_path / "versions.cmake").write_text("\n".join("  " + line + "  # note" for line in lines) + "\n")
+    assert load_versions(tmp_path) == load_versions()
 
 
 def test_loaded_extension_version_matches_metadata(db):

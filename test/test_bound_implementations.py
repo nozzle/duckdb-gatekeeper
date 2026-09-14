@@ -50,6 +50,42 @@ def test_null_list_has_no_executable_aggregate(db, expression):
     assert not any(f["type"] == "aggregate" for f in result["functions"])
 
 
+@pytest.mark.parametrize("expression,blocked", [
+    ("list_sum($1)", "sum"), ("list_avg(?)", "avg"),
+    ("list_unique($1)", "histogram"), ("list_distinct($1)", "histogram"),
+    ("array_unique($1)", "histogram"), ("array_distinct($1)", "histogram"),
+])
+@pytest.mark.parametrize("global_block", [False, True])
+def test_untyped_parameter_cannot_defer_implementation(db, expression, blocked, global_block):
+    if global_block:
+        configure(db, {"blocked_functions": [blocked]})
+        db.execute("SET lock_configuration=true")
+    result = validate(db, "SELECT " + expression, {"blocked_functions": [] if global_block else [blocked]})
+    assert result["code"] == "binding", result
+    assert "parameter" in result["error_message"].lower()
+    assert not result["allowed"] and result["objects"] == result["functions"] == []
+
+
+def test_typed_parameter_keeps_aggregate_authorization(db):
+    sql = "SELECT list_sum($1::INTEGER[])"
+    result = validate(db, sql)
+    assert result["allowed"], result
+    assert any(f["name"] == "sum" for f in result["functions"])
+    assert db.execute(sql, [[1, 2, 3]]).fetchone() == (6,)
+    configure(db, {"blocked_functions": ["sum"]})
+    db.execute("SET lock_configuration=true")
+    result = validate(db, sql)
+    assert result["code"] == "forbidden", result
+    assert result["violations"][0]["function_name"] == "sum"
+
+
+@pytest.mark.parametrize("sql", ["SELECT list_sort($1)", "SELECT array_slice($1,1,2)", "SELECT list_zip($1)"])
+def test_placeholder_plans_require_resolved_parameters(db, sql):
+    result = validate(db, sql)
+    assert result["code"] == "binding", result
+    assert not result["allowed"] and result["objects"] == result["functions"] == []
+
+
 def test_admitted_dispatch_uses_actual_aggregate(db):
     configure(db, {"allowed_functions": ["list_aggregate"], "blocked_functions": ["sum"]})
     assert validate(db, "SELECT list_aggregate([1,2], 'min')")["allowed"]

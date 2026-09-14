@@ -8,7 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_versions(root=ROOT):
     values = {}
     for line in (root / "versions.cmake").read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
+        line = line.split("#", 1)[0].strip()
+        if not line:
             continue
         match = re.fullmatch(r'set\((GATEKEEPER_[A-Z_]+) "([^"]+)"\)', line)
         if not match or match[1] in values:
