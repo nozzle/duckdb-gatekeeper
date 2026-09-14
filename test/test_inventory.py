@@ -74,7 +74,7 @@ def test_registered_aliases_share_classification(db):
     ("SELECT setseed(0.5)", "setseed"), ("SELECT current_user", "current_user"),
     ("SELECT has_table_privilege('t', 'SELECT')", "has_table_privilege"), ("SELECT pg_typeof(1)", "pg_typeof"),
     ("SELECT apply([1, 2], x -> x + 1)", "apply"), ("SELECT filter([1, 2], x -> x > 1)", "filter"),
-    ("SELECT version()", "version"), ("SELECT uuidv7()", "uuidv7"),
+    ("SELECT version()", "version"), ("SELECT reduce([1, 2], (a, b) -> a + b)", "reduce"),
     ("SELECT variant_typeof(1::VARIANT)", "variant_typeof"), ("SELECT st_astext(NULL::GEOMETRY)", "st_astext"),
     ("SELECT st_crs(st_geomfromwkb(NULL::BLOB))", "st_crs"),
     ("FROM duckdb_keywords()", "duckdb_keywords"), ("FROM pg_timezone_names()", "pg_timezone_names"),
