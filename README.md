@@ -8,7 +8,7 @@ that query stays inside the lines you drew.
 | --- | --- |
 | **Table ACL** | Only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. |
 | **Function ACL** | Only the functions you allow, starting from 954 reviewed defaults, with exact-name allow and block lists. |
-| **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and metadata readers are rejected. |
+| **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
 Every decision comes back as one row of named columns with structured diagnostics.
