@@ -18,14 +18,14 @@ def test_inspection_reset_and_complete_replacement(db):
     assert defaults["allowed_tables"] == []
     assert defaults["blocked_tables"] == []
     assert all(value is not None for value in defaults.values())
-    configure(db, {"allowed_tables": [], "blocked_functions": ["MD5", "md5"], "max_statements": 2})
+    configure(db, {"allowed_tables": [], "blocked_functions": ["MD5", "md5"]})
     assert policy(db)["restrict_tables"] is True
     assert policy(db)["blocked_functions"] == ["md5"]
-    configure(db, {"max_statements": 3})
-    assert policy(db) == {**defaults, "max_statements": 3}
+    configure(db, {"use_default_functions": False})
+    assert policy(db) == {**defaults, "use_default_functions": False}
     db.execute("RESET GLOBAL gatekeeper_policy")
     assert policy(db) == defaults
-    configure(db, {"max_statements": 2})
+    configure(db, {"blocked_functions": ["lower"]})
     db.execute("RESET gatekeeper_policy")
     assert policy(db) == defaults
 
@@ -34,7 +34,7 @@ def test_canonical_policy_shape_is_pinned(db):
     """The canonical setting has exactly the supported policy fields."""
     expected = {"use_default_functions",
                 "allowed_functions", "blocked_functions",
-                "allowed_tables", "blocked_tables", "max_statements", "restrict_tables"}
+                "allowed_tables", "blocked_tables", "restrict_tables"}
     assert set(policy(db)) == expected
     for statement in ("CALL gatekeeper_configure(allowed_types := [])",
                       "SELECT * FROM gatekeeper_validate('SELECT 1', allowed_types := [])"):
@@ -50,6 +50,22 @@ def test_canonical_policy_shape_is_pinned(db):
     assert policy(db) == before
 
 
+@pytest.mark.parametrize("value", [1, 2, 0, -1, 1.5, True, None, "1"])
+def test_statement_limit_is_not_configurable(db, value):
+    configure(db, {"blocked_functions": ["md5"]})
+    before = policy(db)
+    for operation in [lambda: configure(db, {"max_statements": value}),
+                      lambda: validate(db, "SELECT 1", {"max_statements": value})]:
+        with pytest.raises(duckdb.Error, match="max_statements"):
+            operation()
+        assert policy(db) == before
+    # Extra canonical STRUCT keys are discarded by DuckDB and cannot change the cap.
+    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), max_statements := ?)", [value])
+    assert policy(db) == before
+    result = validate(db, "SELECT 1; SELECT 2")
+    assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "limit"
+
+
 def test_configuration_is_nontransactional_and_requires_table_function(db):
     db.execute("BEGIN")
     configure(db, {"blocked_functions": ["md5"]})
@@ -61,8 +77,7 @@ def test_configuration_is_nontransactional_and_requires_table_function(db):
 
 @pytest.mark.parametrize("options", [
     {"alowed_schemas": ["main"]}, {"use_default_functions": "false"}, {"use_default_functions": 1},
-    {"allowed_functions": [1]}, {"allowed_functions": [None]}, {"max_statements": 1.5},
-    {"max_statements": 0}, {"max_statements": None},
+    {"allowed_functions": [1]}, {"allowed_functions": [None]},
     {"allow_table_functions": True}, {"allow_table_functions": False},
     {"allowed_tables": [{"schema": "main", "table": "t", "catlog": "memory"}]},
     {"allowed_tables": [{"schema": "main", "tabel": "t"}]},
@@ -144,7 +159,7 @@ def test_set_requires_consistent_table_restriction(db):
 
 
 @pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
-                                     "max_statements := NULL::INTEGER",
+                                     "use_default_functions := NULL::BOOLEAN",
                                      "blocked_functions := [], blocked_functions := ['md5']",
                                      "blocked_functions = [], blocked_functions = ['md5']"])
 def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument):
@@ -166,9 +181,9 @@ def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
     before = policy(db)
     # SQL PREPARE's grammar excludes CALL; the equivalent table SELECT is preparable.
     db.execute("PREPARE cfg AS SELECT * FROM gatekeeper_configure(blocked_functions := $1)")
-    db.execute("PREPARE literal_cfg AS SELECT * FROM gatekeeper_configure(max_statements := 4)")
-    db.execute("EXPLAIN CALL gatekeeper_configure(max_statements := 5)").fetchall()
-    db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(max_statements := 6)")
+    db.execute("PREPARE literal_cfg AS SELECT * FROM gatekeeper_configure(blocked_functions := ['abs'])")
+    db.execute("EXPLAIN CALL gatekeeper_configure(blocked_functions := ['lower'])").fetchall()
+    db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(blocked_functions := ['upper'])")
     assert policy(db) == before
     db.execute("EXECUTE cfg(['md5'])")
     assert policy(db)["blocked_functions"] == ["md5"]
@@ -197,11 +212,11 @@ def test_all_writers_obey_lock(db, statement):
 
 def test_allowed_configs_exception_is_shared_by_all_writers(db):
     db.execute("SET allowed_configs = ['gatekeeper_policy']; SET lock_configuration = true")
-    configure(db, {"max_statements": 2})
-    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), max_statements := 3)")
-    assert policy(db)["max_statements"] == 3
+    configure(db, {"blocked_functions": ["md5"]})
+    db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), blocked_functions := ['lower'])")
+    assert policy(db)["blocked_functions"] == ["lower"]
     db.execute("RESET gatekeeper_policy")
-    assert policy(db)["max_statements"] == 1
+    assert policy(db)["blocked_functions"] == []
 
 
 @pytest.mark.parametrize("statement", [
@@ -215,8 +230,8 @@ def test_session_configuration_rejected(db, statement):
 
 def test_set_validation_and_cast_limitations(db):
     before = policy(db)
-    for expr in ["NULL", "{'max_statements': 2, 'alowed_schemas': ['main']}",
-                 "struct_update(current_setting('gatekeeper_policy'), max_statements := 0)",
+    for expr in ["NULL", "{'use_default_functions': false, 'alowed_schemas': ['main']}",
+                 "struct_update(current_setting('gatekeeper_policy'), blocked_functions := [NULL])",
                  "struct_update(current_setting('gatekeeper_policy'), allowed_tables := [{schema:'main', tabel:'t'}])"]:
         with pytest.raises(duckdb.Error):
             db.execute("SET gatekeeper_policy = " + expr)
@@ -242,7 +257,6 @@ def test_prepare_validation_reads_global_at_execution(db):
     ({"blocked_functions": ["md5"]}, {"blocked_functions": []}, "SELECT md5('x')", "function"),
     ({"use_default_functions": False}, {"use_default_functions": True}, "SELECT abs(1)", "function"),
     ({"use_default_functions": False}, {"allowed_functions": ["abs"]}, "SELECT abs(1)", "function"),
-    ({"max_statements": 1}, {"max_statements": 2}, "SELECT 1; SELECT 2", "limit"),
     ({"blocked_functions": ["range"]}, {"blocked_functions": []}, "SELECT * FROM range(3)", "function"),
     ({}, {"allowed_functions": ["read_csv_auto"]}, "SELECT * FROM 'missing.csv'", "function"),
     ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
@@ -301,8 +315,8 @@ def test_configuration_is_never_admitted_as_submitted_sql(db, sql):
 
 
 def test_atomic_replacements_across_connections(db):
-    policies = [{"blocked_functions": ["md5"], "max_statements": 2},
-                {"blocked_functions": ["lower"], "max_statements": 3}]
+    policies = [{"blocked_functions": ["md5"], "use_default_functions": False},
+                {"blocked_functions": ["lower"], "use_default_functions": True}]
     configure(db, policies[0])
 
     def worker(i):
@@ -310,7 +324,7 @@ def test_atomic_replacements_across_connections(db):
             for _ in range(30):
                 configure(conn, policies[i % 2])
                 snapshot = policy(conn)
-                assert (snapshot["blocked_functions"], snapshot["max_statements"]) in [(["md5"], 2), (["lower"], 3)]
+                assert (snapshot["blocked_functions"], snapshot["use_default_functions"]) in [(["md5"], False), (["lower"], True)]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(worker, range(4)))

@@ -182,13 +182,22 @@ def test_paths(db, sql, opts, allowed):
     assert result["allowed"] == allowed, result
 
 
-def test_limits(db):
-    assert not check(db, "")["allowed"]
-    assert not check(db, "SELECT 1; SELECT 2")["allowed"]
-    assert not check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
-    configure(db, {"max_statements": 2})
-    assert check(db, "SELECT 1; SELECT 2", {"max_statements": 2})["allowed"]
-    assert not check(db, "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t", {"max_statements": 2, "allowed_tables": []})["allowed"]
+@pytest.mark.parametrize("sql", ["SELECT 1", "SELECT 1;", "SELECT 1; -- trailing comment",
+                                  "SELECT ';'", "SELECT 1 /* ; SELECT 2 */"])
+def test_single_statement_boundary(db, sql):
+    assert check(db, sql)["allowed"]
+
+
+@pytest.mark.parametrize("sql", ["SELECT 1; SELECT 2", "SELECT 1; -- comment\n SELECT 2",
+                                  "WITH t AS (SELECT 1) SELECT * FROM t; SELECT * FROM t",
+                                  "SELECT * FROM missing; SELECT 2"])
+def test_fixed_statement_limit_precedes_binding(db, sql):
+    configure(db, {"use_default_functions": False})
+    result = check(db, sql, {"use_default_functions": True})
+    assert not result["allowed"] and result["code"] == "forbidden"
+    assert result["violations"][0]["rule"] == "limit"
+    assert result["objects"] == result["functions"] == []
+    assert result["error_message"] == ""
 
 
 @pytest.mark.parametrize("options", [

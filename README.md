@@ -116,7 +116,7 @@ global policy and binds the submitted SQL again.
 | Bad input | `gatekeeper_validate` | `CALL gatekeeper_configure` |
 | --- | --- | --- |
 | Unknown/duplicate option name, wrong type | DuckDB error at bind | DuckDB error at bind |
-| Invalid value (`max_statements := 0`, NULL list member) | `code = 'invalid_input'` | Raises; policy unchanged |
+| Invalid value (NULL list member, empty function name) | `code = 'invalid_input'` | Raises; policy unchanged |
 
 Empty option lists accept any element type, since DuckDB resolves untyped `[]` to
 `INTEGER[]` before table-function binding. All-NULL lists also pass the element-type
@@ -133,7 +133,10 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `use_default_functions` | BOOLEAN | `true` | `true`: 864 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
-| `max_statements` | BIGINT | `1` | Positive; at most 1000. |
+
+Validation accepts exactly one statement. A trailing semicolon is allowed; empty or
+comment-only SQL returns `invalid_input`, and multiple statements return `forbidden`
+with violation rule `limit`. The statement cap is fixed internally, like the AST caps.
 
 ```sql
 SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']);
@@ -346,12 +349,10 @@ flowchart TB
     subgraph global["Global policy (CALL gatekeeper_configure)"]
         g1[allowed_tables / blocked_tables]
         g2[allowed_functions / blocked_functions]
-        g3[max_statements]
     end
     subgraph request["Request options (gatekeeper_validate)"]
         r1[narrow tables]
         r2[narrow functions]
-        r3[lower statement limit]
     end
     global --> both{both layers<br/>must allow}
     request --> both
@@ -362,7 +363,6 @@ flowchart TB
 | --- | --- |
 | Blocks and the never-bind list | Either layer's deny wins. |
 | Allowlists (functions, tables) | Each layer must allow the resolved identity. |
-| Statement limit | The stricter value applies. |
 
 ```sql
 CALL gatekeeper_configure(
@@ -394,7 +394,7 @@ SELECT current_setting('gatekeeper_policy').blocked_functions AS blocked_functio
 | [md5] |
 
 A request that tries to widen access does not error; it simply cannot authorize anything
-the global policy denies. Grant capabilities (readers, higher statement limits) in
+the global policy denies. Grant capabilities (such as readers) in
 `CALL gatekeeper_configure`, then use request options to narrow per tenant.
 
 | Operation | SQL |
@@ -415,7 +415,7 @@ the global policy denies. Grant capabilities (readers, higher statement limits) 
 Prefer `CALL gatekeeper_configure`: it validates option names, types, and nested identity
 fields before DuckDB's casts. `SET gatekeeper_policy = <STRUCT>` also works but requires
 the **complete canonical STRUCT**: every option plus the `restrict_tables` flag, with no
-NULL at any depth. `SET gatekeeper_policy = {max_statements: 2}` fails with
+NULL at any depth. `SET gatekeeper_policy = {blocked_functions: ['md5']}` fails with
 `NULL policy field: use_default_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead.
 
@@ -434,7 +434,7 @@ non-internal objects. `blocked_tables` applies regardless of `restrict_tables`.
 
 ![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result row is returned](docs/pipeline.svg)
 
-1. **Parse** the statement and enforce `max_statements`.
+1. **Parse** the SQL and require exactly one statement.
 2. **Inspect the AST** for statement type, dynamic SQL, never-bind functions, and
    bind-time expressions the caller wrote.
 3. **Bind** on your connection, using the caller's search path and transaction.

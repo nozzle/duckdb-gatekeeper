@@ -54,12 +54,12 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
 
 
 def test_ceiling_shared_and_replacement_is_global(db):
-    configure(db,{"blocked_functions":["md5"],"max_statements":2})
+    configure(db,{"blocked_functions":["md5"]})
     with db.cursor() as other:
         assert not validate(other,"SELECT md5('x')")["allowed"]
         assert not validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
-        assert validate(other,"SELECT 1;SELECT 2")["allowed"]
-        assert validate(other,"SELECT 1;SELECT 2",{"use_default_functions":False})["allowed"]
+        assert validate(other,"SELECT 1")["allowed"]
+        assert validate(other,"SELECT 1",{"use_default_functions":False})["allowed"]
         configure(other)
         assert validate(db,"SELECT md5('x')")["allowed"]
     with connect() as independent:

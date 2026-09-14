@@ -57,17 +57,9 @@ def test_prepared_policy_overrides_and_nulls(db):
 
 
 def test_limits_at_edges_and_recovery(db):
-    assert validate(db, "SELECT 1", {"max_statements": 1})["allowed"]
-    assert not validate(db, "SELECT 1; SELECT 2", {"max_statements": 1})["allowed"]
     for _ in range(20):
         assert validate(db, "SELECT 1")["allowed"]
         assert not validate(db, "SELECT 1; SELECT 2")["allowed"]
-    for value in [0, -1, 0.5, True, None, "1", 2**64]:
-        try:
-            result = validate(db, "SELECT 1", {"max_statements": value})
-        except duckdb.Error:
-            continue
-        assert not result["allowed"] and result["code"] == "invalid_input", (value, result)
 
 
 def test_embedded_nul_policy_does_not_truncate(db):

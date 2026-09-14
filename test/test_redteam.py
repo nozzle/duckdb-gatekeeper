@@ -175,10 +175,12 @@ def test_validation_cannot_execute_configuration(db):
 
 
 def test_mixed_batch_rejected_before_binding(catalog):
-    configure(catalog, {"max_statements": 2})
+    configure(catalog, {"allowed_functions": ["missing_file_reader"]})
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
-    result = validate(catalog, sql, {"max_statements": 2, "allowed_functions": ["missing_file_reader"]})
-    assert not result["allowed"] and result["code"] == "unsupported"
+    result = validate(catalog, sql, {"allowed_functions": ["missing_file_reader"]})
+    assert not result["allowed"] and result["code"] == "forbidden"
+    assert result["violations"][0]["rule"] == "limit"
+    assert result["error_message"] == ""
     assert catalog.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
 
@@ -190,10 +192,9 @@ def test_mixed_batch_rejected_before_binding(catalog):
     "WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d",
 ])
 def test_write_smuggling(db, sql):
-    configure(db, {"max_statements": 10})
-    result = validate(db, sql, {"max_statements": 10})
+    result = validate(db, sql)
     assert not result["allowed"]
-    assert result["code"] in {"parser", "unsupported"}
+    assert result["code"] in {"parser", "unsupported", "forbidden"}
 
 
 @pytest.mark.parametrize("sql", [
