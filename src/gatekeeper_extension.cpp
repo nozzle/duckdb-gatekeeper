@@ -9,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -622,8 +623,37 @@ static void LoadInternal(ExtensionLoader &loader) {
 		validate.named_parameters[name] = LogicalType::ANY;
 		configure.named_parameters[name] = LogicalType::ANY;
 	}
-	loader.RegisterFunction(validate);
-	loader.RegisterFunction(configure);
+	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
+	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.
+	// The generator keeps only the first line of each description and shows it in one table cell, so keep
+	// these to a single short sentence and do not add newlines. Parameter names are paired positionally
+	// with named_parameters, an unordered map, so they are listed in OptionNames() order; this is only
+	// safe because every named option is ANY (pinned by test_documentation.py).
+	FunctionDescription validate_description;
+	validate_description.parameter_types = {LogicalType::VARCHAR};
+	validate_description.parameter_names = {"sql"};
+	validate_description.description = "Validates one untrusted read-only SQL statement against the global policy "
+	                                   "and the request options without executing it.";
+	validate_description.examples = {
+	    "SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM "
+	    "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
+	FunctionDescription configure_description;
+	configure_description.description =
+	    "Replaces the global Gatekeeper policy atomically; omitted options revert to the built-in defaults.";
+	configure_description.examples = {"CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': "
+	                                  "'*'}], blocked_functions := ['md5'])"};
+	for (const auto &name : gatekeeper::OptionNames()) {
+		validate_description.parameter_names.push_back(name);
+		configure_description.parameter_names.push_back(name);
+	}
+	CreateTableFunctionInfo validate_info(std::move(validate));
+	validate_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	validate_info.descriptions.push_back(std::move(validate_description));
+	CreateTableFunctionInfo configure_info(std::move(configure));
+	configure_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	configure_info.descriptions.push_back(std::move(configure_description));
+	loader.RegisterFunction(std::move(validate_info));
+	loader.RegisterFunction(std::move(configure_info));
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }

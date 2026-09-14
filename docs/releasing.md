@@ -49,6 +49,16 @@ Keep the descriptor's version/ref
 as unquoted scalars with two-space indentation; the standard-library-only packaging
 check deliberately rejects changes to that local format.
 
+`test/test_documentation.py` executes the descriptor's `hello_world` block against the
+built extension and compares each statement's `-- ` response comments (header row first,
+`|`-separated) with the actual result, and it checks that `extended_description` uses
+only `###` headings. Both fields render on duckdb.org: `hello_world` as one SQL block
+under the site's own "Installing and Loading" section (so it must not repeat
+`INSTALL`/`LOAD`), and `extended_description` as markdown under "About gatekeeper",
+followed by "Added Functions" and "Added Settings" tables generated from
+`duckdb_functions()` and `duckdb_settings()`. Function descriptions and examples are
+registered in `src/gatekeeper_extension.cpp` and tested alongside the descriptor.
+
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
 all ZIPs. Native and Wasm assets are unsigned development builds, not DuckDB-signed
