@@ -185,7 +185,7 @@
       "dot": "emerald",
       "title": "Main path",
       "items": [
-        "Parse, preflight, and bind run once per statement",
+        "Parse, preflight, and bind run for the single statement",
         "The submitted query is never executed, though binding may perform I/O; only allowed = true and code = 'ok' mean success",
         "objects and functions list what the query actually bound to"
       ]

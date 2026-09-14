@@ -184,17 +184,19 @@ def test_mixed_batch_rejected_before_binding(catalog):
     assert catalog.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
 
-@pytest.mark.parametrize("sql", [
-    "SELECT 1; /* harmless */ DELETE FROM t RETURNING *",
-    "SELECT 1; -- comment\n COPY t TO 'out.csv'",
-    "WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d",
-    "WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d",
-    "WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d",
+@pytest.mark.parametrize("sql,code", [
+    ("SELECT 1; /* harmless */ DELETE FROM t RETURNING *", "forbidden"),
+    ("SELECT 1; -- comment\n COPY t TO 'out.csv'", "forbidden"),
+    ("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", "parser"),
+    ("WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d", "parser"),
+    ("WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d", "parser"),
 ])
-def test_write_smuggling(db, sql):
+def test_write_smuggling(db, sql, code):
     result = validate(db, sql)
     assert not result["allowed"]
-    assert result["code"] in {"parser", "unsupported", "forbidden"}
+    assert result["code"] == code
+    if code == "forbidden":
+        assert result["violations"][0]["rule"] == "limit"
 
 
 @pytest.mark.parametrize("sql", [

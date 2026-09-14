@@ -183,6 +183,7 @@ def test_paths(db, sql, opts, allowed):
 
 
 @pytest.mark.parametrize("sql", ["SELECT 1", "SELECT 1;", "SELECT 1; -- trailing comment",
+                                  "SELECT 1;;", "SELECT 1; ;", ";SELECT 1",
                                   "SELECT ';'", "SELECT 1 /* ; SELECT 2 */"])
 def test_single_statement_boundary(db, sql):
     assert check(db, sql)["allowed"]

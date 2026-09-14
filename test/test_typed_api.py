@@ -337,7 +337,7 @@ def test_object_identifiers_are_ascii_case_insensitive(db):
     assert result["violations"][0]["table"] == "Orders"
 
 
-@pytest.mark.parametrize("sql", ["", "  ", "-- comment", "/* comment */", "; ;"])
+@pytest.mark.parametrize("sql", ["", "  ", "-- comment", "/* comment */", ";", ";;", "; ;"])
 def test_empty_sql_is_invalid_input(db, sql):
     result = validate(db, sql)
     assert result["code"] == "invalid_input" and not result["allowed"]

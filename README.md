@@ -134,9 +134,11 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
-Validation accepts exactly one statement. A trailing semicolon is allowed; empty or
-comment-only SQL returns `invalid_input`, and multiple statements return `forbidden`
-with violation rule `limit`. The statement cap is fixed internally, like the AST caps.
+Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
+segments, so `SELECT 1;`, `SELECT 1;;`, and `;SELECT 1` are accepted. Empty,
+semicolon-only, or comment-only SQL returns `invalid_input`, and multiple statements
+return `forbidden` with violation rule `limit`. The statement cap is fixed internally,
+like the AST caps.
 
 ```sql
 SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']);
@@ -419,9 +421,11 @@ NULL at any depth. `SET gatekeeper_policy = {blocked_functions: ['md5']}` fails 
 `NULL policy field: use_default_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead.
 
-DuckDB silently drops unknown keys during the cast; because the canonical value is
-NULL-free (`catalog: ''` means any catalog), a typo that displaces a required field fails
-closed. Check the readback.
+DuckDB silently drops unknown keys during the cast: a complete canonical STRUCT with
+an extra field succeeds, but that field has no effect (unlike an unknown option in
+`CALL gatekeeper_configure`, which errors). Because the canonical value is NULL-free
+(`catalog: ''` means any catalog), a typo that displaces a required field fails closed.
+Check the readback.
 
 When setting `allowed_tables` directly, also set `restrict_tables := true`; a nonempty
 list with `restrict_tables = false` is rejected. With an empty list,
