@@ -10,6 +10,33 @@ from engine import add_engine_arguments, engine_cmake_flags, engine_source
 IMAGE = "emscripten/emsdk@sha256:9922c93314b63a1d9ceba2e76f03737f1f9cc4b7350341211e2d3555633ffdd5"  # 3.1.71
 
 
+def common_git_dir(checkout):
+    return Path(subprocess.check_output(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=checkout, text=True
+    ).strip())
+
+
+def container_mounts(root, source):
+    """Bind mounts (same path inside and out) for this checkout, the engine checkout, and their Git metadata.
+
+    Linked worktrees and submodules keep their Git metadata outside the worktree. That holds for this
+    checkout and, independently, for the selected engine even when its worktree sits under root (for
+    example build/candidate-source linked from another clone); without it CMake stamps a dummy v0.0.1.
+    """
+    mounts, mounted = [], []
+
+    def mount(path, options=""):
+        if not any(path.is_relative_to(existing) for existing in mounted):
+            mounts.extend(["-v", f"{path}:{path}{options}"])
+            mounted.append(path)
+
+    mount(root)
+    mount(source)
+    for checkout in (root, source):
+        mount(common_git_dir(checkout), ":ro")
+    return mounts
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=4)
@@ -21,26 +48,11 @@ def main():
     source = engine_source(args)
     build = root / "build/wasm_eh"
     build.mkdir(parents=True, exist_ok=True)
-    common = Path(subprocess.check_output(
-        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=root, text=True
-    ).strip())
-    docker = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{root}:{root}", "-w", str(root)]
+    docker = ["docker", "run", "--rm", "--platform", "linux/amd64", "-w", str(root), *container_mounts(root, source)]
     # Preserve checkout ownership on Linux; Git rejects a runner-owned checkout as root.
     # The pinned SDK's prebuilt cache is read-only for this user.
     if hasattr(os, "getuid"):
         docker += ["--user", f"{os.getuid()}:{os.getgid()}"]
-    # Linked worktrees and their submodules refer to metadata outside the worktree.
-    if not common.is_relative_to(root):
-        docker += ["-v", f"{common}:{common}:ro"]
-    # An external engine checkout must be visible inside the container at the same path, and so
-    # must its Git metadata when it is a linked worktree, or CMake stamps a dummy v0.0.1.
-    if not source.is_relative_to(root):
-        docker += ["-v", f"{source}:{source}"]
-        source_common = Path(subprocess.check_output(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=source, text=True
-        ).strip())
-        if not source_common.is_relative_to(source) and not source_common.is_relative_to(root):
-            docker += ["-v", f"{source_common}:{source_common}:ro"]
     docker += [IMAGE]
     subprocess.run(docker + ["emcmake", "cmake", "-S", str(source), "-B", str(build),
                             "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),

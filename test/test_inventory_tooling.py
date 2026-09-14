@@ -322,3 +322,27 @@ def test_sanitized_runner_rejects_engines_the_pinned_package_cannot_load(tmp_pat
     result = subprocess.run([sys.executable, str(ROOT / "scripts/test_sanitized.py"), "--duckdb-version", "v1.5.4"],
                             capture_output=True, text=True)
     assert result.returncode == 2
+
+
+def test_wasm_container_mounts_engine_git_metadata(tmp_path):
+    """An engine linked as a worktree under root still needs its external Git common directory mounted."""
+    from build_wasm import container_mounts
+    git = lambda *args, cwd: subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+    for name in ("project", "engine"):
+        repo = tmp_path / name
+        repo.mkdir()
+        git("init", "-q", cwd=repo)
+        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init", cwd=repo)
+    root, engine = tmp_path / "project", tmp_path / "engine"
+    candidate = root / "build/candidate-source"
+    candidate.parent.mkdir(parents=True)
+    git("worktree", "add", "-q", str(candidate), cwd=engine)
+    root, engine, candidate = root.resolve(), engine.resolve(), candidate.resolve()
+    volumes = lambda mounts: [mounts[i + 1] for i in range(0, len(mounts), 2)]
+    # Under-root linked worktree: the source is already covered by root, but its metadata is not.
+    assert volumes(container_mounts(root, candidate)) == [f"{root}:{root}", f"{engine / '.git'}:{engine / '.git'}:ro"]
+    # External primary checkout: mount it, and its own metadata is inside it.
+    assert volumes(container_mounts(root, engine)) == [f"{root}:{root}", f"{engine}:{engine}"]
+    # The pinned submodule of the real primary checkout needs nothing beyond root and root's metadata.
+    real_root = ROOT.resolve()
+    assert volumes(container_mounts(real_root, real_root / "duckdb"))[0] == f"{real_root}:{real_root}"

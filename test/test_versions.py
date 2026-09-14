@@ -89,7 +89,7 @@ def _tampered_artifact(tmp_path, version, source_id):
         # Mach-O image (which ends at LC_CODE_SIGNATURE) and re-append DuckDB's trailing metadata footer.
         listing = subprocess.check_output(["otool", "-l", str(tampered)], text=True)
         signature = listing[listing.index("LC_CODE_SIGNATURE"):]
-        end = sum(int(re.search(rf"{field} (\d+)", signature)[1]) for field in ("dataoff", "datasize"))
+        end = sum(int(re.search(rf"{field}\s+(\d+)", signature)[1]) for field in ("dataoff", "datasize"))
         image, footer = tampered.read_bytes()[:end], tampered.read_bytes()[end:]
         tampered.write_bytes(image)
         subprocess.run(["codesign", "--force", "--sign", "-", str(tampered)], check=True, capture_output=True)
