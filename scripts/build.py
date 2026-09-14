@@ -4,7 +4,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from versions import SUPPORTED_DUCKDB
 
 
 def main():
@@ -12,6 +11,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--shell", action="store_true")
+    parser.add_argument("--duckdb-source", type=Path, default=root / "duckdb")
+    parser.add_argument("--build-dir", type=Path, default=root / "build/release")
+    parser.add_argument("--duckdb-version", help="optional engine version override, e.g. v1.5.4")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
@@ -24,10 +26,11 @@ def main():
         return found
 
     cmake = tool("cmake")
-    build = root / "build/release"
-    subprocess.run([cmake, "-G", "Ninja", "-S", str(root / "duckdb"), "-B", str(build),
+    build = args.build_dir.resolve()
+    version = ["-DOVERRIDE_GIT_DESCRIBE=" + (args.duckdb_version or "")]
+    subprocess.run([cmake, "-G", "Ninja", "-S", str(args.duckdb_source.resolve()), "-B", str(build),
                     "-DPython3_EXECUTABLE=" + sys.executable,
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=Release", "-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB,
+                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=Release", *version,
                     "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
                     "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=" + ("ON" if args.shell else "OFF")], check=True)
     targets = ["gatekeeper_loadable_extension"] + (["shell"] if args.shell else [])

@@ -2,7 +2,7 @@
 
 Gatekeeper's GitHub Releases and DuckDB community publication are separate steps.
 The local [community descriptor](../community/description.yml) is prepared for the
-first release; it is not evidence of publication. Its `v0.1.0` ref must exist and
+community submission; it is not evidence of publication. Its `v0.1.1` ref must exist and
 pass CI before submission.
 
 ## Prepare the release commit
@@ -27,8 +27,8 @@ pass CI before submission.
 After checking out the validated release commit with a clean worktree, a maintainer runs:
 
 ```sh
-git tag -a v0.1.0 -m "Gatekeeper v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "Gatekeeper v0.1.1"
+git push origin v0.1.1
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
@@ -77,10 +77,10 @@ silently overwritten. Do not move a published version tag.
    of [duckdb/community-extensions](https://github.com/duckdb/community-extensions).
    Recheck its current descriptor conventions before submission. The prepared descriptor
    pins a version tag; never replace it with a floating branch ref.
-2. Include the exact-engine restriction prominently in the PR: configure rejects any
-   other source revision and load rejects any other DuckDB release. New DuckDB patch
-   and minor releases require reviewed repins and a new descriptor ref; bulk rebuilds
-   may fail and installation on newer engines may be unavailable until then.
+2. State which engine the GitHub assets target, and link compatibility validation.
+   The community repository can rebuild the source against another engine; there is
+   no additional exact-version restriction. Each binary still needs its matching engine.
+   Compilation and regression tests, rather than inventory provenance, gate compatibility.
 3. Include the platform opt-ins, MVP/threads exclusions, Wasm runtime pin, and Python
    toolchain requirement. Reference the successful tag distribution run. The community
    repository builds and signs its own binaries; GitHub assets are not those binaries.
@@ -105,5 +105,7 @@ builds and unsigned local/GitHub builds intact. Run `test/test_documentation.py`
 the edit. It exercises local README examples; the community-install smoke check above
 is a separate deployment verification.
 
-Monitor DuckDB releases and perform the coordinated repin for each supported patch
-or minor release. Do not relax the source or engine checks to make a bulk build pass.
+Monitor DuckDB releases and test community-style rebuilds. Update our reproducible
+build pins when adopting a new release for our own assets, and address actual build
+or regression failures. Existing function names do not require repeat source review
+on every engine update; new defaults can be added independently.

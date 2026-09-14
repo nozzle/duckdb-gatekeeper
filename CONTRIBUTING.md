@@ -18,12 +18,20 @@ For existing clones run `git submodule update --init --recursive`. The artifact 
 build the CLI.
 
 Generation (`scripts/generate.py`, run at CMake configure time) derives the SQL grammar
-from the exact pinned DuckDB revision and compiles the reviewed inventories into the
-build tree. It needs only the Python standard library, so distribution images require no
-extra packages. Any other engine revision is rejected at configure time, and the built
-extension refuses to load into any other DuckDB release. Repinning is a coordinated
-change; follow [inventories/README.md](inventories/README.md#repinning-the-engine) and
-[AGENTS.md](AGENTS.md).
+from the DuckDB source actually being compiled and compiles the function name list into
+the build tree. It needs only the Python standard library. Our submodule and release
+tooling remain pinned for reproducibility, but community builds can use another engine.
+DuckDB's normal extension checks require a matching binary; Gatekeeper adds no fixed
+engine-version restriction. To test another checkout without changing the submodule:
+
+```sh
+.venv/bin/python scripts/build.py --duckdb-source /path/to/duckdb --build-dir build/candidate --shell
+```
+
+The engine's Git metadata determines binary compatibility. `--duckdb-version vX.Y.Z`
+can explicitly override that metadata when building a release checkout. Compatibility
+requires the build and regression tests to pass; it does not require reclassifying
+existing function names. See [build-pin maintenance](inventories/README.md#repinning-the-engine).
 
 The community-extension build path also works and runs on CI:
 
@@ -34,8 +42,9 @@ make test_release     # sqllogictests in test/sql
 
 ### Loading unsigned builds
 
-Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use DuckDB
-1.5.5 and explicitly enable unsigned loading for these development artifacts:
+Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
+engine matching the binary (1.5.5 for our release artifacts) and explicitly enable
+unsigned loading for these development artifacts:
 
 ```sh
 duckdb -unsigned
@@ -123,15 +132,17 @@ uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt
 
 Dependabot handles GitHub Actions, Docker, pip, and the `test/wasm` npm lock monthly.
 DuckDB and DuckDB-Wasm are excluded and bumped manually together with the submodule,
-version checks, fuzz image, Wasm runtime pin, and inventory baseline; see
+release metadata, fuzz image, and Wasm runtime pin; historical inventory baselines are
+maintained independently. See
 [AGENTS.md](AGENTS.md).
 
 ## Function inventories
 
 Core and 29 extension inventories classify names as compute, elevated, or unreviewed.
-Only compute names become defaults. Runtime audits detect changes without admitting
-functions automatically, and unreviewed names are never promoted by tooling. Every
-supported DuckDB update requires review: follow the
+Only compute names become defaults. Runtime audits report changes without admitting
+functions automatically or blocking engine upgrades. Review names when adding or
+changing defaults; existing implementations are trusted across upgrades. Historical
+source notes and baselines remain independent of build-engine versions. Follow the
 [inventory workflow](inventories/README.md) and [inventories/AGENTS.md](inventories/AGENTS.md).
 
 ## Implementation structure

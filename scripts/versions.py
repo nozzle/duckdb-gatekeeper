@@ -27,6 +27,8 @@ def load_versions(root=ROOT):
 
 VERSIONS = load_versions()
 EXTENSION_VERSION = VERSIONS["GATEKEEPER_VERSION"]
+# Release build defaults only; these do not restrict the engine used by community builds.
 SUPPORTED_DUCKDB = VERSIONS["GATEKEEPER_DUCKDB_VERSION"]
 SUPPORTED_DUCKDB_REVISION = VERSIONS["GATEKEEPER_DUCKDB_REVISION"]
-BASELINE_FILENAME = f"duckdb-{SUPPORTED_DUCKDB}.json"
+# Historical inventory provenance is independent of the release build engine.
+BASELINE_FILENAME = "duckdb-1.5.5.json"

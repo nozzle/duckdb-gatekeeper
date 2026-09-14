@@ -19,7 +19,7 @@ Every decision comes back as one row of named columns with structured diagnostic
 > [security model](docs/security.md) before integrating.
 
 > [!NOTE]
-> Early development. Targets **DuckDB 1.5.5 only**; community publication is pending.
+> Early development. Release binaries target **DuckDB 1.5.5**; community publication is pending.
 
 ## Installation
 
@@ -38,8 +38,11 @@ Community binaries are built and signed by DuckDB and load with signature verifi
 enabled. Source builds and the binaries attached to GitHub Releases are unsigned
 development artifacts and require `allow_unsigned_extensions`.
 
-Gatekeeper is pinned to exactly DuckDB **1.5.5**. New DuckDB releases, including patches,
-require a coordinated review and rebuild, so Gatekeeper may lag a newer engine.
+Each binary is specific to its DuckDB engine version. The community repository can
+rebuild Gatekeeper source for newer engines; compatibility is checked by builds and
+regression tests rather than an exact-version restriction. Default functions are a
+name list: new names remain excluded until added, and existing implementations are
+trusted across DuckDB upgrades.
 For browsers, the DuckDB-Wasm EH bundle is supported; see
 [Wasm installation and browser tests](test/wasm/README.md).
 

@@ -199,7 +199,9 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
-  every overload, argument, or future version. The inventory admits the clock (`now`,
+  every overload or argument. Existing DuckDB implementations are trusted across
+  engine upgrades; the inventory is not an exact-version compatibility gate. New
+  names remain excluded until classified or explicitly allowed. The inventory admits the clock (`now`,
   `current_date`, `uuidv7`), non-cryptographic PRNG state including `setseed`'s reseed of
   the connection-local engine, and the host's `TimeZone`/`Calendar` settings that ICU
   temporal functions consume; results using them are not reproducible from SQL text
@@ -284,8 +286,11 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 ## Compatibility and review
 
-Only the pinned DuckDB 1.5.5 revision is supported. Internal C++ and serializer APIs
-require rebuilding/reviewing for other versions. Unknown serialized fields and
+Release binaries target DuckDB 1.5.5. Source builds may use another engine checkout;
+the grammar and serializer come from that checkout, and DuckDB enforces binary
+compatibility. Internal C++ API changes can require fixes, so compatibility is checked
+by compilation and functional regressions. Existing function classifications do not
+need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.

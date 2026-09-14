@@ -62,26 +62,36 @@ unselected conditional branches), so a schema edit that needs an unsupported key
 clearly rather than being ignored. The test suite runs generation under `python -S`,
 checks that malformed inventories are still rejected there, and cross-checks the validator
 against the pinned `jsonschema` package (from `requirements-inventory.txt`) on the real
-inventories and on mutated documents. `scripts/inventory.py` then checks version/source metadata,
+inventories and on mutated documents. `scripts/inventory.py` then checks metadata shape,
 sorting, duplicates, and classification conflicts, including conflicts across extensions.
 The build consumes this same loader. Tests exercise every default and every excluded name.
 
-The generator requires Python 3.10+ and a Git checkout with initialized pinned submodules.
-`versions.cmake` owns the extension and engine version/revision; `scripts/versions.py`
-reads it and derives the baseline filename. Generated C++ literals are split into
+The generator requires Python 3.10+ and the DuckDB source being compiled. CMake passes
+that source explicitly, including for external checkouts. `versions.cmake` owns the
+extension version and reproducible release build defaults; the historical baseline is
+independent of those build defaults. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
 Inventory notes retain provenance, non-obvious classification traps, and coverage limitations.
-Generation and audit comparisons cross-check implementation source URLs against DuckDB's pinned extension
-descriptors or in-tree source revision. UI has an independent source pin because no
+The optional `audit_inventory.py --check-sources` check compares implementation source
+URLs with a checkout of the historical review engine. Normal generation and runtime
+reports do not require those sources to match the build engine. UI has an independent source pin because no
 engine descriptor exists; MotherDuck records its binary version/hash in `binary_review`
 and cannot contribute defaults. Original attribution is retained in `NOTICE`.
-Capture-only mode remains available without submodules; comparison requires the pinned
-checkout and rejects descriptors with multiple distinct source URLs or revisions.
+Capture and comparison work without submodules. The optional provenance check rejects
+ambiguous descriptors with multiple distinct source URLs or revisions.
+After repinning the build engine, pass `--check-sources --source-checkout /path/to/review-engine`
+to check provenance using a separate historical checkout. Its commit must match the
+inventory's recorded core source, not the current release build pin.
 
 ## Version update procedure
 
-Every supported **major/minor update** requires this process; run it on patches too:
+Function policy matches names. Existing DuckDB implementations are trusted across
+upgrades; changes behind an existing name are not a backwards-compatibility attack
+model. New names remain excluded until explicitly allowed or classified. Maintaining
+defaults improves convenience and does not gate engine upgrades.
+
+To investigate coverage on another runtime:
 
 1. Capture the candidate runtime in a separate environment without changing the
    accepted baseline or classifications:
@@ -97,41 +107,41 @@ Every supported **major/minor update** requires this process; run it on patches 
    ```
 
    Additions, removals, changed overload signatures/macro definitions, engine version,
-   or loaded-extension versions cause failure. Unknown names require explicit
-   classification; they are never added to defaults by enumeration.
+   and loaded-extension versions are reported without failing. `--strict` optionally
+   turns drift into an error for baseline investigations. Unknown names remain excluded;
+   they are never added to defaults by enumeration.
 
-3. Review changed implementations and **all overloads** of each name. Record why
-   non-obvious entries are default or elevated. Update source revisions and notes.
+3. Review names you choose to add or reclassify, including their overloads. Record why
+   non-obvious entries are default or elevated and preserve the reviewed source revision.
+   Existing names need no repeat implementation review merely because the engine changed.
 4. Capture separate baselines for optional extensions using explicit trusted local
    signed builds (`--load-extension /path/to/extension.duckdb_extension`). The tool
    never installs or auto-loads an extension on the user's behalf. Compare each
    extension against the corresponding baseline with `--baseline`.
-5. Review parser/binder and serialization changes; update the build pin, grammar,
-   inventory loader version, dependency versions, and tests together. Changing the
-   inventory version alone cannot enable a new engine version.
-6. Run the runtime audit, full conformance/default tests, build, and benchmarks.
-   Replace an accepted baseline only after the review is complete.
+5. Run generation, the runtime report, full tests, and a build after classification
+   changes. Update a historical baseline only intentionally, preserving its provenance.
 
 ## Repinning the engine
 
-`scripts/generate.py` refuses to run against any DuckDB checkout other than
-`SUPPORTED_DUCKDB_REVISION`, and `LoadInternal` refuses to load into any other DuckDB
-release. This
-is deliberate fail-closed behavior: the grammar is derived from the serializer of exactly
-that revision. It also means the community repository's bulk rebuild for the next DuckDB
-release fails at configure time until Gatekeeper is repinned. To repin, update together:
+Our submodule and release toolchain pins make local/CI artifacts reproducible. They do
+not prevent community rebuilds against another engine: grammar and serializer code
+come from the engine being compiled, and DuckDB checks each binary's compatibility.
+Compilation and regression tests establish source compatibility; unsupported structures
+still fail closed. No inventory re-review is required just to rebuild against a patch
+or minor release. To change our release build defaults, update together:
 
 - the `duckdb` submodule and engine version/revision in `versions.cmake`
-  (consumed by CMake, generated C++ constants, build scripts, and the audit);
-- `OVERRIDE_GIT_DESCRIBE` in `Makefile` and `.github/workflows/test.yml`;
+   (release build metadata; not an engine allowlist);
+- `OVERRIDE_GIT_DESCRIBE` in `.github/workflows/test.yml`;
 - `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
   `v1.5-variegata` rather than tagging patch releases);
 - the `duckdb` pin in `requirements-dev.in`, the regenerated hashed lock files, the fuzz
-  image, and the baseline described above.
+   image, and the coordinated Wasm runtime/toolchain pins. Historical inventory
+   source references and baselines need not change with the build pin.
 
-The CI audit runs on every push/PR. A manually dispatched candidate-version job
-captures and uploads a report against the existing baseline, deliberately failing
-when review is needed. Snapshot generation is not approval. Semantic changes with
-unchanged signatures still require source review; an empty diff is not a safety proof.
+The CI inventory report runs on every push/PR. A manually dispatched candidate-version
+job captures and uploads a report against the historical baseline. Neither promotes
+names automatically. Compatibility CI additionally builds a separate pinned engine
+checkout and runs the SQL contract suite against it.

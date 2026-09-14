@@ -1,0 +1,46 @@
+name: Engine rebuild compatibility
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: compatibility-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  candidate:
+    name: Rebuild against another engine checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: duckdb/duckdb
+          # Post-1.5.5 v1.5-variegata snapshot; test a different engine without repinning inventories.
+          ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+          path: build/candidate-source
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+        with:
+          key: candidate-a3cd0de-ubuntu
+          max-size: 1G
+      - run: python -m pip install --require-hashes -r requirements-dev.txt
+      - name: Configure against the actual candidate source
+        run: >-
+          cmake -G Ninja -S build/candidate-source -B build/candidate
+          -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
+          -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
+          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF
+      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension --parallel 4
+      - name: SQL contract on the candidate engine
+        run: build/candidate/test/unittest 'test/sql/*'

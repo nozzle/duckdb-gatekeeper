@@ -66,6 +66,11 @@ def main():
     parser.add_argument("--candidate", type=Path, help="compare a previously captured snapshot")
     parser.add_argument("--baseline", type=Path, default=ROOT / "inventories/baselines" / BASELINE_FILENAME)
     parser.add_argument("--load-extension", type=Path, action="append", default=[], help="explicit trusted local signed extension to load during capture")
+    parser.add_argument("--check-sources", action="store_true",
+                        help="verify provenance against a checkout of the historical review engine")
+    parser.add_argument("--source-checkout", type=Path,
+                        help="historical DuckDB checkout for --check-sources (default: local submodule)")
+    parser.add_argument("--strict", action="store_true", help="fail on runtime drift (default: report only)")
     args = parser.parse_args()
     entries, defaults = load()
     candidate = json.loads(args.candidate.read_text()) if args.candidate else capture(args.load_extension)
@@ -74,15 +79,14 @@ def main():
         args.capture.write_text(json.dumps(candidate, indent=2) + "\n")
         print(f"Candidate snapshot written to {args.capture}; review before accepting as baseline")
         return
-    check_sources(entries)
+    if args.check_sources:
+        check_sources(entries, duckdb_source=args.source_checkout)
     baseline = json.loads(args.baseline.read_text())
     delta = compare(baseline, candidate)
     report = {**delta, **coverage(candidate, entries), "compiled_default_count": len(defaults)}
     print(json.dumps(report, indent=2))
-    if any(delta.values()):
-        raise SystemExit("Runtime inventory changed: explicit review required")
-    if report["unclassified_runtime_names"]:
-        raise SystemExit("Runtime names lack an explicit classification")
+    if args.strict and (any(delta.values()) or report["unclassified_runtime_names"]):
+        raise SystemExit("Runtime inventory differs from the historical baseline")
 
 
 if __name__ == "__main__":

@@ -2,15 +2,21 @@
 import json
 from pathlib import Path
 import re
+import subprocess
 import schema_check
-from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def check_sources(entries, root=ROOT):
-    """Cross-check reviewed implementation URLs against the pinned engine's descriptors."""
-    engine = f"https://github.com/duckdb/duckdb/tree/{SUPPORTED_DUCKDB_REVISION}"
+def check_sources(entries, root=ROOT, duckdb_source=None):
+    """Optional provenance check against a checkout of the historical review engine."""
+    source = duckdb_source if duckdb_source is not None else root / "duckdb"
+    engine = ""
+    if "core" in entries:
+        engine = entries["core"]["source"]
+        revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        if engine != "https://github.com/duckdb/duckdb/tree/" + revision:
+            raise ValueError("Source check requires the historical review checkout; use --source-checkout")
     aliases = {name: name + "_scanner" for name in ("mysql", "postgres", "sqlite", "odbc")}
     for name, entry in entries.items():
         if name == "motherduck":
@@ -26,8 +32,8 @@ def check_sources(entries, root=ROOT):
         if name == "core":
             expected = engine
         else:
-            descriptor = root / "duckdb/.github/config/extensions" / (aliases.get(name, name) + ".cmake")
-            if not descriptor.is_file() and not (root / "duckdb/extension" / name / "CMakeLists.txt").is_file():
+            descriptor = source / ".github/config/extensions" / (aliases.get(name, name) + ".cmake")
+            if not descriptor.is_file() and not (source / "extension" / name / "CMakeLists.txt").is_file():
                 raise ValueError("Missing DuckDB extension source/descriptor: " + name)
             text = descriptor.read_text() if descriptor.is_file() else ""
             text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
@@ -64,8 +70,8 @@ def load(root=ROOT):
         name = entry["name"]
         if name in entries:
             raise ValueError(f"duplicate inventory: {name}")
-        if entry["reviewed_duckdb"] != SUPPORTED_DUCKDB:
-            raise ValueError(f"missing or incompatible review metadata: {name}")
+        if name == "motherduck" and entry["compute"]:
+            raise ValueError("Binary-only MotherDuck review cannot grant defaults")
         groups = {group: entry.get(group, []) for group in ["compute", "elevated", "unreviewed"]}
         groups.update({f"groups.{group}": names for group, names in entry.get("groups", {}).items()})
         for group, names in groups.items():
