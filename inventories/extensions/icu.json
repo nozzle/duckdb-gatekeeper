@@ -3,10 +3,16 @@
   "reviewed_duckdb": "1.5.5",
   "source": "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/icu",
   "notes": [
-    "These inventories match DuckDB 1.5.5 at d8cdaa33fda8df955cc76ef58a280f68f4cd43fa."
+    "These inventories match DuckDB 1.5.5 at d8cdaa33fda8df955cc76ef58a280f68f4cd43fa.",
+    "current_date/today/get_current_time/current_localtime/current_localtimestamp (extension/icu/icu-current.cpp) and the unary age overload (icu-dateadd.cpp CurrentMidnight) convert MetaTransaction start_timestamp using the session TimeZone and Calendar settings (ICUDateFunc::BindData, icu-datefunc.cpp). Every ICU temporal compute function reads those two settings; they are trusted host temporal configuration, not inspectable session state, and a tenant learns nothing beyond the host's chosen zone and calendar.",
+    "pg_timezone_names enumerates the embedded ICU time zone database (icu-timezone.cpp) and reports each zone's current offset and DST flag using calendar->getNow(): static data plus the clock."
   ],
   "compute": [
+    "age",
     "century",
+    "current_date",
+    "current_localtime",
+    "current_localtimestamp",
     "date_diff",
     "date_part",
     "date_sub",
@@ -24,6 +30,7 @@
     "epoch",
     "era",
     "generate_series",
+    "get_current_time",
     "hour",
     "icu_calendar_names",
     "icu_collate_af",
@@ -173,6 +180,7 @@
     "minute",
     "month",
     "monthname",
+    "pg_timezone_names",
     "quarter",
     "range",
     "second",
@@ -180,19 +188,12 @@
     "timezone",
     "timezone_hour",
     "timezone_minute",
+    "today",
     "week",
     "weekday",
     "weekofyear",
     "year",
     "yearweek"
   ],
-  "elevated": [
-    "age",
-    "current_date",
-    "current_localtime",
-    "current_localtimestamp",
-    "get_current_time",
-    "pg_timezone_names",
-    "today"
-  ]
+  "elevated": []
 }

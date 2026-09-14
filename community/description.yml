@@ -122,7 +122,7 @@ docs:
     |--------|------|---------|-------|
     | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted or NULL catalog matches any. `[]` denies all tables and views. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-    | `use_default_functions` | BOOLEAN | `true` | `true`: 864 reviewed read-only defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+    | `use_default_functions` | BOOLEAN | `true` | `true`: 954 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
     | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
@@ -179,10 +179,12 @@ docs:
       (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), sequence and storage
       functions, and `gatekeeper_configure` itself are on a never-bind list that no option
       can override, including through views or macros.
-    - File readers (`read_parquet`, `read_csv_auto`, `read_json_auto`) and session-value
-      functions (`current_date`, `current_user`) are **not** defaults. Grant them by name in
-      the global policy. Admitting a reader permits its resource access; `allowed_tables`
-      does not restrict file paths.
+    - File readers (`read_parquet`, `read_csv_auto`, `read_json_auto`) and catalog, session,
+      or configuration inspection (`current_schema`, `current_setting`, `getvariable`) are
+      **not** defaults. Grant them by name in the global policy. Admitting a reader permits
+      its resource access; `allowed_tables` does not restrict file paths. The clock
+      (`current_date`, `now()`) and the connection-local RNG (`random()`, `uuid()`) are
+      defaults.
     - Expressions in bind-time positions (`LIMIT`, reader arguments, type parameters) must
       be literals or parameters, except correlated `unnest`, `range`, and `generate_series`
       arguments, which DuckDB evaluates per row.

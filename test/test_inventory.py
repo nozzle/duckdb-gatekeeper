@@ -22,7 +22,7 @@ def test_complete_default_inventory(db):
     db.execute("SET autoinstall_known_extensions=false; SET autoload_known_extensions=false")
     entries, names = load()
     assert len(entries) == 30
-    assert len(names) == 864
+    assert len(names) == 954
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
         result = check(db, f"SELECT {quoted}(1)")
@@ -37,6 +37,78 @@ def test_nondefault_inventory(db):
             assert name not in defaults
             sql = 'SELECT "' + name.replace('"', '""') + '"(1)'
             assert not check(db, sql)["allowed"], name
+
+
+def test_core_baseline_fully_reviewed():
+    """Every 1.5.5 baseline name is classified; names an audit surfaces land in unreviewed."""
+    entries, _ = load()
+    baseline = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
+    assert coverage(baseline, entries)["unclassified_runtime_names"] == []
+    assert entries["core"]["unreviewed"] == []
+    assert entries["core"]["unreviewed_reason"]
+
+
+def test_registered_aliases_share_classification(db):
+    """apply/list_transform and friends are one implementation; the policy must not split them."""
+    entries, _ = load()
+    bucket = {}
+    for entry in entries.values():
+        for group in ["compute", "elevated", "unreviewed"]:
+            for name in entry.get(group, []):
+                bucket.setdefault(name, set()).add(group)
+    pairs = db.execute("""SELECT DISTINCT lower(function_name), lower(alias_of) FROM duckdb_functions()
+                          WHERE alias_of IS NOT NULL""").fetchall()
+    assert len(pairs) > 50
+    unclassified = [name for pair in pairs for name in pair if name not in bucket]
+    assert not unclassified, unclassified
+    mismatched = [(alias, canonical) for alias, canonical in pairs if bucket[alias] != bucket[canonical]]
+    assert not mismatched, mismatched
+    assert {"apply", "filter", "reduce"} <= set(bucket) and all(bucket[n] == {"compute"} for n in ["apply", "filter", "reduce"])
+
+
+@pytest.mark.parametrize("sql, name", [
+    ("SELECT current_date", "current_date"), ("SELECT today()", "today"), ("SELECT now()::VARCHAR", "now"),
+    ("SELECT current_timestamp::VARCHAR", "get_current_timestamp"), ("SELECT localtime", "current_localtime"),
+    ("SELECT age(TIMESTAMP '2000-01-01')", "age"), ("SELECT ago(INTERVAL 1 DAY)::VARCHAR", "ago"),
+    ("SELECT random()", "random"), ("SELECT uuid()", "uuid"), ("SELECT uuidv7()", "uuidv7"),
+    ("SELECT setseed(0.5)", "setseed"), ("SELECT current_user", "current_user"),
+    ("SELECT has_table_privilege('t', 'SELECT')", "has_table_privilege"), ("SELECT pg_typeof(1)", "pg_typeof"),
+    ("SELECT apply([1, 2], x -> x + 1)", "apply"), ("SELECT filter([1, 2], x -> x > 1)", "filter"),
+    ("SELECT version()", "version"), ("SELECT reduce([1, 2], (a, b) -> a + b)", "reduce"),
+    ("SELECT variant_typeof(1::VARIANT)", "variant_typeof"), ("SELECT st_astext(NULL::GEOMETRY)", "st_astext"),
+    ("SELECT st_crs(st_geomfromwkb(NULL::BLOB))", "st_crs"),
+    ("FROM duckdb_keywords()", "duckdb_keywords"), ("FROM pg_timezone_names()", "pg_timezone_names"),
+])
+def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
+    """Each default is blockable and disappears with use_default_functions=false."""
+    db.execute("CREATE TABLE t AS SELECT 1 x")
+    db.execute(sql).fetchall()
+    assert check(db, sql)["allowed"], (name, check(db, sql))
+    for options in [{"blocked_functions": [name]}, {"use_default_functions": False}]:
+        result = check(db, sql, options)
+        assert result["code"] == "forbidden", (name, options, result)
+        assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"]), result
+
+
+@pytest.mark.parametrize("sql, name", [
+    ("SELECT current_query()", "current_query"), ("SELECT txid_current()", "txid_current"),
+    ("SELECT current_setting('threads')", "current_setting"), ("SELECT getvariable('x')", "getvariable"),
+    ("SELECT stats(1)", "stats"), ("SELECT make_type('INTEGER')", "make_type"),
+    ("SELECT st_setcrs(NULL::GEOMETRY, 'EPSG:4326')", "st_setcrs"), ("SELECT switch(1, MAP {1: 'a'}, 'b')", "switch"),
+    ("SELECT pg_sleep(0)", "pg_sleep"), ("SELECT sleep_ms(0)", "sleep_ms"),
+    ("SELECT finalize(count(*) EXPORT_STATE) FROM t", "finalize"),
+    ("SELECT finalize(combine(count(*) EXPORT_STATE, count(*) EXPORT_STATE)) FROM t", "combine"),
+    ("FROM pragma_platform()", "pragma_platform"), ("FROM duckdb_coordinate_systems()", "duckdb_coordinate_systems"),
+    ("SELECT parse_duckdb_log_message('FileSystem', '')", "parse_duckdb_log_message"),
+    ("SELECT __internal_decompress_string(1::UBIGINT)", "__internal_decompress_string"),
+    ("SELECT vector_type(1)", "vector_type"), ("FROM test_all_types()", "test_all_types"),
+])
+def test_inspection_and_internal_names_are_excluded(db, sql, name):
+    """Reviewed and excluded from defaults; the reason for each is recorded in core.json notes."""
+    db.execute("CREATE TABLE t AS SELECT 1 x")
+    result = check(db, sql)
+    assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
+    assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"]), result
 
 
 def test_audit_deltas():
@@ -78,9 +150,20 @@ def test_audit_named_arguments_and_positional_order():
     assert compare(baseline, candidate)["changed"] == ["reader"]
 
 
+def test_rejected_validation_does_not_touch_the_rng(db):
+    """switch evaluates its MAP argument at bind time without a foldability check; a caller-authored
+    switch is rejected before binding, so the setseed inside it never runs during validation."""
+    db.execute("SELECT setseed(0.1)")
+    result = check(db, "SELECT switch(1, MAP {1: setseed(0.5)})")
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "switch", result
+    draws = [db.execute("SELECT random()").fetchone()[0] for _ in range(3)]
+    db.execute("SELECT setseed(0.1)")
+    assert draws == [db.execute("SELECT random()").fetchone()[0] for _ in range(3)]
+
+
 @pytest.mark.parametrize("sql, name", [
     ("SELECT current_catalog()", "current_catalog"),
-    ("SELECT ago(INTERVAL 1 DAY)::VARCHAR", "ago"),
+    ("SELECT get_block_size('memory')", "get_block_size"),
     ("SELECT pg_catalog.pg_get_viewdef(0)", "pg_get_viewdef"),
     ("SELECT * FROM histogram('t', x)", "histogram"),
     ("SELECT * FROM histogram_values('t', x)", "histogram_values"),

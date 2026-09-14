@@ -21,6 +21,38 @@ its descriptive `groups` membership too. `unreviewed` records baseline names wit
 a completed source review; these remain excluded and must not be promoted
 automatically. Unreviewed is not a claim of elevated behavior.
 
+### Classification criteria
+
+A name is `compute` when every overload's output depends only on its arguments plus, at
+most, three admitted sources:
+
+- **The clock.** Either `MetaTransaction` start time (`now()`, `current_date`, `ago`) or an
+  execution-time `system_clock` read (`uuidv7`, the offsets in `pg_timezone_names`).
+- **Non-cryptographic PRNG state.** The connection-local PCG32 engine (`random()`,
+  `uuid()`), a query-local engine seeded from it or from OS entropy
+  (`st_generatepoints`), and `setseed()`, which reseeds the connection engine. That reseed
+  is the one admitted mutation: it is connection-local, its only readers are the RNG
+  functions and unseeded `SAMPLE`, and the engine is never a secret.
+- **The `TimeZone` and `Calendar` settings.** Every ICU temporal function consumes them
+  (`current_localtime`, `date_part` on `TIMESTAMPTZ`, `timezone()`); they are trusted host
+  temporal configuration in the same sense that types and collations are trusted, and a
+  tenant learns only the host's chosen zone and calendar.
+
+These disclose nothing else about the host, and `current_date` is the most common non-pure
+expression in analytic SQL, so excluding them would deny ordinary queries for no gain.
+
+A name is `elevated` when any overload reads catalog, session, configuration, or planner
+state (`current_setting`, `current_schema`, `getvariable`, `duckdb_tables`, `stats`),
+performs I/O or mutation (readers, `checkpoint`, `nextval`), dispatches by a
+caller-supplied name (`query`, `list_aggregate`, `finalize`), consumes resources for their
+own sake (`sleep_ms`), takes raw pointers, is an internal/debug/test registration DuckDB
+does not harden as a caller surface (`__internal_*`, `test_vector_types`), reveals host
+platform details (`pragma_platform`), resolves a caller-supplied name through the catalog
+(`make_type`, `st_setcrs`), or evaluates caller expressions at bind time without a
+foldability check so that volatile functions run during validation (`switch`). Version
+strings fixed by the engine pin are compute.
+Registered aliases share their canonical name's classification; the test suite checks this.
+
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
 and invalid group shapes. The contract is: **Python's standard library is sufficient to
 generate and build Gatekeeper; development tests additionally use `jsonschema` to verify
