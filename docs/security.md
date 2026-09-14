@@ -1,6 +1,6 @@
 # Security model
 
-Gatekeeper phase one is a pre-execution validator, not an enforcement hook or a
+Gatekeeper is a pre-execution validator, not an enforcement hook or a
 database sandbox. A successful decision means the SQL conforms to the selected
 syntax, caller-function and resolved-deny/object policies on the pinned parser/binder. It does not mean the SQL is cheap,
 returns nonsensitive data, or cannot have side effects through admitted functions.
@@ -97,7 +97,7 @@ database configuration and are not authorized separately.
 Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
-query-wide check too. Legacy function-child `x -> ...` remains ambiguous: DuckDB
+query-wide check too. Single-arrow function-child `x -> ...` remains ambiguous: DuckDB
 can fall back to JSON binding even inside a function argument. Such syntax retains
 the conservative `json_extract` candidate. Use `lambda x: ...` to avoid that ambiguity
 when combining lambdas with trusted JSON expansions.
@@ -164,6 +164,18 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   interception surface. In particular, global blocks are not a sandbox for arbitrary
   trusted callback code that performs its own direct lookups/evaluation.
 
+The bound-plan authorization module also checks SELECT-list `UNNEST`, executable
+list lambda bodies (including collation implementations inside them), and list
+aggregate implementations such as `sum` inside `list_sum`. DuckDB stores lambdas
+and list aggregates in function bind data rather than ordinary expression children.
+Lambda bodies are walked directly; the private list-aggregate bind data is inspected
+through its pinned serialization callback, without evaluating or rebinding arguments.
+`list_distinct`/`list_unique` and their `array_*` aliases use the source-reviewed fixed
+`histogram` implementation.
+These implementations obey blocks in both layers and appear in successful function
+evidence. Their catalog/schema are empty when the bound representation supplies no
+reliable provenance. Arbitrary extension bind data is not introspected.
+
 ## Remaining boundaries
 
 - Validation always binds on the calling connection and authorizes retrieved table
@@ -213,9 +225,7 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   parser/serializer resource exhaustion.
 
 Keep external access, extension loading, credentials, filesystem/network permissions,
-and configuration changes controlled independently. A future locked connection
-enforcement mode needs separate analysis of binding-time side effects and prepared
-statement lifecycle.
+and configuration changes controlled independently.
 
 ## Validating-connection profiles
 
@@ -280,7 +290,7 @@ against hostile callers still requires review of the application and its trust b
 
 `test_redteam.py` checks nested table references in filters, windows, LIMIT/ORDER BY,
 CTEs, views and macros; search-path and temporary-table shadowing; dynamic SQL;
-write-containing batches; duplicate/escaped JSON keys; invalid limits; and prepared
+write-containing batches; duplicate typed policy fields; fixed limits; and prepared
 validation after catalog/policy changes. `test_global_policy.py` checks locking,
 atomic replacement, strict configuration, and non-bypassable policy layers.
 `test_adversarial_generated.py` combines nested queries and function
@@ -291,8 +301,8 @@ DuckDB can wrap policy exceptions while binding a table macro. Such denials reta
 preflight cannot leak into an error
 result. Tests cover this independently of the error's DuckDB exception type.
 
-Gatekeeper's AST walk uses an explicit work stack with per-node scope snapshots
-and depth checks. DuckDB parsing/serialization still has its own stack behavior.
+Gatekeeper's AST and bound-expression walks use explicit work stacks. The AST walk
+checks node and depth budgets. DuckDB parsing/serialization still has its own stack behavior.
 
 The Python-wheel sanitizer runner uses AddressSanitizer and UndefinedBehaviorSanitizer
 to instrument Gatekeeper and its compiled JsonSerializer. The Python DuckDB engine
@@ -302,7 +312,9 @@ not coverage-guided fuzzing or a full engine memory-safety audit.
 Run `.venv/bin/python scripts/test_sanitized.py` for the instrumented suite.
 
 The linked SQL/typed-option fuzz target exercises the public entry point against
-fixed local catalog fixtures. Gatekeeper uses coverage and ASan/UBSan instrumentation;
+fixed local catalog fixtures on every PR and main push, with an additional weekly run.
+Its deterministic startup checks cover native policy setters and reentrant/stateful
+replacement callbacks. Gatekeeper uses coverage and ASan/UBSan instrumentation;
 the linked DuckDB engine is exercised but not fully instrumented. The macOS
 Python-wheel sanitizer runner also disables libc++ container annotations because
 containers cross instrumented and uninstrumented code. This is qualified

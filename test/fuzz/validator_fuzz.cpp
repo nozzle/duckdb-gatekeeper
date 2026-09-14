@@ -7,40 +7,40 @@
 using namespace duckdb_yyjson;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-	// Preserve the six-byte corpus prefix, including retired flag bits and byte 5.
-	if (size < 6 || size > 65536)
+	// Four controls: policy flags, AST node budget, AST depth budget, ceiling flags.
+	if (size < 4 || size > 65536)
 		return 0;
 	std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
-	    yyjson_read(reinterpret_cast<const char *>(data + 6), size - 6, 0), yyjson_doc_free);
+	    yyjson_read(reinterpret_cast<const char *>(data + 4), size - 4, 0), yyjson_doc_free);
 	if (!doc)
 		return 0;
 	auto root = yyjson_doc_get_root(doc.get());
 	try {
 		gatekeeper::Policy policy;
-		policy.defaults = data[0] & 2;
-		policy.tables = data[0] & 16;
-		if (data[1] & 1)
+		policy.defaults = data[0] & 1;
+		policy.tables = data[0] & 2;
+		if (data[0] & 4)
 			policy.blocked_tables.insert({"*", "main", "t"});
-		if (data[1] & 2)
+		if (data[0] & 8)
 			policy.allowed_tables.insert({"memory", "*", "*"});
-		if (data[1] & 4)
+		if (data[0] & 16)
 			policy.allowed_tables.insert({"*", "main", "*"});
-		if (data[1] & 8)
+		if (data[0] & 32)
 			policy.allowed_tables.insert({"", "main", "t"});
-		if (data[1] & 16)
+		if (data[0] & 64)
 			policy.blocked_functions = {"md5", "read_csv"};
-		if (data[1] & 32)
+		if (data[0] & 128)
 			policy.allowed_functions = {"md5", "range", "query_table"};
 		gatekeeper::Limits limits;
-		limits.nodes = data[2] ? data[2] : gatekeeper::MAX_AST_NODES;
-		limits.depth = data[3] ? data[3] : gatekeeper::MAX_AST_DEPTH;
+		limits.nodes = data[1] ? data[1] : gatekeeper::MAX_AST_NODES;
+		limits.depth = data[2] ? data[2] : gatekeeper::MAX_AST_DEPTH;
 		auto ast = yyjson_obj_get(root, "ast");
 		if (!ast)
 			return 0;
 		gatekeeper::BindingPolicy binding;
 		auto result = gatekeeper::Validate(ast, policy, &binding, nullptr, limits);
 		gatekeeper::Policy ceiling;
-		ceiling.defaults = data[4] & 1;
+		ceiling.defaults = data[3] & 1;
 		ceiling.blocked_functions = {"abs", "md5"};
 		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling, limits);
 		if (layered.allowed &&

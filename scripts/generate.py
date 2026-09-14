@@ -8,8 +8,8 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
-from inventory import load
-from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
+from inventory import load, check_sources
+from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "duckdb/src/include/duckdb/storage/serialization"
@@ -113,10 +113,11 @@ def header(name, data):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "generated",
-                        help="directory for grammar.hpp and inventory.hpp (the build passes its binary dir)")
+                        help="directory for generated headers (the build passes its binary dir)")
     args = parser.parse_args()
     pinned_revision()
-    _, defaults = load()
+    entries, defaults = load()
+    check_sources(entries)
     inventory = {"defaults": defaults}
     args.output.mkdir(parents=True, exist_ok=True)
     for name, data in [("grammar", grammar()), ("inventory", inventory)]:
@@ -125,6 +126,13 @@ def main():
         # Leave the timestamp alone when nothing changed so reconfiguring does not force a rebuild.
         if not target.exists() or target.read_text() != content:
             target.write_text(content)
+    target = args.output / "version.hpp"
+    content = ('#pragma once\nnamespace gatekeeper {\n'
+               f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
+               f'constexpr const char *DUCKDB_VERSION = "v{SUPPORTED_DUCKDB}";\n'
+               '} // namespace gatekeeper\n')
+    if not target.exists() or target.read_text() != content:
+        target.write_text(content)
 
 
 if __name__ == "__main__":

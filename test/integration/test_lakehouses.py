@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 import uuid
@@ -26,7 +25,8 @@ def lake(request, tmp_path):
 
 
 def initialize_lake(db, kind, tmp_path):
-    db.execute("LOAD '" + str(ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension").replace("'", "''") + "'")
+    extension = Path(os.getenv("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
+    db.execute("LOAD '" + str(extension).replace("'", "''") + "'")
     if kind == "iceberg":
         import boto3
         s3 = boto3.client("s3", endpoint_url="http://127.0.0.1:19000", aws_access_key_id="gatekeeper-test", aws_secret_access_key="gatekeeper-local-only", region_name="us-east-1")

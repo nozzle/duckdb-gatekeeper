@@ -1,7 +1,11 @@
 {
   "name": "motherduck",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/motherduck.go",
+  "source": "https://motherduck.com/docs/",
+  "binary_review": {
+    "version": "v1.5.5-2026-08-22",
+    "sha256": "9a6a53fd5332ac188feb8410ed71b3d8f71822cbfaca8024aec18f2892bf0743"
+  },
   "notes": [
     "MotherDuck has no public source revision pinned by DuckDB 1.5.5. This elevated snapshot uses the",
     "v1.5.5-2026-08-22 implementation binary with SHA-256 9a6a53fd5332ac188feb8410ed71b3d8f71822cbfaca8024aec18f2892bf0743.",

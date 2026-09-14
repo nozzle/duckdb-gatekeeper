@@ -12,7 +12,7 @@ from test_gatekeeper import ROOT
 sys.path.insert(0, str(ROOT / "scripts"))
 from generate import header, pinned_revision
 import schema_check
-from inventory import load
+from inventory import load, check_sources
 
 
 @pytest.mark.parametrize("key,value", [
@@ -60,6 +60,14 @@ def test_generation_requires_initialized_checkout(tmp_path):
     with pytest.raises(SystemExit, match="Git checkout.*submodule"):
         pinned_revision(tmp_path)
     assert pinned_revision()
+
+
+def test_reviewed_sources_match_engine_descriptors():
+    entries, _ = load()
+    check_sources(entries)
+    entries["spatial"]["source"] = entries["spatial"]["source"].replace("/tree/", "/tree/0")
+    with pytest.raises(ValueError, match="Reviewed source.*spatial"):
+        check_sources(entries)
 
 
 def test_inventory_uses_supplied_schema(tmp_path):

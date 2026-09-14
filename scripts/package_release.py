@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import zipfile
 
-from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
+from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION, load_versions
 
 ROOT = Path(__file__).resolve().parents[1]
 # Keep aligned with MainDistributionPipeline.yml and the community descriptor.
@@ -23,22 +23,16 @@ def release_version(tag):
             raise ValueError(f"Cannot read release version from {location}")
         return match.group(1)
 
-    config = (ROOT / "extension_config.cmake").read_text()
-    version = extract(r"EXTENSION_VERSION\s+(\d+\.\d+\.\d+)\)", config, "extension_config.cmake")
-    source = (ROOT / "src/gatekeeper_extension.cpp").read_text()
-    runtime_version = extract(r'GatekeeperExtension::Version\(\) const\s*\{\s*return "([^"]+)";',
-                              source, "src/gatekeeper_extension.cpp Version()")
-    error_version = extract(r'"Gatekeeper ([^" ]+) supports DuckDB %s only;',
-                            source, "src/gatekeeper_extension.cpp load-error message")
-    engine_version = extract(r'SUPPORTED_DUCKDB_VERSION\s*=\s*"([^"]+)";',
-                             source, "src/gatekeeper_extension.cpp engine pin")
-    if engine_version != f"v{SUPPORTED_DUCKDB}":
-        raise ValueError(f"C++ engine pin {engine_version} and scripts/versions.py v{SUPPORTED_DUCKDB} must agree")
+    metadata = load_versions(ROOT)
+    version = metadata["GATEKEEPER_VERSION"]
+    if (metadata["GATEKEEPER_DUCKDB_VERSION"] != SUPPORTED_DUCKDB or
+            metadata["GATEKEEPER_DUCKDB_REVISION"] != SUPPORTED_DUCKDB_REVISION):
+        raise ValueError("Loaded and on-disk engine metadata must agree")
 
     descriptor = (ROOT / "community/description.yml").read_text()
     if SUPPORTED_DUCKDB_REVISION not in descriptor or f"DuckDB {SUPPORTED_DUCKDB}" not in descriptor:
         raise ValueError("community/description.yml must cite the pinned DuckDB version and source revision "
-                         "from scripts/versions.py")
+                         "from versions.cmake")
 
     def descriptor_pin(section, key):
         # These two pins use canonical two-space, unquoted scalar syntax in the
@@ -52,9 +46,8 @@ def release_version(tag):
     if descriptor_version != version or descriptor_ref != f"v{version}":
         raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
                          f"and release v{version} must agree")
-    if (tag and tag != f"v{version}") or runtime_version != version or error_version != version:
-        raise ValueError(f"Tag {tag!r}, CMake version {version}, runtime version {runtime_version}, "
-                         f"and load-error version {error_version} must agree")
+    if tag and tag != f"v{version}":
+        raise ValueError(f"Tag {tag!r} and version {version} must agree")
     return version
 
 

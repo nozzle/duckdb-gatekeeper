@@ -31,7 +31,7 @@ def test_lateral_arguments_rejected(db, argument):
                    "LATERAL gatekeeper_validate(" + argument + ") v")
 
 
-def test_scalar_interface_removed(db):
+def test_validation_requires_table_function_syntax(db):
     with pytest.raises(duckdb.BinderException, match="table function"):
         db.execute("SELECT gatekeeper_validate('SELECT 1')")
 
@@ -72,19 +72,11 @@ def test_preparing_does_not_validate_submitted_sql(db):
 
 
 @pytest.mark.parametrize("args", [
-    "'{}'", "resolve_objects := false", "unknown := true", "limits := {max_statements:1}",
-    "use_default_functions := 'false'", "use_default_functions := 1", "max_statements := 1.5",
+    "unknown := true", "use_default_functions := 'false'", "use_default_functions := 1",
     "allowed_functions := 'sum'", "allowed_functions := [1,2]", "allowed_tables := [1]",
     "allowed_tables := ['main.t']",
     "blocked_functions := [], blocked_functions := ['md5']",
-    "allow_dynamic_sql := true",  # unknown option
-    "allow_table_functions := true", "allow_table_functions := false",  # removed option
-    "allow_replacement_scans := true", "allow_replacement_scans := false",
     "blocked_tables := [1]", "blocked_tables := ['main.t']",
-    "check_functions := true", "check_functions := false",
-    "allow_recursive_ctes := true", "allow_recursive_ctes := false",
-    "max_ast_bytes := 8388608", "max_ast_nodes := 100000", "max_ast_depth := 512",
-    "max_statements := 1", "max_statements := 2", "max_statements := 0",
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):

@@ -1,5 +1,4 @@
 """Regression probes for deny decisions, actual binding, and policy confusion."""
-import json
 
 import pytest
 
@@ -94,26 +93,13 @@ def test_function_hidden_positions(catalog, expression):
 
 
 @pytest.mark.parametrize("options", [
-    '{"blocked_functions":["md5"],"blocked_functions":[]}',
-    '{"blocked_functions":["md5"],"blocked_\\u0066unctions":[]}',
-    '{"allowed_tables":[{"schema":"allowed","table":"t","table":"other"}]}',
-    '{"limits":{"max_statements":1,"max_statements":2}}',
-    '{"limits":{"max_statements":1.0}}',
-    '{"limits":{"max_statements":-1}}',
-    '{"limits":{"max_statements":true}}',
-    '{"limits":{"max_ast_bytes":18446744073709551616}}',
-    '{"resolve_objects":null}',
-    '{"allowed_catalogs":[null]}',
-    '{"allowed_functions":[{"name":"sum"}]}',
-    '{"allow_dynamic_sql":1}',
-    '{"CHECK_FUNCTIONS":false}',
-    '{} {}',
-    '{"check_functions":false} trailing',
+    "blocked_functions := ['md5'], BLOCKED_FUNCTIONS := []",
+    "allowed_tables := [{schema: 'main', 'table': 't', TABLE: 'other'}]",
 ])
-def test_policy_parser_confusion(db, options):
+def test_duplicate_typed_policy_fields(db, options):
     import duckdb
-    with pytest.raises(duckdb.BinderException, match="No function matches"):
-        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1',?)", [options])
+    with pytest.raises(duckdb.Error):
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', " + options + ")")
 
 
 def test_preflight_denies_before_reader_binding(db):

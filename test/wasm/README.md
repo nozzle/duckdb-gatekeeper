@@ -3,8 +3,7 @@
 Gatekeeper supports the **EH (native WebAssembly exception handling)** bundle of
 DuckDB-Wasm with embedded **DuckDB 1.5.5**. The tested npm package is
 `@duckdb/duckdb-wasm@1.33.1-dev64.0`; its package version is independent of the
-engine version. The npm `latest` package at initial validation (`1.33.1-dev57.0`)
-embeds DuckDB 1.5.4 and is incompatible. Pin the package; do not bypass engine
+engine version. Pin this package and verify its embedded engine; do not bypass engine
 metadata/version checks.
 
 ## Build and test locally
@@ -84,11 +83,9 @@ against a user who controls their browser.
 - **MVP:** builds/loads, but the tested runtime throws `_setThrew is not defined`
   on a missing-table error even without Gatekeeper. Exception paths cannot be
   supported until the runtime is fixed and regression-tested.
-- **Threads/COI:** an experimental build with explicit `USE_WASM_THREADS=1`, EH,
-  and pthread flags passed the smoke cases and a 10,000-row validation batch.
-  Loader reliability and the distribution Makefile's thread/shared-memory flags
-  still need investigation; one load after an earlier engine error timed out.
-  It remains excluded from supported distribution.
+- **Threads/COI:** excluded because loader recovery after an engine error and the
+  distribution toolchain's thread/shared-memory flags are not verified. Supporting
+  it requires repeatable load/error/recovery tests with the actual distribution artifact.
 
 ## Maintenance
 

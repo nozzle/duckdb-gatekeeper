@@ -312,6 +312,10 @@ flowchart LR
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
 
+Blocks also cover bound implementations: `unnest` inside a view, `lower` introduced
+by `nocase` comparisons inside list lambdas, and `sum` dispatched by `list_sum`.
+These implementations are included in successful function dependency lists.
+
 > [!NOTE]
 > `current_date`, `current_user`, and other session-value functions are **not** defaults.
 > Grant them by name in the global policy: `allowed_functions := ['current_date']`.

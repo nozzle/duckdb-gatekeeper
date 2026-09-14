@@ -1,5 +1,4 @@
 import concurrent.futures
-import json
 
 import pytest
 import duckdb
@@ -22,7 +21,7 @@ def test_binding_errors_and_no_execution(db):
     result=validate(db,"SELECT * FROM missing")
     assert not result["allowed"] and result["code"]=="binding"
     with pytest.raises(duckdb.BinderException, match="Invalid named parameter"):
-        validate(db,"SELECT * FROM missing",{"resolve_objects":False})
+        validate(db,"SELECT * FROM missing",{"unknown":False})
     db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
     assert not validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
     assert db.execute("SELECT nextval('seq')").fetchone()==(1,)

@@ -1,7 +1,7 @@
 {
   "name": "excel",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/excel.go",
+  "source": "https://github.com/duckdb/duckdb-excel/tree/f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d",
   "notes": [
     "Source: https://github.com/duckdb/duckdb-excel/tree/f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d"
   ],

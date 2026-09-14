@@ -91,12 +91,9 @@ def test_output_file_is_not_overwritten(artifacts, tmp_path):
 
 
 @pytest.mark.parametrize("filename,old,new,message", [
-    ("extension_config.cmake", "EXTENSION_VERSION", "OTHER_VERSION", "extension_config.cmake"),
-    ("src/gatekeeper_extension.cpp", "Version()", "OtherVersion()", "Version"),
-    ("src/gatekeeper_extension.cpp", "Gatekeeper 0.1.0 supports", "Gatekeeper supports", "load-error message"),
-    ("src/gatekeeper_extension.cpp", "Gatekeeper 0.1.0 supports", "Gatekeeper 0.0.9 supports", "must agree"),
-    ("src/gatekeeper_extension.cpp", 'SUPPORTED_DUCKDB_VERSION = "v1.5.5"',
-     'SUPPORTED_DUCKDB_VERSION = "v1.5.4"', r"C\+\+ engine pin.*must agree"),
+    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.0"', 'GATEKEEPER_VERSION "0.0.9"', "must agree"),
+    ("versions.cmake", 'GATEKEEPER_DUCKDB_VERSION "1.5.5"', 'GATEKEEPER_DUCKDB_VERSION "1.5.4"', "must agree"),
+    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.0"', 'GATEKEEPER_VERSION "garbage"', "Invalid version"),
     ("community/description.yml", "version: 0.1.0", "version: 0.0.9", "Community descriptor.*must agree"),
     ("community/description.yml", "ref: v0.1.0", "ref: v0.0.9", "Community descriptor.*must agree"),
     ("community/description.yml", "version: 0.1.0", "other_version: 0.1.0", "extension.version"),
@@ -106,7 +103,7 @@ def test_output_file_is_not_overwritten(artifacts, tmp_path):
     ("community/description.yml", "DuckDB 1.5.5", "DuckDB 1.5.4", "must cite the pinned DuckDB"),
 ])
 def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old, new, message):
-    for source in ("extension_config.cmake", "src/gatekeeper_extension.cpp", "community/description.yml"):
+    for source in ("versions.cmake", "community/description.yml"):
         target = tmp_path / source
         target.parent.mkdir(parents=True, exist_ok=True)
         text = (ROOT / source).read_text()

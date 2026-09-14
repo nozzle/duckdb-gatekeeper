@@ -36,17 +36,16 @@ def test_canonical_policy_shape_is_pinned(db):
                 "allowed_functions", "blocked_functions",
                 "allowed_tables", "blocked_tables", "restrict_tables"}
     assert set(policy(db)) == expected
-    for statement in ("CALL gatekeeper_configure(allowed_types := [])",
-                      "SELECT * FROM gatekeeper_validate('SELECT 1', allowed_types := [])"):
-        with pytest.raises(duckdb.Error, match="allowed_types"):
+    for statement in ("CALL gatekeeper_configure(unknown := [])",
+                      "SELECT * FROM gatekeeper_validate('SELECT 1', unknown := [])"):
+        with pytest.raises(duckdb.Error, match="unknown"):
             db.execute(statement)
-    assert "allow_dynamic_sql" not in policy(db)
     before = policy(db)
     # DuckDB discards extra STRUCT keys, while CALL rejects unknown options.
-    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), allow_dynamic_sql := true)")
+    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), unknown := true)")
     assert policy(db) == before
     with pytest.raises(duckdb.Error):
-        db.execute("CALL gatekeeper_configure(allow_dynamic_sql := true)")
+        db.execute("CALL gatekeeper_configure(unknown := true)")
     assert policy(db) == before
 
 
@@ -76,14 +75,12 @@ def test_configuration_is_nontransactional_and_requires_table_function(db):
 
 
 @pytest.mark.parametrize("options", [
-    {"alowed_schemas": ["main"]}, {"use_default_functions": "false"}, {"use_default_functions": 1},
+    {"unknown": ["main"]}, {"use_default_functions": "false"}, {"use_default_functions": 1},
     {"allowed_functions": [1]}, {"allowed_functions": [None]},
-    {"allow_table_functions": True}, {"allow_table_functions": False},
     {"allowed_tables": [{"schema": "main", "table": "t", "catlog": "memory"}]},
     {"allowed_tables": [{"schema": "main", "tabel": "t"}]},
-    {"allowed_types": [{"schema": "main", "type": "t", "extra": "x"}]},
 ])
-def test_strict_parameterized_call_preserves_old_policy_on_failure(db, options):
+def test_strict_parameterized_call_preserves_policy_on_failure(db, options):
     configure(db, {"blocked_functions": ["md5"]})
     before = policy(db)
     with pytest.raises(duckdb.Error):
@@ -230,14 +227,14 @@ def test_session_configuration_rejected(db, statement):
 
 def test_set_validation_and_cast_limitations(db):
     before = policy(db)
-    for expr in ["NULL", "{'use_default_functions': false, 'alowed_schemas': ['main']}",
+    for expr in ["NULL", "{'use_default_functions': false, 'unknown': ['main']}",
                  "struct_update(current_setting('gatekeeper_policy'), blocked_functions := [NULL])",
                  "struct_update(current_setting('gatekeeper_policy'), allowed_tables := [{schema:'main', tabel:'t'}])"]:
         with pytest.raises(duckdb.Error):
             db.execute("SET gatekeeper_policy = " + expr)
         assert policy(db) == before
     # A complete STRUCT plus an extra key is silently cast by DuckDB before our callback.
-    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), alowed_schemas := ['main'])")
+    db.execute("SET gatekeeper_policy = struct_insert(current_setting('gatekeeper_policy'), unknown := ['main'])")
     assert policy(db) == before
     db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), blocked_functions := ['MD5', 'md5'])")
     assert policy(db)["blocked_functions"] == ["md5"]

@@ -1,10 +1,16 @@
 name: Linked SQL and typed-option fuzzing
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: sql-fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   CMAKE_C_COMPILER_LAUNCHER: ccache
   CMAKE_CXX_COMPILER_LAUNCHER: ccache

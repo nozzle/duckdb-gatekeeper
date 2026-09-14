@@ -15,10 +15,86 @@ SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions :
 ----
 false
 
+statement ok
+CREATE TABLE permitted(x INTEGER);
+
+statement ok
+CREATE TABLE secret(x INTEGER);
+
+statement ok
+CREATE VIEW permitted_view AS SELECT * FROM permitted;
+
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM other.t', allowed_tables := [{catalog:'*', schema:'tenant', 'table':'*'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted', allowed_tables := [{schema:'main', 'table':'permitted'}]);
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM secret', allowed_tables := [{schema:'main', 'table':'permitted'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema:'main', 'table':'permitted_view'}]);
+----
+forbidden
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema:'main', 'table':'permitted_view'}, {schema:'main', 'table':'permitted'}]);
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', allowed_tables := [{schema:'main', 'table':'permitted', typo:'x'}]);
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1; SELECT 2');
+----
+forbidden
+
+statement ok
+PREPARE validation AS SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')');
+
+query I
+EXECUTE validation;
+----
+true
+
+statement ok
+CALL gatekeeper_configure(blocked_functions := ['md5']);
+
+query I
+EXECUTE validation;
 ----
 false
+
+statement ok
+RESET gatekeeper_policy;
+
+statement ok
+CREATE VIEW unnested AS SELECT unnest([1,2]) AS x;
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM unnested', blocked_functions := ['unnest']);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT list_transform([''a''], lambda x: x COLLATE nocase = ''A'')', blocked_functions := ['lower']);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT list_sum([1,2])', blocked_functions := ['sum']);
+----
+forbidden
+
+query I
+SELECT list_contains(list_transform(functions, lambda f: f.name), 'sum') FROM gatekeeper_validate('SELECT list_sum([1,2])');
+----
+true
 
 query I
 CALL gatekeeper_configure(blocked_functions := ['md5']);

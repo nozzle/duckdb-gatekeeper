@@ -1,8 +1,6 @@
-import json
-
 import pytest
 
-from test_gatekeeper import ROOT, db
+from test_gatekeeper import db
 from typed_helpers import validate, configure, never_bind_names
 
 
@@ -189,7 +187,7 @@ def test_function_child_arrow_can_still_be_json(expressions):
         "use_default_functions": False, "allowed_functions": ["json_extract_string"]})["allowed"]
 
 
-def test_legacy_lambda_overlap_and_keyword_workaround(expressions):
+def test_single_arrow_lambda_overlap_and_keyword_workaround(expressions):
     expressions.execute("SET lambda_syntax='ENABLE_SINGLE_ARROW'; CREATE VIEW v_json AS SELECT json_extract(j, 'a') z FROM t")
     options = {"use_default_functions": False, "allowed_functions": ["list_transform", "+"]}
     sql = "SELECT list_transform(arr, x -> x + 1), z FROM t, v_json"

@@ -1,7 +1,7 @@
 {
   "name": "quack",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/quack.go",
+  "source": "https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0",
   "notes": [
     "Source: https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0"
   ],

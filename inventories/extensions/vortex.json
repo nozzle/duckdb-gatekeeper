@@ -1,7 +1,7 @@
 {
   "name": "vortex",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/vortex.go",
+  "source": "https://github.com/vortex-data/duckdb-vortex/tree/2a008b1734d563f46a1ff0af3a758f4fd844ea91",
   "notes": [
     "DuckDB pins https://github.com/vortex-data/duckdb-vortex/tree/2a008b1734d563f46a1ff0af3a758f4fd844ea91,",
     "whose lockfile pins https://github.com/vortex-data/vortex/tree/b68abbb68427ed545dbd18ee3b383f78d9c34d43/vortex-duckdb."

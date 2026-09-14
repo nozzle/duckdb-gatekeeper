@@ -1,5 +1,4 @@
 import concurrent.futures
-import json
 import os
 from pathlib import Path
 
@@ -74,7 +73,7 @@ def test_writes(db, sql):
     assert result["code"] == "unsupported"
 
 
-def test_no_execution_or_binding(db, tmp_path):
+def test_validation_binds_without_executing(db, tmp_path):
     db.execute("CREATE TABLE existing AS SELECT 42 AS x")
     assert not check(db, "DROP TABLE existing")["allowed"]
     assert db.execute("SELECT * FROM existing").fetchone() == (42,)
@@ -201,17 +200,9 @@ def test_fixed_statement_limit_precedes_binding(db, sql):
     assert result["error_message"] == ""
 
 
-@pytest.mark.parametrize("options", [
-    "null", "[]", "false", "{", '{"unknown":true}', '{"check_functions":"false"}',
-    '{"check_functions":false,"check_functions":true}', '{"allowed_functions":null}',
-    '{"allowed_tables":[{"table":"t"}]}', '{"allowed_tables":[{"schema":"s","table":"t","unknown":"x"}]}',
-    '{"limits":{"max_statements":0}}', '{"limits":{"max_ast_depth":513}}',
-    '{"limits":{"unknown":1}}', '{"reader_paths":"literal_local"}',
-    '{"check_functions":false,"use_default_functions":true}',
-])
-def test_invalid_options(db, options):
+def test_options_must_be_named(db):
     with pytest.raises(duckdb.BinderException, match="No function matches"):
-        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', ?)", [options])
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', ?)", ["{}"])
 
 
 def test_parser_and_null_inputs(db):
