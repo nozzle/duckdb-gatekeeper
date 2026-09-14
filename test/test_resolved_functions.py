@@ -38,11 +38,16 @@ def test_resolution_does_not_confuse_columns_with_functions(expressions):
                                                       "use_default_functions": False})["allowed"]
 
 
-def test_variant_requires_explicit_function_permission(expressions):
-    result = validate(expressions, "SELECT v['a'] FROM t")
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "variant_extract"
-    configure(expressions, {"allowed_functions": ["variant_extract"]})
+def test_variant_indexing_resolves_to_variant_extract(expressions):
+    # v['a'] on a VARIANT synthesizes variant_extract, a reviewed default; the synthesized name
+    # still answers to blocks, to defaults being disabled, and to an explicit grant.
+    assert validate(expressions, "SELECT v['a'] FROM t")["allowed"]
+    for options in [{"blocked_functions": ["variant_extract"]}, {"use_default_functions": False}]:
+        result = validate(expressions, "SELECT v['a'] FROM t", options)
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "variant_extract", result
+    configure(expressions, {"use_default_functions": False, "allowed_functions": ["variant_extract"]})
     assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": ["variant_extract"]})["allowed"]
+    configure(expressions)
 
 
 def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
@@ -155,11 +160,13 @@ def test_conservative_synthesis_overlap_with_trusted_macro(expressions):
 
 
 def test_default_non_compute_value_functions_require_opt_in(db):
-    for name in ["current_schema", "current_catalog", "current_user", "current_date"]:
-        result = validate(db, "SELECT " + name)
+    # Catalog, session, and configuration inspection is opt-in; the clock and RNG are defaults.
+    for sql, name in [("current_schema", "current_schema"), ("current_catalog", "current_catalog"),
+                      ("current_setting('threads')", "current_setting"), ("getvariable('x')", "getvariable")]:
+        result = validate(db, "SELECT " + sql)
         assert result["code"] == "forbidden", (name, result)
         configure(db, {"allowed_functions": [name]})
-        assert validate(db, "SELECT " + name, {"allowed_functions": [name]})["allowed"]
+        assert validate(db, "SELECT " + sql, {"allowed_functions": [name]})["allowed"]
         configure(db)
 
 

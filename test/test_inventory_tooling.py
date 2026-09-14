@@ -40,7 +40,7 @@ def test_core_elevated_ownership_survives_without_motherduck(tmp_path):
              "current_setting", "nextval", "checkpoint", "duckdb_views", "histogram", "list_aggregate"}
     assert names <= set(entries["core"]["elevated"])
     assert not names & set(defaults)
-    assert len(defaults) == 864
+    assert len(defaults) == 956
 
 
 def test_generation_chunks_roundtrip_and_compile(tmp_path):

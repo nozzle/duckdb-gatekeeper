@@ -7,7 +7,7 @@ that query stays inside the lines you drew.
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. |
-| **Function ACL** | Only the functions you allow, starting from 864 reviewed read-only defaults, with exact-name allow and block lists. |
+| **Function ACL** | Only the functions you allow, starting from 956 reviewed read-only defaults, with exact-name allow and block lists. |
 | **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and metadata readers are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -130,7 +130,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 864 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 956 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
@@ -208,17 +208,17 @@ FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [])
 | --- | --- | --- | --- | --- | --- | --- |
 | false | forbidden | table | object is not allowed | memory | reporting | orders |
 
-**Function denied:** `md5` is a default, but `current_date` is not.
+**Function denied:** `md5` is a default, but `current_setting` (configuration inspection) is not.
 
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
        violations[1].message AS message, violations[1].function_name AS function_name
-FROM gatekeeper_validate('SELECT md5(''x''), current_date');
+FROM gatekeeper_validate('SELECT md5(''x''), current_setting(''threads'')');
 ```
 
 | allowed | code | rule | message | function_name |
 | --- | --- | --- | --- | --- |
-| false | forbidden | function | resolved function is not allowed: current_date | current_date |
+| false | forbidden | function | function is not allowed: current_setting | current_setting |
 
 **Engine error:** the code identifies the phase and `violations` is empty. This
 example displays the first line of DuckDB's error message, omitting suggestions:
@@ -317,8 +317,13 @@ by `nocase` comparisons inside list lambdas, and `sum` dispatched by `list_sum`.
 These implementations are included in successful function dependency lists.
 
 > [!NOTE]
-> `current_date`, `current_user`, and other session-value functions are **not** defaults.
-> Grant them by name in the global policy: `allowed_functions := ['current_date']`.
+> Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
+> `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
+> policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
+> the connection-local RNG (`random()`, `uuid()`), and PostgreSQL compatibility stubs
+> (`current_user`, `pg_typeof`) are defaults because they read nothing but the transaction
+> start time and the connection's own random engine. The criteria are in
+> [inventories/README.md](inventories/README.md#classification-criteria).
 
 ### File readers
 

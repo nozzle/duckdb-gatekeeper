@@ -21,6 +21,24 @@ its descriptive `groups` membership too. `unreviewed` records baseline names wit
 a completed source review; these remain excluded and must not be promoted
 automatically. Unreviewed is not a claim of elevated behavior.
 
+### Classification criteria
+
+A name is `compute` when every overload's output depends only on its arguments, plus at
+most the transaction-start clock and the connection-local random engine. Those two
+sources are in scope because `now()`, `current_date`, `random()`, `uuid()`, and
+`setseed()` disclose nothing about the host and touch no state outside the connection's
+own PCG32 engine; `current_date` is also the most common non-pure expression in
+analytic SQL, so excluding it would deny ordinary queries for no security gain.
+
+A name is `elevated` when any overload reads catalog, session, configuration, or planner
+state (`current_setting`, `current_schema`, `getvariable`, `duckdb_tables`, `stats`),
+performs I/O or mutation (readers, `checkpoint`, `nextval`), dispatches by a
+caller-supplied name (`query`, `list_aggregate`, `finalize`), consumes resources for their
+own sake (`sleep_ms`), takes raw pointers, is an internal/debug/test registration DuckDB
+does not harden as a caller surface (`__internal_*`, `test_vector_types`), or reveals host
+platform details (`pragma_platform`). Version strings fixed by the engine pin are compute.
+Registered aliases share their canonical name's classification; the test suite checks this.
+
 `schema.json` rejects unknown keys, malformed source URLs, non-list review notes,
 and invalid group shapes. The contract is: **Python's standard library is sufficient to
 generate and build Gatekeeper; development tests additionally use `jsonschema` to verify
