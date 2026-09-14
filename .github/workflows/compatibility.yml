@@ -10,6 +10,8 @@ on:
       - CMakeLists.txt
       - extension_config.cmake
       - versions.cmake
+      - duckdb
+      - requirements-dev.txt
       - inventories/**
       - scripts/**
       - src/**
