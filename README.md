@@ -212,10 +212,10 @@ macros; they match resolved objects, not CTE names, file paths, or reader argume
 
 > [!NOTE]
 > **Internal objects** (`duckdb_*`, `information_schema.*`) need a rule with exact schema
-> and table names in each policy layer; wildcards never grant them, but block wildcards
-> do match them. Metadata *readers* stay on the never-bind list regardless. Schema-wide
-> `SHOW` is denied whenever any table restriction is configured; `DESCRIBE table` checks
-> the resolved table normally.
+> and table names in each policy layer; schema/table wildcards never grant them, though
+> the catalog may be `'*'` or omitted. Block wildcards do match them. Metadata *readers*
+> stay on the never-bind list regardless. Schema-wide `SHOW` is denied whenever any table
+> restriction is configured; `DESCRIBE table` checks the resolved table normally.
 
 Table rules govern tables and views only. Types, casts, and collations are trusted as
 part of the host-configured database and need no Gatekeeper permission by name.
