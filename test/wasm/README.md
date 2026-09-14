@@ -61,16 +61,16 @@ await conn.query(`CALL gatekeeper_configure(
   allowed_tables := [{catalog: 'memory', schema: 'main', 'table': 'orders'}]
 )`);
 await conn.query('SET lock_configuration = true');
-const check = await conn.prepare('SELECT gatekeeper_validate(?) AS decision');
-const result = (await check.query('SELECT * FROM orders')).toArray()[0].decision;
+const check = await conn.prepare('SELECT * FROM gatekeeper_validate(?)');
+const result = (await check.query('SELECT * FROM orders')).toArray()[0];
 console.log(result.allowed, result.code);
 await check.close();
 await conn.close();
 await db.terminate();
 ```
 
-Use native Arrow STRUCT results; Gatekeeper does not require loading the SQL JSON
-extension. The runtime supplies the yyjson imports used by Gatekeeper's internal
+Use native Arrow result columns, including nested lists of STRUCTs; Gatekeeper does
+not require loading the SQL JSON extension. The runtime supplies the yyjson imports used by Gatekeeper's internal
 AST serialization. That linkage is exercised by the browser test, not inferred
 from compilation alone.
 

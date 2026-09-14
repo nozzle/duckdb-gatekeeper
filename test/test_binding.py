@@ -21,7 +21,7 @@ def test_resolves_unqualified_objects(db):
 def test_binding_errors_and_no_execution(db):
     result=validate(db,"SELECT * FROM missing")
     assert not result["allowed"] and result["code"]=="binding"
-    with pytest.raises(duckdb.BinderException, match="unknown option"):
+    with pytest.raises(duckdb.BinderException, match="Invalid named parameter"):
         validate(db,"SELECT * FROM missing",{"resolve_objects":False})
     db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
     assert not validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
@@ -74,10 +74,10 @@ def test_invalid_configuration_does_not_lock(db):
 
 
 def test_prepared_validation_observes_defaults(db):
-    db.execute("PREPARE v AS SELECT gatekeeper_validate('SELECT md5(''x'')')")
-    assert db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    db.execute("PREPARE v AS SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')')")
+    assert db.execute("EXECUTE v").fetchone()[0]
     configure(db,{"blocked_functions":["md5"]})
-    assert not db.execute("EXECUTE v").fetchone()[0]["allowed"]
+    assert not db.execute("EXECUTE v").fetchone()[0]
 
 
 def test_configuration_race(db):

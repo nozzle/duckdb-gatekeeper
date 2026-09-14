@@ -19,15 +19,15 @@ repo:
 
 docs:
   hello_world: |
-    SELECT gatekeeper_validate('SELECT 1').allowed;
+    SELECT allowed FROM gatekeeper_validate('SELECT 1');
     -- true
-    SELECT gatekeeper_validate('DROP TABLE orders').code;
+    SELECT code FROM gatekeeper_validate('DROP TABLE orders');
     -- unsupported
   extended_description: |
     Gatekeeper checks untrusted read-only SQL before execution. It parses the statement,
     checks caller-authored syntax and functions, then binds it to authorize resolved
     catalogs, schemas, tables, views, types, collations, and functions. It returns a
-    native STRUCT with an authorization decision, structured diagnostics, and resolved
+    single row of named columns with an authorization decision, structured diagnostics, and resolved
     dependencies. A lockable global policy sets a ceiling that request options may
     narrow but never widen. The function defaults are reviewed inventories, not
     runtime-discovered allowlists.

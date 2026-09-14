@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -103,67 +102,98 @@ static gatekeeper::Policy GlobalPolicy(ClientContext &context) {
 	return gatekeeper::ReadPolicy(value);
 }
 
-struct OptionBinding : FunctionData {
-	vector<string> names;
+struct ValidateBinding : FunctionData {
+	Value sql;
+	std::vector<std::pair<std::string, Value>> options;
 	unique_ptr<FunctionData> Copy() const override {
-		auto result = make_uniq<OptionBinding>();
-		result->names = names;
+		auto result = make_uniq<ValidateBinding>();
+		result->sql = sql;
+		result->options = options;
 		return std::move(result);
 	}
-	bool Equals(const FunctionData &other) const override { return names == other.Cast<OptionBinding>().names; }
+	bool Equals(const FunctionData &other) const override {
+		auto &binding = other.Cast<ValidateBinding>();
+		if (!Value::NotDistinctFrom(sql, binding.sql) || options.size() != binding.options.size())
+			return false;
+		for (idx_t i = 0; i < options.size(); i++)
+			if (options[i].first != binding.options[i].first ||
+			    !Value::NotDistinctFrom(options[i].second, binding.options[i].second))
+				return false;
+		return true;
+	}
 };
 
-static unique_ptr<FunctionData> BindOptions(ClientContext &, ScalarFunction &function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	auto result = make_uniq<OptionBinding>();
-	idx_t start = function.name == "gatekeeper_validate" ? 1 : 0;
-	if (arguments.size() < start)
-		throw BinderException("gatekeeper_validate requires SQL text");
-	gatekeeper::Names seen;
-	function.arguments.clear();
-	if (start)
-		function.arguments.push_back(LogicalType::VARCHAR);
-	for (idx_t i = start; i < arguments.size(); i++) {
-		auto name = arguments[i]->GetAlias();
-		if (name.empty())
-			throw BinderException("Gatekeeper options must be named typed arguments");
-		if (!seen.insert(name).second)
-			throw BinderException("duplicate Gatekeeper option: %s", name);
+#ifdef GATEKEEPER_FUZZ
+bool GatekeeperBindingsEqualForFuzz(const Value &left, const Value &right, bool option) {
+	ValidateBinding a, b;
+	a.sql = option ? Value("SELECT 1") : left;
+	b.sql = option ? Value("SELECT 1") : right;
+	if (option) {
+		a.options.emplace_back("blocked_functions", left);
+		b.options.emplace_back("blocked_functions", right);
+	}
+	return a.Equals(*b.Copy());
+}
+#endif
+
+static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
+                                             vector<string> &names) {
+	// DuckDB overwrites duplicate named parameters before calling bind.
+	if (input.ref.function &&
+	    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size() + 1)
+		throw BinderException("duplicate Gatekeeper option");
+	auto result = make_uniq<ValidateBinding>();
+	result->sql = input.inputs[0];
+	for (const auto &option : input.named_parameters) {
+		auto &name = option.first;
+		auto value = option.second;
 		LogicalType expected;
 		try {
 			expected = gatekeeper::OptionType(name);
 		} catch (const std::invalid_argument &error) {
 			throw BinderException(error.what());
 		}
-		auto actual = arguments[i]->return_type;
-		if (actual.id() != LogicalTypeId::UNKNOWN && actual.id() != LogicalTypeId::SQLNULL) {
+		auto actual = value.type();
+		if (!value.IsNull()) {
+			// DuckDB resolves untyped [] and [NULL] to INTEGER[] before table binding.
+			bool untyped_list = actual.id() == LogicalTypeId::LIST;
+			if (untyped_list)
+				for (const auto &entry : ListValue::GetChildren(value))
+					untyped_list = untyped_list && entry.IsNull();
 			if (expected == LogicalType::BOOLEAN && actual != expected)
 				throw BinderException("%s requires BOOLEAN", name);
 			if (expected == LogicalType::BIGINT && !actual.IsIntegral())
 				throw BinderException("%s requires an integer", name);
 			if (expected.id() == LogicalTypeId::LIST &&
-			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
-			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
+			    (actual.id() != LogicalTypeId::LIST ||
+			     (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
+			      ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL && !untyped_list)))
 				throw BinderException("%s requires VARCHAR[]", name);
 			if ((name == "allowed_tables" || name == "blocked_tables") &&
-			    (actual.id() != LogicalTypeId::LIST || (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
-			                                            ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL)))
+			    (actual.id() != LogicalTypeId::LIST ||
+			     (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
+			      ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL && !untyped_list)))
 				throw BinderException("%s requires STRUCT[]", name);
+			if (expected == LogicalType::BIGINT)
+				value = Value::BIGINT(value.GetValue<int64_t>());
 		}
-		// Preserve table-entry field sets rather than silently coercing away unknown fields.
-		function.arguments.push_back(name == "allowed_tables" || name == "blocked_tables" ? actual : expected);
-		result->names.push_back(name);
+		// ANY preserves nested field sets rather than silently coercing away unknown fields.
+		result->options.emplace_back(name, std::move(value));
 	}
-	function.varargs = LogicalType::INVALID;
+	auto type = ResultType();
+	for (const auto &field : StructType::GetChildTypes(type)) {
+		names.push_back(field.first);
+		types.push_back(field.second);
+	}
 	return std::move(result);
 }
 
-static std::vector<std::pair<std::string, Value>> Options(DataChunk &args, const OptionBinding &binding, idx_t row,
-                                                          idx_t start) {
-	std::vector<std::pair<std::string, Value>> options;
-	for (idx_t i = 0; i < binding.names.size(); i++)
-		options.emplace_back(binding.names[i], args.data[i + start].GetValue(row));
-	return options;
+struct SingleRowState : GlobalTableFunctionState {
+	bool finished = false;
+};
+
+static unique_ptr<GlobalTableFunctionState> InitSingleRow(ClientContext &, TableFunctionInitInput &) {
+	return make_uniq<SingleRowState>();
 }
 
 static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
@@ -492,33 +522,30 @@ Value GatekeeperCheckForFuzz(ClientContext &context, const string &sql, const ga
 }
 #endif
 
-static void GatekeeperValidate(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &expression = state.expr.Cast<BoundFunctionExpression>();
-	gatekeeper::Policy defaults;
-	std::string configuration_error;
+static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+	auto &state = input.global_state->Cast<SingleRowState>();
+	if (state.finished)
+		return;
+	auto &binding = input.bind_data->Cast<ValidateBinding>();
+	gatekeeper::Result decision;
 	try {
-		defaults = GlobalPolicy(state.GetContext());
+		// Read policy and bind the SQL at execution, never cache a decision in bind data.
+		auto defaults = GlobalPolicy(context);
+		auto policy = defaults;
+		gatekeeper::ApplyOptions(policy, binding.options);
+		if (binding.sql.IsNull())
+			decision = {false, "invalid_input", "", "NULL SQL input", {}};
+		else
+			decision = Check(context, policy, defaults, binding.sql.GetValue<string>());
 	} catch (const std::invalid_argument &error) {
-		configuration_error = error.what();
+		decision = {false, "invalid_input", "", error.what(), {}};
 	}
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	for (idx_t row = 0; row < args.size(); row++) {
-		auto sql = args.data[0].GetValue(row);
-		gatekeeper::Result decision;
-		try {
-			if (!configuration_error.empty())
-				throw std::invalid_argument(configuration_error);
-			auto policy = defaults;
-			gatekeeper::ApplyOptions(policy, Options(args, expression.bind_info->Cast<OptionBinding>(), row, 1));
-			if (sql.IsNull())
-				decision = {false, "invalid_input", "", "NULL SQL input", {}};
-			else
-				decision = Check(state.GetContext(), policy, defaults, sql.GetValue<string>());
-		} catch (const std::invalid_argument &error) {
-			decision = {false, "invalid_input", "", error.what(), {}};
-		}
-		result.SetValue(row, ResultValue(decision));
-	}
+	auto result = ResultValue(decision);
+	auto &fields = StructValue::GetChildren(result);
+	for (idx_t column = 0; column < fields.size(); column++)
+		output.SetValue(column, 0, fields[column]);
+	output.SetCardinality(1);
+	state.finished = true;
 }
 
 struct ConfigureBinding : FunctionData {
@@ -527,14 +554,6 @@ struct ConfigureBinding : FunctionData {
 	unique_ptr<FunctionData> Copy() const override { return make_uniq<ConfigureBinding>(policy); }
 	bool Equals(const FunctionData &other) const override { return policy == other.Cast<ConfigureBinding>().policy; }
 };
-
-struct ConfigureState : GlobalTableFunctionState {
-	bool finished = false;
-};
-
-static unique_ptr<GlobalTableFunctionState> InitConfigure(ClientContext &, TableFunctionInitInput &) {
-	return make_uniq<ConfigureState>();
-}
 
 static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
                                               vector<LogicalType> &types, vector<string> &names) {
@@ -563,7 +582,7 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 }
 
 static void Configure(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-	auto &state = input.global_state->Cast<ConfigureState>();
+	auto &state = input.global_state->Cast<SingleRowState>();
 	if (state.finished)
 		return;
 	auto &config = DBConfig::GetConfig(context);
@@ -596,15 +615,14 @@ static void LoadInternal(ExtensionLoader &loader) {
 		installed = installed || scan.function == GatekeeperReplacementScan;
 	if (!installed)
 		config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
-	ScalarFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, ResultType(), GatekeeperValidate,
-	                        BindOptions);
-	validate.varargs = LogicalType::ANY;
-	validate.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	validate.stability = FunctionStability::VOLATILE;
-	loader.RegisterFunction(validate);
-	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitConfigure);
-	for (const auto &name : gatekeeper::OptionNames())
+	TableFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, GatekeeperValidate, BindValidate,
+	                       InitSingleRow);
+	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
+	for (const auto &name : gatekeeper::OptionNames()) {
+		validate.named_parameters[name] = LogicalType::ANY;
 		configure.named_parameters[name] = LogicalType::ANY;
+	}
+	loader.RegisterFunction(validate);
 	loader.RegisterFunction(configure);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

@@ -64,12 +64,12 @@ def test_random_option_types(db):
         assert result["allowed"] == (result["code"] == "ok"), json.dumps(options)
 
 
-def test_filtered_vector_and_varying_options(db):
-    result = db.execute("""SELECT count(*) FILTER (WHERE r.allowed), count(*) FROM (
-        SELECT gatekeeper_validate('SELECT md5(''x'')',
-            blocked_functions := CASE WHEN i%2=0 THEN []::VARCHAR[] ELSE ['md5'] END) AS r
-        FROM range(10000) t(i) WHERE i%3!=0)""").fetchone()
-    assert result == (3333, 6666)
+def test_filtered_table_result(db):
+    for blocks, allowed_count in [([], 6666), (["md5"], 0)]:
+        result = db.execute("""SELECT count(*) FILTER (WHERE r.allowed), count(*)
+            FROM range(10000) t(i) CROSS JOIN gatekeeper_validate('SELECT md5(''x'')',
+                blocked_functions := ?) r WHERE i%3!=0""", [blocks]).fetchone()
+        assert result == (allowed_count, 6666)
 
 
 def test_literal_path_and_quoted_cte_names(db):

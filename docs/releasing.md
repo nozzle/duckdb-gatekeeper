@@ -86,8 +86,8 @@ verify installation, loading, and the descriptor's hello-world queries:
 ```sql
 INSTALL gatekeeper FROM community;
 LOAD gatekeeper;
-SELECT gatekeeper_validate('SELECT 1').allowed;
-SELECT gatekeeper_validate('DROP TABLE orders').code;
+SELECT allowed FROM gatekeeper_validate('SELECT 1');
+SELECT code FROM gatekeeper_validate('DROP TABLE orders');
 ```
 
 Expect `true` and `unsupported`. Then remove the pending-publication qualifications

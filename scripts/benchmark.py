@@ -25,10 +25,10 @@ def main():
             times = []
             for iteration in range(args.iterations + 20):
                 start = time.perf_counter_ns()
-                result = db.execute("SELECT gatekeeper_validate(?, allowed_tables := ?)",
+                result = db.execute("SELECT allowed FROM gatekeeper_validate(?, allowed_tables := ?)",
                                     [query, [{"catalog": "*", "schema": "tenant_a", "table": "*"}]]).fetchone()[0]
                 elapsed = time.perf_counter_ns() - start
-                assert result["allowed"], result
+                assert result, result
                 if iteration >= 20:
                     times.append(elapsed / 1000)
             print(f"{name}: median={statistics.median(times):.1f} us p95={sorted(times)[int(len(times)*0.95)]:.1f} us")

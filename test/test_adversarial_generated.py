@@ -46,14 +46,14 @@ def test_generated_function_obfuscation(db):
         assert not result["allowed"] and result["code"] == "forbidden", (sql, result)
 
 
-def test_vectorized_policy_overrides_and_nulls(db):
+def test_prepared_policy_overrides_and_nulls(db):
     configure(db,{"blocked_functions":["md5"]})
-    result = db.execute("""SELECT r.code, r.allowed, count(*) FROM (
-        SELECT gatekeeper_validate(
-            CASE WHEN i%3=0 THEN NULL ELSE 'SELECT md5(''x'')' END,
-            blocked_functions := CASE WHEN i%3=1 THEN []::VARCHAR[] ELSE ['md5'] END) r
-        FROM range(12000) t(i)) GROUP BY ALL ORDER BY 1""").fetchall()
-    assert result == [("forbidden", False, 8000), ("invalid_input", False, 4000)]
+    for sql, blocks, code in [(None, ["md5"], "invalid_input"),
+                              ("SELECT md5('x')", [], "forbidden"),
+                              ("SELECT md5('x')", ["md5"], "forbidden")]:
+        result = db.execute("SELECT code, allowed FROM gatekeeper_validate(?, blocked_functions := ?)",
+                            [sql, blocks]).fetchall()
+        assert result == [(code, False)]
 
 
 def test_limits_at_edges_and_recovery(db):
@@ -79,4 +79,4 @@ def test_embedded_nul_policy_does_not_truncate(db):
         entry = {"catalog": "*", "schema": "main", "table": "*", field: "name\0suffix"}
         assert validate(db, "SELECT 1", {"allowed_tables": [entry]})["code"] == "invalid_input"
     with pytest.raises(duckdb.Error):
-        db.execute("SELECT gatekeeper_validate('SELECT 1', ?)", ['{"check_functions":false}\0{}'])
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', ?)", ['{"check_functions":false}\0{}'])

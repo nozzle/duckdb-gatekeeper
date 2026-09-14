@@ -13,7 +13,7 @@ returns nonsensitive data, or cannot have side effects through admitted function
    does not temporarily mutate those settings.
 2. Install the global policy through trusted `CALL gatekeeper_configure`, then lock
    configuration. Construct any further request restrictions from authenticated context.
-3. Call `gatekeeper_validate` with the exact SQL to execute.
+3. Run `SELECT * FROM gatekeeper_validate(?)` with the exact SQL to execute.
 4. Require an explicit successful result; reject missing results, NULLs, and exceptions.
 5. Execute the same SQL under controlled database/process settings.
 
@@ -25,12 +25,29 @@ and `RESET`, unless the host deliberately exempts `gatekeeper_policy` in `allowe
 This protects Gatekeeper's policy, not arbitrary SQL execution: the application must
 still require validation and control access to the raw connection/native APIs.
 Configuration is nontransactional; a surrounding rollback does not undo replacement.
-Each validation chunk takes one coherent snapshot. Lock before exposing the instance.
+Each validation call takes one coherent snapshot at execution. Lock before exposing the instance.
 Use strict parameterized `CALL` for authoring; direct STRUCT `SET` silently drops
 unknown extra keys at any depth during DuckDB casting. The canonical setting is
 NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled nested
 `catalog`, `schema`, or leaf) fails closed instead of widening catalog matching.
 See [global policy](../README.md#global-policy) in the README.
+
+Validation returns one row with `allowed`, `code`, `violations`, `error_type`,
+`error_message`, `position`, `objects`, and `functions` as named columns. Require
+`allowed = true` and `code = 'ok'`. The diagnostic/dependency lists retain nested
+STRUCT elements. SQL text and options accept constant expressions or host-bound
+parameters, not correlated/lateral per-row expressions. For multiple SQL strings,
+make separate parameterized calls. Prepared executions read the current policy and
+bind the submitted SQL again; preparing a call does not cache an authorization decision.
+
+Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
+or select `*` for all result columns.
+Empty option lists are accepted regardless of element type, since DuckDB resolves
+untyped `[]` to `INTEGER[]` before table binding. All-NULL lists also pass the element-type
+check regardless of declared type (`[NULL]` and `[NULL]::DOUBLE[]` both return `invalid_input`
+at execution). Lists with non-NULL members require the documented element types.
+Nested identity fields are preserved
+and checked, including the field names of typed empty STRUCT lists.
 
 `allowed_tables` is a union of catalog/schema/table rules within each layer, with
 an intersection between layers. A whole-component `*` matches any identifier;
@@ -265,7 +282,7 @@ write-containing batches; duplicate/escaped JSON keys; invalid limits; and prepa
 validation after catalog/policy changes. `test_global_policy.py` checks locking,
 atomic replacement, strict configuration, and non-bypassable policy layers.
 `test_adversarial_generated.py` combines nested queries and function
-spellings deterministically and checks mixed NULL/allow/deny vectorized results.
+spellings deterministically and checks single-row NULL/allow/deny results and prepared executions.
 
 DuckDB can wrap policy exceptions while binding a table macro. Such denials retain
 `forbidden`, and all exception exits explicitly clear `allowed` so successful

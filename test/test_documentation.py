@@ -25,13 +25,35 @@ def runnable_blocks(db, blocks):
 
 
 def test_readme_sql_examples(db):
-    blocks = re.findall(r"```sql\n(.*?)```", (ROOT / "README.md").read_text(), re.S)
-    observed = []
-    for block in runnable_blocks(db, blocks):
-        rows = db.execute(block).fetchall()
-        if rows:
-            observed.append(rows)
-    assert observed[1:] == [[(True,)], [("unsupported",)], [("binding",)], [(False,)], [(True,)], [(True,)], [(True,)], [(False,)], [(["md5"],)]]
+    examples = re.findall(r"```sql\n(.*?)```(?:\n\n(\|[^\n]*\n(?:\|[^\n]*(?:\n|$))+))?",
+                          (ROOT / "README.md").read_text(), re.S)
+    runnable = runnable_blocks(db, [block for block, _ in examples])
+
+    def display(value):
+        if value is None:
+            return "NULL"
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, list):
+            return "[" + ", ".join(display(item) for item in value) + "]"
+        return "''" if value == "" else str(value)
+
+    for block, table in examples:
+        if block not in runnable:
+            continue
+        result = db.execute(block)
+        columns = [column[0] for column in result.description]
+        rows = result.fetchall()
+        if not table:
+            assert db.extract_statements(block)[-1].type not in {
+                duckdb.StatementType.SELECT, duckdb.StatementType.CALL
+            }, "README queries must show their response as a table"
+            continue
+        cells = [[cell.strip() for cell in line.strip().strip("|").split("|")]
+                 for line in table.strip().splitlines()]
+        assert cells[0] == columns, block
+        assert all(re.fullmatch(r":?-+:?", cell) for cell in cells[1]), table
+        assert cells[2:] == [[display(value) for value in row] for row in rows], block
 
 
 @pytest.mark.parametrize("block", [

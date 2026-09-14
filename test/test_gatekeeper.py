@@ -200,19 +200,15 @@ def test_limits(db):
     '{"check_functions":false,"use_default_functions":true}',
 ])
 def test_invalid_options(db, options):
-    with pytest.raises(duckdb.BinderException, match="named typed arguments"):
-        db.execute("SELECT gatekeeper_validate('SELECT 1', ?)", [options])
+    with pytest.raises(duckdb.BinderException, match="No function matches"):
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', ?)", [options])
 
 
-def test_parser_null_batch(db):
+def test_parser_and_null_inputs(db):
     result = check(db, "SELECT * FROM")
     assert result["code"] == "parser" and result["error_message"]
-    assert db.execute("SELECT gatekeeper_validate(NULL)").fetchone()[0]["code"] == "invalid_input"
-    assert db.execute("SELECT gatekeeper_validate('SELECT 1',blocked_functions := NULL)").fetchone()[0]["code"] == "invalid_input"
-    count = db.execute("""SELECT count(*) FROM (
-        SELECT gatekeeper_validate(CASE WHEN i%2=0 THEN 'SELECT 1' ELSE 'DROP TABLE t' END) AS r
-        FROM range(5000) t(i)) WHERE NOT r.allowed""").fetchone()[0]
-    assert count == 2500
+    assert db.execute("SELECT code FROM gatekeeper_validate(NULL)").fetchall() == [("invalid_input",)]
+    assert db.execute("SELECT code FROM gatekeeper_validate('SELECT 1',blocked_functions := NULL)").fetchall() == [("invalid_input",)]
 
 
 def test_concurrent_policies():

@@ -5,15 +5,70 @@ from test_gatekeeper import db
 from typed_helpers import validate, configure
 
 
-def test_named_prepared_and_row_varying_options(db):
-    result = db.execute("SELECT gatekeeper_validate(?, blocked_functions := ?)", ["SELECT md5('x')", ["md5"]]).fetchone()[0]
-    assert not result["allowed"]
-    assert result["violations"][0]["function_name"] == "md5"
-    rows = db.execute("""SELECT r.allowed, count(*) FROM (
-        SELECT gatekeeper_validate('SELECT md5(''x'')', blocked_functions :=
-            CASE WHEN i%2=0 THEN []::VARCHAR[] ELSE ['md5'] END) r
-        FROM range(10000) t(i)) GROUP BY ALL ORDER BY 1""").fetchall()
-    assert rows == [(False, 5000), (True, 5000)]
+def test_named_prepared_options_and_result_columns(db):
+    result = db.execute("SELECT * FROM gatekeeper_validate(?, blocked_functions := ?)", ["SELECT md5('x')", ["md5"]])
+    assert [column[0] for column in result.description] == [
+        "allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions"
+    ]
+    rows = result.fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] is False and rows[0][1] == "forbidden"
+    assert rows[0][2][0]["function_name"] == "md5"
+
+
+def test_table_projection_filter_and_join(db):
+    assert db.execute("SELECT code, allowed FROM gatekeeper_validate('SELECT 1')").fetchall() == [("ok", True)]
+    assert db.execute("SELECT * FROM gatekeeper_validate('DROP TABLE t') WHERE allowed").fetchall() == []
+    assert db.execute("SELECT count(*) FROM gatekeeper_validate('SELECT 1')").fetchone() == (1,)
+    assert db.execute("""SELECT i, allowed FROM range(3) t(i)
+        CROSS JOIN gatekeeper_validate('SELECT 1') ORDER BY i""").fetchall() == [(0, True), (1, True), (2, True)]
+
+
+@pytest.mark.parametrize("argument", ["sql_text", "'SELECT 1', blocked_functions := blocks"])
+def test_lateral_arguments_rejected(db, argument):
+    with pytest.raises(duckdb.BinderException):
+        db.execute("SELECT v.* FROM (VALUES ('SELECT 1', ['md5'])) q(sql_text, blocks), "
+                   "LATERAL gatekeeper_validate(" + argument + ") v")
+
+
+def test_scalar_interface_removed(db):
+    with pytest.raises(duckdb.BinderException, match="table function"):
+        db.execute("SELECT gatekeeper_validate('SELECT 1')")
+
+
+@pytest.mark.parametrize("name", ["blocked_functions", "allowed_tables", "blocked_tables"])
+@pytest.mark.parametrize("value", ["[NULL]", "[NULL]::DOUBLE[]"])
+def test_all_null_lists_return_invalid_input(db, name, value):
+    assert db.execute(f"SELECT code FROM gatekeeper_validate('SELECT 1', {name} := {value})").fetchall() == [
+        ("invalid_input",)
+    ]
+
+
+@pytest.mark.parametrize("sql,code", [("SELECT 1", "ok"), ("DROP TABLE t", "unsupported"),
+                                     ("SELECT md5('x')", "forbidden"), ("SELECT * FROM", "parser"),
+                                     ("SELECT * FROM missing", "binding"), (None, "invalid_input")])
+def test_exactly_one_row_for_each_outcome(db, sql, code):
+    rows = db.execute("SELECT allowed, code FROM gatekeeper_validate(?, blocked_functions := ['md5'])",
+                      [sql]).fetchall()
+    assert rows == [(code == "ok", code)]
+
+
+def test_prepared_parameters_rebind_sql_and_options(db):
+    db.execute("PREPARE validation AS SELECT allowed, code FROM gatekeeper_validate($1, blocked_functions := $2)")
+    for args, expected in [("'SELECT md5(''x'')', ['md5']", (False, "forbidden")),
+                           ("'SELECT md5(''x'')', []", (True, "ok")),
+                           ("NULL, []", (False, "invalid_input")),
+                           ("'DROP TABLE t', []", (False, "unsupported"))]:
+        assert db.execute("EXECUTE validation(" + args + ")").fetchall() == [expected]
+
+
+def test_preparing_does_not_validate_submitted_sql(db):
+    db.execute("PREPARE validation AS SELECT code FROM gatekeeper_validate('SELECT * FROM later')")
+    assert db.execute("EXECUTE validation").fetchall() == [("binding",)]
+    db.execute("CREATE TABLE later(i INT)")
+    assert db.execute("EXECUTE validation").fetchall() == [("ok",)]
+    db.execute("DROP TABLE later")
+    assert db.execute("EXECUTE validation").fetchall() == [("binding",)]
 
 
 @pytest.mark.parametrize("args", [
@@ -32,7 +87,7 @@ def test_named_prepared_and_row_varying_options(db):
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):
-        db.execute("SELECT gatekeeper_validate('SELECT 1'," + args + ")")
+        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1'," + args + ")")
     with pytest.raises(duckdb.Error):
         db.execute("CALL gatekeeper_configure(" + args.replace("'SELECT 1',", "") + ")")
 
@@ -115,7 +170,8 @@ def test_python_replacement_scan_rejected(db):
     # The Python scan resolves names in the calling frame, so validate from this frame directly.
     for options in ["allowed_tables := []", "blocked_tables := []"]:
         db.execute("CALL gatekeeper_configure(" + options + ")")
-        result=db.execute("SELECT gatekeeper_validate('SELECT * FROM host_data', " + options + ")").fetchone()[0]
+        cursor = db.execute("SELECT * FROM gatekeeper_validate('SELECT * FROM host_data', " + options + ")")
+        result = dict(zip((column[0] for column in cursor.description), cursor.fetchone()))
         assert not result["allowed"] and result["code"]=="forbidden", result
         assert result["violations"][0]["rule"]=="replacement_scan"
         assert result["objects"] == result["functions"] == []

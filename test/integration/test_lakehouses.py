@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def validate(db, sql, policy):
     args = ["?"] + [name + " := ?" for name in policy]
-    return db.execute("SELECT gatekeeper_validate(" + ",".join(args) + ")", [sql, *policy.values()]).fetchone()[0]
+    result = db.execute("SELECT * FROM gatekeeper_validate(" + ",".join(args) + ")", [sql, *policy.values()])
+    return dict(zip((column[0] for column in result.description), result.fetchone()))
 
 
 @pytest.fixture(params=["iceberg", "ducklake"])
