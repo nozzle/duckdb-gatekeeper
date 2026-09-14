@@ -49,9 +49,10 @@ def test_engine_guard_uses_build_engine(db):
     # Release artifacts are accepted on the version tag; Git abbreviation lengths may differ from the host's.
     if "-dev" in version:
         assert build_source_id == source_id
+    # CMake generates into the extension's binary dir, next to the artifact, for every build configuration.
     header = EXTENSION.parent / "generated/version.hpp"
-    if header.is_file():
-        assert f'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE {version} ' in header.read_text()
+    assert header.is_file(), header
+    assert f'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE {build_version} {build_source_id}"' in header.read_text()
 
 
 def test_review_provenance_is_separate_from_release_pin(tmp_path):
