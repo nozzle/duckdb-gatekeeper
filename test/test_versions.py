@@ -44,11 +44,11 @@ def test_distribution_engine_pins():
 def test_engine_guard_uses_build_engine(db):
     """The artifact under test is stamped with the engine that just accepted it, and the stamp is inspectable."""
     version, source_id = db.execute("PRAGMA version").fetchone()[:2]
-    stamp = re.search(rb"GATEKEEPER_BUILD_ENGINE (\S+) (\S+)\0", EXTENSION.read_bytes())
-    assert stamp, "build engine stamp missing from the artifact"
-    assert stamp[1].decode() == version
+    build_version, build_source_id = _stamp(EXTENSION.read_bytes())
+    assert build_version == version
+    # Release artifacts are accepted on the version tag; Git abbreviation lengths may differ from the host's.
     if "-dev" in version:
-        assert stamp[2].decode() == source_id
+        assert build_source_id == source_id
     header = EXTENSION.parent / "generated/version.hpp"
     if header.is_file():
         assert f'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE {version} ' in header.read_text()
@@ -65,12 +65,22 @@ def test_review_provenance_is_separate_from_release_pin(tmp_path):
         reviewed_duckdb(tmp_path)
 
 
-def _tampered_artifact(tmp_path, old, new):
+STAMP = re.compile(rb"GATEKEEPER_BUILD_ENGINE ([^\s\0]+) ([^\s\0]+)\0")
+
+
+def _stamp(data):
+    """The (version, source_id) the artifact records for itself; the fields of the build tree, not the host."""
+    matches = STAMP.findall(data)
+    assert len(matches) == 1, "expected exactly one build engine stamp"
+    return tuple(field.decode() for field in matches[0])
+
+
+def _tampered_artifact(tmp_path, version, source_id):
     """Copy the built loadable with its build engine stamp rewritten in place (same length)."""
     data = EXTENSION.read_bytes()
-    needle, replacement = b"GATEKEEPER_BUILD_ENGINE " + old.encode(), b"GATEKEEPER_BUILD_ENGINE " + new.encode()
+    needle = b"GATEKEEPER_BUILD_ENGINE %s %s\0" % tuple(field.encode() for field in _stamp(data))
+    replacement = b"GATEKEEPER_BUILD_ENGINE %s %s\0" % (version.encode(), source_id.encode())
     assert len(needle) == len(replacement)
-    assert data.count(needle) == 1
     # DuckDB derives the entrypoint symbol from the file name, so the copy keeps it.
     tampered = tmp_path / EXTENSION.name
     tampered.write_bytes(data.replace(needle, replacement))
@@ -91,16 +101,16 @@ def _tampered_artifact(tmp_path, old, new):
 def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
     """An artifact whose recorded build engine disagrees with the host must be refused by Gatekeeper itself,
     whether or not DuckDB's footer check is disabled with allow_extensions_metadata_mismatch."""
-    version, source_id = duckdb.connect().execute("PRAGMA version").fetchone()[:2]
+    # Start from the artifact's own stamp: a release build is accepted on its version tag alone, so its
+    # source id may legitimately be abbreviated differently from what the host reports.
+    version, source_id = _stamp(EXTENSION.read_bytes())
     release = "-dev" not in version
-    # Release builds are identified by the version tag, dev builds by the source id; tamper the field the
-    # guard compares and expect it, formatted as the guard prints it, in the diagnostic.
-    altered = (version if release else source_id)
+    # Release builds are identified by the version tag, dev builds by the source id; alter only the field
+    # the guard compares and expect it, formatted as the guard prints it, in the diagnostic.
+    altered = version if release else source_id
     altered = altered[:-1] + ("0" if altered[-1] != "0" else "1")
-    old = f"{version} {source_id}"
-    new = f"{altered} {source_id}" if release else f"{version} {altered}"
+    tampered = _tampered_artifact(tmp_path, *((altered, source_id) if release else (version, altered)))
     expected = rf"was built for DuckDB {re.escape(altered)} \(" if release else rf"\({re.escape(altered)}\); this engine"
-    tampered = _tampered_artifact(tmp_path, old, new)
     config = {"allow_unsigned_extensions": "true", "allow_extensions_metadata_mismatch": str(metadata_mismatch).lower()}
     db = duckdb.connect(config=config)
     with pytest.raises(duckdb.InvalidInputException, match=expected):
@@ -109,5 +119,5 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
         db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')")
     # The same copy/re-sign flow with the stamp left intact loads, so the refusal above is the guard.
     (tmp_path / "intact").mkdir()
-    intact = _tampered_artifact(tmp_path / "intact", old, old)
+    intact = _tampered_artifact(tmp_path / "intact", version, source_id)
     duckdb.connect(config=config).execute("LOAD '" + str(intact).replace("'", "''") + "'")
