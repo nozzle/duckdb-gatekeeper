@@ -1,7 +1,5 @@
 # Gatekeeper for DuckDB
 
-[Security model](docs/security.md) · [Function inventories](inventories/README.md) · [Contributing](CONTRIBUTING.md)
-
 A DuckDB extension that validates untrusted SQL against a policy **before** you run it.
 Hand it a query from a tenant, an LLM, or a dashboard builder and it tells you whether
 that query stays inside the lines you drew.
@@ -35,6 +33,10 @@ LOAD gatekeeper;
 > community repository. Until then, follow the
 > [build and local-load instructions](CONTRIBUTING.md#building) and
 > [loading unsigned builds](CONTRIBUTING.md#loading-unsigned-builds).
+
+Community binaries are built and signed by DuckDB and load with signature verification
+enabled. Source builds and the binaries attached to GitHub Releases are unsigned
+development artifacts and require `allow_unsigned_extensions`.
 
 Gatekeeper is pinned to exactly DuckDB **1.5.5**. New DuckDB releases, including patches,
 require a coordinated review and rebuild, so Gatekeeper may lag a newer engine.
@@ -216,7 +218,10 @@ macros; they match resolved objects, not CTE names, file paths, or reader argume
 > the resolved table normally.
 
 Table rules govern tables and views only. Types, casts, and collations are trusted as
-part of the host-configured database and need no Gatekeeper permission.
+part of the host-configured database and need no Gatekeeper permission by name.
+Function policy still applies to the implementations they bind: `'a' COLLATE nocase = 'A'`
+is denied under `blocked_functions := ['lower']` because the comparison binds `lower`.
+See [callback bypasses](docs/security.md#callback-bypasses).
 
 ## Function ACL
 
@@ -431,8 +436,8 @@ Gatekeeper authorizes what a statement **references**. It does not:
 - enforce execution deadlines or memory budgets;
 - isolate the filesystem or network;
 - prevent binding from performing I/O before a denial is returned;
-- prove that every overload of a default function is harmless (defaults are a reviewed
-  name inventory).
+- prove that every overload of a default function is harmless (defaults are a
+  [reviewed name inventory](inventories/README.md)).
 
 The full list of boundaries is in [docs/security.md](docs/security.md#remaining-boundaries).
 
