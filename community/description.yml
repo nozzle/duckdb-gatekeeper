@@ -122,7 +122,7 @@ docs:
     |--------|------|---------|-------|
     | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted or NULL catalog matches any. `[]` denies all tables and views. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-    | `use_default_functions` | BOOLEAN | `true` | `true`: 956 reviewed read-only defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+    | `use_default_functions` | BOOLEAN | `true` | `true`: 954 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
     | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 

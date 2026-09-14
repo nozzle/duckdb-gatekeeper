@@ -199,11 +199,12 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
-  every overload, argument, or future version. The inventory admits the transaction-start
-  clock (`now`, `current_date`) and the connection-local random engine (`random`, `uuid`,
-  `setseed`) as defaults; results using them are not reproducible from SQL text alone,
-  and a host that caches or replays tenant queries must account for that. Everything
-  that reads catalog, session, configuration, or planner state is opt-in; see
+  every overload, argument, or future version. The inventory admits the clock (`now`,
+  `current_date`, `uuidv7`), non-cryptographic PRNG state including `setseed`'s reseed of
+  the connection-local engine, and the host's `TimeZone`/`Calendar` settings that ICU
+  temporal functions consume; results using them are not reproducible from SQL text
+  alone, and a host that caches or replays tenant queries must account for that. All
+  other catalog, session, configuration, or planner state is opt-in; see
   [inventories/README.md](../inventories/README.md#classification-criteria).
 - Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
   replacement-scan list. It runs only while a validation is binding on the calling

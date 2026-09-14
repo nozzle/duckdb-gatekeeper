@@ -123,7 +123,7 @@ def test_community_descriptor_headings():
 
 
 def test_default_function_count_in_prose():
-    """The 864 in the README and descriptor must track the reviewed default inventory."""
+    """The default count quoted in the README and descriptor must track the reviewed inventory."""
     _, defaults = load()
     for path in [ROOT / "README.md", ROOT / "community/description.yml"]:
         counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text())

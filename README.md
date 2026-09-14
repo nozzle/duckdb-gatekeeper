@@ -7,7 +7,7 @@ that query stays inside the lines you drew.
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. |
-| **Function ACL** | Only the functions you allow, starting from 956 reviewed read-only defaults, with exact-name allow and block lists. |
+| **Function ACL** | Only the functions you allow, starting from 954 reviewed defaults, with exact-name allow and block lists. |
 | **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and metadata readers are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -130,7 +130,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 956 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 954 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
@@ -320,9 +320,10 @@ These implementations are included in successful function dependency lists.
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
 > `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
 > policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
-> the connection-local RNG (`random()`, `uuid()`), and PostgreSQL compatibility stubs
-> (`current_user`, `pg_typeof`) are defaults because they read nothing but the transaction
-> start time and the connection's own random engine. The criteria are in
+> the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
+> compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
+> nothing about the host beyond the time and its `TimeZone`, and `setseed` touches only
+> the connection's own random engine. The criteria are in
 > [inventories/README.md](inventories/README.md#classification-criteria).
 
 ### File readers

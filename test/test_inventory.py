@@ -22,7 +22,7 @@ def test_complete_default_inventory(db):
     db.execute("SET autoinstall_known_extensions=false; SET autoload_known_extensions=false")
     entries, names = load()
     assert len(entries) == 30
-    assert len(names) == 956
+    assert len(names) == 954
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
         result = check(db, f"SELECT {quoted}(1)")
@@ -40,8 +40,10 @@ def test_nondefault_inventory(db):
 
 
 def test_core_baseline_fully_reviewed():
-    """Every 1.5.5 baseline name has a completed source review; names an audit surfaces land in unreviewed."""
+    """Every 1.5.5 baseline name is classified; names an audit surfaces land in unreviewed."""
     entries, _ = load()
+    baseline = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
+    assert coverage(baseline, entries)["unclassified_runtime_names"] == []
     assert entries["core"]["unreviewed"] == []
     assert entries["core"]["unreviewed_reason"]
 
@@ -57,7 +59,9 @@ def test_registered_aliases_share_classification(db):
     pairs = db.execute("""SELECT DISTINCT lower(function_name), lower(alias_of) FROM duckdb_functions()
                           WHERE alias_of IS NOT NULL""").fetchall()
     assert len(pairs) > 50
-    mismatched = [(alias, canonical) for alias, canonical in pairs if bucket.get(alias) != bucket.get(canonical)]
+    unclassified = [name for pair in pairs for name in pair if name not in bucket]
+    assert not unclassified, unclassified
+    mismatched = [(alias, canonical) for alias, canonical in pairs if bucket[alias] != bucket[canonical]]
     assert not mismatched, mismatched
     assert {"apply", "filter", "reduce"} <= set(bucket) and all(bucket[n] == {"compute"} for n in ["apply", "filter", "reduce"])
 
@@ -70,8 +74,9 @@ def test_registered_aliases_share_classification(db):
     ("SELECT setseed(0.5)", "setseed"), ("SELECT current_user", "current_user"),
     ("SELECT has_table_privilege('t', 'SELECT')", "has_table_privilege"), ("SELECT pg_typeof(1)", "pg_typeof"),
     ("SELECT apply([1, 2], x -> x + 1)", "apply"), ("SELECT filter([1, 2], x -> x > 1)", "filter"),
-    ("SELECT version()", "version"), ("SELECT switch(1, MAP {1: 'a'}, 'b')", "switch"),
+    ("SELECT version()", "version"), ("SELECT uuidv7()", "uuidv7"),
     ("SELECT variant_typeof(1::VARIANT)", "variant_typeof"), ("SELECT st_astext(NULL::GEOMETRY)", "st_astext"),
+    ("SELECT st_crs(st_geomfromwkb(NULL::BLOB))", "st_crs"),
     ("FROM duckdb_keywords()", "duckdb_keywords"), ("FROM pg_timezone_names()", "pg_timezone_names"),
 ])
 def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
@@ -89,6 +94,7 @@ def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
     ("SELECT current_query()", "current_query"), ("SELECT txid_current()", "txid_current"),
     ("SELECT current_setting('threads')", "current_setting"), ("SELECT getvariable('x')", "getvariable"),
     ("SELECT stats(1)", "stats"), ("SELECT make_type('INTEGER')", "make_type"),
+    ("SELECT st_setcrs(NULL::GEOMETRY, 'EPSG:4326')", "st_setcrs"), ("SELECT switch(1, MAP {1: 'a'}, 'b')", "switch"),
     ("SELECT pg_sleep(0)", "pg_sleep"), ("SELECT sleep_ms(0)", "sleep_ms"),
     ("SELECT finalize(count(*) EXPORT_STATE) FROM t", "finalize"),
     ("SELECT finalize(combine(count(*) EXPORT_STATE, count(*) EXPORT_STATE)) FROM t", "combine"),
@@ -142,6 +148,17 @@ def test_audit_named_arguments_and_positional_order():
     candidate = json.loads(json.dumps(baseline))
     candidate["functions"][0]["parameters"].reverse()
     assert compare(baseline, candidate)["changed"] == ["reader"]
+
+
+def test_rejected_validation_does_not_touch_the_rng(db):
+    """switch evaluates its MAP argument at bind time without a foldability check; a caller-authored
+    switch is rejected before binding, so the setseed inside it never runs during validation."""
+    db.execute("SELECT setseed(0.1)")
+    result = check(db, "SELECT switch(1, MAP {1: setseed(0.5)})")
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "switch", result
+    draws = [db.execute("SELECT random()").fetchone()[0] for _ in range(3)]
+    db.execute("SELECT setseed(0.1)")
+    assert draws == [db.execute("SELECT random()").fetchone()[0] for _ in range(3)]
 
 
 @pytest.mark.parametrize("sql, name", [

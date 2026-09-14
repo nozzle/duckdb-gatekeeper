@@ -5,7 +5,7 @@
   "notes": [
     "Source: https://github.com/duckdb/duckdb-spatial/tree/eb1e57c9d92c0f3f76eb03eaa52c315090f328cc",
     "ST_AsText, ST_AsWKB, ST_GeomFromWKB, and ST_Intersects_Extent overload core GEOMETRY names (src/spatial/modules/main/spatial_functions_scalar.cpp); each is a pure executor over its input and shares the core compute classification.",
-    "ST_GeneratePoints (spatial_functions_table.cpp) seeds a query-local RandomEngine from its optional seed argument. DuckDB_Proj_Version and DuckDB_Proj_Compiled_Version (modules/proj/proj_module.cpp) return proj_info() strings fixed by the pinned revision. ST_Transform is elevated because PROJ can read grid resources."
+    "ST_GeneratePoints (spatial_functions_table.cpp) draws from a query-local RandomEngine seeded from its optional seed argument, or from OS entropy (clock fallback) when the seed is omitted or negative; it never touches the connection engine. DuckDB_Proj_Version returns proj_info().version and DuckDB_Proj_Compiled_Version returns pj_release (modules/proj/proj_module.cpp); both are fixed by the PROJ port in the reviewed dependency build (vcpkg 84bab45d, PROJ 9.7.1), the same trusted-extension-build boundary the rest of this inventory assumes. ST_Transform is elevated because PROJ can read grid resources."
   ],
   "compute": [
     "duckdb_proj_compiled_version",
