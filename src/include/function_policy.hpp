@@ -54,6 +54,24 @@ inline const Names &NeverBindFunctions() {
 	return names;
 }
 
+// Scalar functions that select a catalog aggregate by a caller-supplied name argument
+// (extension/core_functions/scalar/list/list_aggregates.cpp). The AST walk records when the caller writes
+// one so that the bound target is allowlisted, not merely unblocked; both sides must use the same names.
+inline const Names &DispatchingAggregators() {
+	static const Names names = {"aggregate", "array_aggr", "array_aggregate", "list_aggr", "list_aggregate"};
+	return names;
+}
+
+// System builtins whose bind data is always ListLambdaBindData carrying the executable lambda body
+// (list_transform.cpp, list_filter.cpp, list_reduce.cpp and their registered aliases in functions.json).
+// Authorization must be able to walk that body; if it cannot, validation fails closed.
+inline const Names &ListLambdaFunctions() {
+	static const Names names = {"list_transform", "array_transform", "list_apply",   "array_apply",
+	                            "apply",          "list_filter",     "array_filter", "filter",
+	                            "list_reduce",    "array_reduce",    "reduce"};
+	return names;
+}
+
 inline std::string CanonicalFunction(std::string name) {
 	name = Lower(std::move(name));
 	// Explicit aliases reviewed in DuckDB's Parquet registration; no runtime discovery.

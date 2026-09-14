@@ -1,7 +1,10 @@
 """Executable bound implementations must obey both layers, including inside expansions."""
+import json
+import re
+
 import pytest
 
-from test_gatekeeper import db
+from test_gatekeeper import ROOT, db
 from typed_helpers import configure, validate
 
 
@@ -143,3 +146,59 @@ def test_dispatch_target_check_is_scoped_to_caller_written_dispatchers(db):
     assert validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
     result = validate(db, "SELECT list_aggregate([1,2], 'histogram')")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "histogram", result
+
+
+LAMBDA_CALLS = {
+    "list_transform": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "array_transform": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "list_apply": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "array_apply": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "apply": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "list_filter": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "array_filter": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "filter": "{f}(['a'], lambda x: x COLLATE nocase = 'A')",
+    "list_reduce": "{f}(['a','A'], lambda x, y: CASE WHEN x COLLATE nocase = y THEN x ELSE y END)",
+    "array_reduce": "{f}(['a','A'], lambda x, y: CASE WHEN x COLLATE nocase = y THEN x ELSE y END)",
+    "reduce": "{f}(['a','A'], lambda x, y: CASE WHEN x COLLATE nocase = y THEN x ELSE y END)",
+}
+
+
+def _header_names(function):
+    header = (ROOT / "src/include/function_policy.hpp").read_text()
+    body = header.split(f"inline const Names &{function}()", 1)[1].split("return names;", 1)[0]
+    return set(re.findall(r'"([a-z_]+)"', body))
+
+
+def test_list_lambda_function_names_match_the_engine():
+    """The fail-closed lambda inspection covers exactly DuckDB's list-lambda builtins and their aliases, so a
+    renamed or added alias in the engine cannot leave a lambda body uninspected without failing this test."""
+    functions = json.loads((ROOT / "duckdb/extension/core_functions/scalar/list/functions.json").read_text())
+    engine = set()
+    for entry in functions:
+        if entry["name"] in ("list_transform", "list_filter", "list_reduce"):
+            engine.add(entry["name"])
+            engine.update(entry.get("aliases", []))
+    assert _header_names("ListLambdaFunctions") == engine == set(LAMBDA_CALLS)
+    dispatchers = set()
+    for entry in functions:
+        if entry["name"] in ("list_aggregate",):
+            dispatchers.add(entry["name"])
+            dispatchers.update(entry.get("aliases", []))
+    assert _header_names("DispatchingAggregators") == dispatchers
+
+
+@pytest.mark.parametrize("function", sorted(LAMBDA_CALLS))
+def test_every_list_lambda_alias_exposes_its_body(db, function):
+    """Each alias binds ListLambdaBindData and its body is walked: the nocase comparison inside binds `lower`,
+    which is reported and blockable, directly and through a trusted view."""
+    expression = LAMBDA_CALLS[function].format(f=function)
+    db.execute("CREATE VIEW v AS SELECT " + expression + " AS x")
+    for sql in ("SELECT " + expression, "SELECT * FROM v"):
+        result = validate(db, sql)
+        assert result["allowed"], result
+        assert any(f["name"] == "lower" for f in result["functions"]), result
+        result = validate(db, sql, {"blocked_functions": ["lower"]})
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower", result
+    # A NULL list still binds the builtin with an empty body; nothing to inspect, nothing to deny.
+    assert validate(db, f"SELECT {function}(NULL, lambda x: x)" if "reduce" not in function
+                    else f"SELECT {function}(NULL, lambda x, y: x)")["allowed"]
