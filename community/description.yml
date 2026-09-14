@@ -84,10 +84,6 @@ docs:
     connection, and authorizes every **resolved** table, view, and caller-written
     function against a two-layer policy: a lockable global ceiling and per-request
     options that may narrow it but never widen it. The submitted SQL is not executed.
-
-    Types and collations are host-trusted; their names have no separate authorization
-    policy.
-
     Gatekeeper is a **pre-execution validator, not a sandbox**. It does not filter rows
     or columns, cap memory or time, or isolate the filesystem. See
     [Security boundaries](#security-boundaries) before integrating.
