@@ -96,7 +96,7 @@ def hello_world_examples(db):
                 statement = []
     assert not statement, "hello_world ends with an unterminated statement"
     for sql, _ in examples:
-        assert db.extract_statements(sql)[0].type != duckdb.StatementType.LOAD, \
+        assert all(statement.type != duckdb.StatementType.LOAD for statement in db.extract_statements(sql)), \
             "duckdb.org adds INSTALL/LOAD above hello_world; do not repeat them"
     return examples
 

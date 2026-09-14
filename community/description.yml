@@ -110,9 +110,9 @@ docs:
 
     ### Functions and options
 
-    ```sql
-    SELECT * FROM gatekeeper_validate(sql VARCHAR, option := value, ...);  -- one result row
-    CALL gatekeeper_configure(option := value, ...);                       -- replaces the global policy
+    ```text
+    SELECT * FROM gatekeeper_validate(sql VARCHAR, option := value, ...)  -- one result row
+    CALL gatekeeper_configure(option := value, ...)                       -- replaces the global policy
     ```
 
     Both take the same named options and accept host-bound parameters (`?`, `$1`), so
@@ -154,8 +154,10 @@ docs:
     of the database instance, is not persisted, and is not undone by rollback. Request
     options are intersected with it: either layer's block wins, and each layer must allow
     every resolved table or view and every caller-written function. (Functions that
-    trusted views and macros introduce internally are exempt from the allowlists but
-    still honor blocks and the never-bind list.) A request that tries to widen access
+    trusted views and macros introduce internally are normally exempt from the
+    allowlists but always honor blocks and the never-bind list; ambiguous caller syntax
+    such as `t.x` or `list[i]` triggers a query-wide implementation check that can reach
+    those expansions too.) A request that tries to widen access
     does not error; it simply cannot authorize anything the global policy denies.
 
     | Operation | SQL |
