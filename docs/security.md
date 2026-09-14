@@ -51,6 +51,10 @@ at execution). Lists with non-NULL members require the documented element types.
 Nested identity fields are preserved
 and checked, including the field names of typed empty STRUCT lists.
 
+Tables and views are unrestricted until a layer configures `allowed_tables`; only
+internal objects (`duckdb_*`, `information_schema.*`) need an explicit rule from the
+start. Set `allowed_tables` in the global policy during trusted setup when tenants must
+not see every table; `[]` denies all tables and views.
 `allowed_tables` is a union of catalog/schema/table rules within each layer, with
 an intersection between layers. A whole-component `*` matches any identifier;
 other text is exact and ASCII case-folded. Matching uses resolved identities, not
@@ -96,6 +100,21 @@ expansion using the same implementation must also pass it. This conservative
 query-wide restriction can deny a mixed caller/view expression; it does not grant
 an exception to caller code. Type names, casts, and collations are trusted host
 database configuration and are not authorized separately.
+Name-selected aggregate dispatch (`list_aggregate`, `list_aggr`, `aggregate`,
+`array_aggregate`, `array_aggr`) is elevated, and admitting a dispatcher does not admit
+every aggregate it can reach: when the caller writes one, the aggregate DuckDB resolves
+from the caller's (foldable) name argument must pass both allowlists, and like other
+ambiguous caller syntax the check applies query-wide, so a trusted view's own dispatch in
+the same plan is checked too. Dispatchers used only inside trusted definitions, and the
+fixed `histogram` behind `list_distinct`/`list_unique`, keep the block-only treatment.
+
+Defaults are admitted by leaf name, so a host-created macro or function that shadows a
+default name is a trusted definition: `CREATE MACRO ltrim(x) AS ...` in a schema ahead of
+`system` on the search path is admitted whenever `ltrim` is, and its body is checked
+against blocks and the never-bind list only. The same holds for views, types, casts, and
+collations. Gatekeeper assumes catalog integrity; letting untrusted users create
+definitions in a shared catalog is outside its model, and restricting defaults to
+`system.main` would not by itself make such DDL safe.
 Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
@@ -236,6 +255,12 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   at 100,000 nodes, and AST depth at 512. AST validation occurs after parsing and
   serialization; traversal limits do not replace process limits against
   parser/serializer resource exhaustion.
+- Engine diagnostics are returned verbatim in `error_message` for `parser` and `binding`
+  results. DuckDB's messages can name catalog objects (`Did you mean "secrets"?`), file
+  paths, and reader arguments, including objects the policy denies. Policy denials
+  (`forbidden`, `unsupported`) carry no engine text. Treat `error_message` as sensitive:
+  log it for operators and return a generic error to untrusted callers. Trimming the
+  message is not a reliable confidentiality boundary, because names can appear on any line.
 
 Keep external access, extension loading, credentials, filesystem/network permissions,
 and configuration changes controlled independently.
@@ -296,8 +321,14 @@ footer identity) and refuses to load into any other engine. The stamp is a singl
 is read from its catalog (`pragma_version()`) rather than `DuckDB::LibraryVersion()`:
 distributed loadables statically link their own DuckDB copy, so the latter only ever
 reports the build engine. A grammar generated from one engine must never validate
-statements for another. Internal C++ API changes can require
-fixes, so compatibility is checked by compilation and functional regressions. Existing function classifications do not
+statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serializer
+(`extension/json/json_serializer.cpp`) and uses internal binder entry points
+(`Binder::CreateBinder`, `SetBindingMode`, `SetCatalogLookupCallback`,
+`GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
+public API, so an engine upgrade can require source changes. Compatibility is therefore
+checked by compilation and functional regressions on every candidate engine
+(`compatibility.yml`), through both the direct CMake path and the community `make release`
+path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
@@ -309,6 +340,8 @@ project's GitHub Release binaries are unsigned. Distribution signatures authenti
 the distributed binary, not its policy semantics or suitability for hostile workloads.
 Platform CI, browser tests, and fuzzing provide regression coverage; production use
 against hostile callers still requires review of the application and its trust boundary.
+Suspected authorization bypasses should be reported privately as described in
+[SECURITY.md](../SECURITY.md).
 
 ## Adversarial regression coverage
 

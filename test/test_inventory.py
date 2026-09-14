@@ -22,7 +22,7 @@ def test_complete_default_inventory(db):
     db.execute("SET autoinstall_known_extensions=false; SET autoload_known_extensions=false")
     entries, names = load()
     assert len(entries) == 30
-    assert len(names) == 954
+    assert len(names) == 953
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
         result = check(db, f"SELECT {quoted}(1)")

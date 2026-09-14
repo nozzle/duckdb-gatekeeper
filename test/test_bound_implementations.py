@@ -99,3 +99,47 @@ def test_literal_json_is_not_bound_implementation_evidence(db):
     result = validate(db, sql, {"blocked_functions": ["sum"]})
     assert result["allowed"], result
     assert not any(f["name"] == "sum" for f in result["functions"])
+
+
+STRICT = {"use_default_functions": False,
+          "allowed_functions": ["list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr",
+                                "list_value", "list_distinct"]}
+
+
+@pytest.mark.parametrize("dispatcher", ["list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr"])
+def test_caller_written_dispatch_target_must_be_allowed(db, dispatcher):
+    """The aggregate a caller selects by name is caller-chosen text: a strict allowlist that admits only the
+    dispatcher must not reach every unblocked aggregate. Folding the name does not evade the bound check."""
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["sum", "||"]})
+    concat = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["||"]}
+    for name in ("'sum'", "'su' || 'm'"):
+        result = validate(db, f"SELECT {dispatcher}([1,2], {name})", concat)
+        assert result["code"] == "forbidden", result
+        assert result["violations"][0]["rule"] == "function" and result["violations"][0]["function_name"] == "sum", result
+    granted = {**concat, "allowed_functions": concat["allowed_functions"] + ["sum"]}
+    result = validate(db, f"SELECT {dispatcher}([1,2], 'su' || 'm')", granted)
+    assert result["allowed"], result
+    assert any(f["name"] == "sum" and f["type"] == "aggregate" for f in result["functions"]), result
+    # Both layers must grant the target: the request cannot add it past the global ceiling.
+    configure(db, STRICT)
+    assert validate(db, f"SELECT {dispatcher}([1,2], 'sum')", granted)["code"] == "forbidden"
+
+
+def test_dispatch_target_check_is_scoped_to_caller_written_dispatchers(db):
+    """Fixed implementations and dispatchers introduced only by trusted definitions keep the block-only rule;
+    once the caller writes a dispatcher, the check applies query-wide like other ambiguous caller syntax."""
+    db.execute("CREATE VIEW v AS SELECT list_aggregate([1,2], 'sum') AS s")
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]})
+    assert validate(db, "SELECT list_distinct([1,2])", STRICT)["allowed"]
+    assert validate(db, "SELECT s FROM v", STRICT)["allowed"]
+    assert validate(db, "SELECT s FROM v", {**STRICT, "blocked_functions": ["sum"]})["code"] == "forbidden"
+    request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]}
+    assert validate(db, "SELECT list_aggregate([1], 'count')", request)["allowed"]
+    # The view's own dispatch is bound into the same plan, so the caller's dispatcher makes it subject to the check.
+    result = validate(db, "SELECT list_aggregate([1], 'count') FROM v", request)
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum", result
+    # With defaults on, an admitted dispatcher reaches default aggregates but not elevated ones.
+    configure(db, {"allowed_functions": ["list_aggregate"]})
+    assert validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
+    result = validate(db, "SELECT list_aggregate([1,2], 'histogram')")
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "histogram", result

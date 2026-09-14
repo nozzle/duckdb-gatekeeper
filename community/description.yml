@@ -1,5 +1,5 @@
 # Prepared for extensions/gatekeeper/description.yml in duckdb/community-extensions.
-# Submit only after v0.1.1 exists and its full distribution workflow succeeds.
+# Submit only after v0.1.2 exists and its full distribution workflow succeeds.
 #
 # duckdb.org renders `description` under the title, adds its own "Installing and Loading"
 # block, shows `hello_world` as one SQL code block, renders `extended_description` as
@@ -9,7 +9,7 @@
 extension:
   name: gatekeeper
   description: Pre-execution authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Checks every resolved table, view, and function against a lockable policy without executing the query.
-  version: 0.1.1
+  version: 0.1.2
   language: C++
   build: cmake
   license: MIT
@@ -21,7 +21,7 @@ extension:
 
 repo:
   github: nozzle/duckdb-gatekeeper
-  ref: v0.1.1
+  ref: v0.1.2
 
 docs:
   hello_world: |
@@ -87,7 +87,8 @@ docs:
 
     Gatekeeper is a **pre-execution validator, not a sandbox**. It does not filter rows
     or columns, cap memory or time, or isolate the filesystem. See
-    [Security boundaries](#security-boundaries) before integrating.
+    [Security boundaries](#security-boundaries) before integrating. It is in early
+    development (0.x): the option and result schema may still change between releases.
 
     ### How a decision is made
 
@@ -120,9 +121,9 @@ docs:
 
     | Option | Type | Default | Notes |
     |--------|------|---------|-------|
-    | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted or NULL catalog matches any. `[]` denies all tables and views. |
+    | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-    | `use_default_functions` | BOOLEAN | `true` | `true`: 954 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+    | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
     | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
@@ -148,6 +149,10 @@ docs:
     `unsupported_structure`. Branch on `code` and `violations[].rule`, not on message text.
 
     ### Global policy
+
+    **Tables and views are unrestricted by default, except internal objects.** Configure
+    `allowed_tables` during trusted setup to restrict access; `[]` denies all tables and views.
+    Function policy is always on: only the reviewed defaults and the names you allow bind.
 
     `CALL gatekeeper_configure(...)` **replaces** the global policy atomically, filling
     omitted options from the built-in defaults. The policy is shared by every connection
@@ -197,10 +202,12 @@ docs:
     the gap between validation and execution. Run validation on a dedicated connection
     with `autoload_known_extensions = false`, `autoinstall_known_extensions = false`,
     memory and thread limits, and `lock_configuration = true`. Default functions are a
-    reviewed name inventory, not a
-    proof that every overload is harmless. Read the
-    [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/docs/security.md)
-    before integrating.
+    reviewed name inventory, not a proof that every overload is harmless. Engine error
+    messages (`error_message`) can name catalog objects the policy denies, so return them
+    to trusted operators only. Read the
+    [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.2/docs/security.md)
+    before integrating, and report suspected bypasses through
+    [SECURITY.md](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.2/SECURITY.md).
 
     ### Compatibility
 
@@ -216,12 +223,12 @@ docs:
     classified or explicitly allowed; inventory updates improve coverage rather than
     gate engine upgrades. Existing DuckDB function implementations are trusted across
     upgrades. See the
-    [build-pin maintenance guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/inventories/README.md#repinning-the-engine).
+    [build-pin maintenance guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.2/inventories/README.md#repinning-the-engine).
 
     Wasm support is limited to the EH bundle, browser-tested with
     `@duckdb/duckdb-wasm@1.33.1-dev64.0` embedding DuckDB 1.5.5 (the npm package version
     is independent of its embedded engine version). MVP and threads/COI remain excluded;
-    see [Wasm compatibility](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/test/wasm/README.md).
+    see [Wasm compatibility](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.2/test/wasm/README.md).
 
     Full documentation, including a Python integration example, is in the
-    [README](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/README.md).
+    [README](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.2/README.md).

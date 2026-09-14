@@ -6,9 +6,9 @@ that query stays inside the lines you drew.
 
 | Control | What it enforces |
 | --- | --- |
-| **Table ACL** | Only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. |
-| **Function ACL** | Only the functions you allow, starting from 954 reviewed defaults, with exact-name allow and block lists. |
-| **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
+| **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
+| **Function ACL** | Only the functions you allow, starting from 953 reviewed defaults, with exact-name allow and block lists. |
+| **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
 Every decision comes back as one row of named columns with structured diagnostics.
@@ -132,9 +132,9 @@ element types. Typed STRUCT lists have their field names checked even when empty
 
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. |
+| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 954 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
 
@@ -248,6 +248,10 @@ not prove definitions are unchanged between validation and execution.
 
 ## Table ACL
 
+> [!IMPORTANT]
+> Tables and views are unrestricted by default, except internal objects. Configure
+> `allowed_tables` in the global policy to restrict access; `[]` denies all tables and views.
+
 Rules match all three components of a **resolved** table or view identity, ASCII
 case-insensitively. Any matching allow grants; any matching block wins.
 
@@ -319,6 +323,9 @@ flowchart LR
 Blocks also cover bound implementations: `unnest` inside a view, `lower` introduced
 by `nocase` comparisons inside list lambdas, and `sum` dispatched by `list_sum`.
 These implementations are included in successful function dependency lists.
+When the caller writes a name-selected dispatcher (`list_aggregate`, `list_aggr`,
+`aggregate`, `array_aggregate`, `array_aggr`), the aggregate it names is caller-chosen
+text and must also be allowed in both layers, not merely unblocked.
 
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
@@ -532,6 +539,7 @@ Gatekeeper authorizes what a statement **references**. It does not:
   [reviewed name inventory](inventories/README.md)).
 
 The full list of boundaries is in [docs/security.md](docs/security.md#remaining-boundaries).
+Report suspected authorization bypasses privately; see [SECURITY.md](SECURITY.md).
 
 ## License
 

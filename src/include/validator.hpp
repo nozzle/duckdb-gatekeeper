@@ -61,6 +61,9 @@ struct BindingPolicy {
 	Names synthesized_functions;
 	Names literal_constructors;
 	Names runtime_table_functions;
+	// Caller-written list_aggregate/aggregate family calls: the aggregate they select by name is caller-chosen
+	// text, so the bound implementation must pass the allowlists like any other caller-written function.
+	Names caller_dispatchers;
 };
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);

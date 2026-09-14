@@ -3,10 +3,11 @@
   "reviewed_duckdb": "1.5.5",
   "source": "https://github.com/duckdb/duckdb-delta/tree/45c40878601b54b4188b09e08732fe0d576ad222",
   "notes": [
-    "Source: https://github.com/duckdb/duckdb-delta/tree/45c40878601b54b4188b09e08732fe0d576ad222"
+    "Source: https://github.com/duckdb/duckdb-delta/tree/45c40878601b54b4188b09e08732fe0d576ad222",
+    "parse_delta_filter_logline is a default macro that casts its argument to a fixed STRUCT (src/delta_macros.cpp); it reads nothing itself, the delta_filter_pushdown_log macros that join duckdb_logs are elevated.",
+    "get_delta_test_expression takes no arguments and returns the kernel's built-in testing expressions (src/functions/expression_functions.cpp, ffi::get_testing_kernel_expression). It is a test registration rather than a supported caller surface, so it is elevated per the classification criteria even though it discloses nothing about the host."
   ],
   "compute": [
-    "get_delta_test_expression",
     "parse_delta_filter_logline"
   ],
   "elevated": [
@@ -18,6 +19,7 @@
     "delta_list_files",
     "delta_scan",
     "delta_set_transaction_version",
+    "get_delta_test_expression",
     "write_blob"
   ]
 }

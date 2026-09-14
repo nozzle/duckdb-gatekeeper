@@ -1,0 +1,111 @@
+# name: test/sql/readers.test
+# description: File readers are not defaults; replacement scans are decided before the reader binds.
+# group: [gatekeeper]
+
+require gatekeeper
+
+require parquet
+
+statement ok
+COPY (SELECT 1 AS x) TO '__TEST_DIR__/data.parquet';
+
+statement ok
+COPY (SELECT 1 AS x) TO '__TEST_DIR__/data.csv';
+
+# A path in FROM is denied by function policy, whether or not the file exists: nothing is opened.
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
+----
+forbidden	function	read_parquet
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''/definitely/missing.parquet''');
+----
+forbidden	function	read_parquet
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''');
+----
+forbidden	function	read_csv_auto
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM read_parquet(''__TEST_DIR__/data.parquet'')');
+----
+forbidden	function	read_parquet
+
+# Granting the reader in the global policy admits the path; it appears as a replacement object.
+statement ok
+CALL gatekeeper_configure(allowed_functions := ['read_parquet', 'read_csv_auto']);
+
+query TT
+SELECT code, objects[1].type FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
+----
+ok	replacement
+
+query TT
+SELECT code, objects[1].type FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''');
+----
+ok	replacement
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM read_parquet(''__TEST_DIR__/data.parquet'')');
+----
+true
+
+# Once admitted, engine errors from the reader surface with their phase.
+query TT
+SELECT code, error_type FROM gatekeeper_validate('SELECT * FROM ''/definitely/missing.parquet''');
+----
+binding	IO
+
+# The request layer can take the grant away again; allowed_tables never governs file paths.
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''', use_default_functions := false, allowed_functions := ['read_csv']);
+----
+forbidden	function	read_csv_auto
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''', allowed_tables := []);
+----
+true
+
+# read_parquet and parquet_scan share one permission; read_csv alone does not cover the CSV shorthand.
+statement ok
+CALL gatekeeper_configure(allowed_functions := ['parquet_scan', 'read_csv']);
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM read_parquet(''__TEST_DIR__/data.parquet'')');
+----
+true
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''');
+----
+forbidden	function	read_csv_auto
+
+statement ok
+RESET gatekeeper_policy;
+
+# Unclaimed names are binding errors; a file-shaped name that resolves to a catalog object uses table policy.
+query TT
+SELECT code, error_type FROM gatekeeper_validate('SELECT * FROM ''nothing.xyz''');
+----
+binding	Catalog
+
+statement ok
+CREATE TABLE "data.parquet"(x INTEGER);
+
+query TT
+SELECT code, objects[1].type FROM gatekeeper_validate('SELECT * FROM "data.parquet"');
+----
+ok	table
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM "data.parquet"', allowed_tables := []);
+----
+forbidden

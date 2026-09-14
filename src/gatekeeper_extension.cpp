@@ -81,7 +81,9 @@ static Value ResultValue(const gatekeeper::Result &result) {
 static constexpr const char *POLICY_SETTING = "gatekeeper_policy";
 
 static void SetPolicy(ClientContext &, SetScope scope, Value &value) {
-	if (scope == SetScope::SESSION)
+	// DuckDB's parser currently rejects SET LOCAL; refuse it here too so a future parser cannot route a
+	// connection-scoped assignment into the instance-wide policy.
+	if (scope == SetScope::SESSION || scope == SetScope::LOCAL)
 		throw InvalidInputException("gatekeeper_policy is global-only");
 	try {
 		value = gatekeeper::PolicyValue(gatekeeper::ReadPolicy(value));
@@ -477,7 +479,9 @@ static void CheckBuildEngine(DatabaseInstance &db) {
 	string host_version, host_source_id;
 	try {
 		Connection con(db);
-		auto result = con.Query("SELECT library_version, source_id FROM pragma_version()");
+		// Fully qualified: a host macro named pragma_version in the default catalog would otherwise shadow the
+		// builtin and could report whatever engine identity the guard is looking for.
+		auto result = con.Query("SELECT library_version, source_id FROM system.main.pragma_version()");
 		if (result->HasError()) {
 			result->ThrowError();
 		}

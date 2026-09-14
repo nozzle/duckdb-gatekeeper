@@ -33,23 +33,27 @@ the submodule:
 `scripts/build.py`, `scripts/test_sanitized.py`, `scripts/fuzz_sql.py`, and
 `scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options
 (`test_sanitized.py` runs its suite inside the pinned `duckdb` Python package, so it only
-accepts an engine identifying as that release). The
-pinned submodule is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because
-a shallow clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy
-`v0.0.1` that no real engine loads. Any other checkout uses its own Git metadata unless
-`--duckdb-version vX.Y.Z` overrides it. Compatibility requires the build and regression
+accepts an engine identifying as that release). A checkout at exactly the pinned engine
+revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because a shallow
+clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy `v0.0.1`
+that no real engine loads. Every other checkout, including another revision inside `duckdb/`,
+uses its own Git metadata unless `--duckdb-version vX.Y.Z` overrides it; the `Makefile`
+applies the same revision-gated rule, so a community rebuild for a newer engine is never
+labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
 `Engine rebuild compatibility` workflow rebuilds against a post-release engine snapshot
-and loads the resulting artifact into that engine's shell.
+through both the direct CMake path and the community `make release` path, checks the
+stamped engine identity against the candidate checkout's own `git describe`, and loads
+the resulting artifact into that engine's shell.
 
 The community-extension build path also works and runs on CI:
 
 ```sh
 make release          # pinned extension-ci-tools Makefile
 make test_release     # sqllogictests in test/sql
-make release OVERRIDE_GIT_DESCRIBE=v1.5.6   # another engine checked out in duckdb/
-OVERRIDE_GIT_DESCRIBE= make release         # use the checkout's own tags
+make release OVERRIDE_GIT_DESCRIBE=v1.5.6   # label a shallow clone of another engine explicitly
+OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, even for the pinned revision
 ```
 
 ### Loading unsigned builds
@@ -90,6 +94,26 @@ make an unsigned extension a DuckDB-signed community build. See the
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
 .venv/bin/python scripts/benchmark.py --iterations 1000
 ```
+
+The suite has two layers with different reach:
+
+- `test/sql/*.test` is the **portable contract**: sqllogictests that the community build
+  (`make test_release`) and the engine-rebuild workflow run on every platform, including
+  Windows, musl, and engines other than the pinned one. They cover statement rejection,
+  the never-bind list, strict function allowlists, table allow/block/wildcard rules,
+  replacement scans, trusted expansions, and nested bound implementations. Add a case
+  here whenever a behavior must hold everywhere the extension is distributed.
+- `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
+  tests that run against the loadable artifact on Linux and macOS. Set
+  `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
+  artifact; the distribution workflow does this with the downloaded platform artifacts.
+
+`scripts/smoke_loadable.py <artifact>` loads a distributed artifact into the pinned DuckDB
+Python package and exercises the checks that cross the host/loadable ABI boundary
+(bind-data inspection for lambdas and dispatched aggregates, replacement-scan callbacks,
+the policy setting). `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
+and Gatekeeper stamped into an artifact against the engine checkout it was built from,
+independently of any shell built alongside it.
 
 `test/test_documentation.py` executes every ```` ```sql ```` block in `README.md` in
 order against a fresh database, except the exact community installation block,

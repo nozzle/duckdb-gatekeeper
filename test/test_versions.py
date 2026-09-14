@@ -1,5 +1,6 @@
 """Release surfaces consume canonical metadata or explicitly match its engine pin."""
 import json
+import os
 import platform
 import re
 import subprocess
@@ -29,9 +30,12 @@ def test_distribution_engine_pins():
     workflow = (ROOT / ".github/workflows/MainDistributionPipeline.yml").read_text()
     assert re.search(r"duckdb_version: v" + re.escape(SUPPORTED_DUCKDB) + r"\s", workflow)
     assert "OVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB in (ROOT / ".github/workflows/test.yml").read_text()
-    # Overridable default: shallow clones cannot describe the engine and would otherwise stamp v0.0.1.
-    assert re.search(r"^OVERRIDE_GIT_DESCRIBE \?= v" + re.escape(SUPPORTED_DUCKDB) + r"$",
-                     (ROOT / "Makefile").read_text(), re.M)
+    # The Makefile supplies the release pin only for the pinned engine revision and reads both values from
+    # versions.cmake; an unconditional default would label every community rebuild as the pinned release.
+    makefile = (ROOT / "Makefile").read_text()
+    assert "GATEKEEPER_DUCKDB_REVISION" in makefile and "GATEKEEPER_DUCKDB_VERSION" in makefile
+    assert not re.search(r"^OVERRIDE_GIT_DESCRIBE \?=", makefile, re.M)
+    assert "v" + SUPPORTED_DUCKDB not in makefile
     assert f"duckdb=={SUPPORTED_DUCKDB}" in (ROOT / "requirements-dev.in").read_text().splitlines()
     assert f"version === 'v{SUPPORTED_DUCKDB}'" in (ROOT / "test/wasm/smoke.mjs").read_text()
     lock = json.loads((ROOT / "test/wasm/package-lock.json").read_text())
@@ -51,6 +55,8 @@ def test_engine_guard_uses_build_engine(db):
         assert build_source_id == source_id
     # CMake generates into the extension's binary dir, next to the artifact, for every build configuration.
     header = EXTENSION.parent / "generated/version.hpp"
+    if os.getenv("GATEKEEPER_EXTENSION") and not header.is_file():
+        pytest.skip("distributed artifact under test has no build tree beside it")
     assert header.is_file(), header
     assert f'] = "GATEKEEPER_BUILD_ENGINE {build_version} {build_source_id}"' in header.read_text()
 
@@ -135,3 +141,28 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
     (tmp_path / "intact").mkdir()
     intact = _tampered_artifact(tmp_path / "intact", version, source_id)
     duckdb.connect(config=config).execute("LOAD '" + str(intact).replace("'", "''") + "'")
+
+
+def test_check_engine_stamp_script():
+    """The CI identity check derives the expectation from the engine checkout, not from a co-built shell."""
+    import check_engine_stamp
+    version, source_id = _stamp(EXTENSION.read_bytes())
+    arguments = ["--extension", str(EXTENSION), "--engine-source", str(ROOT / "duckdb")]
+    if "-dev" in version:
+        pytest.skip("local artifact was built from an unpinned engine checkout")
+    assert check_engine_stamp.main(arguments + ["--expect-version", version]) == 0
+    with pytest.raises(SystemExit):
+        check_engine_stamp.main(["--extension", str(ROOT / "versions.cmake"), "--engine-source", str(ROOT / "duckdb")])
+    assert check_engine_stamp.main(arguments + ["--expect-version", version + "-dev1"]) == 1
+    data = EXTENSION.read_bytes()
+    assert check_engine_stamp.footer_field(data, 3) == version
+    assert check_engine_stamp.footer_field(data, 1) == "4"
+
+
+def test_engine_guard_reads_the_builtin_engine_identity():
+    """A host macro shadowing pragma_version() in the default catalog must not steer the load guard."""
+    db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
+    db.execute("CREATE MACRO pragma_version() AS TABLE SELECT 'v0.0.0' AS library_version, 'shadow' AS source_id")
+    assert db.execute("SELECT library_version FROM pragma_version()").fetchone() == ("v0.0.0",)
+    db.execute("LOAD '" + str(EXTENSION).replace("'", "''") + "'")
+    assert db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')").fetchone() == (True,)
