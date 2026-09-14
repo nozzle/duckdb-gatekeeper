@@ -362,6 +362,18 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	static Connection connection(database);
 	static bool initialized = false;
 	if (!initialized) {
+		for (bool option : {false, true}) {
+			auto type = option ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+			Value null(type);
+			auto value = option ? Value::LIST(LogicalType::VARCHAR, {Value("md5")}) : Value("SELECT 1");
+			auto different = option ? Value::LIST(LogicalType::VARCHAR, {Value("abs")}) : Value("SELECT 2");
+			if (!GatekeeperBindingsEqualForFuzz(null, null, option) ||
+			    !GatekeeperBindingsEqualForFuzz(value, value, option) ||
+			    GatekeeperBindingsEqualForFuzz(null, value, option) ||
+			    GatekeeperBindingsEqualForFuzz(value, null, option) ||
+			    GatekeeperBindingsEqualForFuzz(value, different, option))
+				std::abort();
+		}
 		CheckNativeSettingBypass();
 		CheckReplacementCallbacks();
 		Setup(connection);

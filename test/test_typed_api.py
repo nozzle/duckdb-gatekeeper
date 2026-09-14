@@ -32,8 +32,16 @@ def test_lateral_arguments_rejected(db, argument):
 
 
 def test_scalar_interface_removed(db):
-    with pytest.raises(duckdb.Error):
+    with pytest.raises(duckdb.BinderException, match="table function"):
         db.execute("SELECT gatekeeper_validate('SELECT 1')")
+
+
+@pytest.mark.parametrize("name", ["blocked_functions", "allowed_tables", "blocked_tables"])
+@pytest.mark.parametrize("value", ["[NULL]", "[NULL]::DOUBLE[]"])
+def test_all_null_lists_return_invalid_input(db, name, value):
+    assert db.execute(f"SELECT code FROM gatekeeper_validate('SELECT 1', {name} := {value})").fetchall() == [
+        ("invalid_input",)
+    ]
 
 
 @pytest.mark.parametrize("sql,code", [("SELECT 1", "ok"), ("DROP TABLE t", "unsupported"),

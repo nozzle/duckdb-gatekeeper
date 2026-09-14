@@ -113,9 +113,28 @@ struct ValidateBinding : FunctionData {
 	}
 	bool Equals(const FunctionData &other) const override {
 		auto &binding = other.Cast<ValidateBinding>();
-		return sql == binding.sql && options == binding.options;
+		if (!Value::NotDistinctFrom(sql, binding.sql) || options.size() != binding.options.size())
+			return false;
+		for (idx_t i = 0; i < options.size(); i++)
+			if (options[i].first != binding.options[i].first ||
+			    !Value::NotDistinctFrom(options[i].second, binding.options[i].second))
+				return false;
+		return true;
 	}
 };
+
+#ifdef GATEKEEPER_FUZZ
+bool GatekeeperBindingsEqualForFuzz(const Value &left, const Value &right, bool option) {
+	ValidateBinding a, b;
+	a.sql = option ? Value("SELECT 1") : left;
+	b.sql = option ? Value("SELECT 1") : right;
+	if (option) {
+		a.options.emplace_back("blocked_functions", left);
+		b.options.emplace_back("blocked_functions", right);
+	}
+	return a.Equals(*b.Copy());
+}
+#endif
 
 static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
                                              vector<string> &names) {
@@ -128,7 +147,12 @@ static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindI
 	for (const auto &option : input.named_parameters) {
 		auto &name = option.first;
 		auto value = option.second;
-		auto expected = gatekeeper::OptionType(name);
+		LogicalType expected;
+		try {
+			expected = gatekeeper::OptionType(name);
+		} catch (const std::invalid_argument &error) {
+			throw BinderException(error.what());
+		}
 		auto actual = value.type();
 		if (!value.IsNull()) {
 			// DuckDB resolves untyped [] and [NULL] to INTEGER[] before table binding.

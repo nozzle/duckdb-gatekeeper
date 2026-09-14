@@ -119,9 +119,10 @@ global policy and binds the submitted SQL again.
 | Invalid value (`max_statements := 0`, NULL list member) | `code = 'invalid_input'` | Raises; policy unchanged |
 
 Empty option lists accept any element type, since DuckDB resolves untyped `[]` to
-`INTEGER[]` before table-function binding. Nonempty lists require the documented
-element types; NULL members are invalid values. Typed STRUCT lists have their field
-names checked even when empty.
+`INTEGER[]` before table-function binding. All-NULL lists also pass the element-type
+check regardless of their declared type: `[NULL]` and `[NULL]::DOUBLE[]` both return
+`invalid_input` at execution. Lists with non-NULL members require the documented
+element types. Typed STRUCT lists have their field names checked even when empty.
 
 ### Options
 
@@ -382,7 +383,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functio
 | --- |
 | false |
 
-The request cannot clear a global block:
+The request cannot clear a global block. The global policy still lists the block:
 
 ```sql
 SELECT current_setting('gatekeeper_policy').blocked_functions AS blocked_functions;
