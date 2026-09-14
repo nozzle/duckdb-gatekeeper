@@ -174,7 +174,8 @@ docs:
 
     - `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP`, `COPY`, `SET`, `ATTACH`, and every
       other non-read statement return `unsupported`.
-    - Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`), metadata readers
+    - Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`,
+      `json_serialize_plan`), metadata readers
       (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), sequence and storage
       functions, and `gatekeeper_configure` itself are on a never-bind list that no option
       can override, including through views or macros.
@@ -183,7 +184,8 @@ docs:
       the global policy. Admitting a reader permits its resource access; `allowed_tables`
       does not restrict file paths.
     - Expressions in bind-time positions (`LIMIT`, reader arguments, type parameters) must
-      be literals or parameters.
+      be literals or parameters, except correlated `unnest`, `range`, and `generate_series`
+      arguments, which DuckDB evaluates per row.
 
     ### Security boundaries
 
