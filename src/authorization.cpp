@@ -86,16 +86,21 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 // the actual bound aggregate without unsafe layout casts, evaluating arguments, or rebinding names.
 // Inspect only this documented shape, never arbitrary JSON payloads that can resemble expressions.
 static string ListAggregateImplementation(BoundFunctionExpression &expression) {
+	static const gatekeeper::Names names = {"aggregate",   "array_aggr",     "array_aggregate",
+	                                        "list_aggr",   "list_aggregate", "list_distinct",
+	                                        "list_unique", "array_distinct", "array_unique"};
+	if (!names.count(expression.function.name))
+		return {};
+	// Catalog construction stamps this provenance onto each overload and binding preserves it.
+	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
+	if (expression.function.catalog_name != "system" || expression.function.schema_name != "main")
+		throw BinderException("List aggregate implementation is not the pinned builtin");
 	auto null_input =
 	    !expression.children.empty() && expression.children[0]->return_type.id() == LogicalTypeId::SQLNULL;
 	// These builtins use the fixed histogram implementation and have no serialization callbacks.
 	if (expression.function.name == "list_distinct" || expression.function.name == "list_unique" ||
 	    expression.function.name == "array_distinct" || expression.function.name == "array_unique")
 		return null_input ? "" : "histogram";
-	static const gatekeeper::Names names = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
-	                                        "list_aggregate"};
-	if (!names.count(expression.function.name))
-		return {};
 	if (!expression.bind_info)
 		throw BinderException("List aggregate requires resolved parameter types");
 	if (!expression.function.HasSerializationCallbacks())

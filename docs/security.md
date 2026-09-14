@@ -172,6 +172,9 @@ aggregate implementations such as `sum` inside `list_sum`. DuckDB stores lambdas
 and list aggregates in function bind data rather than ordinary expression children.
 Lambda bodies are walked directly; the private list-aggregate bind data is inspected
 through its pinned serialization callback, without evaluating or rebinding arguments.
+Both list-aggregate serialization and fixed histogram inspection require the bound
+function's `system.main` provenance. Same-named scalar implementations from other
+catalogs/schemas fail closed before their serialization callbacks can run.
 `list_distinct`/`list_unique` and their `array_*` aliases use the source-reviewed fixed
 `histogram` implementation.
 These implementations obey blocks in both layers and appear in successful function

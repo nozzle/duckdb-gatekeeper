@@ -1,9 +1,13 @@
+#include "authorization.hpp"
 #include "duckdb.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "engine_errors.hpp"
 #include "fuzz_checks.hpp"
 #include "options.hpp"
@@ -351,6 +355,40 @@ static void CheckFuzzLimits(Connection &connection) {
 		std::abort();
 }
 
+static void CheckForeignAggregateProvenance() {
+	struct ProbeBindData : FunctionData {
+		unique_ptr<FunctionData> Copy() const override { return make_uniq<ProbeBindData>(); }
+		bool Equals(const FunctionData &) const override { return true; }
+	};
+	for (const auto *name : {"aggregate", "array_aggr", "array_aggregate", "list_aggr", "list_aggregate",
+	                         "list_distinct", "list_unique", "array_distinct", "array_unique"}) {
+		for (const auto &identity : {std::pair<string, string>{"memory", "main"}, {"system", "custom"}, {"", ""}}) {
+			for (bool null_input : {false, true}) {
+				ScalarFunction function(name, {LogicalType::INTEGER}, LogicalType::INTEGER, nullptr);
+				function.catalog_name = identity.first;
+				function.schema_name = identity.second;
+				function.SetSerializeCallback([](Serializer &, optional_ptr<FunctionData>, const ScalarFunction &) {
+					std::abort(); // A foreign callback must never be invoked, including for NULL inputs.
+				});
+				vector<unique_ptr<Expression>> children;
+				children.push_back(make_uniq<BoundConstantExpression>(null_input ? Value() : Value::INTEGER(1)));
+				vector<unique_ptr<Expression>> expressions;
+				expressions.push_back(make_uniq<BoundFunctionExpression>(
+				    LogicalType::INTEGER, std::move(function), std::move(children), make_uniq<ProbeBindData>()));
+				LogicalProjection plan(0, std::move(expressions));
+				gatekeeper::Result result;
+				try {
+					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), plan, result);
+					std::abort();
+				} catch (const BinderException &error) {
+					if (ErrorData(error).RawMessage().find("not the pinned builtin") == string::npos)
+						std::abort();
+				}
+			}
+		}
+	}
+}
+
 static int Fuzz(const uint8_t *data, size_t size) {
 	if (size < 4 || size > 4096)
 		return 0;
@@ -358,6 +396,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	static Connection connection(database);
 	static bool initialized = false;
 	if (!initialized) {
+		CheckForeignAggregateProvenance();
 		for (bool option : {false, true}) {
 			auto type = option ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
 			Value null(type);
