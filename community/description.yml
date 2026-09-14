@@ -8,7 +8,7 @@
 # sit beside the generated ones. test/test_documentation.py executes `hello_world`.
 extension:
   name: gatekeeper
-  description: Pre-execution authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Parses and binds the statement, checks every resolved table, view, and function against a lockable policy, and returns one row with the decision and structured diagnostics without executing the query.
+  description: Pre-execution authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Checks every resolved table, view, and function against a lockable policy without executing the query.
   version: 0.1.0
   language: C++
   build: cmake
@@ -30,9 +30,10 @@ docs:
     CREATE TABLE reporting.orders (customer_id INTEGER, amount DOUBLE);
     CREATE TABLE secrets (token VARCHAR);
 
-    -- Trusted setup: install the global ceiling, then freeze it
+    -- Trusted setup: install the global ceiling, then freeze it.
+    -- An omitted catalog matches any database; add catalog: 'mydb' to pin one.
     CALL gatekeeper_configure(
-        allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}],
+        allowed_tables := [{schema: 'reporting', 'table': '*'}],
         blocked_functions := ['md5']
     );
     -- Success
@@ -152,8 +153,10 @@ docs:
     omitted options from the built-in defaults. The policy is shared by every connection
     of the database instance, is not persisted, and is not undone by rollback. Request
     options are intersected with it: either layer's block wins, and each layer must allow
-    a resolved table or function. A request that tries to widen access does not error; it
-    simply cannot authorize anything the global policy denies.
+    every resolved table or view and every caller-written function. (Functions that
+    trusted views and macros introduce internally are exempt from the allowlists but
+    still honor blocks and the never-bind list.) A request that tries to widen access
+    does not error; it simply cannot authorize anything the global policy denies.
 
     | Operation | SQL |
     |-----------|-----|
@@ -186,8 +189,9 @@ docs:
     and type resolution can autoload extensions when those settings are on. Applications
     must control trusted definitions, host capabilities, credentials, resource limits, and
     the gap between validation and execution. Run validation on a dedicated connection
-    with `autoload_known_extensions = false`, memory and thread limits, and
-    `lock_configuration = true`. Default functions are a reviewed name inventory, not a
+    with `autoload_known_extensions = false`, `autoinstall_known_extensions = false`,
+    memory and thread limits, and `lock_configuration = true`. Default functions are a
+    reviewed name inventory, not a
     proof that every overload is harmless. Read the
     [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/docs/security.md)
     before integrating.

@@ -625,26 +625,23 @@ static void LoadInternal(ExtensionLoader &loader) {
 	}
 	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
 	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.
-	// Every named option is ANY, so listing them in documented order cannot misalign parameter types.
+	// The generator keeps only the first line of each description and shows it in one table cell, so keep
+	// these to a single short sentence and do not add newlines. Parameter names are paired positionally
+	// with named_parameters, an unordered map, so they are listed in OptionNames() order; this is only
+	// safe because every named option is ANY (pinned by test_documentation.py).
 	FunctionDescription validate_description;
 	validate_description.parameter_types = {LogicalType::VARCHAR};
 	validate_description.parameter_names = {"sql"};
-	validate_description.description =
-	    "Validates one untrusted read-only SQL statement against the global policy and the request options "
-	    "without executing it. Returns one row: allowed, code, violations, error_type, error_message, position, "
-	    "objects, functions. Require allowed = true AND code = 'ok'; request options can narrow the global policy "
-	    "but never widen it.";
+	validate_description.description = "Validates one untrusted read-only SQL statement against the global policy "
+	                                   "and the request options without executing it.";
 	validate_description.examples = {
-	    "SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM reporting.orders', "
-	    "allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}])"};
+	    "SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM "
+	    "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
 	FunctionDescription configure_description;
 	configure_description.description =
-	    "Replaces the global Gatekeeper policy atomically; omitted options revert to the built-in defaults. "
-	    "Shared by every connection of the database instance, inspected with current_setting('gatekeeper_policy'), "
-	    "and frozen by SET lock_configuration = true.";
-	configure_description.examples = {
-	    "CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}], "
-	    "blocked_functions := ['md5'])"};
+	    "Replaces the global Gatekeeper policy atomically; omitted options revert to the built-in defaults.";
+	configure_description.examples = {"CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': "
+	                                  "'*'}], blocked_functions := ['md5'])"};
 	for (const auto &name : gatekeeper::OptionNames()) {
 		validate_description.parameter_names.push_back(name);
 		configure_description.parameter_names.push_back(name);

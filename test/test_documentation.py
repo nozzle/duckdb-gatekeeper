@@ -1,10 +1,14 @@
 """Run the README and community-descriptor SQL examples in order, including their expected decisions."""
 import re
+import sys
 
 import duckdb
 import pytest
 
 from test_gatekeeper import ROOT, db
+
+sys.path.insert(0, str(ROOT / "scripts"))
+from inventory import load
 
 RESPONSE_TYPES = {duckdb.StatementType.SELECT, duckdb.StatementType.CALL}
 
@@ -107,24 +111,43 @@ def test_community_hello_world(db):
 def test_community_descriptor_headings():
     """Sub-headings must be ### so they sit beside the site's generated 'About' section."""
     descriptor = (ROOT / "community/description.yml").read_text()
-    extended = descriptor.split("  extended_description: |\n", 1)[1]
+    parts = descriptor.split("  extended_description: |\n", 1)
+    assert len(parts) == 2, "community/description.yml docs.extended_description must be a two-space indented block scalar"
+    extended = parts[1]
     headings = re.findall(r"(?m)^    (#+) (.+)$", extended)
     assert headings and {level for level, _ in headings} == {"###"}, headings
-    anchors = {title.lower().replace(" ", "-") for _, title in headings}
+    # kramdown-style slug: lowercase, drop punctuation, spaces to hyphens.
+    anchors = {re.sub(r"[^a-z0-9 -]", "", title.lower()).replace(" ", "-") for _, title in headings}
     for target in re.findall(r"\]\(#([^)]+)\)", extended):
         assert target in anchors, target
 
 
+def test_default_function_count_in_prose():
+    """The 864 in the README and descriptor must track the reviewed default inventory."""
+    _, defaults = load()
+    for path in [ROOT / "README.md", ROOT / "community/description.yml"]:
+        counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text())
+        assert counts and set(counts) == {str(len(defaults))}, (path, counts, len(defaults))
+
+
 def test_function_metadata_for_generated_docs(db):
-    """duckdb.org builds its 'Added Functions' table from duckdb_functions()."""
+    """duckdb.org builds its 'Added Functions' table from duckdb_functions().
+
+    The generator keeps only the first line of `description`, and `parameters` is paired
+    positionally with `parameter_types`, which come from an unordered map of named
+    parameters; that pairing is only correct while every named option is ANY.
+    """
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders (amount DOUBLE)")
-    rows = db.execute("""SELECT function_name, description, examples, parameters FROM duckdb_functions()
-                         WHERE function_name LIKE 'gatekeeper%' ORDER BY function_name""").fetchall()
+    rows = db.execute("""SELECT function_name, description, examples, parameters, parameter_types
+                         FROM duckdb_functions() WHERE function_name LIKE 'gatekeeper%'
+                         ORDER BY function_name""").fetchall()
     assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_validate"]
     options = ["allowed_tables", "blocked_tables", "use_default_functions", "allowed_functions", "blocked_functions"]
-    for name, description, examples, parameters in rows:
-        assert description and examples, name
-        assert sorted(parameters) == sorted(options + (["sql"] if name == "gatekeeper_validate" else [])), name
+    for name, description, examples, parameters, parameter_types in rows:
+        assert description and "\n" not in description and examples, name
+        positional = ["sql"] if name == "gatekeeper_validate" else []
+        assert sorted(parameters) == sorted(options + positional), name
+        assert parameter_types == ["VARCHAR"] * len(positional) + ["ANY"] * len(options), name
         assert db.extract_statements(examples[0])[0].type in RESPONSE_TYPES
         assert db.execute(examples[0]).fetchone()[0] is True, examples[0]
     assert db.execute("SELECT description FROM duckdb_settings() WHERE name = 'gatekeeper_policy'").fetchone()[0]
