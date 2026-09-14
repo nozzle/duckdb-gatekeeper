@@ -113,11 +113,6 @@ per-row arguments are not supported. Use separate parameterized calls for multip
 SQL strings. Every execution, including a prepared execution, checks the current
 global policy and binds the submitted SQL again.
 
-**Migration:** the scalar interface has been removed. Replace
-`SELECT gatekeeper_validate(...).allowed` with
-`SELECT allowed FROM gatekeeper_validate(...)`; clients now receive named columns
-instead of a single STRUCT column.
-
 | Bad input | `gatekeeper_validate` | `CALL gatekeeper_configure` |
 | --- | --- | --- |
 | Unknown/duplicate option name, wrong type | DuckDB error at bind | DuckDB error at bind |
@@ -156,8 +151,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := f
 | true |
 
 > [!NOTE]
-> The former `allow_replacement_scans` option has been removed. Authorize the substituted
-> reader through function policy instead (see [File readers](#file-readers)).
+> Authorize replacement-scan readers through function policy (see [File readers](#file-readers)).
 
 ### Result
 

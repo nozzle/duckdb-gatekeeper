@@ -40,9 +40,8 @@ parameters, not correlated/lateral per-row expressions. For multiple SQL strings
 make separate parameterized calls. Prepared executions read the current policy and
 bind the submitted SQL again; preparing a call does not cache an authorization decision.
 
-To migrate from the removed scalar interface, replace
-`SELECT gatekeeper_validate(...).allowed` with
-`SELECT allowed FROM gatekeeper_validate(...)`, or select `*` for all result columns.
+Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
+or select `*` for all result columns.
 Empty option lists are accepted regardless of element type, since DuckDB resolves
 untyped `[]` to `INTEGER[]` before table binding. Nonempty lists require the documented
 element types; NULL members return `invalid_input`. Nested identity fields are preserved
