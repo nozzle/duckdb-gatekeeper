@@ -149,7 +149,7 @@ def test_generation_bakes_build_engine_identity(tmp_path):
     subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
                     "--duckdb-version", "v1.5.6-dev150", "--duckdb-source-id", "a3cd0deed1"], check=True)
     text = (output / "version.hpp").read_text()
-    assert 'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"' in text
+    assert re.search(r'BUILD_ENGINE_STAMP\[\d+\] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"', text)
     for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex"),
                         ("--duckdb-source-id", "a"), ("--duckdb-source-id", "")]:
         result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),

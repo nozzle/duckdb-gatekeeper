@@ -52,7 +52,7 @@ def test_engine_guard_uses_build_engine(db):
     # CMake generates into the extension's binary dir, next to the artifact, for every build configuration.
     header = EXTENSION.parent / "generated/version.hpp"
     assert header.is_file(), header
-    assert f'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE {build_version} {build_source_id}"' in header.read_text()
+    assert f'] = "GATEKEEPER_BUILD_ENGINE {build_version} {build_source_id}"' in header.read_text()
 
 
 def test_review_provenance_is_separate_from_release_pin(tmp_path):
@@ -67,7 +67,9 @@ def test_review_provenance_is_separate_from_release_pin(tmp_path):
             reviewed_duckdb(tmp_path)
 
 
-STAMP = re.compile(rb"GATEKEEPER_BUILD_ENGINE ([^\s\0]+) ([^\s\0]+)\0")
+# The stamp array is NUL padded (scripts/generate.py STAMP_WIDTH), so include the run of NULs that follows
+# and any in-place rewrite of a different length can keep the total byte count.
+STAMP = re.compile(rb"GATEKEEPER_BUILD_ENGINE ([^\s\0]+) ([^\s\0]+)\0+")
 
 
 def _stamp(data):
@@ -78,14 +80,16 @@ def _stamp(data):
 
 
 def _tampered_artifact(tmp_path, version, source_id):
-    """Copy the built loadable with its build engine stamp rewritten in place (same length)."""
+    """Copy the built loadable with its build engine stamp rewritten in place, keeping the byte count."""
     data = EXTENSION.read_bytes()
-    needle = b"GATEKEEPER_BUILD_ENGINE %s %s\0" % tuple(field.encode() for field in _stamp(data))
-    replacement = b"GATEKEEPER_BUILD_ENGINE %s %s\0" % (version.encode(), source_id.encode())
-    assert len(needle) == len(replacement)
+    match = STAMP.search(data)
+    assert match and len(STAMP.findall(data)) == 1
+    replacement = b"GATEKEEPER_BUILD_ENGINE %s %s" % (version.encode(), source_id.encode())
+    assert len(replacement) < match.end() - match.start(), "rewritten stamp does not fit the padded array"
+    replacement = replacement.ljust(match.end() - match.start(), b"\0")
     # DuckDB derives the entrypoint symbol from the file name, so the copy keeps it.
     tampered = tmp_path / EXTENSION.name
-    tampered.write_bytes(data.replace(needle, replacement))
+    tampered.write_bytes(data[:match.start()] + replacement + data[match.end():])
     if platform.system() == "Darwin":
         # The kernel kills a process that pages in code whose ad-hoc signature no longer matches. Re-sign the
         # Mach-O image (which ends at LC_CODE_SIGNATURE) and re-append DuckDB's trailing metadata footer.
@@ -119,7 +123,15 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
         db.execute("LOAD '" + str(tampered).replace("'", "''") + "'")
     with pytest.raises(duckdb.Error):
         db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')")
-    # The same copy/re-sign flow with the stamp left intact loads, so the refusal above is the guard.
+    # A dev stamp of the same source commit (or a release stamp on a dev host) is a different footer identity
+    # even though the compared field would agree; DuckDB distinguishes them and so must the guard.
+    other_kind = version.replace("-dev", "") if not release else version + "-dev"
+    (tmp_path / "kind").mkdir()
+    kind = _tampered_artifact(tmp_path / "kind", other_kind, source_id)
+    # Without the mismatch setting DuckDB's own footer check may refuse first; with it, the guard must.
+    with pytest.raises(duckdb.Error, match="was built for DuckDB" if metadata_mismatch else None):
+        duckdb.connect(config=config).execute("LOAD '" + str(kind).replace("'", "''") + "'")
+    # The same copy/re-sign flow with the stamp left intact loads, so the refusals above are the guard.
     (tmp_path / "intact").mkdir()
     intact = _tampered_artifact(tmp_path / "intact", version, source_id)
     duckdb.connect(config=config).execute("LOAD '" + str(intact).replace("'", "''") + "'")

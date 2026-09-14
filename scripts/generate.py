@@ -12,6 +12,7 @@ from inventory import load
 from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
+STAMP_WIDTH = 96
 
 
 def grammar(duckdb_source=ROOT / "duckdb"):
@@ -126,10 +127,13 @@ def main():
     # The engine guard in LoadInternal parses this stamp at load time and compares it with the host. It is one
     # string so `strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE` shows which engine an
     # artifact was built for, and so tests can rewrite it in place to prove the guard refuses a mismatch.
+    # The array is fixed-width and NUL padded so a rewritten stamp of a different length still fits in place.
     stamp = f"GATEKEEPER_BUILD_ENGINE {args.duckdb_version} {args.duckdb_source_id}"
+    if len(stamp) >= STAMP_WIDTH:
+        raise SystemExit("Build engine stamp is too long: " + stamp)
     content = ('#pragma once\nnamespace gatekeeper {\n'
                f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
-               f'constexpr char BUILD_ENGINE_STAMP[] = "{stamp}";\n'
+               f'constexpr char BUILD_ENGINE_STAMP[{STAMP_WIDTH}] = "{stamp}";\n'
                '} // namespace gatekeeper\n')
     if not target.exists() or target.read_text() != content:
         target.write_text(content)

@@ -491,10 +491,13 @@ static void CheckBuildEngine(DatabaseInstance &db) {
 		                            error.what());
 	}
 	auto build = ParseBuildEngine();
-	const bool release = build.version.find("-dev") == string::npos;
-	const string &expected = release ? build.version : build.source_id;
-	const string &actual = release ? host_version : host_source_id;
-	if (actual != expected) {
+	// DuckDB identifies release engines by version tag and dev engines by source id. Both sides must be the
+	// same kind and agree on that field; a dev artifact from the release commit is still a different footer.
+	const bool build_release = build.version.find("-dev") == string::npos;
+	const bool host_release = host_version.find("-dev") == string::npos;
+	const string &expected = build_release ? build.version : build.source_id;
+	const string &actual = host_release ? host_version : host_source_id;
+	if (build_release != host_release || actual != expected) {
 		throw InvalidInputException("Gatekeeper %s was built for DuckDB %s (%s); this engine is %s (%s)",
 		                            gatekeeper::VERSION, build.version, build.source_id, host_version, host_source_id);
 	}
