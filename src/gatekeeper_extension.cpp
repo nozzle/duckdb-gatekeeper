@@ -1,9 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "gatekeeper_extension.hpp"
+#include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -15,18 +13,12 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "engine_errors.hpp"
 #include "function_policy.hpp"
 #include "fuzz_checks.hpp"
 #include "json_serializer.hpp"
 #include "options.hpp"
-#include <map>
+#include "version.hpp"
 
 namespace duckdb {
 using namespace duckdb_yyjson;
@@ -148,35 +140,10 @@ static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindI
 	for (const auto &option : input.named_parameters) {
 		auto &name = option.first;
 		auto value = option.second;
-		LogicalType expected;
 		try {
-			expected = gatekeeper::OptionType(name);
+			gatekeeper::CheckOptionShape(name, value);
 		} catch (const std::invalid_argument &error) {
 			throw BinderException(error.what());
-		}
-		auto actual = value.type();
-		if (!value.IsNull()) {
-			// DuckDB resolves untyped [] and [NULL] to INTEGER[] before table binding.
-			bool untyped_list = actual.id() == LogicalTypeId::LIST;
-			if (untyped_list)
-				for (const auto &entry : ListValue::GetChildren(value))
-					untyped_list = untyped_list && entry.IsNull();
-			if (expected == LogicalType::BOOLEAN && actual != expected)
-				throw BinderException("%s requires BOOLEAN", name);
-			if (expected == LogicalType::BIGINT && !actual.IsIntegral())
-				throw BinderException("%s requires an integer", name);
-			if (expected.id() == LogicalTypeId::LIST &&
-			    (actual.id() != LogicalTypeId::LIST ||
-			     (ListType::GetChildType(actual).id() != LogicalTypeId::VARCHAR &&
-			      ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL && !untyped_list)))
-				throw BinderException("%s requires VARCHAR[]", name);
-			if ((name == "allowed_tables" || name == "blocked_tables") &&
-			    (actual.id() != LogicalTypeId::LIST ||
-			     (ListType::GetChildType(actual).id() != LogicalTypeId::STRUCT &&
-			      ListType::GetChildType(actual).id() != LogicalTypeId::SQLNULL && !untyped_list)))
-				throw BinderException("%s requires STRUCT[]", name);
-			if (expected == LogicalType::BIGINT)
-				value = Value::BIGINT(value.GetValue<int64_t>());
 		}
 		// ANY preserves nested field sets rather than silently coercing away unknown fields.
 		result->options.emplace_back(name, std::move(value));
@@ -195,73 +162,6 @@ struct SingleRowState : GlobalTableFunctionState {
 
 static unique_ptr<GlobalTableFunctionState> InitSingleRow(ClientContext &, TableFunctionInitInput &) {
 	return make_uniq<SingleRowState>();
-}
-
-static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
-                              const string &name, gatekeeper::Result &result) {
-	auto canonical = gatekeeper::CanonicalFunction(name);
-	if (gatekeeper::FunctionDenied(policy, name) ||
-	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
-		result.violations.emplace("function", "resolved function is not allowed: " + canonical, "", "", "", canonical);
-		throw PermissionException("resolved function is not allowed");
-	}
-}
-
-static void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
-                            CatalogEntry &entry, gatekeeper::Result &result) {
-	switch (entry.type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY:
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
-	case CatalogType::TABLE_FUNCTION_ENTRY:
-	case CatalogType::MACRO_ENTRY:
-	case CatalogType::TABLE_MACRO_ENTRY:
-	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
-		AuthorizeFunction(policy, binding, entry.name, result);
-		auto &function = entry.Cast<StandardEntry>();
-		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
-		    binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
-		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
-		     function.schema.name != "main")) {
-			result.violations.emplace("bind_time_expression",
-			                          "runtime arguments require a system table-in-out function",
-			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
-			throw PermissionException("untrusted table-in-out function");
-		}
-		if (binding.literal_constructors.count(gatekeeper::Lower(entry.name)) &&
-		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
-		     function.schema.name != "main")) {
-			result.violations.emplace("bind_time_expression", "literal constructor must resolve to a system builtin",
-			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
-			throw PermissionException("untrusted bind-time constructor");
-		}
-		string type = entry.type == CatalogType::SCALAR_FUNCTION_ENTRY      ? "scalar"
-		              : entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY ? "aggregate"
-		              : entry.type == CatalogType::TABLE_FUNCTION_ENTRY     ? "table"
-		              : entry.type == CatalogType::MACRO_ENTRY              ? "macro"
-		              : entry.type == CatalogType::TABLE_MACRO_ENTRY        ? "table_macro"
-		                                                                    : "pragma";
-		result.functions.insert({function.schema.catalog.GetName(), function.schema.name, entry.name, type});
-		return;
-	}
-	default:
-		break;
-	}
-	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
-		return;
-	auto &object = entry.Cast<StandardEntry>();
-	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
-	if (!gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
-		if (gatekeeper::TableBlocked(policy, catalog, schema, name))
-			result.violations.emplace("table", "object is blocked", catalog, schema, name);
-		else if (entry.internal)
-			result.violations.emplace("internal_object", "internal object requires exact schema/table permission",
-			                          catalog, schema, name);
-		else
-			result.violations.emplace("table", "object is not allowed", catalog, schema, name);
-	}
-	if (!result.violations.empty())
-		throw PermissionException("resolved object is not allowed");
-	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
 }
 
 // Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
@@ -324,62 +224,6 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// later catalog lookup, so fail closed and let the caller retry.
 	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
 	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
-}
-
-// Direct FunctionBinder/collation lookups can bypass CatalogEntryRetriever. This
-// backstop checks surviving bound expressions; it cannot undo earlier bind-time work.
-static void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
-                          LogicalOperator &root, gatekeeper::Result &result) {
-	auto function = [&](const string &name, const string &type) {
-		AuthorizeFunction(policy, binding, name, result);
-		for (const auto &entry : result.functions)
-			if (entry.name == name && entry.type == type)
-				return;
-		// A bound implementation does not expose catalog provenance. Do not infer it
-		// from a same-named catalog entry of a different kind or do another lookup.
-		result.functions.insert({"", "", name, type});
-	};
-	vector<LogicalOperator *> operators{&root};
-	while (!operators.empty()) {
-		auto op = operators.back();
-		operators.pop_back();
-		for (auto &child : op->children)
-			operators.push_back(child.get());
-		// A catalog table's physical scan is authorized by its object identity.
-		if (op->type == LogicalOperatorType::LOGICAL_GET && op->Cast<LogicalGet>().function.name != "seq_scan")
-			function(op->Cast<LogicalGet>().function.name, "table");
-		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
-			ExpressionIterator::EnumerateExpression(*expr, [&](Expression &child) {
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION)
-					function(child.Cast<BoundFunctionExpression>().function.name, "scalar");
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
-					function(child.Cast<BoundAggregateExpression>().function.name, "aggregate");
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
-					auto &window = child.Cast<BoundWindowExpression>();
-					if (window.aggregate)
-						function(window.aggregate->name, "aggregate");
-					else {
-						static const std::map<ExpressionType, string> windows = {
-						    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
-						    {ExpressionType::WINDOW_RANK, "rank"},
-						    {ExpressionType::WINDOW_RANK_DENSE, "dense_rank"},
-						    {ExpressionType::WINDOW_NTILE, "ntile"},
-						    {ExpressionType::WINDOW_PERCENT_RANK, "percent_rank"},
-						    {ExpressionType::WINDOW_CUME_DIST, "cume_dist"},
-						    {ExpressionType::WINDOW_FIRST_VALUE, "first_value"},
-						    {ExpressionType::WINDOW_LAST_VALUE, "last_value"},
-						    {ExpressionType::WINDOW_LEAD, "lead"},
-						    {ExpressionType::WINDOW_LAG, "lag"},
-						    {ExpressionType::WINDOW_NTH_VALUE, "nth_value"},
-						    {ExpressionType::WINDOW_FILL, "fill"}};
-						auto found = windows.find(window.GetExpressionType());
-						if (found != windows.end())
-							function(found->second, "window");
-					}
-				}
-			});
-		});
-	}
 }
 
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
@@ -451,10 +295,15 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 			if (!bound.plan)
 				throw BinderException(
 				    "Validation requires a complete bound plan; parameter values or types may be needed");
-			if (bound.plan) {
-				AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
-				AuthorizePlan(policy, binding_policy, *bound.plan, result);
-			}
+			// Some bind callbacks return placeholder plans instead of throwing ParameterNotResolved.
+			// Mirror Planner's bound_all_parameters type check: execution must not choose a different
+			// implementation after validation by resolving an UNKNOWN parameter for the first time.
+			for (const auto &entry : parameters.GetParameters())
+				if (!entry.second->return_type.IsValid())
+					throw BinderException(
+					    "Validation requires a complete bound plan; parameter values or types may be needed");
+			AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
+			AuthorizePlan(policy, binding_policy, *bound.plan, result);
 			// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 			for (auto &entry : binder->GetReplacementScans())
 				if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
@@ -565,14 +414,8 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 			throw std::invalid_argument("duplicate Gatekeeper configuration option");
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
-		for (const auto &option : input.named_parameters) {
-			auto value = option.second;
-			// ANY preserves original types and nested field names; only integer widening is permitted.
-			if (!value.IsNull() && gatekeeper::OptionType(option.first) == LogicalType::BIGINT &&
-			    value.type().IsIntegral())
-				value = Value::BIGINT(value.GetValue<int64_t>());
-			options.emplace_back(option.first, std::move(value));
-		}
+		for (const auto &option : input.named_parameters)
+			options.emplace_back(option.first, option.second);
 		gatekeeper::ApplyOptions(policy, options);
 		types.push_back(LogicalType::BOOLEAN);
 		names.push_back("Success");
@@ -599,12 +442,10 @@ static void Configure(ClientContext &context, TableFunctionInput &input, DataChu
 // The grammar and inventory are generated from exactly this engine release. DuckDB's own footer check
 // compares the same string but can be disabled with allow_extensions_metadata_mismatch, so refuse to
 // load into any other engine build here as well.
-static constexpr const char *SUPPORTED_DUCKDB_VERSION = "v1.5.5";
-
 static void LoadInternal(ExtensionLoader &loader) {
-	if (string(DuckDB::LibraryVersion()) != SUPPORTED_DUCKDB_VERSION) {
-		throw InvalidInputException("Gatekeeper 0.1.0 supports DuckDB %s only; this engine is %s",
-		                            SUPPORTED_DUCKDB_VERSION, DuckDB::LibraryVersion());
+	if (string(DuckDB::LibraryVersion()) != gatekeeper::DUCKDB_VERSION) {
+		throw InvalidInputException("Gatekeeper %s supports DuckDB %s only; this engine is %s", gatekeeper::VERSION,
+		                            gatekeeper::DUCKDB_VERSION, DuckDB::LibraryVersion());
 	}
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
@@ -657,7 +498,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }
-std::string GatekeeperExtension::Version() const { return "0.1.0"; }
+std::string GatekeeperExtension::Version() const { return gatekeeper::VERSION; }
 } // namespace duckdb
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(gatekeeper, loader) { duckdb::LoadInternal(loader); }

@@ -70,7 +70,7 @@
       "id": "preflight",
       "type": "security",
       "label": "AST checks",
-      "sublabel": "functions, flags, limits",
+      "sublabel": "syntax, functions, limits",
       "stage": 2,
       "row": 0,
       "width": 128

@@ -7,17 +7,16 @@ pass CI before submission.
 
 ## Prepare the release commit
 
-1. Keep the extension version in `extension_config.cmake`, `GatekeeperExtension::Version()`
-   and its load-error message in `src/gatekeeper_extension.cpp`, and the community
-   descriptor aligned. Update the release packaging tests when changing version pins.
+1. Set the extension version in `versions.cmake` and align the community descriptor.
+   CMake and generated C++ constants consume this canonical metadata. Update the
+   release packaging tests when changing version pins.
    DuckDB upgrades additionally require the full [repinning checklist](../inventories/README.md#repinning-the-engine).
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
-   sanitizers, lakehouse integration, native fuzz smoke, and distribution builds.
+   sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
 3. Require the full distribution matrix: Linux amd64/arm64 glibc and musl, macOS
-   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Windows ARM64
-   is newly opted in and must pass its native build and sqllogictests before support
-   is advertised. Wasm EH must pass the browser test of the actual distribution artifact.
+   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native
+   target must pass the SQL contract suite. Wasm EH must pass the browser test of the actual distribution artifact.
    If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging
    tests, and community descriptor aligned and document the reason.
 4. Leave the README and security doc's pending-publication statements in place until
@@ -41,9 +40,9 @@ artifact so archive creation is tested before tagging. Only a version-tag push p
 a GitHub Release.
 Only stable `vMAJOR.MINOR.PATCH` tag pushes trigger distribution; prerelease and test
 tags are excluded. The package gate validates the exact stable version again before
-the tag-only publish job can run, including the version in the load-time error message.
+the tag-only publish job can run, using the canonical `versions.cmake` metadata.
 It also checks `community/description.yml`'s `extension.version` and `repo.ref`, and
-the C++ engine pin against `scripts/versions.py`. The descriptor must also cite the
+the engine metadata loaded by `scripts/versions.py`. The descriptor must also cite the
 pinned DuckDB version and source revision in its compatibility description.
 Keep the descriptor's version/ref
 as unquoted scalars with two-space indentation; the standard-library-only packaging

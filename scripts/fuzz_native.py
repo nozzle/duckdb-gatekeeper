@@ -1,4 +1,4 @@
-"""Coverage-guided native JSON policy/AST fuzzing using clang libFuzzer and ASan/UBSan."""
+"""Coverage-guided native AST/policy fuzzing using clang libFuzzer and ASan/UBSan."""
 import argparse
 import json
 import os
@@ -18,7 +18,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     generated = out / "generated"
     subprocess.run([sys.executable, str(root / "scripts/generate.py"), "--output", str(generated)], check=True)
-    corpus = out / "corpus"
+    corpus = out / "ast-corpus"
     corpus.mkdir(exist_ok=True)
     import duckdb
     with duckdb.connect() as db:
@@ -31,12 +31,12 @@ def main():
                                    "SELECT 1 LIMIT len(repeat('x',200000000))", "SELECT * FROM range($1)",
                                    "SELECT quantile_cont(x,[0.2,0.8]) FROM t"]):
             ast = json.loads(db.execute("SELECT json_serialize_sql(?,skip_default:=true,skip_empty:=true,skip_null:=true)", [query]).fetchone()[0])
-            for j, prefix in enumerate([bytes([107, 30, 0, 0, 0, 0]), bytes([255, 63, 1, 1, 1, 1]), bytes(6)]):
+            for j, prefix in enumerate([bytes([107, 0, 0, 0]), bytes([255, 1, 1, 1]), bytes(4)]):
                 (corpus / f"seed-{i}-{j}").write_bytes(prefix + json.dumps({"ast": ast}).encode())
             node = ast.get("statements", [{}])[0].get("node", {})
             if node.get("type") == "SET_OPERATION_NODE" and "left" in node:
                 node["children"] = [node.pop("left"), node.pop("right")]
-                (corpus / f"children-{i}").write_bytes(bytes([107, 30, 0, 0, 0, 0]) + json.dumps({"ast": ast}).encode())
+                (corpus / f"children-{i}").write_bytes(bytes([107, 0, 0, 0]) + json.dumps({"ast": ast}).encode())
     command = [os.environ.get("CXX", "clang++"), "-std=c++17", "-O1", "-g", "-fsanitize=fuzzer,address,undefined", "-fno-sanitize=vptr", "-fno-omit-frame-pointer"]
     for path in ["src/include", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
         command += ["-I" + str(root / path)]

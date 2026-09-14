@@ -1,10 +1,16 @@
 name: Linked SQL and typed-option fuzzing
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: sql-fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   CMAKE_C_COMPILER_LAUNCHER: ccache
   CMAKE_CXX_COMPILER_LAUNCHER: ccache
@@ -25,7 +31,7 @@ jobs:
           max-size: 600M
       - run: python -m pip install --require-hashes -r requirements-dev.txt
       - run: sudo apt-get update -qq && sudo apt-get install -y clang libclang-rt-dev
-      - run: python scripts/fuzz_sql.py --seconds 120
+      - run: python scripts/fuzz_sql.py --seconds ${{ github.event_name == 'schedule' && 1800 || 120 }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

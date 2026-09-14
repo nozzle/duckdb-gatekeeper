@@ -1,12 +1,9 @@
 """Deterministic generated combinations with independently specified outcomes."""
-import json
 import random
 
 from test_binding import validate
 from test_gatekeeper import db
 from typed_helpers import configure
-import duckdb
-import pytest
 
 
 def test_generated_nested_reference_positions(db):
@@ -70,5 +67,3 @@ def test_embedded_nul_policy_does_not_truncate(db):
     for field in ["catalog", "schema", "table"]:
         entry = {"catalog": "*", "schema": "main", "table": "*", field: "name\0suffix"}
         assert validate(db, "SELECT 1", {"allowed_tables": [entry]})["code"] == "invalid_input"
-    with pytest.raises(duckdb.Error):
-        db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', ?)", ['{"check_functions":false}\0{}'])

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sys
 
-from inventory import ROOT, load
+from inventory import ROOT, load, check_sources
 from versions import BASELINE_FILENAME
 
 
@@ -74,6 +74,7 @@ def main():
         args.capture.write_text(json.dumps(candidate, indent=2) + "\n")
         print(f"Candidate snapshot written to {args.capture}; review before accepting as baseline")
         return
+    check_sources(entries)
     baseline = json.loads(args.baseline.read_text())
     delta = compare(baseline, candidate)
     report = {**delta, **coverage(candidate, entries), "compiled_default_count": len(defaults)}

@@ -1,7 +1,7 @@
 {
   "name": "sqlite",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/sqlite.go",
+  "source": "https://github.com/duckdb/duckdb-sqlite/tree/f79b1db7d7730b18d0f8400d3650ffa6b45168d8",
   "notes": [
     "Source: https://github.com/duckdb/duckdb-sqlite/tree/f79b1db7d7730b18d0f8400d3650ffa6b45168d8"
   ],

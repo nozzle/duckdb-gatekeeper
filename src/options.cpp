@@ -7,20 +7,56 @@ using duckdb::LogicalType;
 using duckdb::LogicalTypeId;
 using duckdb::Value;
 
+enum class OptionKind { DEFAULTS, ALLOWED_FUNCTIONS, BLOCKED_FUNCTIONS, ALLOWED_TABLES, BLOCKED_TABLES };
+struct OptionSpec {
+	std::string name;
+	OptionKind kind;
+	LogicalTypeId element;
+};
+static const std::vector<OptionSpec> &Options() {
+	static const std::vector<OptionSpec> options = {
+	    {"use_default_functions", OptionKind::DEFAULTS, LogicalTypeId::BOOLEAN},
+	    {"allowed_functions", OptionKind::ALLOWED_FUNCTIONS, LogicalTypeId::VARCHAR},
+	    {"blocked_functions", OptionKind::BLOCKED_FUNCTIONS, LogicalTypeId::VARCHAR},
+	    {"allowed_tables", OptionKind::ALLOWED_TABLES, LogicalTypeId::STRUCT},
+	    {"blocked_tables", OptionKind::BLOCKED_TABLES, LogicalTypeId::STRUCT}};
+	return options;
+}
+static const OptionSpec &FindOption(const std::string &name) {
+	for (const auto &option : Options())
+		if (option.name == name)
+			return option;
+	throw std::invalid_argument("unknown option: " + name);
+}
+
 const std::vector<std::string> &OptionNames() {
-	static const std::vector<std::string> names = {"use_default_functions", "allowed_functions", "blocked_functions",
-	                                               "allowed_tables", "blocked_tables"};
+	static const auto names = [] {
+		std::vector<std::string> result;
+		for (const auto &option : Options())
+			result.push_back(option.name);
+		return result;
+	}();
 	return names;
 }
 
-LogicalType OptionType(const std::string &name) {
-	if (name == "use_default_functions")
-		return LogicalType::BOOLEAN;
-	if (name == "allowed_functions" || name == "blocked_functions")
-		return LogicalType::LIST(LogicalType::VARCHAR);
-	if (name == "allowed_tables" || name == "blocked_tables")
-		return LogicalType::ANY;
-	throw std::invalid_argument("unknown option: " + name);
+void CheckOptionShape(const std::string &name, const Value &value) {
+	auto element = FindOption(name).element;
+	if (value.IsNull())
+		return; // NULL values are reported at execution by validation.
+	if (element == LogicalTypeId::BOOLEAN) {
+		if (value.type() != LogicalType::BOOLEAN)
+			throw std::invalid_argument(name + " requires BOOLEAN");
+		return;
+	}
+	auto message = name + (element == LogicalTypeId::VARCHAR ? " requires VARCHAR[]" : " requires STRUCT[]");
+	if (value.type().id() != LogicalTypeId::LIST)
+		throw std::invalid_argument(message);
+	// Empty and all-NULL lists have no value that can violate the element shape. DuckDB
+	// gives untyped [] and [NULL] INTEGER[]; semantic decoding still rejects NULL members.
+	if (duckdb::ListType::GetChildType(value.type()).id() != element)
+		for (const auto &entry : duckdb::ListValue::GetChildren(value))
+			if (!entry.IsNull())
+				throw std::invalid_argument(message);
 }
 
 static Names Strings(const Value &value, bool lower) {
@@ -45,20 +81,17 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 		auto &value = option.second;
 		if (!seen.insert(name).second)
 			throw std::invalid_argument("duplicate option: " + name);
-		auto type = OptionType(name);
+		auto kind = FindOption(name).kind;
+		CheckOptionShape(name, value);
 		if (value.IsNull())
 			throw std::invalid_argument("NULL option: " + name);
-		if (type == LogicalType::BOOLEAN) {
-			if (value.type() != type)
-				throw std::invalid_argument("expected BOOLEAN: " + name);
-			auto flag = value.GetValue<bool>();
-			if (name == "use_default_functions")
-				policy.defaults = flag;
-		} else if (name == "allowed_functions")
+		if (kind == OptionKind::DEFAULTS) {
+			policy.defaults = value.GetValue<bool>();
+		} else if (kind == OptionKind::ALLOWED_FUNCTIONS)
 			policy.allowed_functions = Strings(value, true);
-		else if (name == "blocked_functions")
+		else if (kind == OptionKind::BLOCKED_FUNCTIONS)
 			policy.blocked_functions = Strings(value, true);
-		else if (name == "allowed_tables" || name == "blocked_tables") {
+		else {
 			std::string leaf = "table";
 			if (value.type().id() != LogicalTypeId::LIST)
 				throw std::invalid_argument(name + " requires a list of structs");
@@ -73,9 +106,9 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				if (!fields.count("schema") || !fields.count(leaf))
 					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
 			}
-			if (name == "allowed_tables")
+			if (kind == OptionKind::ALLOWED_TABLES)
 				policy.tables = true;
-			auto &identities = name == "allowed_tables" ? policy.allowed_tables : policy.blocked_tables;
+			auto &identities = kind == OptionKind::ALLOWED_TABLES ? policy.allowed_tables : policy.blocked_tables;
 			identities.clear();
 			for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
 				if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT)

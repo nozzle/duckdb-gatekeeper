@@ -1,7 +1,7 @@
 {
   "name": "ducklake",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/ducklake.go",
+  "source": "https://github.com/duckdb/ducklake/tree/d8a1881e22516ea3d186d73e83c65fe5bd1a1dc4",
   "notes": [
     "Source: https://github.com/duckdb/ducklake/tree/d8a1881e22516ea3d186d73e83c65fe5bd1a1dc4"
   ],

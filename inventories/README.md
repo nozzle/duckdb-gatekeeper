@@ -5,7 +5,7 @@ Gatekeeper owns its function classifications here:
 - `core.json`: built-in groups (operators, aggregates, windows, syntax helpers,
   generators, scalars), default compute names, and excluded names.
 - `extensions/*.json`: one file for each reviewed core extension, preserving
-  `compute` and `elevated` groups, source links, and review notes/pins.
+  `compute` and `elevated` groups, implementation source links, and review notes/pins.
 - `baselines/duckdb-1.5.5.json`: runtime signatures and loaded-extension versions
   captured from the pinned Python DuckDB runtime. This includes Python-specific
   functions; it does not claim that all extensions were loaded or audited live.
@@ -34,11 +34,18 @@ inventories and on mutated documents. `scripts/inventory.py` then checks version
 sorting, duplicates, and classification conflicts, including conflicts across extensions.
 The build consumes this same loader. Tests exercise every default and every excluded name.
 
-The generator requires Python 3.10+ and a Git checkout with initialized pinned submodules. `scripts/versions.py` owns the inventory engine
-version/revision and baseline filename. Generated C++ literals are split into
+The generator requires Python 3.10+ and a Git checkout with initialized pinned submodules.
+`versions.cmake` owns the extension and engine version/revision; `scripts/versions.py`
+reads it and derives the baseline filename. Generated C++ literals are split into
 8 KB-or-smaller pieces for MSVC compatibility.
 
 Inventory notes retain provenance, non-obvious classification traps, and coverage limitations.
+Generation and audit comparisons cross-check implementation source URLs against DuckDB's pinned extension
+descriptors or in-tree source revision. UI has an independent source pin because no
+engine descriptor exists; MotherDuck records its binary version/hash in `binary_review`
+and cannot contribute defaults. Original attribution is retained in `NOTICE`.
+Capture-only mode remains available without submodules; comparison requires the pinned
+checkout and rejects descriptors with multiple distinct source URLs or revisions.
 
 ## Version update procedure
 
@@ -82,9 +89,8 @@ is deliberate fail-closed behavior: the grammar is derived from the serializer o
 that revision. It also means the community repository's bulk rebuild for the next DuckDB
 release fails at configure time until Gatekeeper is repinned. To repin, update together:
 
-- the `duckdb` submodule and `SUPPORTED_DUCKDB`/`SUPPORTED_DUCKDB_REVISION` in
-  `scripts/versions.py` (consumed by generation, the build scripts, and the audit);
-- `SUPPORTED_DUCKDB_VERSION` in `src/gatekeeper_extension.cpp`;
+- the `duckdb` submodule and engine version/revision in `versions.cmake`
+  (consumed by CMake, generated C++ constants, build scripts, and the audit);
 - `OVERRIDE_GIT_DESCRIBE` in `Makefile` and `.github/workflows/test.yml`;
 - `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`

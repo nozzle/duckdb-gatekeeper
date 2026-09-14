@@ -106,7 +106,8 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint python3 
 The first target exercises the AST walker and yyjson; the second links DuckDB and
 exercises SQL parsing, typed options, catalog binding, and configuration paths. Corpus,
 logs, and crash artifacts stay in ignored `build/` directories. The linked fuzzer also
-runs weekly on CI. See the sanitizer scope in
+runs on every PR/main push and weekly on CI. Its deterministic startup regressions
+cover native policy setters and replacement callbacks. See the sanitizer scope in
 [docs/security.md](docs/security.md#adversarial-regression-coverage).
 
 ## Dependencies
@@ -132,6 +133,20 @@ Only compute names become defaults. Runtime audits detect changes without admitt
 functions automatically, and unreviewed names are never promoted by tooling. Every
 supported DuckDB update requires review: follow the
 [inventory workflow](inventories/README.md) and [inventories/AGENTS.md](inventories/AGENTS.md).
+
+## Implementation structure
+
+- `src/gatekeeper_extension.cpp`: SQL API, policy snapshot, parse/preflight/bind orchestration,
+  replacement interception, and structured error/result handling.
+- `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
+  checks, including executable lambda/list-aggregate bind data.
+- `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
+- `src/options.cpp`: shared option specifications, typed decoding, and canonical global settings.
+- `versions.cmake`: canonical extension/engine metadata; generation emits `version.hpp`.
+
+DuckDB's ordinary expression iterator does not enumerate executable function bind data.
+When reviewing a new engine, inspect those representations explicitly; a successful
+catalog callback alone does not establish complete function coverage.
 
 ## Pull requests
 

@@ -28,24 +28,24 @@ def test_set_operation_representations_and_all_branches(db, native_validator):
     def ast(sql):
         return json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
                                      [sql]).fetchone()[0])
-    legacy = ast("SELECT 1 UNION ALL SELECT 2")
-    assert native_validator(legacy) == "ok"
-    modern = copy.deepcopy(legacy)
-    node = modern["statements"][0]["node"]
+    pair = ast("SELECT 1 UNION ALL SELECT 2")
+    assert native_validator(pair) == "ok"
+    latest = copy.deepcopy(pair)
+    node = latest["statements"][0]["node"]
     node["children"] = [node.pop("left"), node.pop("right")]
-    assert native_validator(modern) == "ok"
+    assert native_validator(latest) == "ok"
     node["children"].append(ast("SELECT md5('x')")["statements"][0]["node"])
-    assert native_validator(modern) == "forbidden"
+    assert native_validator(latest) == "forbidden"
     for children in [[], [node["children"][0]], None, "invalid"]:
-        malformed = copy.deepcopy(modern)
+        malformed = copy.deepcopy(latest)
         malformed["statements"][0]["node"]["children"] = children
         assert native_validator(malformed) == "unsupported"
     for field in ["left", "right"]:
-        malformed = copy.deepcopy(legacy)
+        malformed = copy.deepcopy(pair)
         del malformed["statements"][0]["node"][field]
         assert native_validator(malformed) == "unsupported"
     node["left"] = node["children"][0]
-    assert native_validator(modern) == "unsupported"
+    assert native_validator(latest) == "unsupported"
 
 
 def test_serialized_bind_time_sites(db, native_validator):

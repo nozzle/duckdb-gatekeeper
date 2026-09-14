@@ -1,3 +1,4 @@
+"""Bind-time expression restrictions and complete-binding dependency evidence."""
 import pytest
 
 from test_gatekeeper import db
@@ -45,12 +46,19 @@ def test_literal_bind_time_forms_remain_usable(db, sql):
 @pytest.mark.parametrize("sql", [
     "SELECT x FROM t WHERE x=?", "SELECT x FROM t WHERE x=$1", "SELECT x FROM t WHERE x=$value",
     "SELECT * FROM t LIMIT ?", "SELECT * FROM t LIMIT $n OFFSET $offset", "SELECT $1::INTEGER",
-    "SELECT x FROM t WHERE x=$1::INT AND x=$1::INT", "SELECT x FROM t WHERE x=$1 LIMIT $1",
+    "SELECT x FROM t WHERE x=$1::INT AND x=$1::INT", "SELECT x FROM t WHERE x=$1 LIMIT $2",
 ])
 def test_parameters_with_complete_binding(db, sql):
     db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql)
     assert result["allowed"], result
+
+
+def test_conflicting_parameter_types_require_rebinding(db):
+    db.execute("CREATE TABLE t(x INTEGER)")
+    # INTEGER comparison and BIGINT LIMIT invalidate the shared parameter type in DuckDB.
+    result = validate(db, "SELECT x FROM t WHERE x=$1 LIMIT $1")
+    assert result["code"] == "binding" and not result["allowed"], result
 
 
 @pytest.mark.parametrize("sql", ["SELECT $1", "SELECT abs($1)", "SELECT * FROM range($1)"])

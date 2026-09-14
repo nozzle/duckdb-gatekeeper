@@ -1,7 +1,7 @@
 {
   "name": "avro",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/avro.go",
+  "source": "https://github.com/duckdb/duckdb-avro/tree/f9d590297485f0318f480372c70bdd852826e258",
   "notes": [
     "Source: https://github.com/duckdb/duckdb-avro/tree/f9d590297485f0318f480372c70bdd852826e258"
   ],

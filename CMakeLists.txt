@@ -6,9 +6,10 @@ find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
 file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/src/include/duckdb/storage/serialization/*.json)
+file(GLOB DESCRIPTOR_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/.github/config/extensions/*.cmake)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    scripts/generate.py scripts/inventory.py scripts/schema_check.py scripts/versions.py
-    ${INVENTORY_FILES} ${SERIALIZATION_FILES})
+    scripts/generate.py scripts/inventory.py scripts/schema_check.py scripts/versions.py versions.cmake
+    ${INVENTORY_FILES} ${SERIALIZATION_FILES} ${DESCRIPTOR_FILES})
 # Generated headers live in the build tree so parallel configurations never race on shared files.
 set(GATEKEEPER_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
@@ -20,7 +21,7 @@ endif()
 include_directories(src/include ${GATEKEEPER_GENERATED_DIR}
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/extension/json/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/third_party/yyjson/include)
-set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/options.cpp src/validator.cpp
+set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/authorization.cpp src/options.cpp src/validator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/duckdb/extension/json/json_serializer.cpp)
 build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})

@@ -130,7 +130,7 @@ static const Inventory &GetInventory() {
 bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	auto &inventory = GetInventory();
 	auto canonical = CanonicalFunction(name);
-	// Only Parquet gets bidirectional allow aliases here. Preserve the existing JSON allow semantics.
+	// Parquet aliases share a permission; JSON aliases accept the canonical extraction name.
 	return !FunctionDenied(policy, name) &&
 	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
 	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
@@ -485,7 +485,8 @@ struct Walker {
 		if (expected == "SetOperationNode") {
 			auto children = yyjson_obj_get(value, "children");
 			auto left = yyjson_obj_get(value, "left"), right = yyjson_obj_get(value, "right");
-			// SetOperationNode::SerializeChildNode emits either the legacy pair or the latest list.
+			// DuckDB's default serializer emits a pair; Latest() emits a list. Validate both shapes
+			// so native AST tests can use json_serialize_sql while production uses Latest().
 			if (children) {
 				if (left || right || !yyjson_is_arr(children) || yyjson_arr_size(children) < 2)
 					throw Stop{"set operation requires either left/right or at least two children"};

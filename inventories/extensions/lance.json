@@ -1,7 +1,7 @@
 {
   "name": "lance",
   "reviewed_duckdb": "1.5.5",
-  "source": "https://github.com/uwdata/mosaic/tree/3eb74ea8/packages/server/duckdb-server-go/pkg/functionset/lance.go",
+  "source": "https://github.com/lance-format/lance-duckdb/tree/2f167ea1aa8b1201c89d53740b84deb00aff680e",
   "notes": [
     "Source: https://github.com/lance-format/lance-duckdb/tree/2f167ea1aa8b1201c89d53740b84deb00aff680e"
   ],

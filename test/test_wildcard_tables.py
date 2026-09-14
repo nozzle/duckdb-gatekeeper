@@ -101,8 +101,8 @@ def test_show_is_not_authorized_by_a_broad_wildcard(db, sql):
     assert "table" in {v["rule"] for v in result["violations"]}
 
 
-@pytest.mark.parametrize("name", ["allowed_catalogs", "allowed_schemas"])
-def test_unknown_namespace_options_are_rejected_by_both_apis(db, name):
+@pytest.mark.parametrize("name", ["allowed_tabels", "blocked_tabels"])
+def test_misspelled_options_are_rejected_by_both_apis(db, name):
     configure(db, {"allowed_tables": []})
     before = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
     for sql in [f"CALL gatekeeper_configure({name} := ['memory'])",
