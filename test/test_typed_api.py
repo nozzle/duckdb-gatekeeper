@@ -84,6 +84,7 @@ def test_preparing_does_not_validate_submitted_sql(db):
     "check_functions := true", "check_functions := false",
     "allow_recursive_ctes := true", "allow_recursive_ctes := false",
     "max_ast_bytes := 8388608", "max_ast_nodes := 100000", "max_ast_depth := 512",
+    "max_statements := 1", "max_statements := 2", "max_statements := 0",
 ])
 def test_rejected_signatures(db,args):
     with pytest.raises(duckdb.Error):
@@ -95,16 +96,15 @@ def test_rejected_signatures(db,args):
 @pytest.mark.parametrize("options", [
     {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":[""]},
     {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema":"main","table":"t","extra":"x"}]},
-    {"max_statements":0}, {"max_statements":-1},
 ])
 def test_invalid_typed_values(db,options):
     result = validate(db,"SELECT 1", options)
     assert not result["allowed"] and result["code"] == "invalid_input", result
 
 
-def test_configure_replacement_and_independent_limits(db):
-    assert configure(db,{"blocked_functions":["md5"],"max_statements":2})
-    assert validate(db,"SELECT 1; SELECT 2", {"use_default_functions":False})["allowed"]
+def test_configure_replacement_and_independent_options(db):
+    assert configure(db,{"blocked_functions":["md5"]})
+    assert validate(db,"SELECT 1", {"use_default_functions":False})["allowed"]
     assert not validate(db,"SELECT md5('x')")["allowed"]
     assert not validate(db,"SELECT md5('x')", {"blocked_functions":[]})["allowed"]
     configure(db)
@@ -187,7 +187,7 @@ def test_no_prebind_io_for_blocked_reader(db):
 def test_bind_callback_input_errors_have_binding_code(db):
     result=validate(db,"SELECT map_concat(1)")
     assert not result["allowed"] and result["code"]=="binding", result
-    result=validate(db,"SELECT 1",{"max_statements":0})
+    result=validate(db,"SELECT 1",{"blocked_functions":[None]})
     assert not result["allowed"] and result["code"]=="invalid_input", result
 
 
@@ -337,7 +337,7 @@ def test_object_identifiers_are_ascii_case_insensitive(db):
     assert result["violations"][0]["table"] == "Orders"
 
 
-@pytest.mark.parametrize("sql", ["", "  ", "-- comment", "/* comment */", "; ;"])
+@pytest.mark.parametrize("sql", ["", "  ", "-- comment", "/* comment */", ";", ";;", "; ;"])
 def test_empty_sql_is_invalid_input(db, sql):
     result = validate(db, sql)
     assert result["code"] == "invalid_input" and not result["allowed"]

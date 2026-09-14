@@ -175,25 +175,28 @@ def test_validation_cannot_execute_configuration(db):
 
 
 def test_mixed_batch_rejected_before_binding(catalog):
-    configure(catalog, {"max_statements": 2})
+    configure(catalog, {"allowed_functions": ["missing_file_reader"]})
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
-    result = validate(catalog, sql, {"max_statements": 2, "allowed_functions": ["missing_file_reader"]})
-    assert not result["allowed"] and result["code"] == "unsupported"
+    result = validate(catalog, sql, {"allowed_functions": ["missing_file_reader"]})
+    assert not result["allowed"] and result["code"] == "forbidden"
+    assert result["violations"][0]["rule"] == "limit"
+    assert result["error_message"] == ""
     assert catalog.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
 
-@pytest.mark.parametrize("sql", [
-    "SELECT 1; /* harmless */ DELETE FROM t RETURNING *",
-    "SELECT 1; -- comment\n COPY t TO 'out.csv'",
-    "WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d",
-    "WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d",
-    "WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d",
+@pytest.mark.parametrize("sql,code", [
+    ("SELECT 1; /* harmless */ DELETE FROM t RETURNING *", "forbidden"),
+    ("SELECT 1; -- comment\n COPY t TO 'out.csv'", "forbidden"),
+    ("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", "parser"),
+    ("WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d", "parser"),
+    ("WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d", "parser"),
 ])
-def test_write_smuggling(db, sql):
-    configure(db, {"max_statements": 10})
-    result = validate(db, sql, {"max_statements": 10})
+def test_write_smuggling(db, sql, code):
+    result = validate(db, sql)
     assert not result["allowed"]
-    assert result["code"] in {"parser", "unsupported"}
+    assert result["code"] == code
+    if code == "forbidden":
+        assert result["violations"][0]["rule"] == "limit"
 
 
 @pytest.mark.parametrize("sql", [

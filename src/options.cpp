@@ -9,7 +9,7 @@ using duckdb::Value;
 
 const std::vector<std::string> &OptionNames() {
 	static const std::vector<std::string> names = {"use_default_functions", "allowed_functions", "blocked_functions",
-	                                               "allowed_tables",        "blocked_tables",    "max_statements"};
+	                                               "allowed_tables", "blocked_tables"};
 	return names;
 }
 
@@ -20,8 +20,6 @@ LogicalType OptionType(const std::string &name) {
 		return LogicalType::LIST(LogicalType::VARCHAR);
 	if (name == "allowed_tables" || name == "blocked_tables")
 		return LogicalType::ANY;
-	if (name == "max_statements")
-		return LogicalType::BIGINT;
 	throw std::invalid_argument("unknown option: " + name);
 }
 
@@ -109,13 +107,6 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
 				identities.insert(table);
 			}
-		} else {
-			if (value.type() != LogicalType::BIGINT)
-				throw std::invalid_argument("expected integer limit");
-			auto limit = value.GetValue<int64_t>();
-			if (limit <= 0 || limit > 1000)
-				throw std::invalid_argument("invalid limit: " + name);
-			policy.statements = limit;
 		}
 	}
 }
@@ -143,7 +134,6 @@ Value PolicyValue(const Policy &policy) {
 	                      {"blocked_functions", strings(policy.blocked_functions)},
 	                      {"allowed_tables", identities(policy.allowed_tables, "table")},
 	                      {"blocked_tables", identities(policy.blocked_tables, "table")},
-	                      {"max_statements", Value::BIGINT(policy.statements)},
 	                      {"restrict_tables", Value::BOOLEAN(policy.tables)}});
 }
 

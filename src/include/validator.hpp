@@ -10,6 +10,7 @@ namespace gatekeeper {
 using Json = duckdb_yyjson::yyjson_val;
 using Names = std::set<std::string>;
 // Fixed validation guardrails, independent of authorization policy.
+constexpr uint64_t MAX_STATEMENTS = 1;
 constexpr uint64_t MAX_AST_BYTES = 8388608;
 constexpr uint64_t MAX_AST_NODES = 100000;
 constexpr uint64_t MAX_AST_DEPTH = 512;
@@ -27,7 +28,6 @@ struct Policy {
 	bool defaults = true, tables = false;
 	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
-	uint64_t statements = 1;
 };
 struct Violation {
 	std::string rule, message, catalog, schema, table, function_name;

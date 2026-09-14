@@ -438,7 +438,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	std::string sql;
 	if (data[0] % 4 == 0) {
-		sql = "SELECT * FROM gatekeeper_validate($1, max_statements := " + std::to_string(1 + data[1] % 4) + ")";
+		sql = "SELECT * FROM gatekeeper_validate($1)";
 	} else {
 		sql = "SELECT * FROM gatekeeper_validate(" + std::string(data[0] % 4 == 1 ? "'SELECT * FROM t'" : "$1") + ", " +
 		      options + ")";

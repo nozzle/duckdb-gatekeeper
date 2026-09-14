@@ -205,6 +205,8 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
 - Explicitly admitting eligible elevated readers transfers responsibility
   for their resources and trusted implementation to the application. The never-bind
   list cannot be overridden by any option.
+- A fixed internal cap rejects multiple statements before binding with code `forbidden`
+  and violation rule `limit`; empty or comment-only SQL returns `invalid_input`.
 - Fixed internal limits cap SQL input and serialized AST size at 8 MiB, AST traversal
   at 100,000 nodes, and AST depth at 512. AST validation occurs after parsing and
   serialization; traversal limits do not replace process limits against

@@ -92,11 +92,10 @@ def test_objects_and_functions_are_resolved_deduplicated_sorted(db):
 @pytest.mark.parametrize("sql,options", [
     ("SELECT abs(x), missing FROM t", {}),
     ("SELECT * FROM t", {"allowed_tables": []}),
-    ("SELECT abs(x) FROM t; SELECT * FROM missing", {"max_statements": 2}),
-    ("SELECT * FROM", {}), (None, {}), ("SELECT 1", {"max_statements": 0}),
+    ("SELECT abs(x) FROM t; SELECT * FROM missing", {}),
+    ("SELECT * FROM", {}), (None, {}), ("SELECT 1", {"blocked_functions": [None]}),
 ])
 def test_failed_results_never_expose_partial_dependencies(db, sql, options):
-    configure(db, {"max_statements": 2})
     db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql, options)
     assert not result["allowed"]

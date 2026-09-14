@@ -395,8 +395,8 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 		parser.ParseQuery(sql);
 		if (parser.statements.empty())
 			throw InvalidInputException("SQL contains no statements");
-		if (parser.statements.size() > std::min(policy.statements, ceiling.statements))
-			return {false, "forbidden", "", "", {{"limit", "statement count exceeds policy"}}};
+		if (parser.statements.size() > gatekeeper::MAX_STATEMENTS)
+			return {false, "forbidden", "", "", {{"limit", "statement count exceeds fixed limit"}}};
 		unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr),
 		                                                               yyjson_mut_doc_free);
 		if (!doc)
