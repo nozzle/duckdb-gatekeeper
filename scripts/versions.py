@@ -28,9 +28,9 @@ def load_versions(root=ROOT):
 
 def reviewed_duckdb(root=ROOT):
     """The engine the core inventory was reviewed against; historical provenance, not a build pin."""
-    version = json.loads((root / "inventories/core.json").read_text())["reviewed_duckdb"]
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
-        raise ValueError("Invalid core.json reviewed_duckdb: " + version)
+    version = json.loads((root / "inventories/core.json").read_text()).get("reviewed_duckdb")
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise ValueError(f"Invalid core.json reviewed_duckdb: {version!r}")
     return version
 
 

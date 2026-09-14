@@ -61,9 +61,10 @@ def test_review_provenance_is_separate_from_release_pin(tmp_path):
     (tmp_path / "inventories").mkdir()
     (tmp_path / "inventories/core.json").write_text(json.dumps({"reviewed_duckdb": "1.4.0"}))
     assert reviewed_duckdb(tmp_path) == "1.4.0"
-    (tmp_path / "inventories/core.json").write_text(json.dumps({"reviewed_duckdb": "v1.4"}))
-    with pytest.raises(ValueError, match="reviewed_duckdb"):
-        reviewed_duckdb(tmp_path)
+    for malformed in ({"reviewed_duckdb": "v1.4"}, {"reviewed_duckdb": 1.4}, {"reviewed_duckdb": None}, {}):
+        (tmp_path / "inventories/core.json").write_text(json.dumps(malformed))
+        with pytest.raises(ValueError, match="reviewed_duckdb"):
+            reviewed_duckdb(tmp_path)
 
 
 STAMP = re.compile(rb"GATEKEEPER_BUILD_ENGINE ([^\s\0]+) ([^\s\0]+)\0")
