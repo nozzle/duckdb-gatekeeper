@@ -109,12 +109,21 @@ def test_audit_comparison_checks_reviewed_sources(monkeypatch, tmp_path):
     candidate.write_text("{}")
     monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--check-sources", "--candidate", str(candidate)])
 
-    def reject(entries):
+    def reject(entries, **kwargs):
         raise ValueError("source pin drift")
 
     monkeypatch.setattr(audit_inventory, "check_sources", reject)
     with pytest.raises(ValueError, match="source pin drift"):
         audit_inventory.main()
+
+
+def test_source_check_accepts_explicit_historical_checkout(monkeypatch, tmp_path):
+    entries, _ = load()
+    # An external review checkout works even if the caller has no duckdb submodule.
+    check_sources(entries, tmp_path, duckdb_source=ROOT / "duckdb")
+    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "0" * 40)
+    with pytest.raises(ValueError, match="historical review checkout"):
+        check_sources(entries)
 
 
 def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp_path, capsys):

@@ -8,12 +8,15 @@ import schema_check
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def check_sources(entries, root=ROOT):
+def check_sources(entries, root=ROOT, duckdb_source=None):
     """Optional provenance check against a checkout of the historical review engine."""
+    source = duckdb_source if duckdb_source is not None else root / "duckdb"
     engine = ""
     if "core" in entries:
-        revision = subprocess.check_output(["git", "-C", str(root / "duckdb"), "rev-parse", "HEAD"], text=True).strip()
-        engine = "https://github.com/duckdb/duckdb/tree/" + revision
+        engine = entries["core"]["source"]
+        revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        if engine != "https://github.com/duckdb/duckdb/tree/" + revision:
+            raise ValueError("Source check requires the historical review checkout; use --source-checkout")
     aliases = {name: name + "_scanner" for name in ("mysql", "postgres", "sqlite", "odbc")}
     for name, entry in entries.items():
         if name == "motherduck":
@@ -29,8 +32,8 @@ def check_sources(entries, root=ROOT):
         if name == "core":
             expected = engine
         else:
-            descriptor = root / "duckdb/.github/config/extensions" / (aliases.get(name, name) + ".cmake")
-            if not descriptor.is_file() and not (root / "duckdb/extension" / name / "CMakeLists.txt").is_file():
+            descriptor = source / ".github/config/extensions" / (aliases.get(name, name) + ".cmake")
+            if not descriptor.is_file() and not (source / "extension" / name / "CMakeLists.txt").is_file():
                 raise ValueError("Missing DuckDB extension source/descriptor: " + name)
             text = descriptor.read_text() if descriptor.is_file() else ""
             text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())

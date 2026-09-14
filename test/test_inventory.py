@@ -61,7 +61,7 @@ def test_registered_aliases_share_classification(db):
     assert len(pairs) > 50
     # New aliases stay excluded until classified; they do not block engine compatibility.
     mismatched = [(alias, canonical) for alias, canonical in pairs
-                  if alias in bucket and canonical in bucket and bucket[alias] != bucket[canonical]]
+                  if alias in bucket and bucket[alias] != bucket.get(canonical)]
     assert not mismatched, mismatched
     assert {"apply", "filter", "reduce"} <= set(bucket) and all(bucket[n] == {"compute"} for n in ["apply", "filter", "reduce"])
 

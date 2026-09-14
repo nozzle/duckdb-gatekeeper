@@ -68,6 +68,8 @@ def main():
     parser.add_argument("--load-extension", type=Path, action="append", default=[], help="explicit trusted local signed extension to load during capture")
     parser.add_argument("--check-sources", action="store_true",
                         help="verify provenance against a checkout of the historical review engine")
+    parser.add_argument("--source-checkout", type=Path,
+                        help="historical DuckDB checkout for --check-sources (default: local submodule)")
     parser.add_argument("--strict", action="store_true", help="fail on runtime drift (default: report only)")
     args = parser.parse_args()
     entries, defaults = load()
@@ -78,7 +80,7 @@ def main():
         print(f"Candidate snapshot written to {args.capture}; review before accepting as baseline")
         return
     if args.check_sources:
-        check_sources(entries)
+        check_sources(entries, duckdb_source=args.source_checkout)
     baseline = json.loads(args.baseline.read_text())
     delta = compare(baseline, candidate)
     report = {**delta, **coverage(candidate, entries), "compiled_default_count": len(defaults)}

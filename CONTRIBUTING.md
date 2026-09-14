@@ -42,8 +42,9 @@ make test_release     # sqllogictests in test/sql
 
 ### Loading unsigned builds
 
-Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use DuckDB
-1.5.5 and explicitly enable unsigned loading for these development artifacts:
+Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
+engine matching the binary (1.5.5 for our release artifacts) and explicitly enable
+unsigned loading for these development artifacts:
 
 ```sh
 duckdb -unsigned
@@ -131,7 +132,8 @@ uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt
 
 Dependabot handles GitHub Actions, Docker, pip, and the `test/wasm` npm lock monthly.
 DuckDB and DuckDB-Wasm are excluded and bumped manually together with the submodule,
-version checks, fuzz image, Wasm runtime pin, and inventory baseline; see
+release metadata, fuzz image, and Wasm runtime pin; historical inventory baselines are
+maintained independently. See
 [AGENTS.md](AGENTS.md).
 
 ## Function inventories

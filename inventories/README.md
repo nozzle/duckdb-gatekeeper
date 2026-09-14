@@ -80,6 +80,9 @@ engine descriptor exists; MotherDuck records its binary version/hash in `binary_
 and cannot contribute defaults. Original attribution is retained in `NOTICE`.
 Capture and comparison work without submodules. The optional provenance check rejects
 ambiguous descriptors with multiple distinct source URLs or revisions.
+After repinning the build engine, pass `--check-sources --source-checkout /path/to/review-engine`
+to check provenance using a separate historical checkout. Its commit must match the
+inventory's recorded core source, not the current release build pin.
 
 ## Version update procedure
 
