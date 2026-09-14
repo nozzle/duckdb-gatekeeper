@@ -11,7 +11,7 @@ that query stays inside the lines you drew.
 | **No DML/DDL** | Read-only statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and metadata readers are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
-Every decision comes back as a native STRUCT with structured diagnostics.
+Every decision comes back as one row of named columns with structured diagnostics.
 
 > [!WARNING]
 > Gatekeeper is a **pre-execution validator, not a sandbox**. It does not filter rows,
@@ -54,26 +54,35 @@ INSERT INTO reporting.orders VALUES (1, 20), (1, 30), (2, 15);
 Allowed table, default functions:
 
 ```sql
-SELECT gatekeeper_validate(
+SELECT allowed, code FROM gatekeeper_validate(
     'SELECT customer_id, sum(amount) FROM reporting.orders GROUP BY customer_id',
     allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]
-).allowed;
--- true
+);
 ```
+
+| allowed | code |
+| --- | --- |
+| true | ok |
 
 DDL is never allowed:
 
 ```sql
-SELECT gatekeeper_validate('DROP TABLE reporting.orders').code;
--- unsupported
+SELECT allowed, code FROM gatekeeper_validate('DROP TABLE reporting.orders');
 ```
+
+| allowed | code |
+| --- | --- |
+| false | unsupported |
 
 Engine errors surface with their phase:
 
 ```sql
-SELECT gatekeeper_validate('SELECT * FROM missing_table').code;
--- binding
+SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM missing_table');
 ```
+
+| allowed | code |
+| --- | --- |
+| false | binding |
 
 > [!TIP]
 > Require `allowed = true` **and** `code = 'ok'`. Treat exceptions and missing results as
@@ -91,17 +100,33 @@ flowchart LR
 ## Functions
 
 ```text
-gatekeeper_validate(sql VARCHAR, option := value, ...)   -- returns the result STRUCT
+SELECT * FROM gatekeeper_validate(sql VARCHAR, option := value, ...) -- one result row
 CALL gatekeeper_configure(option := value, ...)          -- replaces the global policy
 ```
 
 Both take the same named options and accept host-bound parameters (`?`, `$1`), so
 policies never need to be spliced into SQL text.
 
+Select `*` for all result columns or name just the columns you need. SQL text and
+options must be constant expressions or host-bound parameters; correlated/lateral
+per-row arguments are not supported. Use separate parameterized calls for multiple
+SQL strings. Every execution, including a prepared execution, checks the current
+global policy and binds the submitted SQL again.
+
+**Migration:** the scalar interface has been removed. Replace
+`SELECT gatekeeper_validate(...).allowed` with
+`SELECT allowed FROM gatekeeper_validate(...)`; clients now receive named columns
+instead of a single STRUCT column.
+
 | Bad input | `gatekeeper_validate` | `CALL gatekeeper_configure` |
 | --- | --- | --- |
 | Unknown/duplicate option name, wrong type | DuckDB error at bind | DuckDB error at bind |
 | Invalid value (`max_statements := 0`, NULL list member) | `code = 'invalid_input'` | Raises; policy unchanged |
+
+Empty option lists accept any element type, since DuckDB resolves untyped `[]` to
+`INTEGER[]` before table-function binding. Nonempty lists require the documented
+element types; NULL members are invalid values. Typed STRUCT lists have their field
+names checked even when empty.
 
 ### Options
 
@@ -115,14 +140,20 @@ policies never need to be spliced into SQL text.
 | `max_statements` | BIGINT | `1` | Positive; at most 1000. |
 
 ```sql
-SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']).allowed;
--- false
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']);
 ```
 
+| allowed |
+| --- |
+| false |
+
 ```sql
-SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']).allowed;
--- true
+SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']);
 ```
+
+| allowed |
+| --- |
+| true |
 
 > [!NOTE]
 > The former `allow_replacement_scans` option has been removed. Authorize the substituted
@@ -130,7 +161,10 @@ SELECT gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed
 
 ### Result
 
-| Field | Type | Meaning |
+Each call returns exactly one row unless it raises an exception. `violations`,
+`objects`, and `functions` remain lists of STRUCTs within their respective columns.
+
+| Column | Type | Meaning |
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
@@ -147,32 +181,60 @@ Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
 
+```sql
+SELECT * FROM gatekeeper_validate('SELECT 1');
+```
+
+| allowed | code | violations | error_type | error_message | position | objects | functions |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| true | ok | [] | '' | '' | NULL | [] | [] |
+
+In these result tables, `''` denotes an empty string and `NULL` a SQL NULL.
+
 <details>
 <summary>The three failure shapes</summary>
 
-```jsonc
-// Policy denial: code 'forbidden', structured violations, no error text.
-// SELECT * FROM hr.salaries with allowed_tables := [{catalog:'*', schema:'reporting', 'table':'*'}]
-{ "allowed": false, "code": "forbidden",
-  "violations": [{ "rule": "table", "message": "object is not allowed",
-                   "catalog": "memory", "schema": "hr", "table": "salaries",
-                   "function_name": "", "position": null }],
-  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
+**Table denied:** `code = 'forbidden'`, with a structured violation and no engine
+error text. Project the first violation's fields to display them as columns:
 
-// Function not in the defaults (md5 is; current_date is not).
-// SELECT md5('x'), current_date
-{ "allowed": false, "code": "forbidden",
-  "violations": [{ "rule": "function", "message": "resolved function is not allowed: current_date",
-                   "catalog": "", "schema": "", "table": "", "function_name": "current_date",
-                   "position": null }],
-  "error_type": "", "error_message": "", "position": null, "objects": [], "functions": [] }
-
-// Engine error: code names the phase, violations are empty, the message is DuckDB's.
-// SELECT * FROM missing_table
-{ "allowed": false, "code": "binding", "violations": [],
-  "error_type": "Catalog", "error_message": "Table with name missing_table does not exist!",
-  "position": null, "objects": [], "functions": [] }
+```sql
+SELECT allowed, code, violations[1].rule AS rule,
+       violations[1].message AS message, violations[1].catalog AS catalog,
+       violations[1].schema AS schema, violations[1]."table" AS "table"
+FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := []);
 ```
+
+| allowed | code | rule | message | catalog | schema | table |
+| --- | --- | --- | --- | --- | --- | --- |
+| false | forbidden | table | object is not allowed | memory | reporting | orders |
+
+**Function denied:** `md5` is a default, but `current_date` is not.
+
+```sql
+SELECT allowed, code, violations[1].rule AS rule,
+       violations[1].message AS message, violations[1].function_name AS function_name
+FROM gatekeeper_validate('SELECT md5(''x''), current_date');
+```
+
+| allowed | code | rule | message | function_name |
+| --- | --- | --- | --- | --- |
+| false | forbidden | function | resolved function is not allowed: current_date | current_date |
+
+**Engine error:** the code identifies the phase and `violations` is empty. This
+example displays the first line of DuckDB's error message, omitting suggestions:
+
+```sql
+SELECT allowed, code, violations, error_type,
+       split_part(error_message, chr(10), 1) AS error_message
+FROM gatekeeper_validate('SELECT * FROM missing_table');
+```
+
+| allowed | code | violations | error_type | error_message |
+| --- | --- | --- | --- | --- |
+| false | binding | [] | Catalog | Table with name missing_table does not exist! |
+
+All three denials return empty `objects` and `functions` lists. Policy denials
+have empty `error_type` and `error_message`; the details are in `violations`.
 
 </details>
 
@@ -186,12 +248,15 @@ Rules match all three components of a **resolved** table or view identity, ASCII
 case-insensitively. Any matching allow grants; any matching block wins.
 
 ```sql
-SELECT gatekeeper_validate(
+SELECT allowed FROM gatekeeper_validate(
     'SELECT * FROM reporting.orders',
     allowed_tables := [{catalog: '*', schema: 'reporting', 'table': '*'}]
-).allowed;
--- true
+);
 ```
+
+| allowed |
+| --- |
+| true |
 
 | Intent | Rule |
 | --- | --- |
@@ -311,15 +376,27 @@ CALL gatekeeper_configure(
 );
 ```
 
-```sql
-SELECT gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []).allowed;
--- false: the request cannot clear a global block
-```
+| Success |
+| --- |
+| true |
 
 ```sql
-SELECT current_setting('gatekeeper_policy').blocked_functions;
--- [md5]
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := []);
 ```
+
+| allowed |
+| --- |
+| false |
+
+The request cannot clear a global block:
+
+```sql
+SELECT current_setting('gatekeeper_policy').blocked_functions AS blocked_functions;
+```
+
+| blocked_functions |
+| --- |
+| [md5] |
 
 A request that tries to widen access does not error; it simply cannot authorize anything
 the global policy denies. Grant capabilities (readers, higher statement limits) in
@@ -356,16 +433,11 @@ list with `restrict_tables = false` is rejected. With an empty list,
 `restrict_tables = true` denies all tables/views and `false` disables the allowlist for
 non-internal objects. `blocked_tables` applies regardless of `restrict_tables`.
 
-For `CALL gatekeeper_configure`, an empty non-STRUCT list for `allowed_tables` means an
-empty restriction regardless of element type (DuckDB converts an untyped `[]` to
-`INTEGER[]` before the callback). Nonempty lists require structs, and typed STRUCT lists
-have their field names checked even when empty.
-
 </details>
 
 ## How it works
 
-![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result STRUCT is returned](docs/pipeline.svg)
+![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result row is returned](docs/pipeline.svg)
 
 1. **Parse** the statement and enforce `max_statements`.
 2. **Inspect the AST** for statement type, dynamic SQL, never-bind functions, and
@@ -373,7 +445,7 @@ have their field names checked even when empty.
 3. **Bind** on your connection, using the caller's search path and transaction.
 4. **Authorize** every resolved table and view, plus each caller-requested function,
    against both the global policy and the request layer.
-5. **Return** the result STRUCT. Nothing is executed.
+5. **Return** one result row with named columns. The submitted SQL is not executed.
 
 > [!CAUTION]
 > Binding **can perform I/O** through trusted catalogs and explicitly admitted readers.
@@ -414,9 +486,13 @@ db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("SET lock_configuration = true")
 
 sql = "SELECT sum(amount) FROM reporting.orders"
-decision = db.execute(
-    "SELECT gatekeeper_validate(?, allowed_tables := ?)", [sql, tables]
-).fetchone()[0]
+result = db.execute(
+    "SELECT * FROM gatekeeper_validate(?, allowed_tables := ?)", [sql, tables]
+)
+row = result.fetchone()
+if row is None:
+    raise PermissionError("Missing validation result")
+decision = dict(zip((column[0] for column in result.description), row))
 if not decision["allowed"] or decision["code"] != "ok":
     raise PermissionError(decision["violations"] or decision["error_message"])
 rows = db.execute(sql).fetchall()
