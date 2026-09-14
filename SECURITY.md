@@ -7,10 +7,8 @@ privately until a fix is released.
 ## Reporting a vulnerability
 
 Use [GitHub private vulnerability reporting](https://github.com/nozzle/duckdb-gatekeeper/security/advisories/new)
-for this repository. Do not open a public issue or pull request for a suspected bypass. If
-the private reporting form is unavailable, contact the maintainer listed in
-[community/description.yml](community/description.yml) through a private channel (a GitHub
-profile contact or direct message) and wait for a reply before disclosing anything publicly.
+for this repository (also reachable from the repository's Security tab). Do not open a public
+issue or pull request for a suspected bypass.
 
 Include the DuckDB version (`PRAGMA version`), the Gatekeeper version
 (`SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper'`),
