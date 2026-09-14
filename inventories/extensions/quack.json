@@ -3,7 +3,9 @@
   "reviewed_duckdb": "1.5.5",
   "source": "https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0",
   "notes": [
-    "Source: https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0"
+    "Source: https://github.com/duckdb/duckdb-quack/tree/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0",
+    "quack_check_token compares its second and third VARCHAR arguments with a timing-safe equality (QuackAuthToken, src/quack_extension.cpp) and quack_nop_authorization returns its second argument unchanged (QuackDummyAuthorization). Both are the registered default authentication/authorization callbacks of the Quack server, but calling them reads or changes no server state: they are pure functions of their arguments. quack_uri_parser parses its VARCHAR argument into a STRUCT (QuackParseUriFunction).",
+    "The callbacks the server actually invokes are selected by the quack_authentication_function and quack_authorization_function settings, which validated SQL cannot change (SET is unsupported and current_setting is elevated)."
   ],
   "compute": [
     "quack_check_token",

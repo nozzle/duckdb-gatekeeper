@@ -2,7 +2,7 @@
 
 Gatekeeper's GitHub Releases and DuckDB community publication are separate steps.
 The local [community descriptor](../community/description.yml) is prepared for the
-community submission; it is not evidence of publication. Its `v0.1.1` ref must exist and
+community submission; it is not evidence of publication. Its `v0.1.2` ref must exist and
 pass CI before submission.
 
 ## Prepare the release commit
@@ -27,8 +27,8 @@ pass CI before submission.
 After checking out the validated release commit with a clean worktree, a maintainer runs:
 
 ```sh
-git tag -a v0.1.1 -m "Gatekeeper v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "Gatekeeper v0.1.2"
+git push origin v0.1.2
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
@@ -74,14 +74,23 @@ silently overwritten. Do not move a published version tag.
 
 1. Check the tag workflow and GitHub Release assets. Copy
    `community/description.yml` into `extensions/gatekeeper/description.yml` in a checkout
-   of [duckdb/community-extensions](https://github.com/duckdb/community-extensions).
-   Recheck its current descriptor conventions before submission. The prepared descriptor
-   pins a version tag; never replace it with a floating branch ref.
+   of [duckdb/community-extensions](https://github.com/duckdb/community-extensions),
+   dropping the comment preamble. Recheck its current descriptor conventions before
+   submission. The prepared descriptor pins a version tag; never replace it with a
+   floating branch ref. If reviewers prefer a full commit SHA in `repo.ref`, substitute
+   the SHA the tag points at (`git rev-parse v0.1.2^{}`) in the submitted copy only; the
+   in-repo descriptor keeps the tag because it cannot name the commit that contains it.
 2. State which engine the GitHub assets target, and link compatibility validation.
    The community repository can rebuild the source against another engine; the source
    has no fixed release allowlist. Each binary still loads only into the engine it was
    built from, and Gatekeeper enforces that itself when DuckDB's footer check is disabled.
    Compilation and regression tests, rather than inventory provenance, gate compatibility.
+   Mention the engine coupling up front: the grammar is generated from the engine being
+   compiled, DuckDB's in-tree JSON serializer is compiled into the extension, and internal
+   binder entry points are used (see
+   [Compatibility and review](security.md#compatibility-and-review)), which is why the
+   build needs `requires_toolchains: python3` and why rebuilds for a new engine may need a
+   source update.
 3. Include the platform opt-ins, MVP/threads exclusions, Wasm runtime pin, and Python
    toolchain requirement. Reference the successful tag distribution run. The community
    repository builds and signs its own binaries; GitHub assets are not those binaries.

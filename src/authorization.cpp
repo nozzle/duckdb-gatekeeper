@@ -166,8 +166,22 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 					expressions.push_back(lambda->lambda_expr.get());
 			}
 			auto aggregate = ListAggregateImplementation(bound);
-			if (!aggregate.empty())
+			if (!aggregate.empty()) {
+				// A caller-written dispatcher selects its aggregate by name, so that target is caller-chosen and
+				// must be allowed, not merely unblocked. Fixed implementations (list_distinct's histogram) and
+				// dispatchers introduced only by trusted views or macros keep the block-only treatment. Any
+				// caller-written dispatcher triggers the check query-wide, like other ambiguous caller syntax.
+				static const gatekeeper::Names dispatchers = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
+				                                              "list_aggregate"};
+				if (!binding.caller_dispatchers.empty() && dispatchers.count(bound.function.name) &&
+				    !gatekeeper::FunctionAllowed(policy, aggregate)) {
+					auto canonical = gatekeeper::CanonicalFunction(aggregate);
+					result.violations.emplace("function", "dispatched aggregate is not allowed: " + canonical, "", "",
+					                          "", canonical);
+					throw PermissionException("dispatched aggregate is not allowed");
+				}
 				function(aggregate, "aggregate");
+			}
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
 			function(child.Cast<BoundAggregateExpression>().function.name, "aggregate");

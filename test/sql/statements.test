@@ -1,0 +1,406 @@
+# name: test/sql/statements.test
+# description: Only single SELECT statements are validated; every other statement type is unsupported.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE TABLE t(x INTEGER);
+
+# Statement types are an allowlist: SELECT only. Everything else returns `unsupported` with a
+# `statement` violation before binding, so nothing referenced below needs to exist or be reachable.
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('INSERT INTO t VALUES (1)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('UPDATE t SET x = 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('DELETE FROM t');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('MERGE INTO t USING t AS s ON t.x = s.x WHEN MATCHED THEN DELETE');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE TABLE u(x INTEGER)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE OR REPLACE VIEW v AS SELECT 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE SCHEMA s');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE MACRO m() AS 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE INDEX i ON t(x)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE SEQUENCE seq');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE TYPE mood AS ENUM (''sad'')');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE SECRET s (TYPE s3)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE TEMP TABLE tmp AS SELECT 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('DROP TABLE t');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('ALTER TABLE t ADD COLUMN y INTEGER');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('TRUNCATE t');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('COMMENT ON TABLE t IS ''x''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('COPY t TO ''out.csv''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('COPY t FROM ''in.csv''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('EXPORT DATABASE ''dir''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('IMPORT DATABASE ''dir''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('ATTACH ''other.db''');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('DETACH other');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('USE memory');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SET threads = 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('RESET threads');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SET VARIABLE v = 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('RESET VARIABLE v');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('PRAGMA version');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('PRAGMA table_info(''t'')');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CALL pragma_version()');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CALL checkpoint()');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CHECKPOINT');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('FORCE CHECKPOINT');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('VACUUM');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('ANALYZE');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('EXPLAIN SELECT 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('EXPLAIN ANALYZE SELECT 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('PREPARE p AS SELECT 1');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('EXECUTE p');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('DEALLOCATE p');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('LOAD json');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('INSTALL json');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('BEGIN TRANSACTION');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('COMMIT');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('ROLLBACK');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('PIVOT t ON x USING sum(x)');
+----
+unsupported	statement
+
+# Multiple statements are a fixed limit, checked before anything binds.
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT 1; DROP TABLE t');
+----
+forbidden	limit
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('DROP TABLE t; SELECT 1');
+----
+forbidden	limit
+
+# Empty semicolon segments are ignored by the parser; empty and comment-only input is invalid.
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT 1;;');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate(';SELECT 1');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate(';');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('-- nothing');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('/* nothing */');
+----
+invalid_input
+
+query TT
+SELECT code, error_type FROM gatekeeper_validate('SELEC 1');
+----
+parser	parser
+
+# Parameters validate where DuckDB can finish binding without values; a bare untyped parameter cannot.
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT x FROM t WHERE x = ? LIMIT ?');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $1');
+----
+binding
+
+# Read-only query constructs bind and authorize normally.
+
+query I
+SELECT allowed FROM gatekeeper_validate('FROM t');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('FROM t SELECT x');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT x FROM t QUALIFY row_number() OVER () = 1');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t POSITIONAL JOIN t AS u');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t ASOF JOIN t AS u ON t.x >= u.x');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t SEMI JOIN t AS u ON t.x = u.x');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT x, count(*) FROM t GROUP BY ROLLUP (x)');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT x FROM t GROUP BY ALL ORDER BY ALL');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT [y FOR y IN [1,2] IF y > 1]');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT ARRAY[1,2]');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t USING SAMPLE 1');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t TABLESAMPLE 10%');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) SELECT * FROM r');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t, LATERAL (SELECT t.x + 1) AS l(y)');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM t UNION BY NAME SELECT * FROM t');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SUMMARIZE t');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('DESCRIBE t');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('DESCRIBE SELECT * FROM t');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('PIVOT t ON x IN (1, 2) USING sum(x)');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('UNPIVOT t ON x INTO NAME n VALUE v');
+----
+true

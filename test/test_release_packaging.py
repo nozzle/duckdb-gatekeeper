@@ -22,7 +22,7 @@ def artifacts(tmp_path):
     return inputs
 
 
-@pytest.mark.parametrize("tag", ["v0.1.1", ""])
+@pytest.mark.parametrize("tag", ["v0.1.2", ""])
 def test_release_archives_and_checksums(tag, artifacts, tmp_path):
     output = tmp_path / "release"
     release.package_release(tag, artifacts, output)
@@ -30,7 +30,7 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path):
     assert len(lines) == 10
     for line in lines:
         digest, name = line.split("  ")
-        assert name.startswith("gatekeeper-v0.1.1-duckdb-v1.5.5-")
+        assert name.startswith("gatekeeper-v0.1.2-duckdb-v1.5.5-")
         assert name.endswith("-unsigned.zip")
         archive = output / name
         assert hashlib.sha256(archive.read_bytes()).hexdigest() == digest
@@ -60,11 +60,11 @@ def test_incomplete_or_unexpected_distribution_rejected(artifacts, tmp_path, dam
         directory.rename(artifacts / "gatekeeper-v1.5.6-extension-windows_arm64")
     output = tmp_path / "release"
     with pytest.raises(ValueError):
-        release.package_release("v0.1.1", artifacts, output)
+        release.package_release("v0.1.2", artifacts, output)
     assert not output.exists()
 
 
-@pytest.mark.parametrize("tag", ["v0.2.0", "0.1.1", "v0.1.1-rc1", "v1.5.5"])
+@pytest.mark.parametrize("tag", ["v0.2.0", "0.1.2", "v0.1.2-rc1", "v1.5.5"])
 def test_wrong_release_tag_rejected(tag, artifacts, tmp_path):
     output = tmp_path / "release"
     with pytest.raises(ValueError, match="must agree"):
@@ -78,7 +78,7 @@ def test_existing_assets_are_not_overwritten(artifacts, tmp_path):
     existing = output / "SHA256SUMS"
     existing.write_text("previous release")
     with pytest.raises(ValueError, match="Output must be empty"):
-        release.package_release("v0.1.1", artifacts, output)
+        release.package_release("v0.1.2", artifacts, output)
     assert existing.read_text() == "previous release"
 
 
@@ -86,18 +86,18 @@ def test_output_file_is_not_overwritten(artifacts, tmp_path):
     output = tmp_path / "release"
     output.write_text("existing file")
     with pytest.raises(ValueError, match="Output must be empty and a directory"):
-        release.package_release("v0.1.1", artifacts, output)
+        release.package_release("v0.1.2", artifacts, output)
     assert output.read_text() == "existing file"
 
 
 @pytest.mark.parametrize("filename,old,new,message", [
-    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.1"', 'GATEKEEPER_VERSION "0.0.9"', "must agree"),
+    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.2"', 'GATEKEEPER_VERSION "0.0.9"', "must agree"),
     ("versions.cmake", 'GATEKEEPER_DUCKDB_VERSION "1.5.5"', 'GATEKEEPER_DUCKDB_VERSION "1.5.4"', "must agree"),
-    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.1"', 'GATEKEEPER_VERSION "garbage"', "Invalid version"),
-    ("community/description.yml", "version: 0.1.1", "version: 0.0.9", "Community descriptor.*must agree"),
-    ("community/description.yml", "ref: v0.1.1", "ref: v0.0.9", "Community descriptor.*must agree"),
-    ("community/description.yml", "version: 0.1.1", "other_version: 0.1.1", "extension.version"),
-    ("community/description.yml", "ref: v0.1.1", "other_ref: v0.1.1", "repo.ref"),
+    ("versions.cmake", 'GATEKEEPER_VERSION "0.1.2"', 'GATEKEEPER_VERSION "garbage"', "Invalid version"),
+    ("community/description.yml", "version: 0.1.2", "version: 0.0.9", "Community descriptor.*must agree"),
+    ("community/description.yml", "ref: v0.1.2", "ref: v0.0.9", "Community descriptor.*must agree"),
+    ("community/description.yml", "version: 0.1.2", "other_version: 0.1.2", "extension.version"),
+    ("community/description.yml", "ref: v0.1.2", "other_ref: v0.1.2", "repo.ref"),
     ("community/description.yml", "repo:\n", "other_repo:\n", "repo.ref"),
     ("community/description.yml", release.SUPPORTED_DUCKDB_REVISION, "0" * 40, "must cite the pinned DuckDB"),
     ("community/description.yml", "DuckDB 1.5.5", "DuckDB 1.5.4", "must cite the pinned DuckDB"),
@@ -113,4 +113,4 @@ def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old
         target.write_text(text)
     monkeypatch.setattr(release, "ROOT", tmp_path)
     with pytest.raises(ValueError, match=message):
-        release.release_version("v0.1.1")
+        release.release_version("v0.1.2")

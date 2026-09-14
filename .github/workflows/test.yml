@@ -94,6 +94,8 @@ jobs:
         env:
           GEN: ninja
       - run: make test_release
+      - name: Stamped engine identity matches the pinned submodule
+        run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb --expect-version v1.5.5
       - name: Loadable carries the release engine metadata
         # Static linking hides a mis-stamped engine; the pinned Python package is the real release
         # engine and refuses a loadable whose footer disagrees with it.

@@ -40,7 +40,7 @@ def test_core_elevated_ownership_survives_without_motherduck(tmp_path):
              "current_setting", "nextval", "checkpoint", "duckdb_views", "histogram", "list_aggregate"}
     assert names <= set(entries["core"]["elevated"])
     assert not names & set(defaults)
-    assert len(defaults) == 954
+    assert len(defaults) == 953
 
 
 def test_generation_chunks_roundtrip_and_compile(tmp_path):
@@ -159,21 +159,52 @@ def test_generation_bakes_build_engine_identity(tmp_path):
 
 def test_engine_selection_defaults(tmp_path):
     import argparse
-    from engine import add_engine_arguments, engine_cmake_flags, engine_source
-    from versions import SUPPORTED_DUCKDB
+    from engine import add_engine_arguments, checkout_revision, engine_cmake_flags, engine_source
+    from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
     parser = argparse.ArgumentParser()
     add_engine_arguments(parser)
     # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
+    assert checkout_revision(ROOT / "duckdb") == SUPPORTED_DUCKDB_REVISION
     assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
     assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
     # Other checkouts use their own Git metadata unless told otherwise. The cache entry is always
     # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.
     external = parser.parse_args(["--duckdb-source", str(tmp_path)])
+    assert checkout_revision(tmp_path) is None
+    # A directory inside this repository that is not its own checkout (an uninitialized submodule, a build
+    # tree) must not resolve to Gatekeeper's own commit through Git's parent discovery.
+    assert checkout_revision(ROOT / "scripts") is None
+    assert checkout_revision(ROOT / "does-not-exist") is None
     assert engine_cmake_flags(external) == ["-DOVERRIDE_GIT_DESCRIBE="]
     assert engine_source(external) == tmp_path.resolve()
     assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.6"])) == [
         "-DOVERRIDE_GIT_DESCRIBE=v1.5.6"]
     assert engine_cmake_flags(parser.parse_args(["--duckdb-version", ""])) == ["-DOVERRIDE_GIT_DESCRIBE="]
+
+
+def test_engine_selection_follows_the_revision_not_the_path(tmp_path):
+    """The pin is supplied for the pinned commit, wherever it is checked out, and never for another commit in
+    the submodule directory: a path-based rule would label a rebuild for a newer engine as the pinned release."""
+    import argparse
+    from engine import add_engine_arguments, engine_version
+    from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
+    parser = argparse.ArgumentParser()
+    add_engine_arguments(parser)
+    git = shutil.which("git")
+    if not git:
+        pytest.skip("git not installed")
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+    for name, revision in (("pinned", SUPPORTED_DUCKDB_REVISION), ("other", "0" * 40)):
+        repo = tmp_path / name
+        repo.mkdir()
+        subprocess.run([git, "init", "-q", str(repo)], check=True)
+        subprocess.run([git, "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "engine"], check=True, env=env)
+        # Point HEAD at the wanted commit id without needing that object: a detached ref is enough for rev-parse.
+        (repo / ".git/HEAD").write_text(revision + "\n")
+        assert engine_version(parser.parse_args(["--duckdb-source", str(repo)])) == (
+            "v" + SUPPORTED_DUCKDB if name == "pinned" else None)
+    assert engine_version(parser.parse_args(["--duckdb-source", str(tmp_path / "other"), "--duckdb-version", "v1.5.6"])) == "v1.5.6"
 
 
 def test_engine_override_does_not_survive_reconfigure(tmp_path):

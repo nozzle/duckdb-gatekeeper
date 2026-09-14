@@ -1,0 +1,183 @@
+# name: test/sql/never_bind.test
+# description: Dynamic SQL, metadata readers, and gatekeeper_configure are denied in every layer, by any route.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE TABLE t(x INTEGER);
+
+# Dynamic SQL gets the earlier, more specific diagnostic.
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM query(''SELECT 1'')');
+----
+forbidden	dynamic_sql	query
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM query_table(''t'')');
+----
+forbidden	dynamic_sql	query_table
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT json_serialize_plan(''SELECT 1'')');
+----
+forbidden	dynamic_sql
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM json_execute_serialized_sql(''{}'')');
+----
+forbidden	dynamic_sql
+
+# Metadata readers are never defaults and cannot be granted by name in either layer.
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM duckdb_tables()');
+----
+forbidden	function	duckdb_tables
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM duckdb_tables()', allowed_functions := ['duckdb_tables']);
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := ['duckdb_tables', 'duckdb_columns', 'query', 'gatekeeper_configure']);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM duckdb_tables()', allowed_functions := ['duckdb_tables']);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM duckdb_columns()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM query(''SELECT 1'')', allowed_functions := ['query']);
+----
+forbidden
+
+# gatekeeper_configure is never callable through validated SQL, directly or through a definition.
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM gatekeeper_configure()');
+----
+forbidden
+
+statement ok
+CREATE MACRO reconfigure() AS TABLE SELECT * FROM gatekeeper_configure(blocked_functions := []);
+
+statement ok
+CREATE VIEW reconfigured AS SELECT * FROM gatekeeper_configure(blocked_functions := []);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM reconfigure()', allowed_functions := ['reconfigure']);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM reconfigured');
+----
+forbidden
+
+statement ok
+RESET gatekeeper_policy;
+
+# information_schema and duckdb_* views are internal objects: wildcards never grant them and each layer
+# needs an exact rule. Even then, the readers behind them stay on the never-bind list, so no table rule
+# can expose the catalog.
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM information_schema.tables');
+----
+forbidden	internal_object
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM information_schema.columns', allowed_tables := [{catalog: '*', schema: '*', 'table': '*'}]);
+----
+forbidden	internal_object
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM duckdb_tables', allowed_tables := [{schema: '*', 'table': '*'}]);
+----
+forbidden	internal_object
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM pg_catalog.pg_tables');
+----
+forbidden	internal_object
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema: 'information_schema', 'table': 'tables'}, {schema: 'main', 'table': 'duckdb_tables'}]);
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM information_schema.tables');
+----
+forbidden	function	duckdb_tables
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM duckdb_tables');
+----
+forbidden	function	duckdb_tables
+
+statement ok
+RESET gatekeeper_policy;
+
+# SHOW variants that enumerate the catalog expand to never-bind readers.
+query T
+SELECT code FROM gatekeeper_validate('SHOW TABLES');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SHOW ALL TABLES');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SHOW DATABASES');
+----
+forbidden
+
+# Sequences, storage, and session/configuration inspection are not defaults.
+statement ok
+CREATE SEQUENCE seq;
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT nextval(''seq'')');
+----
+forbidden	function	nextval
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT nextval(''seq'')', allowed_functions := ['nextval']);
+----
+forbidden
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT current_setting(''threads'')');
+----
+forbidden	function	current_setting
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT getvariable(''v'')');
+----
+forbidden	function	getvariable
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM pragma_database_size()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM duckdb_settings()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM duckdb_secrets()');
+----
+forbidden
+
+# Denials leave no engine diagnostics and no binding evidence.
+query TTII
+SELECT code, error_message, length(objects), length(functions) FROM gatekeeper_validate('SELECT * FROM duckdb_tables()');
+----
+forbidden	(empty)	0	0

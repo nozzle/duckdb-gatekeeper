@@ -5,3 +5,5 @@ __pycache__/
 .cache/
 .pytest_cache/
 node_modules/
+/duckdb_unittest_tempdir/
+/data/

@@ -396,6 +396,12 @@ struct Walker {
 				    BindTime(child, "quantile fraction/options", true);
 			}
 			functions[name]++;
+			// The aggregate these dispatch to is selected by a caller-supplied (foldable) expression that only
+			// binding resolves; remember that the caller wrote the dispatcher so the bound target is allowlisted.
+			static const Names dispatchers = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
+			                                  "list_aggregate"};
+			if (binding && dispatchers.count(name))
+				binding->caller_dispatchers.insert(name);
 			auto location = yyjson_obj_get(value, "query_location");
 			if (yyjson_is_uint(location)) {
 				auto position = int64_t(yyjson_get_uint(location));
