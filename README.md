@@ -322,7 +322,7 @@ These implementations are included in successful function dependency lists.
 > policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
 > the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
 > compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
-> nothing about the host beyond the time and its `TimeZone`, and `setseed` touches only
+> nothing about the host beyond the time and its `TimeZone`/`Calendar`, and `setseed` touches only
 > the connection's own random engine. The criteria are in
 > [inventories/README.md](inventories/README.md#classification-criteria).
 
