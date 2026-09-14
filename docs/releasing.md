@@ -78,8 +78,9 @@ silently overwritten. Do not move a published version tag.
    Recheck its current descriptor conventions before submission. The prepared descriptor
    pins a version tag; never replace it with a floating branch ref.
 2. State which engine the GitHub assets target, and link compatibility validation.
-   The community repository can rebuild the source against another engine; there is
-   no additional exact-version restriction. Each binary still needs its matching engine.
+   The community repository can rebuild the source against another engine; the source
+   has no fixed release allowlist. Each binary still loads only into the engine it was
+   built from, and Gatekeeper enforces that itself when DuckDB's footer check is disabled.
    Compilation and regression tests, rather than inventory provenance, gate compatibility.
 3. Include the platform opt-ins, MVP/threads exclusions, Wasm runtime pin, and Python
    toolchain requirement. Reference the successful tag distribution run. The community

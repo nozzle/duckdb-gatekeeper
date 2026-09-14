@@ -2,10 +2,13 @@
 #include "gatekeeper_extension.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -444,20 +447,64 @@ static void Configure(ClientContext &context, TableFunctionInput &input, DataChu
 // with allow_extensions_metadata_mismatch, so refuse any other engine here as well. This mirrors the
 // footer identity rather than a hardcoded release: the version tag for releases, the source id for dev
 // builds, so community rebuilds against any engine checkout keep the guard without a source change.
-static void CheckBuildEngine() {
-	const string build_version = gatekeeper::BUILD_DUCKDB_VERSION;
-	const bool release = build_version.find("-dev") == string::npos;
-	const string expected = release ? build_version : string(gatekeeper::BUILD_DUCKDB_SOURCE_ID);
-	const string actual = release ? DuckDB::LibraryVersion() : DuckDB::SourceID();
-	if (actual != expected) {
-		throw InvalidInputException("Gatekeeper %s was built for DuckDB %s (%s); this engine is %s (%s)",
-		                            gatekeeper::VERSION, build_version, gatekeeper::BUILD_DUCKDB_SOURCE_ID,
-		                            DuckDB::LibraryVersion(), DuckDB::SourceID());
+//
+// Distributed loadables statically link their own copy of DuckDB (EXTENSION_STATIC_BUILD), so inside this
+// file DuckDB::LibraryVersion() and DuckDB::SourceID() report the build engine, never the host. The host's
+// identity comes from its catalog: pragma_version() is bound to the host's implementation. A statically
+// linked Gatekeeper is compiled into its host, so the check only exists in the loadable.
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+struct BuildEngine {
+	string version;
+	string source_id;
+};
+
+static BuildEngine ParseBuildEngine() {
+	// Read through a volatile pointer so the stamp stays one literal string in the binary rather than being
+	// folded into immediates; that keeps it inspectable with `strings` and rewritable by the guard tests.
+	const volatile char *stamp = gatekeeper::BUILD_ENGINE_STAMP;
+	string text;
+	for (; *stamp; stamp++) {
+		text += *stamp;
 	}
+	auto parts = StringUtil::Split(text, ' ');
+	if (parts.size() != 3 || parts[0] != "GATEKEEPER_BUILD_ENGINE") {
+		throw InvalidInputException("Gatekeeper %s has a malformed build engine stamp: %s", gatekeeper::VERSION, text);
+	}
+	return {parts[1], parts[2]};
 }
 
+static void CheckBuildEngine(DatabaseInstance &db) {
+	string host_version, host_source_id;
+	try {
+		Connection con(db);
+		auto result = con.Query("SELECT library_version, source_id FROM pragma_version()");
+		if (result->HasError()) {
+			result->ThrowError();
+		}
+		if (result->RowCount() != 1) {
+			throw InvalidInputException("pragma_version() returned %llu rows", result->RowCount());
+		}
+		host_version = result->GetValue(0, 0).ToString();
+		host_source_id = result->GetValue(1, 0).ToString();
+	} catch (std::exception &error) {
+		throw InvalidInputException("Gatekeeper %s cannot determine the host DuckDB engine: %s", gatekeeper::VERSION,
+		                            error.what());
+	}
+	auto build = ParseBuildEngine();
+	const bool release = build.version.find("-dev") == string::npos;
+	const string &expected = release ? build.version : build.source_id;
+	const string &actual = release ? host_version : host_source_id;
+	if (actual != expected) {
+		throw InvalidInputException("Gatekeeper %s was built for DuckDB %s (%s); this engine is %s (%s)",
+		                            gatekeeper::VERSION, build.version, build.source_id, host_version, host_source_id);
+	}
+}
+#endif
+
 static void LoadInternal(ExtensionLoader &loader) {
-	CheckBuildEngine();
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+	CheckBuildEngine(loader.GetDatabaseInstance());
+#endif
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),

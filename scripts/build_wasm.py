@@ -32,9 +32,15 @@ def main():
     # Linked worktrees and their submodules refer to metadata outside the worktree.
     if not common.is_relative_to(root):
         docker += ["-v", f"{common}:{common}:ro"]
-    # An external engine checkout must be visible inside the container at the same path.
+    # An external engine checkout must be visible inside the container at the same path, and so
+    # must its Git metadata when it is a linked worktree, or CMake stamps a dummy v0.0.1.
     if not source.is_relative_to(root):
         docker += ["-v", f"{source}:{source}"]
+        source_common = Path(subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=source, text=True
+        ).strip())
+        if not source_common.is_relative_to(source) and not source_common.is_relative_to(root):
+            docker += ["-v", f"{source_common}:{source_common}:ro"]
     docker += [IMAGE]
     subprocess.run(docker + ["emcmake", "cmake", "-S", str(source), "-B", str(build),
                             "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),

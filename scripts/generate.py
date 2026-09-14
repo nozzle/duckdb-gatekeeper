@@ -109,8 +109,9 @@ def main():
     args = parser.parse_args()
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?", args.duckdb_version):
         raise SystemExit("Refusing to bake an unrecognised engine version into the guard: " + args.duckdb_version)
-    if not re.fullmatch(r"[0-9a-f]*", args.duckdb_source_id):
-        raise SystemExit("Refusing to bake a non-hex engine source id into the guard: " + args.duckdb_source_id)
+    if not re.fullmatch(r"[0-9a-f]{7,40}", args.duckdb_source_id):
+        raise SystemExit("Refusing to bake an engine source id that is not a 7-40 hex commit id: "
+                         + repr(args.duckdb_source_id))
     _, defaults = load()
     inventory = {"defaults": defaults}
     build_grammar = grammar(args.duckdb_source)
@@ -122,11 +123,13 @@ def main():
         if not target.exists() or target.read_text() != content:
             target.write_text(content)
     target = args.output / "version.hpp"
-    # The engine guard in LoadInternal compares these against the host at load time.
+    # The engine guard in LoadInternal parses this stamp at load time and compares it with the host. It is one
+    # string so `strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE` shows which engine an
+    # artifact was built for, and so tests can rewrite it in place to prove the guard refuses a mismatch.
+    stamp = f"GATEKEEPER_BUILD_ENGINE {args.duckdb_version} {args.duckdb_source_id}"
     content = ('#pragma once\nnamespace gatekeeper {\n'
                f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
-               f'constexpr const char *BUILD_DUCKDB_VERSION = "{args.duckdb_version}";\n'
-               f'constexpr const char *BUILD_DUCKDB_SOURCE_ID = "{args.duckdb_source_id}";\n'
+               f'constexpr char BUILD_ENGINE_STAMP[] = "{stamp}";\n'
                '} // namespace gatekeeper\n')
     if not target.exists() or target.read_text() != content:
         target.write_text(content)

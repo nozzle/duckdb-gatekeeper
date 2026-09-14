@@ -149,8 +149,9 @@ def test_generation_bakes_build_engine_identity(tmp_path):
     subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
                     "--duckdb-version", "v1.5.6-dev150", "--duckdb-source-id", "a3cd0deed1"], check=True)
     text = (output / "version.hpp").read_text()
-    assert 'BUILD_DUCKDB_VERSION = "v1.5.6-dev150"' in text and 'BUILD_DUCKDB_SOURCE_ID = "a3cd0deed1"' in text
-    for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex")]:
+    assert 'BUILD_ENGINE_STAMP[] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"' in text
+    for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex"),
+                        ("--duckdb-source-id", "a"), ("--duckdb-source-id", "")]:
         result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
                                  flag, value], capture_output=True, text=True)
         assert result.returncode != 0 and "Refusing to bake" in result.stderr
@@ -165,12 +166,34 @@ def test_engine_selection_defaults(tmp_path):
     # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
     assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
     assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
-    # Other checkouts use their own Git metadata unless told otherwise.
+    # Other checkouts use their own Git metadata unless told otherwise. The cache entry is always
+    # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.
     external = parser.parse_args(["--duckdb-source", str(tmp_path)])
-    assert engine_cmake_flags(external) == [] and engine_source(external) == tmp_path.resolve()
+    assert engine_cmake_flags(external) == ["-DOVERRIDE_GIT_DESCRIBE="]
+    assert engine_source(external) == tmp_path.resolve()
     assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.6"])) == [
         "-DOVERRIDE_GIT_DESCRIBE=v1.5.6"]
-    assert engine_cmake_flags(parser.parse_args(["--duckdb-version", ""])) == []
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-version", ""])) == ["-DOVERRIDE_GIT_DESCRIBE="]
+
+
+def test_engine_override_does_not_survive_reconfigure(tmp_path):
+    """Override -> automatic in a reused build directory must not keep the cached override."""
+    import argparse
+    from engine import add_engine_arguments, engine_cmake_flags
+    parser = argparse.ArgumentParser()
+    add_engine_arguments(parser)
+    (tmp_path / "CMakeLists.txt").write_text(
+        'cmake_minimum_required(VERSION 3.15)\nproject(probe NONE)\n'
+        'file(WRITE "${CMAKE_BINARY_DIR}/override.txt" "${OVERRIDE_GIT_DESCRIBE}")\n')
+    cmake = shutil.which("cmake", path=os.pathsep.join([str(ROOT / ".venv/bin"), os.environ.get("PATH", "")]))
+    if not cmake:
+        pytest.skip("cmake not installed")
+    build = tmp_path / "build"
+    for arguments in (["--duckdb-source", str(tmp_path), "--duckdb-version", "v1.5.4"],
+                      ["--duckdb-source", str(tmp_path)]):
+        flags = engine_cmake_flags(parser.parse_args(arguments))
+        subprocess.run([cmake, "-S", str(tmp_path), "-B", str(build), *flags], check=True, capture_output=True)
+    assert (build / "override.txt").read_text() == ""
 
 
 def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp_path, capsys):

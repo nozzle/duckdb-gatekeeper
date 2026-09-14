@@ -291,8 +291,12 @@ the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
 `allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
 from (the version tag for releases, the source id for dev builds, mirroring DuckDB's own
-footer identity) and refuses to load into any other engine. A grammar generated from one
-engine must never validate statements for another. Internal C++ API changes can require
+footer identity) and refuses to load into any other engine. The stamp is a single string
+(`strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE`). The host's identity
+is read from its catalog (`pragma_version()`) rather than `DuckDB::LibraryVersion()`:
+distributed loadables statically link their own DuckDB copy, so the latter only ever
+reports the build engine. A grammar generated from one engine must never validate
+statements for another. Internal C++ API changes can require
 fixes, so compatibility is checked by compilation and functional regressions. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,

@@ -34,5 +34,5 @@ def engine_version(args):
 
 
 def engine_cmake_flags(args):
-    version = engine_version(args)
-    return ["-DOVERRIDE_GIT_DESCRIBE=" + version] if version else []
+    """Always set the cache entry: an omitted -D leaves a previous override in CMakeCache.txt."""
+    return ["-DOVERRIDE_GIT_DESCRIBE=" + (engine_version(args) or "")]
