@@ -1,5 +1,5 @@
 # Prepared for extensions/gatekeeper/description.yml in duckdb/community-extensions.
-# Submit only after v0.1.0 exists and its full distribution workflow succeeds.
+# Submit only after v0.1.1 exists and its full distribution workflow succeeds.
 #
 # duckdb.org renders `description` under the title, adds its own "Installing and Loading"
 # block, shows `hello_world` as one SQL code block, renders `extended_description` as
@@ -9,7 +9,7 @@
 extension:
   name: gatekeeper
   description: Pre-execution authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Checks every resolved table, view, and function against a lockable policy without executing the query.
-  version: 0.1.0
+  version: 0.1.1
   language: C++
   build: cmake
   license: MIT
@@ -21,7 +21,7 @@ extension:
 
 repo:
   github: nozzle/duckdb-gatekeeper
-  ref: v0.1.0
+  ref: v0.1.1
 
 docs:
   hello_world: |
@@ -199,24 +199,28 @@ docs:
     memory and thread limits, and `lock_configuration = true`. Default functions are a
     reviewed name inventory, not a
     proof that every overload is harmless. Read the
-    [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/docs/security.md)
+    [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/docs/security.md)
     before integrating.
 
     ### Compatibility
 
-    This release supports **DuckDB 1.5.5 only**, source revision
-    `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa`. Configure-time source checks and
-    load-time engine checks deliberately reject other versions, because the grammar and
-    function inventories are reviewed against exactly that engine. Every DuckDB patch or
-    minor release needs a coordinated source and inventory review, repin, rebuild, and
-    update of this descriptor, so Gatekeeper may be unavailable on a newer engine in the
-    meantime. See the
-    [repinning checklist](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/inventories/README.md#repinning-the-engine).
+    Release binaries are built for **DuckDB 1.5.5**, source revision
+    `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa`. Each binary must match its DuckDB engine;
+    the community repository can rebuild this source for other engine versions.
+    Gatekeeper generates its AST grammar from the engine being compiled and uses
+    DuckDB's normal extension compatibility checks, without an additional exact-version
+    restriction. Builds and regression tests establish source compatibility.
+
+    Default functions are an explicit list of names. New names remain excluded until
+    classified or explicitly allowed; inventory updates improve coverage rather than
+    gate engine upgrades. Existing DuckDB function implementations are trusted across
+    upgrades. See the
+    [build-pin maintenance guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/inventories/README.md#repinning-the-engine).
 
     Wasm support is limited to the EH bundle, browser-tested with
     `@duckdb/duckdb-wasm@1.33.1-dev64.0` embedding DuckDB 1.5.5 (the npm package version
     is independent of its embedded engine version). MVP and threads/COI remain excluded;
-    see [Wasm compatibility](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/test/wasm/README.md).
+    see [Wasm compatibility](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/test/wasm/README.md).
 
     Full documentation, including a Python integration example, is in the
-    [README](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.0/README.md).
+    [README](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.1.1/README.md).

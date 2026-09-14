@@ -10,7 +10,7 @@ import pytest
 from test_gatekeeper import ROOT
 
 sys.path.insert(0, str(ROOT / "scripts"))
-from generate import header, pinned_revision
+from generate import header, grammar
 import schema_check
 from inventory import load, check_sources
 
@@ -19,7 +19,7 @@ from inventory import load, check_sources
     ("unexpected", True), ("notes", "not a list"), ("notes", [42]), ("notes", []),
     ("source", {}), ("source", "not a URL"), ("source", "https://"), ("source", "https://host/a b"),
     ("compute", "sum"), ("compute", [None]), ("groups", {"broken": "sum"}),
-    ("reviewed_duckdb", "1.0.0"),
+    ("reviewed_duckdb", "not-a-version"),
 ])
 def test_inventory_schema_rejects_malformed_metadata(tmp_path, key, value):
     shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
@@ -56,10 +56,33 @@ def test_generation_chunks_roundtrip_and_compile(tmp_path):
     assert json.loads(subprocess.check_output([str(binary)])) == data
 
 
-def test_generation_requires_initialized_checkout(tmp_path):
-    with pytest.raises(SystemExit, match="Git checkout.*submodule"):
-        pinned_revision(tmp_path)
-    assert pinned_revision()
+def test_generation_uses_build_source_without_git_or_matching_review(tmp_path):
+    source = tmp_path / "engine"
+    relative = "src/include/duckdb/storage/serialization"
+    shutil.copytree(ROOT / "duckdb" / relative, source / relative)
+    path = source / relative / "parsed_expression.json"
+    data = json.loads(path.read_text())
+    expression = next(entry for entry in data if entry["class"] == "ConstantExpression")
+    expression["members"].append({"id": 999, "name": "candidate_field", "type": "string"})
+    path.write_text(json.dumps(data))
+    output = tmp_path / "generated"
+    subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"),
+                    "--duckdb-source", str(source), "--output", str(output)], check=True)
+    assert "candidate_field" in (output / "grammar.hpp").read_text()
+    assert "candidate_field" not in grammar()["rules"]["ConstantExpression"]["fields"]
+    expression["members"][-1]["type"] = "UnsupportedCandidateType"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="Unreviewed field type"):
+        grammar(source)
+
+
+def test_review_version_is_historical_provenance(tmp_path):
+    shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
+    path = tmp_path / "inventories/core.json"
+    entry = json.loads(path.read_text())
+    entry["reviewed_duckdb"] = "1.0.0"
+    path.write_text(json.dumps(entry))
+    assert load(tmp_path)[1] == load()[1]
 
 
 def test_reviewed_sources_match_engine_descriptors():
@@ -84,13 +107,32 @@ def test_audit_comparison_checks_reviewed_sources(monkeypatch, tmp_path):
     import audit_inventory
     candidate = tmp_path / "candidate.json"
     candidate.write_text("{}")
-    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--candidate", str(candidate)])
+    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--check-sources", "--candidate", str(candidate)])
 
     def reject(entries):
         raise ValueError("source pin drift")
 
     monkeypatch.setattr(audit_inventory, "check_sources", reject)
     with pytest.raises(ValueError, match="source pin drift"):
+        audit_inventory.main()
+
+
+def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp_path, capsys):
+    import audit_inventory
+    from versions import BASELINE_FILENAME
+    snapshot = json.loads((ROOT / "inventories/baselines" / BASELINE_FILENAME).read_text())
+    snapshot["duckdb_version"] = "v9.0.0"
+    snapshot["functions"].append({"name": "candidate_new_function", "parameters": []})
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(json.dumps(snapshot))
+    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--candidate", str(candidate)])
+    audit_inventory.main()
+    report = json.loads(capsys.readouterr().out)
+    assert report["version_changed"]
+    assert report["unclassified_runtime_names"] == ["candidate_new_function"]
+    assert "candidate_new_function" not in load()[1]
+    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--strict", "--candidate", str(candidate)])
+    with pytest.raises(SystemExit, match="historical baseline"):
         audit_inventory.main()
 
 

@@ -87,7 +87,7 @@ def package_release(tag, artifacts, output):
         checksums.append(f"{digest}  {name}\n")
     (output / "SHA256SUMS").write_text("".join(checksums))
     (output / "RELEASE_NOTES.md").write_text(
-        f"Gatekeeper {version} supports **DuckDB {SUPPORTED_DUCKDB} only**.\n\n"
+        f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
         "They are not DuckDB-signed community binaries. The full distribution matrix "
         "and the Chromium test of its Wasm EH artifact passed before packaging.\n\n"
@@ -99,7 +99,9 @@ def package_release(tag, artifacts, output):
         f"See [loading instructions](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/CONTRIBUTING.md#loading-unsigned-builds), "
         f"[Wasm setup](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/test/wasm/README.md), "
         f"and the [security model](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/docs/security.md).\n\n"
-        "New DuckDB patch/minor releases need a reviewed repin and rebuild. "
+        "Other DuckDB versions need matching extension builds. Gatekeeper source can be "
+        "rebuilt against another engine; compatibility is checked by builds and regression tests, "
+        "not an exact-version allowlist or a repeat review of existing function names. "
         "Community submission and deployment are separate from this GitHub Release.\n"
     )
 

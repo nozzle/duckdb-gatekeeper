@@ -1,4 +1,4 @@
-"""Generate immutable C++ data from the pinned serializer and reviewed inventory."""
+"""Generate immutable C++ data from the build engine's serializer and function inventory."""
 import sys
 
 if sys.version_info < (3, 10):
@@ -7,15 +7,14 @@ if sys.version_info < (3, 10):
 import argparse
 import json
 from pathlib import Path
-import subprocess
-from inventory import load, check_sources
-from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
+from inventory import load
+from versions import EXTENSION_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "duckdb/src/include/duckdb/storage/serialization"
 
 
-def grammar():
+def grammar(duckdb_source=ROOT / "duckdb"):
+    source = duckdb_source / "src/include/duckdb/storage/serialization"
     primitives = {
         "string": "string", "bool": "boolean", "optional_idx": "number",
         "idx_t": "number", "int64_t": "number", "Value": "opaque",
@@ -29,7 +28,7 @@ def grammar():
     allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression TypeExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier".split())
     entries = {}
     for name in ["statement", "query_node", "tableref", "parsed_expression", "result_modifier", "nodes"]:
-        for entry in json.loads((SOURCE / (name + ".json")).read_text()):
+        for entry in json.loads((source / (name + ".json")).read_text()):
             if entry["class"] in allowed:
                 entries[entry["class"]] = entry
 
@@ -87,20 +86,6 @@ def grammar():
     return {"rules": rules, "dispatch": dispatch}
 
 
-def pinned_revision(root=ROOT):
-    if not (root / ".git").exists() or not (root / "duckdb/.git").exists():
-        raise SystemExit("Gatekeeper generation requires a Git checkout with the pinned DuckDB submodule; "
-                         "clone with --recurse-submodules or run git submodule update --init --recursive")
-    try:
-        revision = subprocess.check_output(["git", "-C", str(root / "duckdb"), "rev-parse", "HEAD"],
-                                           text=True, stderr=subprocess.PIPE).strip()
-    except (OSError, subprocess.CalledProcessError) as error:
-        raise SystemExit("Cannot verify the pinned DuckDB revision; install Git and initialize submodules") from error
-    if revision != SUPPORTED_DUCKDB_REVISION:
-        raise SystemExit(f"Gatekeeper requires the pinned DuckDB {SUPPORTED_DUCKDB} revision {SUPPORTED_DUCKDB_REVISION}")
-    return revision
-
-
 def header(name, data):
     text = json.dumps(data, separators=(",", ":"), ensure_ascii=True)
     # Separate raw literals avoid MSVC C2026; splitting inside JSON escapes is safe.
@@ -114,13 +99,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "generated",
                         help="directory for generated headers (the build passes its binary dir)")
+    parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
+                        help="DuckDB source being compiled; defaults to the local submodule")
     args = parser.parse_args()
-    pinned_revision()
-    entries, defaults = load()
-    check_sources(entries)
+    _, defaults = load()
     inventory = {"defaults": defaults}
+    build_grammar = grammar(args.duckdb_source)
     args.output.mkdir(parents=True, exist_ok=True)
-    for name, data in [("grammar", grammar()), ("inventory", inventory)]:
+    for name, data in [("grammar", build_grammar), ("inventory", inventory)]:
         target = args.output / (name + ".hpp")
         content = header(name, data)
         # Leave the timestamp alone when nothing changed so reconfiguring does not force a rebuild.
@@ -129,7 +115,6 @@ def main():
     target = args.output / "version.hpp"
     content = ('#pragma once\nnamespace gatekeeper {\n'
                f'constexpr const char *VERSION = "{EXTENSION_VERSION}";\n'
-               f'constexpr const char *DUCKDB_VERSION = "v{SUPPORTED_DUCKDB}";\n'
                '} // namespace gatekeeper\n')
     if not target.exists() or target.read_text() != content:
         target.write_text(content)

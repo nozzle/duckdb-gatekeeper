@@ -2,15 +2,18 @@
 import json
 from pathlib import Path
 import re
+import subprocess
 import schema_check
-from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def check_sources(entries, root=ROOT):
-    """Cross-check reviewed implementation URLs against the pinned engine's descriptors."""
-    engine = f"https://github.com/duckdb/duckdb/tree/{SUPPORTED_DUCKDB_REVISION}"
+    """Optional provenance check against a checkout of the historical review engine."""
+    engine = ""
+    if "core" in entries:
+        revision = subprocess.check_output(["git", "-C", str(root / "duckdb"), "rev-parse", "HEAD"], text=True).strip()
+        engine = "https://github.com/duckdb/duckdb/tree/" + revision
     aliases = {name: name + "_scanner" for name in ("mysql", "postgres", "sqlite", "odbc")}
     for name, entry in entries.items():
         if name == "motherduck":
@@ -64,8 +67,8 @@ def load(root=ROOT):
         name = entry["name"]
         if name in entries:
             raise ValueError(f"duplicate inventory: {name}")
-        if entry["reviewed_duckdb"] != SUPPORTED_DUCKDB:
-            raise ValueError(f"missing or incompatible review metadata: {name}")
+        if name == "motherduck" and entry["compute"]:
+            raise ValueError("Binary-only MotherDuck review cannot grant defaults")
         groups = {group: entry.get(group, []) for group in ["compute", "elevated", "unreviewed"]}
         groups.update({f"groups.{group}": names for group, names in entry.get("groups", {}).items()})
         for group, names in groups.items():

@@ -439,14 +439,8 @@ static void Configure(ClientContext &context, TableFunctionInput &input, DataChu
 	output.SetValue(0, 0, Value::BOOLEAN(true));
 }
 
-// The grammar and inventory are generated from exactly this engine release. DuckDB's own footer check
-// compares the same string but can be disabled with allow_extensions_metadata_mismatch, so refuse to
-// load into any other engine build here as well.
+// DuckDB checks extension binary compatibility against the engine used to build this artifact.
 static void LoadInternal(ExtensionLoader &loader) {
-	if (string(DuckDB::LibraryVersion()) != gatekeeper::DUCKDB_VERSION) {
-		throw InvalidInputException("Gatekeeper %s supports DuckDB %s only; this engine is %s", gatekeeper::VERSION,
-		                            gatekeeper::DUCKDB_VERSION, DuckDB::LibraryVersion());
-	}
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),

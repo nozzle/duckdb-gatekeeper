@@ -22,8 +22,7 @@ def test_loaded_extension_version_matches_metadata(db):
 def test_distribution_engine_pins():
     workflow = (ROOT / ".github/workflows/MainDistributionPipeline.yml").read_text()
     assert re.search(r"duckdb_version: v" + re.escape(SUPPORTED_DUCKDB) + r"\s", workflow)
-    for path in ("Makefile", ".github/workflows/test.yml"):
-        assert "OVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB in (ROOT / path).read_text()
+    assert "OVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB in (ROOT / ".github/workflows/test.yml").read_text()
     assert f"duckdb=={SUPPORTED_DUCKDB}" in (ROOT / "requirements-dev.in").read_text().splitlines()
     assert f"version === 'v{SUPPORTED_DUCKDB}'" in (ROOT / "test/wasm/smoke.mjs").read_text()
     lock = json.loads((ROOT / "test/wasm/package-lock.json").read_text())
