@@ -172,7 +172,10 @@ def _header_names(function):
 def test_list_lambda_function_names_match_the_engine():
     """The fail-closed lambda inspection covers exactly DuckDB's list-lambda builtins and their aliases, so a
     renamed or added alias in the engine cannot leave a lambda body uninspected without failing this test."""
-    functions = json.loads((ROOT / "duckdb/extension/core_functions/scalar/list/functions.json").read_text())
+    source = ROOT / "duckdb/extension/core_functions/scalar/list/functions.json"
+    if not source.is_file():
+        pytest.skip("engine source checkout not present (distributed-artifact test run)")
+    functions = json.loads(source.read_text())
     engine = set()
     for entry in functions:
         if entry["name"] in ("list_transform", "list_filter", "list_reduce"):
