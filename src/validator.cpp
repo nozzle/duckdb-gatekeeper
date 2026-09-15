@@ -398,9 +398,7 @@ struct Walker {
 			functions[name]++;
 			// The aggregate these dispatch to is selected by a caller-supplied (foldable) expression that only
 			// binding resolves; remember that the caller wrote the dispatcher so the bound target is allowlisted.
-			static const Names dispatchers = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
-			                                  "list_aggregate"};
-			if (binding && dispatchers.count(name))
+			if (binding && DispatchingAggregators().count(name))
 				binding->caller_dispatchers.insert(name);
 			auto location = yyjson_obj_get(value, "query_location");
 			if (yyjson_is_uint(location)) {

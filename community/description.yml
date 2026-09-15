@@ -162,8 +162,11 @@ docs:
     trusted views and macros introduce internally are normally exempt from the
     allowlists but always honor blocks and the never-bind list; ambiguous caller syntax
     such as `t.x` or `list[i]` triggers a query-wide implementation check that can reach
-    those expansions too.) A request that tries to widen access
-    does not error; it simply cannot authorize anything the global policy denies.
+    those expansions too.) Blocks also reach bound implementations such as `sum` behind
+    `list_sum`, and when the caller writes a name-selected dispatcher (`list_aggregate`,
+    `aggregate`, and aliases) the aggregate it names must itself be allowed in both layers.
+    A request that tries to widen access does not error; it simply cannot authorize
+    anything the global policy denies.
 
     | Operation | SQL |
     |-----------|-----|

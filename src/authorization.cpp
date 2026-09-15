@@ -86,10 +86,9 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 // the actual bound aggregate without unsafe layout casts, evaluating arguments, or rebinding names.
 // Inspect only this documented shape, never arbitrary JSON payloads that can resemble expressions.
 static string ListAggregateImplementation(BoundFunctionExpression &expression) {
-	static const gatekeeper::Names names = {"aggregate",   "array_aggr",     "array_aggregate",
-	                                        "list_aggr",   "list_aggregate", "list_distinct",
-	                                        "list_unique", "array_distinct", "array_unique"};
-	if (!names.count(expression.function.name))
+	// Name-selected dispatchers plus the builtins with a fixed histogram implementation.
+	static const gatekeeper::Names fixed = {"list_distinct", "list_unique", "array_distinct", "array_unique"};
+	if (!gatekeeper::DispatchingAggregators().count(expression.function.name) && !fixed.count(expression.function.name))
 		return {};
 	// Catalog construction stamps this provenance onto each overload and binding preserves it.
 	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
@@ -98,8 +97,7 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 	auto null_input =
 	    !expression.children.empty() && expression.children[0]->return_type.id() == LogicalTypeId::SQLNULL;
 	// These builtins use the fixed histogram implementation and have no serialization callbacks.
-	if (expression.function.name == "list_distinct" || expression.function.name == "list_unique" ||
-	    expression.function.name == "array_distinct" || expression.function.name == "array_unique")
+	if (fixed.count(expression.function.name))
 		return null_input ? "" : "histogram";
 	if (!expression.bind_info)
 		throw BinderException("List aggregate requires resolved parameter types");
@@ -161,19 +159,23 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &bound = child.Cast<BoundFunctionExpression>();
 			function(bound.function.name, "scalar");
-			if (auto lambda = dynamic_cast<ListLambdaBindData *>(bound.bind_info.get())) {
-				if (lambda->lambda_expr)
-					expressions.push_back(lambda->lambda_expr.get());
-			}
+			auto lambda = dynamic_cast<ListLambdaBindData *>(bound.bind_info.get());
+			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
+			// executable code that blocks must reach. A distributed loadable performs this cast across the
+			// host/extension boundary; if it ever fails there, refuse rather than silently skip the body.
+			if (!lambda && gatekeeper::ListLambdaFunctions().count(bound.function.name) &&
+			    bound.function.catalog_name == "system" && bound.function.schema_name == "main")
+				throw BinderException("Cannot inspect list lambda implementation");
+			if (lambda && lambda->lambda_expr)
+				expressions.push_back(lambda->lambda_expr.get());
 			auto aggregate = ListAggregateImplementation(bound);
 			if (!aggregate.empty()) {
 				// A caller-written dispatcher selects its aggregate by name, so that target is caller-chosen and
 				// must be allowed, not merely unblocked. Fixed implementations (list_distinct's histogram) and
 				// dispatchers introduced only by trusted views or macros keep the block-only treatment. Any
 				// caller-written dispatcher triggers the check query-wide, like other ambiguous caller syntax.
-				static const gatekeeper::Names dispatchers = {"aggregate", "array_aggr", "array_aggregate", "list_aggr",
-				                                              "list_aggregate"};
-				if (!binding.caller_dispatchers.empty() && dispatchers.count(bound.function.name) &&
+				if (!binding.caller_dispatchers.empty() &&
+				    gatekeeper::DispatchingAggregators().count(bound.function.name) &&
 				    !gatekeeper::FunctionAllowed(policy, aggregate)) {
 					auto canonical = gatekeeper::CanonicalFunction(aggregate);
 					result.violations.emplace("function", "dispatched aggregate is not allowed: " + canonical, "", "",

@@ -224,3 +224,43 @@ def test_concurrent_policies():
                     assert result["allowed"] == (j%2 == 0), result
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             list(pool.map(worker, range(8)))
+
+
+def test_configure_interleaved_with_validate():
+    """Each validation reads one coherent policy snapshot while another connection replaces the global policy.
+    The two policies differ in both dimensions; a torn read would pass one dimension and fail the other."""
+    with connect() as db:
+        db.execute("CREATE TABLE a(x INT); CREATE TABLE b(x INT)")
+        policies = [
+            {"allowed_tables": [{"schema": "main", "table": "a"}], "blocked_functions": ["sum"]},
+            {"allowed_tables": [{"schema": "main", "table": "b"}], "blocked_functions": ["count"]},
+        ]
+        stop = False
+        configure(db, policies[0])  # never validate against the built-in defaults
+
+        def configurer():
+            with db.cursor() as conn:
+                i = 0
+                while not stop:
+                    configure(conn, policies[i % 2])
+                    i += 1
+
+        def validator(_):
+            with db.cursor() as conn:
+                for _ in range(200):
+                    # Policy 0: a allowed, b denied, sum blocked. Policy 1 is the mirror image. Queries denied
+                    # under both policies must never come back ok, whichever snapshot a call happened to take;
+                    # a torn read (tables from one policy, functions from the other) would let one through.
+                    assert check(conn, "SELECT sum(x) FROM a")["code"] == "forbidden"
+                    assert check(conn, "SELECT count(x) FROM b")["code"] == "forbidden"
+                    assert check(conn, "SELECT sum(x) FROM a, b")["code"] == "forbidden"
+                    assert check(conn, "SELECT count(x) FROM a")["code"] in ("ok", "forbidden")
+                    assert check(conn, "SELECT sum(x) FROM b")["code"] in ("ok", "forbidden")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            background = pool.submit(configurer)
+            try:
+                list(pool.map(validator, range(4)))
+            finally:
+                stop = True
+                background.result(timeout=30)
