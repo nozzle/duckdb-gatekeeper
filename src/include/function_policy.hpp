@@ -36,6 +36,7 @@ inline const Names &NeverBindFunctions() {
 	                            "duckdb_views",
 	                            "force_checkpoint",
 	                            "gatekeeper_configure",
+	                            "gatekeeper_enforce",
 	                            "json_execute_serialized_sql",
 	                            "json_serialize_plan",
 	                            "nextval",

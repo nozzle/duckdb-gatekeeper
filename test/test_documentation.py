@@ -141,16 +141,22 @@ def test_function_metadata_for_generated_docs(db):
     rows = db.execute("""SELECT function_name, description, examples, parameters, parameter_types
                          FROM duckdb_functions() WHERE function_name LIKE 'gatekeeper%'
                          ORDER BY function_name""").fetchall()
-    assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_validate"]
+    assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_enforce", "gatekeeper_validate"]
     options = ["allowed_tables", "blocked_tables", "use_default_functions", "allowed_functions", "blocked_functions"]
     for name, description, examples, parameters, parameter_types in rows:
         assert description and "\n" not in description and examples, name
-        positional = ["sql"] if name == "gatekeeper_validate" else []
-        assert sorted(parameters) == sorted(options + positional), name
-        assert parameter_types == ["VARCHAR"] * len(positional) + ["ANY"] * len(options), name
+        if name == "gatekeeper_enforce":
+            assert parameters == [] and parameter_types == []
+        else:
+            positional = ["sql"] if name == "gatekeeper_validate" else []
+            assert sorted(parameters) == sorted(options + positional), name
+            assert parameter_types == ["VARCHAR"] * len(positional) + ["ANY"] * len(options), name
         assert db.extract_statements(examples[0])[0].type in RESPONSE_TYPES
-        assert db.execute(examples[0]).fetchone()[0] is True, examples[0]
-    assert db.execute("SELECT description FROM duckdb_settings() WHERE name = 'gatekeeper_policy'").fetchone()[0]
+        # The enforce example latches the connection it runs on; keep the shared fixture unenforced.
+        with db.cursor() as cursor:
+            assert cursor.execute(examples[0]).fetchone()[0] is True, examples[0]
+    for setting in ["gatekeeper_policy", "gatekeeper_enforcement"]:
+        assert db.execute("SELECT description FROM duckdb_settings() WHERE name = ?", [setting]).fetchone()[0]
 
 
 @pytest.mark.parametrize("block", [

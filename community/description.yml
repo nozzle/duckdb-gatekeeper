@@ -77,16 +77,20 @@ docs:
     -- allowed | code    | error_type
     -- false   | binding | Catalog
   extended_description: |
-    Gatekeeper answers one question before you run SQL you did not write: does this
-    statement stay inside the lines you drew? It is built for multi-tenant analytics,
-    LLM-generated queries, and embedded dashboard builders where the SQL text is
-    untrusted but the database is yours. It parses the statement, binds it on your
-    connection, and authorizes every **resolved** table, view, and caller-written
-    function against a two-layer policy: a lockable global ceiling and per-request
-    options that may narrow it but never widen it. The submitted SQL is not executed.
+    Gatekeeper answers one question about SQL you did not write: does this statement
+    stay inside the lines you drew? It is built for multi-tenant analytics, LLM agents,
+    and embedded dashboard builders where the SQL text is untrusted but the database is
+    yours. It parses the statement, binds it on your connection, and authorizes every
+    **resolved** table, view, and caller-written function against a two-layer policy: a
+    lockable global ceiling and per-request options that may narrow it but never widen it.
 
-    Gatekeeper is a **pre-execution validator, not a sandbox**. It does not filter rows
-    or columns, cap memory or time, or isolate the filesystem. See
+    Ask the question with `gatekeeper_validate`, which returns the decision without
+    executing, or make DuckDB answer it itself: `CALL gatekeeper_enforce()` latches a
+    connection so that every statement on it is checked the same way and denied
+    statements raise a `Permission Error` before anything runs.
+
+    Gatekeeper is a **statement-level sandbox**, not an operating-system one. It does not
+    filter rows or columns, cap memory or time, or isolate the filesystem. See
     [Security boundaries](#security-boundaries) before integrating. It is in early
     development (0.x): the option and result schema may still change between releases.
 
@@ -100,24 +104,47 @@ docs:
        against both the global policy and the request options.
     5. **Return** one row with named columns. Nothing is executed.
 
-    The integration contract: require **both** `allowed = true` and `code = 'ok'`, treat
-    exceptions and missing rows as denials, then execute the same SQL text on the same
-    connection.
+    Two integration contracts. **Enforced connection**: run `CALL gatekeeper_enforce()`
+    on the connection you hand out and execute SQL on it directly; the same steps run
+    inside DuckDB's query hooks, the plan the engine is about to execute is checked once
+    more, and a denial raises. **Validate first**: require **both** `allowed = true` and
+    `code = 'ok'`, treat exceptions and missing rows as denials, then execute the same SQL
+    text on the same connection.
 
     ```sql
     SELECT allowed, code, violations, error_message
     FROM gatekeeper_validate(?, allowed_tables := ?);  -- host-bound parameters
     ```
 
+    ### Enforced connections
+
+    ```sql
+    CALL gatekeeper_enforce();  -- this connection now executes only what the policy allows
+    SET gatekeeper_enforcement = 'new_connections';  -- or latch every connection opened from now on
+    ```
+
+    The latch is irreversible for the life of the connection and lives in connection state,
+    not in a setting. `gatekeeper_enforcement` accepts `off`, `new_connections`, and
+    `all`; switching it back releases nobody, and `lock_configuration` freezes it.
+    `CALL gatekeeper_enforce()` also returns `warnings` naming host settings that weaken
+    the sandbox (`enable_external_access`, autoload, `lock_configuration`); Gatekeeper
+    reports them and never changes them. Parameters and the relation API are covered.
+    Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
+    DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
+    `SELECT` it becomes, and pragma **argument expressions are evaluated during that
+    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied. See the
+    security model's residuals.
+
     ### Functions and options
 
     ```text
     SELECT * FROM gatekeeper_validate(sql VARCHAR, option := value, ...)  -- one result row
     CALL gatekeeper_configure(option := value, ...)                       -- replaces the global policy
+    CALL gatekeeper_enforce()                                             -- latches this connection
     ```
 
-    Both take the same named options and accept host-bound parameters (`?`, `$1`), so
-    policies never need to be spliced into SQL text.
+    The first two take the same named options and accept host-bound parameters (`?`,
+    `$1`), so policies never need to be spliced into SQL text.
 
     | Option | Type | Default | Notes |
     |--------|------|---------|-------|
@@ -185,7 +212,7 @@ docs:
     - Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`,
       `json_serialize_plan`), metadata readers
       (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), sequence and storage
-      functions, and `gatekeeper_configure` itself are on a never-bind list that no option
+      functions, `gatekeeper_configure`, and `gatekeeper_enforce` are on a never-bind list that no option
       can override, including through views or macros.
     - File readers (`read_parquet`, `read_csv_auto`, `read_json_auto`) and catalog, session,
       or configuration inspection (`current_schema`, `current_setting`, `getvariable`) are
@@ -200,11 +227,14 @@ docs:
     ### Security boundaries
 
     Binding **can perform I/O** through trusted catalogs and explicitly admitted readers,
-    and type resolution can autoload extensions when those settings are on. Applications
-    must control trusted definitions, host capabilities, credentials, resource limits, and
-    the gap between validation and execution. Run validation on a dedicated connection
-    with `autoload_known_extensions = false`, `autoinstall_known_extensions = false`,
-    memory and thread limits, and `lock_configuration = true`. Default functions are a
+    and type resolution can autoload extensions when those settings are on. DuckDB also
+    binds prepared statements before any extension hook runs, so a statement an enforced
+    connection will deny may still have been bound. Applications must control trusted
+    definitions, host capabilities, credentials, and resource limits, and, when
+    validating rather than enforcing, the gap between validation and execution. Set
+    `autoload_known_extensions = false`, `autoinstall_known_extensions = false`,
+    `enable_external_access = false` where possible, memory and thread limits, and
+    `lock_configuration = true` before handing out connections. Default functions are a
     reviewed name inventory, not a proof that every overload is harmless. Engine error
     messages (`error_message`) can name catalog objects the policy denies, so return them
     to trusted operators only. Read the

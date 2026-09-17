@@ -4,6 +4,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -160,6 +161,84 @@ static Value Run(Connection &connection, const std::string &sql, const Value &te
 	// Always consume both parameters, even when a chosen option value is a literal.
 	auto result = connection.Query("WITH input AS (SELECT $1::VARCHAR AS text, $2::BIGINT AS n) " + sql, text, limit);
 	return Decision(*result);
+}
+
+static bool GatekeeperDenial(const ErrorData &error) {
+	return error.Type() == ExceptionType::PERMISSION &&
+	       error.RawMessage().find("Gatekeeper denied this statement") != std::string::npos;
+}
+
+// An enforced connection must agree with gatekeeper_validate under the same global policy. Plan the
+// text on a latched connection: PendingQuery runs the binding boundary, the engine's bind, and the
+// execution boundary, then schedules pipeline events. Setup() pins the database to threads=1, so no
+// worker exists to run a scheduled task and nothing executes before the pending result is discarded.
+// The latched connection lives only for this input: a pending result leaves the connection's query
+// open until its next statement, and a static connection torn down in that state at exit() reads
+// configuration after thread-local storage is gone.
+static void CheckEnforcedParity(DuckDB &database, Connection &connection, const std::string &bytes) {
+	Connection enforced(database);
+	auto latch = enforced.Query("CALL gatekeeper_enforce()");
+	if (latch->HasError())
+		std::abort();
+	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)", Value(bytes));
+	if (expected->HasError()) {
+		CheckError(expected->GetErrorObject().Type());
+		return;
+	}
+	auto chunk = expected->Fetch();
+	if (!chunk || chunk->size() != 1)
+		std::abort();
+	auto allowed = chunk->GetValue(0, 0).GetValue<bool>();
+	auto code = chunk->GetValue(1, 0).GetValue<string>();
+	// Keep the list Value alive for as long as its children are referenced.
+	auto violations = chunk->GetValue(2, 0);
+	const auto &entries = ListValue::GetChildren(violations);
+	bool limit_only = !entries.empty();
+	for (const auto &violation : entries)
+		if (StructValue::GetChildren(violation)[0].GetValue<string>() != "limit")
+			limit_only = false;
+	auto pending = enforced.PendingQuery(bytes);
+	bool denial = pending->HasError() && GatekeeperDenial(pending->GetErrorObject());
+	if (pending->HasError())
+		CheckError(pending->GetErrorObject().Type());
+	// Validate allowed it: enforcement must not deny it.
+	if (allowed && denial)
+		std::abort();
+	// Validate forbade it on policy grounds: the engine must not have planned it. The statement-count
+	// limit is the one forbidden case the engine rejects itself, before any hook.
+	if (code == "forbidden" && !limit_only && !pending->HasError())
+		std::abort();
+	// Unsupported statement types must not plan either, except pragmas DuckDB rewrites into SELECTs
+	// before Gatekeeper sees them, which then follow the policy on that SELECT.
+	if (code == "unsupported" && !pending->HasError()) {
+		try {
+			Parser parser(connection.context->GetParserOptions());
+			parser.ParseQuery(bytes);
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::PRAGMA_STATEMENT)
+				std::abort();
+		} catch (const Exception &error) {
+			CheckError(ErrorData(error).Type());
+			std::abort(); // validate parsed this text; the engine's parser must too
+		}
+	}
+	pending.reset();
+}
+
+// Deterministic latch checks, once per process.
+static void CheckEnforcedLatch(DuckDB &database) {
+	Connection enforced(database);
+	auto latch = enforced.Query("CALL gatekeeper_enforce()");
+	if (latch->HasError())
+		std::abort();
+	auto denied = enforced.Query("CREATE TABLE fuzz_denied(x INTEGER)");
+	if (!denied->HasError() || !GatekeeperDenial(denied->GetErrorObject()))
+		std::abort();
+	auto allowed = enforced.Query("SELECT count(*) FROM t");
+	if (allowed->HasError())
+		std::abort();
+	auto relatch = enforced.Query("CALL gatekeeper_enforce()");
+	if (!relatch->HasError() || !GatekeeperDenial(relatch->GetErrorObject()))
+		std::abort();
 }
 
 // Every canonical policy value must be NULL-free at every depth.
@@ -413,6 +492,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckReplacementCallbacks();
 		Setup(connection);
 		CheckFuzzLimits(connection);
+		CheckEnforcedLatch(database);
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
@@ -456,6 +536,10 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	if (data[0] % 16 == 15) {
 		if (Configured(options, text, limit) != Configured(options, text, limit))
 			std::abort();
+		return 0;
+	}
+	if (data[0] % 16 == 12) {
+		CheckEnforcedParity(database, connection, bytes);
 		return 0;
 	}
 	if (data[0] % 16 == 14) {

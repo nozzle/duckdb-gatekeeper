@@ -1,10 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "gatekeeper_extension.hpp"
-#include "authorization.hpp"
 #include "check.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -13,12 +9,10 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_parameter_map.hpp"
-#include "engine_errors.hpp"
-#include "function_policy.hpp"
+#include "enforcement.hpp"
 #include "fuzz_checks.hpp"
 #include "options.hpp"
+#include "policy_setting.hpp"
 #include "version.hpp"
 
 namespace duckdb {
@@ -75,8 +69,6 @@ static Value ResultValue(const gatekeeper::Result &result) {
 	                      identities(result.objects, true), identities(result.functions, false)});
 }
 
-static constexpr const char *POLICY_SETTING = "gatekeeper_policy";
-
 static void SetPolicy(ClientContext &, SetScope scope, Value &value) {
 	// DuckDB's parser currently rejects SET LOCAL; refuse it here too so a future parser cannot route a
 	// connection-scoped assignment into the instance-wide policy.
@@ -89,7 +81,7 @@ static void SetPolicy(ClientContext &, SetScope scope, Value &value) {
 	}
 }
 
-static gatekeeper::Policy GlobalPolicy(ClientContext &context) {
+gatekeeper::Policy GlobalPolicy(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	Value value;
 	if (!config.TryGetCurrentSetting(POLICY_SETTING, value))
@@ -164,167 +156,6 @@ struct SingleRowState : GlobalTableFunctionState {
 
 static unique_ptr<GlobalTableFunctionState> InitSingleRow(ClientContext &, TableFunctionInitInput &) {
 	return make_uniq<SingleRowState>();
-}
-
-// Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
-// construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
-// first callback at LOAD and, while a validation is binding on this thread, decides before that
-// bind happens: the resolved reader is authorized like a caller-written table function in both layers.
-struct ValidationScope {
-	ClientContext &context; // the connection this validation binds on
-	const gatekeeper::Policy &policy;
-	const gatekeeper::Policy &ceiling;
-	gatekeeper::Result &result;
-	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
-};
-static thread_local ValidationScope *active_scope = nullptr;
-// Nested validations (a host callback validating on another connection) restore the outer scope.
-struct ScopeGuard {
-	ValidationScope *previous;
-	explicit ScopeGuard(ValidationScope &scope) : previous(active_scope) { active_scope = &scope; }
-	~ScopeGuard() { active_scope = previous; }
-};
-
-static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
-                                                      optional_ptr<ReplacementScanData>) {
-	auto scope = active_scope;
-	if (!scope || &context != &scope->context)
-		return nullptr; // Ordinary connections, including reentrant ones on this thread, are unaffected.
-	auto path = ReplacementScan::GetFullPath(input);
-	auto deny = [&](const string &rule, const string &message, const string &function = "") {
-		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
-		                                 function);
-		throw PermissionException("replacement scan is not allowed");
-	};
-	auto &config = DBConfig::GetConfig(context);
-	for (auto &scan : config.replacement_scans) {
-		if (scan.function == GatekeeperReplacementScan)
-			continue;
-		// Other callbacks construct a TableRef without binding it; nothing is opened here.
-		auto replacement = scan.function(context, input, scan.data.get());
-		if (!replacement)
-			continue;
-		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
-			deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path);
-		auto &function = replacement->Cast<TableFunctionRef>().function;
-		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
-			deny("replacement_scan", "replacement scan has no resolvable function: " + path);
-		auto name = function->Cast<FunctionExpression>().function_name;
-		for (const auto *layer : {&scope->ceiling, &scope->policy}) {
-			if (!gatekeeper::FunctionAllowed(*layer, name))
-				deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
-				     gatekeeper::CanonicalFunction(name));
-		}
-		scope->authorized.insert(gatekeeper::Lower(input.table_name));
-		scope->result.objects.insert({"", "", path, "replacement"});
-		return replacement;
-	}
-	// No callback claimed the name. Returning nullptr would let DuckDB run every callback a second
-	// time outside this authorization, so raise the engine's own missing-table error here instead.
-	// The lookup throws for every catalog with transactional DDL. If a catalog without it finds the
-	// entry after all, returning nullptr would still resume DuckDB's callback loop rather than the
-	// later catalog lookup, so fail closed and let the caller retry.
-	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
-	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
-}
-
-// gatekeeper_validate: run the binding boundary, then bind privately on the caller's connection with the
-// catalog-lookup callback and replacement interception, then run the execution boundary on that plan.
-static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
-                                const gatekeeper::Policy &ceiling, const string &sql,
-                                const gatekeeper::Limits &limits = gatekeeper::Limits()) {
-	gatekeeper::Result result;
-	bool binding = false;
-	try {
-		auto text = CheckText(context, policy, ceiling, sql, limits);
-		if (!text.result.allowed)
-			return text.result;
-		result = std::move(text.result);
-		binding = true;
-		for (auto &statement : text.statements) {
-			case_insensitive_map_t<BoundParameterData> parameter_data;
-			BoundParameterMap parameters(parameter_data);
-			auto binder = Binder::CreateBinder(context);
-			binder->SetParameters(parameters);
-			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-			binder->SetCatalogLookupCallback([&](CatalogEntry &entry) {
-				AuthorizeObject(ceiling, text.binding, entry, result);
-				AuthorizeObject(policy, text.binding, entry, result);
-			});
-			ValidationScope scope{context, policy, ceiling, result, {}};
-			BoundStatement bound;
-			{
-				ScopeGuard guard(scope);
-				bound = binder->Bind(*statement);
-			}
-			// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
-			// parameters.rebind is a cache hint, not incomplete binding.
-			if (!bound.plan)
-				throw BinderException(
-				    "Validation requires a complete bound plan; parameter values or types may be needed");
-			// Some bind callbacks return placeholder plans instead of throwing ParameterNotResolved.
-			// Mirror Planner's bound_all_parameters type check: execution must not choose a different
-			// implementation after validation by resolving an UNKNOWN parameter for the first time.
-			for (const auto &entry : parameters.GetParameters())
-				if (!entry.second->return_type.IsValid())
-					throw BinderException(
-					    "Validation requires a complete bound plan; parameter values or types may be needed");
-			CheckPlan(policy, ceiling, text.binding, *bound.plan, result);
-			// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
-			for (auto &entry : binder->GetReplacementScans())
-				if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
-					result.violations.emplace("replacement_scan", "replacement scan was not authorized: " + entry.first,
-					                          "", "", entry.first);
-			if (!result.violations.empty())
-				throw PermissionException("unauthorized replacement scan");
-		}
-		return result;
-	} catch (const ParserException &error) {
-		ErrorData data(error);
-		result.code = "parser";
-		result.error_type = "parser";
-		result.error_message = data.RawMessage();
-		auto position = data.ExtraInfo().find("position");
-		if (position != data.ExtraInfo().end()) {
-			try {
-				result.position = std::stoll(position->second);
-			} catch (...) {
-			}
-		}
-	} catch (const std::invalid_argument &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		result.error_message = error.what();
-	} catch (const InvalidInputException &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		if (binding)
-			result.error_type = "Invalid Input";
-		result.error_message = ErrorData(error).RawMessage();
-	} catch (const Exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
-			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
-		if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
-			result.error_message = "Validation cannot complete binding without parameter values or types";
-	} catch (const std::bad_alloc &) {
-		throw;
-	} catch (const std::exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
-			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
-	}
-	result.allowed = false;
-	if (!result.violations.empty()) {
-		result.code = "forbidden";
-		result.error_type.clear();
-		result.error_message.clear();
-	}
-	return result;
 }
 
 #ifdef GATEKEEPER_FUZZ
@@ -478,11 +309,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
 	                          default_policy, SetPolicy, SetScope::GLOBAL);
 	// First position: decide replacement scans before any other callback's reader can bind.
-	bool installed = false;
-	for (auto &scan : config.replacement_scans)
-		installed = installed || scan.function == GatekeeperReplacementScan;
-	if (!installed)
-		config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
+	InstallReplacementScan(config);
 	TableFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, GatekeeperValidate, BindValidate,
 	                       InitSingleRow);
 	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
@@ -521,6 +348,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	configure_info.descriptions.push_back(std::move(configure_description));
 	loader.RegisterFunction(std::move(validate_info));
 	loader.RegisterFunction(std::move(configure_info));
+	RegisterEnforcement(loader);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }

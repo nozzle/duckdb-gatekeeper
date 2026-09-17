@@ -1,18 +1,26 @@
 #pragma once
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "validator.hpp"
 
 namespace duckdb {
 class ClientContext;
 class LogicalOperator;
+struct DBConfig;
 
 // Gatekeeper decides at two boundaries. The binding boundary sees only caller-written text and runs
 // before anything binds, so it owns every property that must hold before the engine touches the
 // catalog or a reader: statement type, statement count, grammar, and caller-written function names.
 // The execution boundary sees a bound plan and owns every property of what actually executes:
-// resolved tables, resolved functions, and implementations chosen during binding. gatekeeper_validate
-// composes both around a private binder; an enforcing connection runs each at the matching engine hook.
+// plan operators, resolved tables, resolved functions, and implementations chosen during binding.
+// Between them, Authorize binds privately with a catalog-lookup callback so every object the binder
+// retrieves, including views that the plan later inlines, is authorized by resolved identity.
+// gatekeeper_validate composes all of this into a structured result; an enforcing connection runs the
+// same composition at the engine's query hooks and then re-checks the plan the engine executes.
 
 struct TextCheck {
 	gatekeeper::Result result;
@@ -29,8 +37,28 @@ struct TextCheck {
 TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
                     const string &sql, const gatekeeper::Limits &limits);
 
-// Execution boundary. Authorizes a bound plan against the ceiling and then the request layer, recording
-// each violation in result and throwing PermissionException at the first denial.
+// Execution boundary. Requires a read-only statement whose plan contains only reviewed read operators,
+// then authorizes the plan against the ceiling and the request layer. Records each violation in result
+// and throws PermissionException at the first denial.
 void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               const gatekeeper::BindingPolicy &binding, LogicalOperator &plan, gatekeeper::Result &result);
+               const gatekeeper::BindingPolicy &binding, const StatementProperties &properties, LogicalOperator &plan,
+               gatekeeper::Result &result);
+
+// Private bind of one admitted statement on the caller's connection with the catalog-lookup callback
+// and replacement interception, followed by the execution boundary on that plan. Parameter values,
+// when supplied, bind exactly as the engine would bind them. Records violations in result and throws
+// PermissionException at the first denial; engine exceptions propagate unchanged.
+void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
+               SQLStatement &statement, const gatekeeper::BindingPolicy &binding,
+               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result);
+
+// gatekeeper_validate: CheckText, then Authorize, with every outcome mapped to a structured result.
+gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
+                         const string &sql, const gatekeeper::Limits &limits = gatekeeper::Limits());
+
+// Installs Gatekeeper's replacement-scan callback in first position, once per database.
+void InstallReplacementScan(DBConfig &config);
+
+// One-line description of a denied result for exception messages.
+string DenialMessage(const gatekeeper::Result &result);
 } // namespace duckdb

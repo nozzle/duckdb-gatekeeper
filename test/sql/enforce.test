@@ -1,0 +1,177 @@
+# name: test/sql/enforce.test
+# description: An enforced connection executes only what the global policy allows; the latch cannot be undone from SQL.
+# group: [gatekeeper]
+
+require gatekeeper
+
+require parquet
+
+statement ok
+CREATE TABLE reporting_orders(id INTEGER, amount DOUBLE);
+
+statement ok
+INSERT INTO reporting_orders VALUES (1, 10.5), (2, 20.0);
+
+statement ok
+CREATE TABLE secret(s VARCHAR);
+
+statement ok
+CREATE VIEW leak AS SELECT * FROM secret;
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema: 'main', 'table': 'reporting_orders'}], blocked_functions := ['md5']);
+
+# The enforcement mode is global-only and takes exactly three spellings.
+
+statement error
+SET gatekeeper_enforcement = 'sometimes';
+----
+gatekeeper_enforcement must be
+
+statement error
+SET SESSION gatekeeper_enforcement = 'off';
+----
+global-only
+
+query I
+SELECT current_setting('gatekeeper_enforcement');
+----
+off
+
+# Explaining or preparing the latch does not engage it; only executing it does.
+
+statement ok
+EXPLAIN SELECT * FROM gatekeeper_enforce();
+
+statement ok
+CREATE TABLE still_unenforced(x INTEGER);
+
+query I
+SELECT enforced FROM gatekeeper_enforce();
+----
+true
+
+# From here on this connection is enforced. Reads the policy allows still run.
+
+query I
+SELECT sum(amount) FROM reporting_orders;
+----
+30.5
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE reporting_orders);
+----
+id	INTEGER
+amount	DOUBLE
+
+# Everything gatekeeper_validate would deny is refused before it can execute.
+
+statement error
+SELECT * FROM secret;
+----
+Gatekeeper denied this statement
+
+statement error
+SELECT * FROM leak;
+----
+Gatekeeper denied this statement
+
+statement error
+SELECT md5('x');
+----
+Gatekeeper denied this statement
+
+statement error
+CREATE TABLE u(x INTEGER);
+----
+Gatekeeper denied this statement
+
+statement error
+INSERT INTO reporting_orders VALUES (3, 1.0);
+----
+Gatekeeper denied this statement
+
+statement error
+DELETE FROM reporting_orders;
+----
+Gatekeeper denied this statement
+
+statement error
+SET threads = 1;
+----
+Gatekeeper denied this statement
+
+statement error
+SELECT * FROM read_csv('/nonexistent/gatekeeper.csv');
+----
+Gatekeeper denied this statement
+
+statement error
+FROM '/nonexistent/gatekeeper.parquet';
+----
+Gatekeeper denied this statement
+
+statement error
+SELECT * FROM duckdb_settings();
+----
+Gatekeeper denied this statement
+
+statement error
+EXPLAIN SELECT 1;
+----
+Gatekeeper denied this statement
+
+statement error
+PREPARE p AS SELECT 1;
+----
+Gatekeeper denied this statement
+
+statement error
+CALL gatekeeper_configure();
+----
+Gatekeeper denied this statement
+
+statement error
+CALL gatekeeper_enforce();
+----
+Gatekeeper denied this statement
+
+statement error
+SELECT * FROM gatekeeper_enforce();
+----
+Gatekeeper denied this statement
+
+statement error
+RESET gatekeeper_enforcement;
+----
+Gatekeeper denied this statement
+
+statement error
+SET gatekeeper_policy = current_setting('gatekeeper_policy');
+----
+Gatekeeper denied this statement
+
+# Engine errors keep the engine's own wording; they are not denials.
+
+statement error
+SELECT * FROM missing_table;
+----
+does not exist
+
+# Query pragmas are rewritten by DuckDB into the SELECT they stand for before Gatekeeper sees them,
+# so they follow the policy on that SELECT rather than being unsupported statements.
+
+statement ok
+PRAGMA version;
+
+statement error
+PRAGMA table_info('reporting_orders');
+----
+Gatekeeper denied this statement
+
+# Denied statements had no effect.
+
+query I
+SELECT count(*) FROM reporting_orders;
+----
+2

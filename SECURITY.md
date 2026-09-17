@@ -34,19 +34,25 @@ in [docs/security.md](docs/security.md), reads a table or view outside `allowed_
 or matching `blocked_tables`; binds a caller-written function outside the allowlists or
 matching `blocked_functions`; reaches a never-bind function by any route; is not a single
 `SELECT`; or executes, writes, or performs I/O the validator claims it does not. Also in
-scope: `gatekeeper_configure` or `SET gatekeeper_policy` widening the policy from a
-connection that should not be able to, and a distributed artifact loading into an engine
-it was not built for.
+scope: any statement executing on an enforced connection that `gatekeeper_validate` would
+deny, any way to release or bypass the enforcement latch from SQL, `gatekeeper_configure`,
+`SET gatekeeper_policy`, or `SET gatekeeper_enforcement` widening the policy or releasing
+enforcement from a connection that should not be able to, and a distributed artifact
+loading into an engine it was not built for.
 
 Out of scope, by design and documented in
 [Remaining boundaries](docs/security.md#remaining-boundaries): row- or column-level
 filtering; execution-time memory, time, or result limits; parser or binder resource
 exhaustion; I/O that trusted catalogs, views, macros, or explicitly admitted readers
-perform during binding; behavior of host-created definitions that shadow default names
+perform during binding, including the bind DuckDB performs for a prepared statement before
+any extension hook runs; scalar functions DuckDB's statement preprocessor evaluates in
+`PRAGMA` arguments while parsing, before any extension hook runs (a documented, pinned
+residual); behavior of host-created definitions that shadow default names
 or otherwise rely on an untrusted party having DDL in the shared catalog; the contents
 of engine `error_message` text; and hosts that leave `autoload_known_extensions`,
-`autoinstall_known_extensions`, or configuration changes enabled on validating
-connections. Reports in these areas are welcome as ordinary issues.
+`autoinstall_known_extensions`, or configuration changes enabled on validating or
+enforced connections; and callers who hold the host-language connection object rather
+than the ability to submit SQL to it. Reports in these areas are welcome as ordinary issues.
 
 Vulnerabilities in DuckDB itself should be reported to the
 [DuckDB project](https://github.com/duckdb/duckdb/security/policy).
