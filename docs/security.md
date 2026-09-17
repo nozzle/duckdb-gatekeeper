@@ -1,29 +1,44 @@
 # Security model
 
-Gatekeeper is a pre-execution validator, not an enforcement hook or a
-database sandbox. A successful decision means the SQL conforms to the selected
-syntax, caller-function and resolved-deny/object policies on the pinned parser/binder. It does not mean the SQL is cheap,
-returns nonsensitive data, or cannot have side effects through admitted functions.
+Gatekeeper decides whether one SQL statement conforms to the selected syntax, caller-function
+and resolved-deny/object policies on the pinned parser/binder. It offers that decision two ways:
+`gatekeeper_validate` returns it to the host before the host executes, and an
+[enforced connection](#enforced-connections) makes DuckDB refuse to execute anything the
+decision denies. Neither means the SQL is cheap, returns nonsensitive data, or cannot have side
+effects through admitted functions. Gatekeeper is a statement-level sandbox, not an
+operating-system, memory, or network sandbox.
 
 ## Integrating
 
+Preferred: hand untrusted callers an enforced connection and execute their SQL on it directly.
+
 1. Load a trusted extension build and keep the execution catalog/search path trusted.
-   Provision required extensions first, then set `autoload_known_extensions=false`
-   and `autoinstall_known_extensions=false` on validation connections. Gatekeeper
-   does not temporarily mutate those settings.
-2. Install the global policy through trusted `CALL gatekeeper_configure`, then lock
-   configuration. Construct any further request restrictions from authenticated context.
-3. Run `SELECT * FROM gatekeeper_validate(?)` with the exact SQL to execute.
-4. Require an explicit successful result; reject missing results, NULLs, and exceptions.
-5. Execute the same SQL under controlled database/process settings.
+   Provision required extensions and attach catalogs first, then set
+   `autoload_known_extensions=false` and `autoinstall_known_extensions=false`, and
+   `enable_external_access=false` where the deployment allows. Gatekeeper does not
+   mutate those settings; `CALL gatekeeper_enforce()` reports them in `warnings`.
+2. Install the global policy through trusted `CALL gatekeeper_configure`, then
+   `SET lock_configuration=true`.
+3. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
+   `SET gatekeeper_enforcement='new_connections'` before opening them.
+4. Execute the caller's SQL on that connection. A denial raises `Permission Error:
+   Gatekeeper denied this statement ...` and executes nothing.
+
+Validate-first, for hosts that cannot dedicate a connection:
+
+1. Steps 1 and 2 above. Construct any further request restrictions from authenticated context.
+2. Run `SELECT * FROM gatekeeper_validate(?)` with the exact SQL to execute.
+3. Require an explicit successful result; reject missing results, NULLs, and exceptions.
+4. Execute the same SQL on the same connection under controlled database/process settings.
+   The application must require validation and control access to the raw connection.
 
 `CALL gatekeeper_configure` atomically replaces a database-scoped authorization ceiling.
 Request overrides can only narrow it: both policy layers must authorize the query,
 and either layer's blocks win. Only trusted bootstrap should configure the instance.
 After setup, `SET lock_configuration=true` blocks configuration through `CALL`, `SET`,
 and `RESET`, unless the host deliberately exempts `gatekeeper_policy` in `allowed_configs`.
-This protects Gatekeeper's policy, not arbitrary SQL execution: the application must
-still require validation and control access to the raw connection/native APIs.
+This protects Gatekeeper's policy, not arbitrary SQL execution: on unenforced connections the
+application must still require validation and control access to the raw connection/native APIs.
 Configuration is nontransactional; a surrounding rollback does not undo replacement.
 Each validation call takes one coherent snapshot at execution. Lock before exposing the instance.
 Use strict parameterized `CALL` for authoring; direct STRUCT `SET` silently drops
@@ -70,6 +85,91 @@ and schema-wide `SHOW` is denied under any configured table restriction.
 Table rules do not restrict or authorize function/type namespaces. Functions use
 leaf-name policies; types are supplied by the host without separate authorization;
 see [table ACL](../README.md#table-acl).
+
+## Enforced connections
+
+### Threat model
+
+The caller can submit arbitrary SQL text to an enforced connection and observe results and
+error messages. The host process, its code, the objects it created (views, macros, attached
+catalogs), and the connections it did not latch are trusted. Host-language APIs on the
+connection object itself (Python's `DuckDBPyConnection` methods other than executing SQL,
+the C++ `Connection`) are out of scope: a caller holding them can open a new, unenforced
+connection. Hand out the ability to execute SQL, not the object.
+
+### Two boundaries
+
+Gatekeeper decides at two points in DuckDB's query lifecycle. Each owns a guarantee that can
+be stated and tested independently.
+
+**Binding boundary** (`ClientContextState::QueryBegin`, before the engine binds). The
+statement text is parsed with the connection's parser options, serialized, and walked
+against the compiled grammar and the global policy exactly as `gatekeeper_validate` does.
+When the statement has no parameters, it is then bound privately with the catalog-lookup
+callback and replacement-scan interception, so every retrieved table and view, including
+those a view or macro expands to, is authorized by resolved identity. Guarantee: no SQL text
+submitted for execution reaches the engine's binder unless it is a single `SELECT` whose
+grammar, caller-written functions and (parameter-free) resolved objects the policy allows.
+Consequently an agent-written `read_csv('s3://...')`, `FROM 'file'`, or `duckdb_settings()`
+never opens a file, socket, or metadata reader, and DDL/DML/`SET`/`LOAD`/`ATTACH`/`COPY`
+never reach the binder.
+
+**Execution boundary** (`PlannerExtension::post_bind_function`, after the engine binds and
+before it optimizes or executes). The plan the engine produced must contain only reviewed
+read-only logical operators, modify no database, return a query result, and pass the same
+resolved-function and implementation checks `gatekeeper_validate` applies to its own plan.
+If the binding boundary deferred object authorization because the statement had parameters,
+it runs here with the values the engine bound them to. Guarantee: no plan executes on an
+enforced connection unless it consists of allowlisted operators over allowed objects and
+functions. This holds for every plan the engine's planner produces, whatever produced the
+statement: SQL text, a prepared statement, or DuckDB's relation API.
+
+Both boundaries read one policy snapshot per statement. DuckDB's `Prepare()` path binds
+before any extension hook runs, so on that path the execution boundary only pre-screens the
+prepared plan; at execution, `OnExecutePrepared` forces a rebind inside the query so the plan
+that runs is authorized under the current policy, and a cached plan can never outlive a policy
+change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
+statement, which `test/test_enforcement.py` checks over a corpus of allowed, denied, and
+erroneous statements.
+
+### Residuals
+
+- **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
+  opens files or URLs while the engine binds it, before the execution boundary can deny the
+  statement (for example when that view is blocked by table policy). Object identity is a
+  bind-time property, so this cannot move earlier. `enable_external_access=false` and
+  `allowed_directories` are the controls; `CALL gatekeeper_enforce()` warns when they are loose.
+- **`Prepare()` before hooks.** DuckDB binds a prepared statement before any extension hook
+  runs. Agent-written readers are still denied before execution, but the bind of a statement
+  that will be denied has already happened; with external access enabled, that bind can
+  perform reader I/O whose only observable effect for the caller is the denial's timing.
+- **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
+  `SELECT` they stand for, and dynamic `PIVOT` into a transaction batch, before any hook. The
+  rewritten statements are what Gatekeeper checks; that is policy-consistent, but the raw text
+  differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
+- **Global modes latch every connection**, including ones extensions open internally for
+  their own metadata SQL. Use per-connection latching with catalogs that do this.
+- **Errors are informative.** Engine errors keep DuckDB's wording, which can name objects and
+  paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
+  and the denied function or object. Treat both as sensitive when relaying to untrusted callers.
+- **Not a resource sandbox.** Memory, CPU time, temporary disk, extension loading, and
+  network posture remain host settings. Gatekeeper reports weak posture; it never changes it.
+
+### Latch semantics
+
+`CALL gatekeeper_enforce()` stores the latch in the connection's registered state at execution
+time (never at bind, so `EXPLAIN` and `PREPARE` of it do not enforce). Nothing removes it;
+`RESET` and native option writes cannot reach it because it is not a setting. On an enforced
+connection `CALL`, `SET`, and `RESET` are unsupported statements, so the latch and the policy are
+unreachable from SQL. `gatekeeper_enforce` is on the never-bind list so validated SQL cannot
+name it either.
+
+`SET gatekeeper_enforcement` is a global-only VARCHAR setting accepting `off`,
+`new_connections`, and `all`. `new_connections` latches every connection opened afterwards
+through DuckDB's connection-open callback; `all` additionally latches every connection open at
+that moment, including the one issuing the `SET`. Returning to `off` releases nobody. A value
+written natively without passing the SET callback is treated as `all`: an unvalidated write to a
+sandbox setting fails closed. `SET lock_configuration=true` freezes the setting.
 
 ## Function enforcement and trusted expansion
 
@@ -128,7 +228,7 @@ when combining lambdas with trusted JSON expansions.
 The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
-checkpoint currval force_checkpoint nextval gatekeeper_configure
+checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
 query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
@@ -147,8 +247,9 @@ reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
 state outside table authorization; `checkpoint.cpp` and `scalar/sequence/nextval.cpp`
 mutate or inspect storage/sequence state. `seq_scan` is the internal scan entry,
 not a caller capability (normal physical scans retain object authorization).
-`gatekeeper_configure` mutates the global policy and is always forbidden in submitted
-SQL, including resolved table-function uses inside trusted views/macros.
+`gatekeeper_configure` mutates the global policy and `gatekeeper_enforce` latches the
+connection; both are always forbidden in submitted SQL, including resolved table-function
+uses inside trusted views/macros.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
@@ -174,7 +275,8 @@ can consult trusted CRS providers and `ignore_unknown_crs`.
   names pass preflight; named PIVOT enums use the host's type definitions.
 - `bind_window_expression.cpp` and `function_binder.cpp` contain direct aggregate/
   function lookup paths. Caller names pass preflight; surviving bound scalar,
-  aggregate, window and table functions also pass a resolved-deny plan walk.
+  aggregate, window and table functions also pass a resolved-deny plan walk, and the
+  plan may contain only reviewed read-only logical operators.
 - `collation_binding.cpp` directly loads collation entries and binds their scalar
   functions. Collation names and inferred implementations are not checked in preflight.
   The generic resolved-function deny walk still applies to surviving bound functions,
@@ -232,8 +334,8 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   other catalog, session, configuration, or planner state is opt-in; see
   [inventories/README.md](../inventories/README.md#classification-criteria).
 - Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
-  replacement-scan list. It runs only while a validation is binding on the calling
-  thread; ordinary connections are unaffected. Other callbacks only construct a table
+  replacement-scan list. It runs while a validation is binding on the calling thread
+  and on every enforced connection; ordinary connections are unaffected. Other callbacks only construct a table
   reference, so a denial happens before the substituted reader binds and no file is
   opened. Readers substituted by DuckDB are authorized by their resolved names
   (`parquet_scan`, `read_csv_auto`, `read_json_auto`), with `parquet_scan` sharing

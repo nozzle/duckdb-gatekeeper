@@ -101,8 +101,9 @@ The suite has two layers with different reach:
   (`make test_release`) and the engine-rebuild workflow run on every platform, including
   Windows, musl, and engines other than the pinned one. They cover statement rejection,
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
-  replacement scans, trusted expansions, and nested bound implementations. Add a case
-  here whenever a behavior must hold everywhere the extension is distributed.
+  replacement scans, trusted expansions, nested bound implementations, and enforced
+  connections. Add a case here whenever a behavior must hold everywhere the extension is
+  distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
   tests that run against the loadable artifact on Linux and macOS. Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
@@ -183,11 +184,17 @@ source notes and baselines remain independent of build-engine versions. Follow t
 
 ## Implementation structure
 
-- `src/gatekeeper_extension.cpp`: SQL API, policy snapshot, private bind orchestration for
-  `gatekeeper_validate`, replacement interception, and structured error/result handling.
-- `src/check.cpp`: the two decision boundaries. `CheckText` is the binding boundary
-  (parse, serialize, grammar walk; never binds) and `CheckPlan` is the execution boundary
-  (bound-plan authorization). Both are independent of how the statement is bound.
+- `src/gatekeeper_extension.cpp`: SQL API (`gatekeeper_validate`, `gatekeeper_configure`),
+  the `gatekeeper_policy` setting, result rendering, and the build-engine load guard.
+- `src/check.cpp`: the decision. `CheckText` is the binding boundary (parse, serialize,
+  grammar walk; never binds), `Authorize` is the private bind with the catalog-lookup
+  callback and replacement-scan interception, `CheckPlan` is the execution boundary
+  (read-only operator allowlist and bound-plan authorization), and `Check` composes them
+  into `gatekeeper_validate`'s structured result.
+- `src/enforcement.cpp`: enforced connections. The per-connection latch
+  (`ClientContextState`), the `QueryBegin`/`OnExecutePrepared`/post-bind hooks that run the
+  same decision inside the engine, the `gatekeeper_enforcement` setting and its
+  connection-open callback, `CALL gatekeeper_enforce()`, and posture warnings.
 - `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
