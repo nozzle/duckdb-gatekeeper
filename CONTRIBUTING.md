@@ -195,6 +195,10 @@ source notes and baselines remain independent of build-engine versions. Follow t
   (`ClientContextState`), the `QueryBegin`/`OnExecutePrepared`/post-bind hooks that run the
   same decision inside the engine, the `gatekeeper_enforcement` setting and its
   connection-open callback, `CALL gatekeeper_enforce()`, and posture warnings.
+- `src/pragma_guard.cpp`: the PRAGMA guard. A parser override, armed by the host through
+  `allow_parser_override_extension`, that rewrites pragmas with non-constant arguments into
+  `PRAGMA gatekeeper_rejected_pragma('<name>')` before DuckDB's preprocessor can evaluate
+  them, and that refusing pragma.
 - `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.

@@ -17,11 +17,13 @@ Preferred: hand untrusted callers an enforced connection and execute their SQL o
    `autoload_known_extensions=false` and `autoinstall_known_extensions=false`, and
    `enable_external_access=false` where the deployment allows. Gatekeeper does not
    mutate those settings; `CALL gatekeeper_enforce()` reports them in `warnings`.
-2. Install the global policy through trusted `CALL gatekeeper_configure`, then
+2. `SET allow_parser_override_extension='fallback'` to arm the [PRAGMA guard](#pragma-guard).
+   Load Gatekeeper before any other extension that overrides the parser.
+3. Install the global policy through trusted `CALL gatekeeper_configure`, then
    `SET lock_configuration=true`.
-3. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
+4. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
    `SET gatekeeper_enforcement='new_connections'` before opening them.
-4. Execute the caller's SQL on that connection. A denial raises `Permission Error:
+5. Execute the caller's SQL on that connection. A denial raises `Permission Error:
    Gatekeeper denied this statement ...` and executes nothing.
 
 Validate-first, for hosts that cannot dedicate a connection:
@@ -136,29 +138,65 @@ statement that reaches them, which `test/test_enforcement.py` checks over a corp
 denied, and erroneous statements. What DuckDB does to a statement before they run is listed
 under residuals.
 
+### PRAGMA guard
+
+DuckDB's statement preprocessor rewrites `PRAGMA` statements while parsing, inside
+`ClientContext::ParseStatements`, and to do so it binds and **evaluates every argument
+expression** (`Binder::BindPragma`, `ExpressionExecutor::EvaluateScalar`) before the pragma
+is even looked up and before any extension hook runs. Left alone, `PRAGMA
+anything(nextval('s'))` on an enforced connection advances the sequence, and `PRAGMA
+anything(error(current_setting('x')::VARCHAR))` reveals a setting through the error text,
+even though the statement is then denied. Any scalar function, including never-bind ones,
+can run this way with the connection's privileges; table functions, DDL, and DML cannot.
+The same evaluation happens for every DuckDB connection, including a plain
+`extract_statements` call. `TransactionBegin` fires identically for `Prepare()` and a
+read-only transaction does not stop `nextval`; the only extension point in front of the
+preprocessor is the parser override, which the engine consults only when the host sets
+`allow_parser_override_extension` to `fallback` or `strict`.
+
+Gatekeeper registers such an override. When armed, it parses the text with the engine
+parser and replaces every `PRAGMA` whose positional or named arguments are not constants
+(string, number, `NULL`, or a bare identifier, which the parser already stores as a string)
+with `PRAGMA gatekeeper_rejected_pragma('<name>')`, a query pragma that refuses to run:
+
+```text
+Permission Error: Gatekeeper denied this statement (unsupported): statement: PRAGMA x has a
+non-constant argument; PRAGMA arguments must be literals while allow_parser_override_extension is enabled
+```
+
+The refusal is raised by the preprocessor itself, so it surfaces from `Query`, `Prepare`,
+and `extract_statements` alike, and nothing in the argument is bound or evaluated. Constant
+pragmas, assignment pragmas (`PRAGMA threads=1`, which the parser turns into `SET`), and
+every other statement reach the engine untouched; parse errors keep DuckDB's own wording.
+`gatekeeper_validate` reports the raw `PRAGMA` text as `unsupported` exactly as before.
+
+What the guard costs and does not cover:
+
+- **It is engine-wide.** The override receives text and parser options, never a connection,
+  so host connections lose non-constant pragma arguments too (`PRAGMA table_info('t'::VARCHAR)`
+  is refused; write the literal). `PRAGMA x=expr` is a `SET` and is unaffected.
+- **First override wins.** The engine hands each statement to the first registered override
+  that answers. An extension loaded before Gatekeeper that overrides the parser (autocomplete's
+  PEG parser, for example) produces statements the guard never sees. Load Gatekeeper first;
+  `CALL gatekeeper_enforce()` warns when another override is registered ahead of it.
+- **It is opt-in.** With the setting at its default the residual below stands, and
+  `CALL gatekeeper_enforce()` warns. `SET lock_configuration=true` freezes the setting, at
+  global and session scope alike.
+- **Pragma query functions still run in the preprocessor.** `PRAGMA show_tables` becomes the
+  `SELECT` it stands for and is checked as such; `PRAGMA import_database('dir')` reads
+  `schema.sql` and `load.sql` from `dir` before any hook, subject to `enable_external_access`
+  and `allowed_directories`.
+- Every `Parser::ParseQuery` on the instance parses twice while the guard is armed.
+
 ### Residuals
 
-- **PRAGMA arguments run before any hook.** DuckDB's statement preprocessor rewrites
-  `PRAGMA` statements while parsing, inside `ClientContext::ParseStatements`, and to do so
-  it binds and **evaluates every argument expression** (`Binder::BindPragma`,
-  `ExpressionExecutor::EvaluateScalar`) before the pragma is even looked up and before any
-  extension hook runs. On an enforced connection `PRAGMA anything(nextval('s'))` therefore
-  advances the sequence, and `PRAGMA anything(error(current_setting('x')::VARCHAR))`
-  reveals a setting through the error text, even though the statement is then denied. Any
-  scalar function, including never-bind ones, can run this way with the connection's
-  privileges; table functions, DDL, and DML cannot. The same evaluation happens for every
-  DuckDB connection, including a plain `extract_statements` call, and there is no
-  interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires identically
-  for `Prepare()`, a read-only transaction does not stop `nextval`, and the parser only
-  yields to extensions when the host enables `allow_parser_override_extension`.
-  With `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown
-  function name in a pragma argument also triggers extension autoload through
-  `Catalog::GetEntry`; the autoload posture warning applies to this path too.
-  `gatekeeper_validate` parses with `Parser` directly and never triggers it.
-  `test/test_enforcement.py` pins this gap with a strict `xfail` so an engine change is
-  noticed. Hosts that cannot tolerate it must reject `PRAGMA` text before it reaches any
-  DuckDB parsing entry point. A Gatekeeper parser override that rejects non-literal pragma
-  arguments engine-wide, opt-in through `allow_parser_override_extension`, is tracked in
+- **PRAGMA arguments run before any hook unless the guard is armed.** See [PRAGMA
+  guard](#pragma-guard). With `allow_parser_override_extension` at its default, DuckDB
+  evaluates pragma argument expressions before Gatekeeper can act, on every connection.
+  With `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown function
+  name in such an argument also triggers extension autoload through `Catalog::GetEntry`; the
+  autoload posture warning applies to this path too. `test/test_enforcement.py` pins the
+  default behaviour so an engine change is noticed. Tracked as
   [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
@@ -255,7 +293,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
-query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
+gatekeeper_rejected_pragma query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
 duckdb_approx_database_count duckdb_columns duckdb_connection_count duckdb_constraints
@@ -275,7 +313,8 @@ mutate or inspect storage/sequence state. `seq_scan` is the internal scan entry,
 not a caller capability (normal physical scans retain object authorization).
 `gatekeeper_configure` mutates the global policy and `gatekeeper_enforce` latches the
 connection; both are always forbidden in submitted SQL, including resolved table-function
-uses inside trusted views/macros.
+uses inside trusted views/macros. `gatekeeper_rejected_pragma` is the [PRAGMA
+guard](#pragma-guard)'s rewrite target and only ever refuses.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
@@ -411,6 +450,7 @@ For a local-only deployment, after trusted setup:
 SET enable_external_access=false;
 SET autoload_known_extensions=false;
 SET autoinstall_known_extensions=false;
+SET allow_parser_override_extension='fallback';
 SET memory_limit='512MB';
 SET threads=1;
 SET search_path='memory.reporting';

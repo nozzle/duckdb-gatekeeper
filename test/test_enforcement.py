@@ -417,14 +417,93 @@ def test_mode_change_races_no_connection_open(db, mode):
         assert leaked_any == 0, leaked_any
 
 
-@pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
-                   "preprocessor before any extension hook runs; see docs/security.md#residuals and issue #46")
-def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, agent):
-    # Pins a known engine-side gap. When this starts passing (an engine change or a new hook), remove the
-    # xfail and the matching residual in the security model.
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
+def test_pragma_arguments_are_evaluated_before_any_hook_by_default(catalog, agent):
+    # Pins the engine-side gap the PRAGMA guard exists for: with allow_parser_override_extension at its
+    # default, DuckDB's statement preprocessor evaluates pragma arguments before any extension hook, so
+    # the sequence advances even though the pragma itself never runs. If this starts failing the engine
+    # changed; revisit docs/security.md#residuals and issue #46.
+    with pytest.raises(duckdb.Error):
         agent.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))")
-    assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)
+    assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (2,)
+
+
+GUARD = re.compile(r"Gatekeeper denied this statement \(unsupported\): statement: PRAGMA no_such_pragma has a "
+                   r"non-constant argument")
+
+
+@pytest.mark.parametrize("mode", ["fallback", "strict"])
+def test_pragma_guard_refuses_non_constant_arguments_before_evaluation(catalog, mode):
+    catalog.execute(f"SET allow_parser_override_extension = '{mode}'")
+    with catalog.cursor() as agent:
+        enforce(agent)
+        for pragma in ["PRAGMA no_such_pragma(nextval('reporting.seq'))",
+                       "PRAGMA no_such_pragma(1, nextval('reporting.seq'))",
+                       "PRAGMA no_such_pragma(seq = nextval('reporting.seq'))",
+                       "PRAGMA no_such_pragma(error(current_setting('memory_limit')::VARCHAR))",
+                       "PRAGMA no_such_pragma('a' || 'b')", "PRAGMA no_such_pragma(1 + 1)",
+                       "PRAGMA no_such_pragma('x'::VARCHAR)", "SELECT 1; PRAGMA no_such_pragma(nextval('reporting.seq'))"]:
+            with pytest.raises(duckdb.PermissionException, match=GUARD):
+                agent.execute(pragma)
+            # The host connection is held to the same rule: the override sees text, not connections.
+            with pytest.raises(duckdb.PermissionException, match=GUARD):
+                catalog.execute(pragma)
+        # Prepare and extract_statements parse through the same preprocessor.
+        with pytest.raises(duckdb.PermissionException, match=GUARD):
+            catalog.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))", [])
+        with pytest.raises(duckdb.PermissionException, match=GUARD):
+            catalog.extract_statements("PRAGMA no_such_pragma(nextval('reporting.seq'))")
+        assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)
+        # gatekeeper_validate reports the raw PRAGMA text exactly as before.
+        result = validate(catalog, "PRAGMA no_such_pragma(nextval('reporting.seq'))")
+        assert result["code"] == "unsupported" and result["violations"][0]["rule"] == "statement"
+        assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (2,)
+
+
+def test_pragma_guard_leaves_constant_pragmas_alone(catalog, agent):
+    catalog.execute("SET allow_parser_override_extension = 'fallback'")
+    # Literals, negative numbers, bare identifiers, and assignment pragmas all keep working on the host.
+    assert catalog.execute("PRAGMA table_info('reporting.orders')").fetchall()[0][1] == "id"
+    catalog.execute("PRAGMA threads = 1")
+    for pragma in ["PRAGMA no_such_pragma(-1)", "PRAGMA no_such_pragma(bare_identifier)",
+                   "PRAGMA no_such_pragma(1, 'two', NULL, x = 3.5)", "PRAGMA no_such_pragma"]:
+        with pytest.raises(duckdb.CatalogException, match="no_such_pragma does not exist"):
+            catalog.execute(pragma)
+    assert catalog.execute("PRAGMA version").fetchall() == catalog.execute("SELECT * FROM pragma_version()").fetchall()
+    # The engine still reports its own parse errors, with the same message as without the override.
+    with pytest.raises(duckdb.ParserException, match='syntax error at or near "SELEC"'):
+        catalog.execute("SELEC 1")
+    # Enforced connections behave as before for pragmas DuckDB rewrites and for the ones it denies.
+    assert agent.execute("PRAGMA version").fetchall() == catalog.execute("SELECT * FROM pragma_version()").fetchall()
+    for pragma in ["PRAGMA table_info('reporting.orders')", "PRAGMA show_tables", "PRAGMA threads = 1",
+                   "PRAGMA gatekeeper_rejected_pragma('anything')"]:
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(pragma).fetchall()
+    assert agent.execute("SELECT count(*) FROM reporting.orders").fetchone() == (3,)
+
+
+def test_pragma_guard_is_shadowed_by_an_earlier_parser_override():
+    # The engine takes the first override that answers. Loaded first, autocomplete's PEG parser produces
+    # the statements and the guard never sees them; Gatekeeper can only report that.
+    def load(db, *names):
+        for name in names:
+            try:
+                db.execute("LOAD autocomplete" if name == "autocomplete" else "LOAD '" + str(EXTENSION) + "'")
+            except duckdb.Error as error:
+                pytest.skip(f"autocomplete extension unavailable: {error}")
+    with duckdb.connect(config={"allow_unsigned_extensions": "true"}) as shadowed:
+        load(shadowed, "autocomplete", "gatekeeper")
+        shadowed.execute("SET allow_parser_override_extension = 'fallback'; CREATE SEQUENCE s")
+        assert any("another parser override is registered ahead" in w for w in enforce(shadowed.cursor()))
+        with pytest.raises(duckdb.CatalogException):
+            shadowed.execute("PRAGMA no_such_pragma(nextval('s'))")
+        assert shadowed.execute("SELECT nextval('s')").fetchone() == (2,)
+    with duckdb.connect(config={"allow_unsigned_extensions": "true"}) as first:
+        load(first, "gatekeeper", "autocomplete")
+        first.execute("SET allow_parser_override_extension = 'fallback'; CREATE SEQUENCE s")
+        assert not any("parser override" in w for w in enforce(first.cursor()))
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            first.execute("PRAGMA no_such_pragma(nextval('s'))")
+        assert first.execute("SELECT nextval('s')").fetchone() == (1,)
 
 
 @pytest.mark.parametrize("statement", [
@@ -457,11 +536,15 @@ def test_posture_warnings():
     with connect() as loose:
         warnings = enforce(loose.cursor())
         assert any("enable_external_access" in w for w in warnings)
+        assert any("allow_parser_override_extension is default" in w for w in warnings)
         assert any("lock_configuration" in w for w in warnings)
     with connect() as tight:
         tight.execute("""SET enable_external_access = false; SET autoinstall_known_extensions = false;
-                         SET autoload_known_extensions = false; SET lock_configuration = true""")
+                         SET autoload_known_extensions = false; SET allow_parser_override_extension = 'fallback';
+                         SET lock_configuration = true""")
         assert enforce(tight.cursor()) == []
+        with pytest.raises(duckdb.InvalidInputException, match="locked"):
+            tight.execute("SET allow_parser_override_extension = 'default'")
         # With external access off the engine itself refuses readers, before Gatekeeper is consulted.
         with pytest.raises(duckdb.Error):
             tight.execute("SELECT * FROM read_csv('/nonexistent/x.csv')")

@@ -1,5 +1,6 @@
 #include "enforcement.hpp"
 #include "check.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "policy_setting.hpp"
+#include "pragma_guard.hpp"
 
 namespace duckdb {
 
@@ -203,6 +205,12 @@ static vector<string> PostureWarnings(ClientContext &context) {
 	    Settings::Get<AutoinstallKnownExtensionsSetting>(config))
 		warnings.push_back("autoload_known_extensions or autoinstall_known_extensions is true: binding can load "
 		                   "extensions on demand");
+	if (Settings::Get<AllowParserOverrideExtensionSetting>(config) == AllowParserOverride::DEFAULT_OVERRIDE)
+		warnings.push_back("allow_parser_override_extension is default: DuckDB evaluates PRAGMA argument expressions "
+		                   "before Gatekeeper can act; set it to fallback to enable the PRAGMA guard");
+	else if (PragmaGuardShadowed(config))
+		warnings.push_back("another parser override is registered ahead of Gatekeeper: statements it produces bypass "
+		                   "the PRAGMA guard");
 	if (!Settings::Get<LockConfigurationSetting>(config))
 		warnings.push_back("lock_configuration is false: unenforced connections can still change gatekeeper_policy "
 		                   "and gatekeeper_enforcement");

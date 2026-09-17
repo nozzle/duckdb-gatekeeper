@@ -37,6 +37,7 @@ inline const Names &NeverBindFunctions() {
 	                            "force_checkpoint",
 	                            "gatekeeper_configure",
 	                            "gatekeeper_enforce",
+	                            "gatekeeper_rejected_pragma",
 	                            "json_execute_serialized_sql",
 	                            "json_serialize_plan",
 	                            "nextval",

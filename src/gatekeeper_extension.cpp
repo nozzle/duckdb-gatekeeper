@@ -13,6 +13,7 @@
 #include "fuzz_checks.hpp"
 #include "options.hpp"
 #include "policy_setting.hpp"
+#include "pragma_guard.hpp"
 #include "version.hpp"
 
 namespace duckdb {
@@ -349,6 +350,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(std::move(validate_info));
 	loader.RegisterFunction(std::move(configure_info));
 	RegisterEnforcement(loader);
+	RegisterPragmaGuard(loader);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }

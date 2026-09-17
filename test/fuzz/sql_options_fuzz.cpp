@@ -25,9 +25,9 @@ static void CheckError(ExceptionType type) {
 static void Setup(Connection &connection) {
 	auto result = connection.Query(
 	    "SET enable_external_access=false; SET autoload_known_extensions=false; SET "
-	    "autoinstall_known_extensions=false; "
+	    "autoinstall_known_extensions=false; SET allow_parser_override_extension='fallback'; "
 	    "SET threads=1; CREATE TABLE t(x INTEGER); CREATE SCHEMA secret; CREATE TABLE secret.t(x INTEGER); "
-	    "CREATE VIEW v AS SELECT * FROM t");
+	    "CREATE VIEW v AS SELECT * FROM t; CREATE SEQUENCE s");
 	for (QueryResult *current = result.get(); current; current = current->next.get()) {
 		if (current->HasError())
 			std::abort();
@@ -238,6 +238,14 @@ static void CheckEnforcedLatch(DuckDB &database) {
 		std::abort();
 	auto relatch = enforced.Query("CALL gatekeeper_enforce()");
 	if (!relatch->HasError() || !GatekeeperDenial(relatch->GetErrorObject()))
+		std::abort();
+	// Setup() armed the PRAGMA guard: a non-constant pragma argument is refused before it is evaluated.
+	auto pragma = enforced.Query("PRAGMA fuzz_no_such(nextval('s'))");
+	if (!pragma->HasError() || !GatekeeperDenial(pragma->GetErrorObject()))
+		std::abort();
+	Connection host(database);
+	auto sequence = host.Query("SELECT nextval('s')");
+	if (sequence->HasError() || sequence->GetValue(0, 0).GetValue<int64_t>() != 1)
 		std::abort();
 }
 

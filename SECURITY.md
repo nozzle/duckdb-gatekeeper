@@ -46,8 +46,8 @@ filtering; execution-time memory, time, or result limits; parser or binder resou
 exhaustion; I/O that trusted catalogs, views, macros, or explicitly admitted readers
 perform during binding, including the bind DuckDB performs for a prepared statement before
 any extension hook runs; scalar functions DuckDB's statement preprocessor evaluates in
-`PRAGMA` arguments while parsing, before any extension hook runs (a documented, pinned
-residual); behavior of host-created definitions that shadow default names
+`PRAGMA` arguments while parsing, before any extension hook runs, unless the host arms the
+PRAGMA guard with `allow_parser_override_extension` (a documented, pinned residual); behavior of host-created definitions that shadow default names
 or otherwise rely on an untrusted party having DDL in the shared catalog; the contents
 of engine `error_message` text; and hosts that leave `autoload_known_extensions`,
 `autoinstall_known_extensions`, or configuration changes enabled on validating or

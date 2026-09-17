@@ -141,10 +141,17 @@ def test_function_metadata_for_generated_docs(db):
     rows = db.execute("""SELECT function_name, description, examples, parameters, parameter_types
                          FROM duckdb_functions() WHERE function_name LIKE 'gatekeeper%'
                          ORDER BY function_name""").fetchall()
-    assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_enforce", "gatekeeper_validate"]
+    assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_enforce", "gatekeeper_rejected_pragma",
+                                        "gatekeeper_validate"]
     options = ["allowed_tables", "blocked_tables", "use_default_functions", "allowed_functions", "blocked_functions"]
     for name, description, examples, parameters, parameter_types in rows:
         assert description and "\n" not in description and examples, name
+        if name == "gatekeeper_rejected_pragma":
+            # The guard's target: a pragma that only ever refuses.
+            assert parameters == ["pragma"] and parameter_types == ["VARCHAR"]
+            with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied this statement"):
+                db.execute(examples[0])
+            continue
         if name == "gatekeeper_enforce":
             assert parameters == [] and parameter_types == []
         else:

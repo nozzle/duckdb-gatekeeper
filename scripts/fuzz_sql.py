@@ -33,7 +33,9 @@ def main():
                                "SELECT 1;", "SELECT ';'", "SELECT * FROM missing; DROP TABLE t",
                                "SELECT list_sum([1,2])", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
                                "SELECT list_unique($1)", "SELECT list_sort($1)", "SELECT unnest([1,2])",
-                               "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')"]):
+                               "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')",
+                               "PRAGMA version", "PRAGMA table_info('t')", "PRAGMA no_such(nextval('s'))",
+                               "PRAGMA no_such(a = 1 + 1); SELECT 1", "PRAGMA threads = 1"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
         (corpus / f"enforced-{i}").write_bytes(bytes([12,0,0,0]) + query.encode())

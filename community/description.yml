@@ -127,13 +127,16 @@ docs:
     not in a setting. `gatekeeper_enforcement` accepts `off`, `new_connections`, and
     `all`; switching it back releases nobody, and `lock_configuration` freezes it.
     `CALL gatekeeper_enforce()` also returns `warnings` naming host settings that weaken
-    the sandbox (`enable_external_access`, autoload, `lock_configuration`); Gatekeeper
-    reports them and never changes them. Parameters and the relation API are covered.
-    Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
-    DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
-    `SELECT` it becomes, and pragma **argument expressions are evaluated during that
-    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied. See the
-    security model's residuals.
+    the sandbox (`enable_external_access`, autoload, `allow_parser_override_extension`,
+    `lock_configuration`); Gatekeeper reports them and never changes them. Parameters and
+    the relation API are covered. Enforcement agrees with `gatekeeper_validate` on every
+    statement that reaches it. DuckDB rewrites pragmas before any extension runs: `PRAGMA
+    version` is checked as the `SELECT` it becomes, and pragma **argument expressions are
+    evaluated during that rewrite**, so by default `PRAGMA x(nextval('s'))` advances `s`
+    before being denied. `SET allow_parser_override_extension = 'fallback'` arms
+    Gatekeeper's PRAGMA guard, a parser override that refuses any `PRAGMA` with a
+    non-constant argument before the engine evaluates it, on every connection of the
+    instance. See the security model.
 
     ### Functions and options
 
@@ -212,8 +215,8 @@ docs:
     - Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`,
       `json_serialize_plan`), metadata readers
       (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), sequence and storage
-      functions, `gatekeeper_configure`, and `gatekeeper_enforce` are on a never-bind list that no option
-      can override, including through views or macros.
+      functions, `gatekeeper_configure`, `gatekeeper_enforce`, and `gatekeeper_rejected_pragma` are on a
+      never-bind list that no option can override, including through views or macros.
     - File readers (`read_parquet`, `read_csv_auto`, `read_json_auto`) and catalog, session,
       or configuration inspection (`current_schema`, `current_setting`, `getvariable`) are
       **not** defaults. Grant them by name in the global policy. Admitting a reader permits

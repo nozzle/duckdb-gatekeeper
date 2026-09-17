@@ -483,7 +483,8 @@ SELECT enforced FROM gatekeeper_enforce();
 
 The full `CALL gatekeeper_enforce()` row also carries a `warnings` list naming host settings
 that weaken the sandbox (`enable_external_access`, `autoload_known_extensions`,
-`lock_configuration`). Gatekeeper reports them; it never changes them.
+`allow_parser_override_extension`, `lock_configuration`). Gatekeeper reports them; it never
+changes them.
 
 From then on, on that connection only, allowed reads work as before:
 
@@ -523,9 +524,10 @@ rejects other values, and is frozen by `SET lock_configuration = true` like `gat
 Global modes also latch connections that extensions open internally (some lakehouse
 catalogs run their own metadata SQL that way); prefer per-connection latching with such catalogs.
 
-Recommended host sequence: load extensions and attach catalogs, `CALL gatekeeper_configure(...)`,
-tighten `enable_external_access` and autoload where the deployment allows, `SET lock_configuration = true`,
-then hand out enforced connections.
+Recommended host sequence: load Gatekeeper, then other extensions, and attach catalogs;
+`CALL gatekeeper_configure(...)`; tighten `enable_external_access` and autoload where the
+deployment allows; `SET allow_parser_override_extension = 'fallback'` to arm the PRAGMA guard;
+`SET lock_configuration = true`; then hand out enforced connections.
 
 What enforcement changes and does not change:
 
@@ -537,9 +539,11 @@ What enforcement changes and does not change:
 - `PRAGMA version` and other pragmas that DuckDB rewrites into `SELECT`s before any extension
   runs are checked as that `SELECT`; `gatekeeper_validate` reports the raw `PRAGMA` text as
   `unsupported`. DuckDB also **evaluates `PRAGMA` argument expressions** during that rewrite,
-  before Gatekeeper can act: `PRAGMA x(nextval('s'))` advances `s` on an enforced connection
-  even though the statement is then denied. See the
-  [residuals](docs/security.md#residuals) before exposing sequences or sensitive settings.
+  before Gatekeeper can act: by default `PRAGMA x(nextval('s'))` advances `s` on an enforced
+  connection even though the statement is then denied. `SET allow_parser_override_extension =
+  'fallback'` arms Gatekeeper's [PRAGMA guard](docs/security.md#pragma-guard), a parser
+  override that refuses any `PRAGMA` with a non-constant argument before the engine evaluates
+  it, on every connection of the instance.
 - `gatekeeper_validate` is available on an enforced connection when the policy allows it
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want a structured dry run.
 - Each statement costs up to three binds (a private authorizing bind, the engine's bind, and a
@@ -644,8 +648,9 @@ it **executes**. It does not:
 - isolate the filesystem or network;
 - prevent binding from performing I/O through trusted views and macros before a denial,
   or before a denial of a prepared statement, which DuckDB binds before any extension hook runs;
-- stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions, which
-  happens during parsing before any extension hook and can run scalar functions such as `nextval`;
+- stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions unless the
+  host arms the [PRAGMA guard](docs/security.md#pragma-guard) with
+  `allow_parser_override_extension`;
 - prove that every overload of a default function is harmless (defaults are a
   [reviewed name inventory](inventories/README.md)).
 
