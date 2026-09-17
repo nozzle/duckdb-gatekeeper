@@ -183,8 +183,11 @@ source notes and baselines remain independent of build-engine versions. Follow t
 
 ## Implementation structure
 
-- `src/gatekeeper_extension.cpp`: SQL API, policy snapshot, parse/preflight/bind orchestration,
-  replacement interception, and structured error/result handling.
+- `src/gatekeeper_extension.cpp`: SQL API, policy snapshot, private bind orchestration for
+  `gatekeeper_validate`, replacement interception, and structured error/result handling.
+- `src/check.cpp`: the two decision boundaries. `CheckText` is the binding boundary
+  (parse, serialize, grammar walk; never binds) and `CheckPlan` is the execution boundary
+  (bound-plan authorization). Both are independent of how the statement is bound.
 - `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
