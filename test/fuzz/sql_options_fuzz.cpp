@@ -172,21 +172,14 @@ static bool GatekeeperDenial(const ErrorData &error) {
 // text on a latched connection: PendingQuery runs the binding boundary, the engine's bind, and the
 // execution boundary, then schedules pipeline events. Setup() pins the database to threads=1, so no
 // worker exists to run a scheduled task and nothing executes before the pending result is discarded.
+// The latched connection lives only for this input: a pending result leaves the connection's query
+// open until its next statement, and a static connection torn down in that state at exit() reads
+// configuration after thread-local storage is gone.
 static void CheckEnforcedParity(DuckDB &database, Connection &connection, const std::string &bytes) {
-	static Connection enforced(database);
-	static bool latched = false;
-	if (!latched) {
-		auto latch = enforced.Query("CALL gatekeeper_enforce()");
-		if (latch->HasError())
-			std::abort();
-		auto denied = enforced.Query("CREATE TABLE fuzz_denied(x INTEGER)");
-		if (!denied->HasError() || !GatekeeperDenial(denied->GetErrorObject()))
-			std::abort();
-		auto allowed = enforced.Query("SELECT count(*) FROM t");
-		if (allowed->HasError())
-			std::abort();
-		latched = true;
-	}
+	Connection enforced(database);
+	auto latch = enforced.Query("CALL gatekeeper_enforce()");
+	if (latch->HasError())
+		std::abort();
 	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)", Value(bytes));
 	if (expected->HasError()) {
 		CheckError(expected->GetErrorObject().Type());
@@ -228,6 +221,24 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 			std::abort(); // validate parsed this text; the engine's parser must too
 		}
 	}
+	pending.reset();
+}
+
+// Deterministic latch checks, once per process.
+static void CheckEnforcedLatch(DuckDB &database) {
+	Connection enforced(database);
+	auto latch = enforced.Query("CALL gatekeeper_enforce()");
+	if (latch->HasError())
+		std::abort();
+	auto denied = enforced.Query("CREATE TABLE fuzz_denied(x INTEGER)");
+	if (!denied->HasError() || !GatekeeperDenial(denied->GetErrorObject()))
+		std::abort();
+	auto allowed = enforced.Query("SELECT count(*) FROM t");
+	if (allowed->HasError())
+		std::abort();
+	auto relatch = enforced.Query("CALL gatekeeper_enforce()");
+	if (!relatch->HasError() || !GatekeeperDenial(relatch->GetErrorObject()))
+		std::abort();
 }
 
 // Every canonical policy value must be NULL-free at every depth.
@@ -481,6 +492,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckReplacementCallbacks();
 		Setup(connection);
 		CheckFuzzLimits(connection);
+		CheckEnforcedLatch(database);
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
