@@ -196,9 +196,13 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 		std::abort();
 	auto allowed = chunk->GetValue(0, 0).GetValue<bool>();
 	auto code = chunk->GetValue(1, 0).GetValue<string>();
-	bool limit_only = false;
-	for (const auto &violation : ListValue::GetChildren(chunk->GetValue(2, 0)))
-		limit_only = StructValue::GetChildren(violation)[0].GetValue<string>() == "limit";
+	// Keep the list Value alive for as long as its children are referenced.
+	auto violations = chunk->GetValue(2, 0);
+	const auto &entries = ListValue::GetChildren(violations);
+	bool limit_only = !entries.empty();
+	for (const auto &violation : entries)
+		if (StructValue::GetChildren(violation)[0].GetValue<string>() != "limit")
+			limit_only = false;
 	auto pending = enforced.PendingQuery(bytes);
 	bool denial = pending->HasError() && GatekeeperDenial(pending->GetErrorObject());
 	if (pending->HasError())
@@ -213,10 +217,15 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	// Unsupported statement types must not plan either, except pragmas DuckDB rewrites into SELECTs
 	// before Gatekeeper sees them, which then follow the policy on that SELECT.
 	if (code == "unsupported" && !pending->HasError()) {
-		Parser parser;
-		parser.ParseQuery(bytes);
-		if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::PRAGMA_STATEMENT)
-			std::abort();
+		try {
+			Parser parser(connection.context->GetParserOptions());
+			parser.ParseQuery(bytes);
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::PRAGMA_STATEMENT)
+				std::abort();
+		} catch (const Exception &error) {
+			CheckError(ErrorData(error).Type());
+			std::abort(); // validate parsed this text; the engine's parser must too
+		}
 	}
 }
 

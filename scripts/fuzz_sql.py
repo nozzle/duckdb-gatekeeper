@@ -36,6 +36,7 @@ def main():
                                "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
+        (corpus / f"enforced-{i}").write_bytes(bytes([12,0,0,0]) + query.encode())
         for flags in range(16):
             (corpus / f"policy-{i}-{flags}").write_bytes(bytes([13,flags,0,0]) + query.encode())
     for mode in [1, 2, 15]:
