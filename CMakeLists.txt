@@ -31,8 +31,8 @@ endif()
 include_directories(src/include ${GATEKEEPER_GENERATED_DIR}
                     "${DuckDB_SOURCE_DIR}/extension/json/include"
                     "${DuckDB_SOURCE_DIR}/third_party/yyjson/include")
-set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/authorization.cpp src/options.cpp src/validator.cpp
-    "${DuckDB_SOURCE_DIR}/extension/json/json_serializer.cpp")
+set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/authorization.cpp src/check.cpp src/options.cpp
+    src/validator.cpp "${DuckDB_SOURCE_DIR}/extension/json/json_serializer.cpp")
 build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
 target_link_libraries(gatekeeper_extension duckdb_yyjson)

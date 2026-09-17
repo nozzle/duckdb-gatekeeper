@@ -1,6 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "gatekeeper_extension.hpp"
 #include "authorization.hpp"
+#include "check.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -11,20 +12,16 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "engine_errors.hpp"
 #include "function_policy.hpp"
 #include "fuzz_checks.hpp"
-#include "json_serializer.hpp"
 #include "options.hpp"
 #include "version.hpp"
 
 namespace duckdb {
-using namespace duckdb_yyjson;
 
 static LogicalType ViolationType() {
 	return LogicalType::STRUCT({{"rule", LogicalType::VARCHAR},
@@ -231,63 +228,28 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
 }
 
+// gatekeeper_validate: run the binding boundary, then bind privately on the caller's connection with the
+// catalog-lookup callback and replacement interception, then run the execution boundary on that plan.
 static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy,
                                 const gatekeeper::Policy &ceiling, const string &sql,
                                 const gatekeeper::Limits &limits = gatekeeper::Limits()) {
 	gatekeeper::Result result;
 	bool binding = false;
 	try {
-		if (sql.find('\0') != string::npos)
-			throw InvalidInputException("SQL contains a NUL byte");
-		if (sql.size() > limits.bytes)
-			return {false, "forbidden", "", "", {{"limit", "SQL exceeds fixed input size limit"}}};
-		Parser parser(context.GetParserOptions());
-		parser.ParseQuery(sql);
-		if (parser.statements.empty())
-			throw InvalidInputException("SQL contains no statements");
-		if (parser.statements.size() > gatekeeper::MAX_STATEMENTS)
-			return {false, "forbidden", "", "", {{"limit", "statement count exceeds fixed limit"}}};
-		unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr),
-		                                                               yyjson_mut_doc_free);
-		if (!doc)
-			throw std::bad_alloc();
-		auto root = yyjson_mut_obj(doc.get());
-		yyjson_mut_doc_set_root(doc.get(), root);
-		yyjson_mut_obj_add_false(doc.get(), root, "error");
-		auto statements = yyjson_mut_arr(doc.get());
-		yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
-		SerializationOptions serialization_options;
-		serialization_options.serialization_compatibility = SerializationCompatibility::Latest();
-		for (auto &statement : parser.statements) {
-			if (statement->type != StatementType::SELECT_STATEMENT)
-				return {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
-			yyjson_mut_arr_append(statements, JsonSerializer::Serialize(statement->Cast<SelectStatement>(), doc.get(),
-			                                                            true, true, true, serialization_options));
-		}
-		unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
-		                                                       yyjson_doc_free);
-		if (!ast)
-			throw std::bad_alloc();
-		size_t bytes = 0;
-		unique_ptr<char, decltype(&free)> serialized(yyjson_write(ast.get(), 0, &bytes), free);
-		if (!serialized)
-			throw std::bad_alloc();
-		if (bytes > limits.bytes)
-			return {false, "forbidden", "", "", {{"limit", "serialized AST exceeds fixed size limit"}}};
-		gatekeeper::BindingPolicy binding_policy;
-		result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &binding_policy, &ceiling, limits);
-		if (!result.allowed)
-			return result;
+		auto text = CheckText(context, policy, ceiling, sql, limits);
+		if (!text.result.allowed)
+			return text.result;
+		result = std::move(text.result);
 		binding = true;
-		for (auto &statement : parser.statements) {
+		for (auto &statement : text.statements) {
 			case_insensitive_map_t<BoundParameterData> parameter_data;
 			BoundParameterMap parameters(parameter_data);
 			auto binder = Binder::CreateBinder(context);
 			binder->SetParameters(parameters);
 			binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
 			binder->SetCatalogLookupCallback([&](CatalogEntry &entry) {
-				AuthorizeObject(ceiling, binding_policy, entry, result);
-				AuthorizeObject(policy, binding_policy, entry, result);
+				AuthorizeObject(ceiling, text.binding, entry, result);
+				AuthorizeObject(policy, text.binding, entry, result);
 			});
 			ValidationScope scope{context, policy, ceiling, result, {}};
 			BoundStatement bound;
@@ -307,8 +269,7 @@ static gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy
 				if (!entry.second->return_type.IsValid())
 					throw BinderException(
 					    "Validation requires a complete bound plan; parameter values or types may be needed");
-			AuthorizePlan(ceiling, binding_policy, *bound.plan, result);
-			AuthorizePlan(policy, binding_policy, *bound.plan, result);
+			CheckPlan(policy, ceiling, text.binding, *bound.plan, result);
 			// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 			for (auto &entry : binder->GetReplacementScans())
 				if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
