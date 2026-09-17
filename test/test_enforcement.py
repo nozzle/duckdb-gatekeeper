@@ -418,7 +418,7 @@ def test_mode_change_races_no_connection_open(db, mode):
 
 
 @pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
-                   "preprocessor before any extension hook runs; see docs/security.md#residuals")
+                   "preprocessor before any extension hook runs; see docs/security.md#residuals and issue #46")
 def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, agent):
     # Pins a known engine-side gap. When this starts passing (an engine change or a new hook), remove the
     # xfail and the matching residual in the security model.

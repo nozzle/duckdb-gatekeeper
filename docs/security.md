@@ -151,11 +151,15 @@ under residuals.
   interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires identically
   for `Prepare()`, a read-only transaction does not stop `nextval`, and the parser only
   yields to extensions when the host enables `allow_parser_override_extension`.
+  With `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown
+  function name in a pragma argument also triggers extension autoload through
+  `Catalog::GetEntry`; the autoload posture warning applies to this path too.
   `gatekeeper_validate` parses with `Parser` directly and never triggers it.
   `test/test_enforcement.py` pins this gap with a strict `xfail` so an engine change is
   noticed. Hosts that cannot tolerate it must reject `PRAGMA` text before it reaches any
-  DuckDB parsing entry point; a Gatekeeper parser-override that rejects non-literal pragma
-  arguments engine-wide is the planned follow-up.
+  DuckDB parsing entry point. A Gatekeeper parser override that rejects non-literal pragma
+  arguments engine-wide, opt-in through `allow_parser_override_extension`, is tracked in
+  [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
   statement (for example when that view is blocked by table policy). Object identity is a
