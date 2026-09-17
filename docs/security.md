@@ -116,24 +116,46 @@ never reach the binder.
 
 **Execution boundary** (`PlannerExtension::post_bind_function`, after the engine binds and
 before it optimizes or executes). The plan the engine produced must contain only reviewed
-read-only logical operators, modify no database, return a query result, and pass the same
-resolved-function and implementation checks `gatekeeper_validate` applies to its own plan.
-If the binding boundary deferred object authorization because the statement had parameters,
-it runs here with the values the engine bound them to. Guarantee: no plan executes on an
-enforced connection unless it consists of allowlisted operators over allowed objects and
-functions. This holds for every plan the engine's planner produces, whatever produced the
-statement: SQL text, a prepared statement, or DuckDB's relation API.
+read-only logical operators, modify no database, return a query result, scan only base
+tables the policy allows (each `LOGICAL_GET` table entry is authorized by resolved identity),
+and pass the same resolved-function and implementation checks `gatekeeper_validate` applies
+to its own plan. If the binding boundary deferred object authorization because the statement
+had parameters, it runs here with the values the engine bound them to. Guarantee: no plan
+executes on an enforced connection unless it consists of allowlisted operators over allowed
+base tables and functions. This holds for every plan the engine's planner produces, whatever
+produced the statement: SQL text, a prepared statement, or DuckDB's relation API. Views are
+inlined before this point; they are authorized by the private bind's catalog callback, which
+for a relation statement sees the relation's SQL rendering rather than its query node.
 
 Both boundaries read one policy snapshot per statement. DuckDB's `Prepare()` path binds
 before any extension hook runs, so on that path the execution boundary only pre-screens the
 prepared plan; at execution, `OnExecutePrepared` forces a rebind inside the query so the plan
 that runs is authorized under the current policy, and a cached plan can never outlive a policy
 change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
-statement, which `test/test_enforcement.py` checks over a corpus of allowed, denied, and
-erroneous statements.
+statement that reaches them, which `test/test_enforcement.py` checks over a corpus of allowed,
+denied, and erroneous statements. What DuckDB does to a statement before they run is listed
+under residuals.
 
 ### Residuals
 
+- **PRAGMA arguments run before any hook.** DuckDB's statement preprocessor rewrites
+  `PRAGMA` statements while parsing, inside `ClientContext::ParseStatements`, and to do so
+  it binds and **evaluates every argument expression** (`Binder::BindPragma`,
+  `ExpressionExecutor::EvaluateScalar`) before the pragma is even looked up and before any
+  extension hook runs. On an enforced connection `PRAGMA anything(nextval('s'))` therefore
+  advances the sequence, and `PRAGMA anything(error(current_setting('x')::VARCHAR))`
+  reveals a setting through the error text, even though the statement is then denied. Any
+  scalar function, including never-bind ones, can run this way with the connection's
+  privileges; table functions, DDL, and DML cannot. The same evaluation happens for every
+  DuckDB connection, including a plain `extract_statements` call, and there is no
+  interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires identically
+  for `Prepare()`, a read-only transaction does not stop `nextval`, and the parser only
+  yields to extensions when the host enables `allow_parser_override_extension`.
+  `gatekeeper_validate` parses with `Parser` directly and never triggers it.
+  `test/test_enforcement.py` pins this gap with a strict `xfail` so an engine change is
+  noticed. Hosts that cannot tolerate it must reject `PRAGMA` text before it reaches any
+  DuckDB parsing entry point; a Gatekeeper parser-override that rejects non-literal pragma
+  arguments engine-wide is the planned follow-up.
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
   statement (for example when that view is blocked by table policy). Object identity is a

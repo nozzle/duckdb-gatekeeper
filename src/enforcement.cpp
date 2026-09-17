@@ -179,9 +179,14 @@ static void SetEnforcement(ClientContext &context, SetScope scope, Value &value)
 	if (text != "off" && text != "new_connections" && text != "all")
 		throw InvalidInputException("gatekeeper_enforcement must be 'off', 'new_connections', or 'all'");
 	value = Value(text);
+	// Publish the mode now rather than when PhysicalSet stores it after this callback returns: a
+	// connection that opens in between must already see the new mode in OnConnectionOpened. The later
+	// store writes the same value again.
+	DBConfig::GetConfig(context).SetOption(ENFORCEMENT_SETTING, value);
 	if (text == "all") {
-		// Every open connection, including the one issuing this SET. Later connections are latched as they
-		// open. Returning to another mode never releases a latch.
+		// Every connection open now, including the one issuing this SET. A connection that opened before
+		// this snapshot is in it; one that opens after it was latched by OnConnectionOpened because the
+		// mode is already published. Returning to another mode never releases a latch.
 		for (auto &connection : DatabaseInstance::GetDatabase(context).GetConnectionManager().GetConnectionList())
 			Latch(*connection);
 	}

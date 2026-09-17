@@ -169,8 +169,9 @@ static bool GatekeeperDenial(const ErrorData &error) {
 }
 
 // An enforced connection must agree with gatekeeper_validate under the same global policy. Plan the
-// text on a latched connection without executing it: PendingQuery runs the binding boundary, the
-// engine's bind, and the execution boundary, and stops before any task runs.
+// text on a latched connection: PendingQuery runs the binding boundary, the engine's bind, and the
+// execution boundary, then schedules pipeline events. Setup() pins the database to threads=1, so no
+// worker exists to run a scheduled task and nothing executes before the pending result is discarded.
 static void CheckEnforcedParity(DuckDB &database, Connection &connection, const std::string &bytes) {
 	static Connection enforced(database);
 	static bool latched = false;

@@ -1,6 +1,7 @@
 #include "check.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -12,6 +13,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "enforcement.hpp"
 #include "engine_errors.hpp"
 #include "function_policy.hpp"
@@ -135,6 +137,17 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 		operators.pop_back();
 		if (!ReadOperator(op->type))
 			deny("unsupported plan operator: " + LogicalOperatorToString(op->type));
+		// Base tables the plan actually scans are authorized by resolved identity here as well as in the
+		// private bind's catalog callback, so a plan that did not come from that bind (a relation whose SQL
+		// rendering diverged from its query node) still cannot read a table the policy denies. Views are
+		// inlined by now and remain the callback's responsibility.
+		if (op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto table = op->Cast<LogicalGet>().GetTable();
+			if (table) {
+				AuthorizeObject(ceiling, binding, *table, result);
+				AuthorizeObject(policy, binding, *table, result);
+			}
+		}
 		for (auto &child : op->children)
 			operators.push_back(child.get());
 	}

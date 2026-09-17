@@ -3,6 +3,7 @@ import concurrent.futures
 import os
 import re
 import threading
+import time
 
 import duckdb
 import pytest
@@ -351,6 +352,79 @@ def test_all_mode_latches_every_open_connection(db):
             with pytest.raises(duckdb.PermissionException, match=DENIED):
                 connection.execute("CREATE TABLE u(x INTEGER)")
             assert connection.execute("SELECT count(*) FROM t").fetchone() == (0,)
+
+
+@pytest.mark.parametrize("mode", ["all", "new_connections"])
+def test_mode_change_races_no_connection_open(db, mode):
+    # Connections opened while SET runs must be latched: either the connection-open callback already sees
+    # the published mode, or the 'all' sweep's snapshot includes the connection. Neither window may leak.
+    stop = threading.Event()
+    final = threading.Event()
+    opened = []
+    lock = threading.Lock()
+
+    def opener():
+        while not stop.is_set():
+            started_after_final = final.is_set()
+            cursor = db.cursor()
+            cursor.execute("SELECT 1")
+            with lock:
+                opened.append((started_after_final, cursor))
+
+    threads = [threading.Thread(target=opener) for _ in range(4)]
+    try:
+        for thread in threads:
+            thread.start()
+        if mode == "new_connections":
+            # The issuing connection stays free in this mode, so the window can be exercised repeatedly.
+            for _ in range(20):
+                db.execute("SET gatekeeper_enforcement = 'new_connections'")
+                db.execute("RESET gatekeeper_enforcement")
+        else:
+            # 'all' latches the issuing connection too, so there is exactly one SET; give the openers a
+            # head start so the sweep has a live population to race against.
+            while True:
+                with lock:
+                    if len(opened) >= 50:
+                        break
+                time.sleep(0.01)
+        db.execute(f"SET gatekeeper_enforcement = '{mode}'")
+        final.set()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            with lock:
+                if sum(1 for after, _ in opened if after) >= 20:
+                    break
+            time.sleep(0.01)
+    finally:
+        stop.set()
+        for thread in threads:
+            thread.join()
+    leaked_after_final, leaked_any = 0, 0
+    for started_after_final, cursor in opened:
+        try:
+            cursor.execute("CREATE TABLE IF NOT EXISTS leak(x INTEGER)")
+            leaked_any += 1
+            leaked_after_final += started_after_final
+        except duckdb.PermissionException:
+            pass
+        cursor.close()
+    # A connection whose creation began after SET returned is always latched.
+    assert leaked_after_final == 0
+    # 'all' also sweeps everything that was open, including connections created while SET ran; only
+    # 'new_connections' may leave cursors from a RESET window unlatched, which is that mode's meaning.
+    if mode == "all":
+        assert leaked_any == 0, leaked_any
+
+
+@pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
+                   "preprocessor before any extension hook runs; see docs/security.md#residuals")
+def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, agent):
+    # Pins a known engine-side gap. When this starts passing (an engine change or a new hook), remove the
+    # xfail and the matching residual in the security model.
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))")
+    assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)
 
 
 @pytest.mark.parametrize("statement", [

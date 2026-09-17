@@ -129,9 +129,11 @@ docs:
     `CALL gatekeeper_enforce()` also returns `warnings` naming host settings that weaken
     the sandbox (`enable_external_access`, autoload, `lock_configuration`); Gatekeeper
     reports them and never changes them. Parameters and the relation API are covered.
-    Enforcement agrees with `gatekeeper_validate` on every statement, except that
-    pragmas DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
-    are checked as that `SELECT`.
+    Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
+    DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
+    `SELECT` it becomes, and pragma **argument expressions are evaluated during that
+    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied. See the
+    security model's residuals.
 
     ### Functions and options
 
