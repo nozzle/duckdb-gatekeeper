@@ -138,28 +138,57 @@ under residuals.
 
 ### Residuals
 
-- **PRAGMA arguments run before any hook.** DuckDB's statement preprocessor rewrites
+- **PRAGMA preprocessing runs before any hook.** DuckDB's statement preprocessor rewrites
   `PRAGMA` statements while parsing, inside `ClientContext::ParseStatements`, and to do so
   it binds and **evaluates every argument expression** (`Binder::BindPragma`,
   `ExpressionExecutor::EvaluateScalar`) before the pragma is even looked up and before any
   extension hook runs. On an enforced connection `PRAGMA anything(nextval('s'))` therefore
   advances the sequence, and `PRAGMA anything(error(current_setting('x')::VARCHAR))`
-  reveals a setting through the error text, even though the statement is then denied. Any
-  scalar function, including never-bind ones, can run this way with the connection's
-  privileges; table functions, DDL, and DML cannot. The same evaluation happens for every
-  DuckDB connection, including a plain `extract_statements` call, and there is no
-  interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires identically
-  for `Prepare()`, a read-only transaction does not stop `nextval`, and the parser only
-  yields to extensions when the host enables `allow_parser_override_extension`.
-  With `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown
-  function name in a pragma argument also triggers extension autoload through
-  `Catalog::GetEntry`; the autoload posture warning applies to this path too.
-  `gatekeeper_validate` parses with `Parser` directly and never triggers it.
-  `test/test_enforcement.py` pins this gap with a strict `xfail` so an engine change is
-  noticed. Hosts that cannot tolerate it must reject `PRAGMA` text before it reaches any
-  DuckDB parsing entry point. A Gatekeeper parser override that rejects non-literal pragma
-  arguments engine-wide, opt-in through `allow_parser_override_extension`, is tracked in
-  [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
+  reveals a setting through the error text (any failing cast leaks the value the same way),
+  even though the statement is then denied. This happens for every statement in a batch
+  before the first one executes, for every DuckDB connection, and from a plain
+  `extract_statements` call (upstream:
+  [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875)).
+
+  What it reaches: **every scalar function visible to the connection**, with literal
+  arguments, once per statement (list lambdas amplify it), so the function allowlist does
+  not apply on this path. That includes core functions, extension functions, host-registered
+  UDFs, and scalar macros. What it cannot reach: table data (the binder rejects subqueries and
+  column references, including inside macros), table functions, and any statement (DDL, DML,
+  `COPY`, `ATTACH`, `LOAD`, `SET`). Among core scalars the state-touching ones are `nextval`
+  (writes), `write_log` (writes when the host enabled logging), `setseed` (own connection),
+  and `current_setting`, `which_secret`, `getvariable`, `current_schemas`, `txid_current`
+  (reads). What that is worth depends on the host: credentials kept in legacy `SET s3_*`
+  options are readable once `httpfs` is loaded, a UDF or extension scalar that reaches the
+  network or runs code is callable, and with `autoload_known_extensions` or
+  `autoinstall_known_extensions` on, an unknown function name in a pragma argument triggers
+  extension autoload through `Catalog::GetEntry`. The same preprocessor also runs
+  query-pragma functions with their constant arguments: `PRAGMA import_database('dir')`
+  reads `schema.sql` and `load.sql` before any hook, gated only by `enable_external_access`
+  and `allowed_directories`.
+
+  There is no interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires
+  identically for `Prepare()` and carries no statement, a read-only transaction does not stop
+  `nextval`, and the parser only yields to extensions through `allow_parser_override_extension`,
+  which is host-gated, process-wide, and answered by whichever override loaded first (a
+  Gatekeeper override was prototyped and declined for those reasons; see
+  [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46)). `gatekeeper_validate`
+  parses with `Parser` directly and never triggers it, and reports the raw `PRAGMA` as
+  `unsupported`: **hosts that cannot tolerate this residual should validate before they
+  execute and refuse `unsupported`**, or reject `PRAGMA` text before it reaches any DuckDB
+  parsing entry point. Keep credentials in the secret manager, autoload off, and
+  side-effecting scalar UDFs or extensions off the shared instance; treat sequences the
+  connection can see as writable by it. `test/test_enforcement.py` pins the gap with a
+  strict `xfail` so an engine change is noticed.
+- **A denial leaves the autocommit transaction open until the next statement.** DuckDB
+  starts the transaction before it calls `QueryBegin` and does not end it when that hook
+  throws (upstream: [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876)).
+  An idle connection whose last statement was denied therefore holds a read snapshot until
+  its next statement; the next query cleans up. Clients that parse before they execute
+  (Python's `execute()` calls `extract_statements` first) run pragma preprocessing inside
+  that transaction, so a `PRAGMA` whose argument evaluation fails after a denial makes the
+  following `PRAGMA`s fail with `Current transaction is aborted` until a non-`PRAGMA`
+  statement runs. Both effects are confined to the connection that received the denial.
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
   statement (for example when that view is blocked by table policy). Object identity is a

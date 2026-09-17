@@ -538,8 +538,11 @@ What enforcement changes and does not change:
   runs are checked as that `SELECT`; `gatekeeper_validate` reports the raw `PRAGMA` text as
   `unsupported`. DuckDB also **evaluates `PRAGMA` argument expressions** during that rewrite,
   before Gatekeeper can act: `PRAGMA x(nextval('s'))` advances `s` on an enforced connection
-  even though the statement is then denied. See the
-  [residuals](docs/security.md#residuals) before exposing sequences or sensitive settings.
+  even though the statement is then denied, and any scalar function the connection can see,
+  host UDFs included, can run the same way. Table data and statements stay out of reach. Hosts
+  that cannot accept this should call `gatekeeper_validate` first and refuse `unsupported`;
+  see the [residuals](docs/security.md#residuals) for the full boundary and the upstream
+  issue.
 - `gatekeeper_validate` is available on an enforced connection when the policy allows it
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want a structured dry run.
 - Each statement costs up to three binds (a private authorizing bind, the engine's bind, and a
@@ -644,8 +647,9 @@ it **executes**. It does not:
 - isolate the filesystem or network;
 - prevent binding from performing I/O through trusted views and macros before a denial,
   or before a denial of a prepared statement, which DuckDB binds before any extension hook runs;
-- stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions, which
-  happens during parsing before any extension hook and can run scalar functions such as `nextval`;
+- stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions or running
+  query pragmas such as `import_database`, which happens during parsing before any extension
+  hook and can run any scalar function the connection can see;
 - prove that every overload of a default function is harmless (defaults are a
   [reviewed name inventory](inventories/README.md)).
 

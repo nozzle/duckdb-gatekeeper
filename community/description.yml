@@ -132,7 +132,9 @@ docs:
     Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
     DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
     `SELECT` it becomes, and pragma **argument expressions are evaluated during that
-    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied. See the
+    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied; any scalar
+    function the connection can see can run that way, table data cannot. Hosts that cannot
+    accept this should call `gatekeeper_validate` first and refuse `unsupported`. See the
     security model's residuals.
 
     ### Functions and options
