@@ -32,7 +32,8 @@ In scope: `gatekeeper_validate` returns `allowed = true` and `code = 'ok'` for a
 that, under the documented policy semantics and the documented integration assumptions
 in [docs/security.md](docs/security.md), reads a table or view outside `allowed_tables`
 or matching `blocked_tables`; binds a caller-written function outside the allowlists or
-matching `blocked_functions`; reaches a never-bind function by any route; is not a single
+matching `blocked_functions`; reaches a never-bind function by any caller-authored route, or
+Gatekeeper's own control plane by any route at all; is not a single
 `SELECT`; or executes, writes, or performs I/O the validator claims it does not. Also in
 scope: any statement executing on an enforced connection (with `gatekeeper_log_only` false)
 that `gatekeeper_validate` would deny, or executing there unrecorded while it is true; any way
@@ -49,8 +50,8 @@ any extension hook runs; scalar functions and query pragmas DuckDB's statement p
 runs while parsing `PRAGMA` statements, before any extension hook runs (a documented, pinned
 residual, upstream [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875));
 functions and readers that host-created views, macros, and attached tables use inside their
-own definitions, which are outside the function allowlist and `blocked_functions` by design
-(the never-bind list still applies); behavior of host-created definitions that shadow default names
+own definitions, which are outside function policy by design (Gatekeeper's own control plane
+excepted); behavior of host-created definitions that shadow default names
 or otherwise rely on an untrusted party having DDL in the shared catalog; the contents
 of engine `error_message` text; and hosts that leave `autoload_known_extensions`,
 `autoinstall_known_extensions`, or configuration changes enabled on validating or

@@ -15,13 +15,14 @@
 namespace duckdb {
 using namespace duckdb_yyjson;
 
-// The never-bind list holds for every name. Blocks hold for names attributable to the caller; a trusted
-// definition's own functions are not. The query-wide allowlist check for ambiguous caller syntax holds for the
-// implementation DuckDB selects wherever it selects it, as documented.
+// Function policy, the never-bind list included, holds for names attributable to the caller; a trusted
+// definition's own functions are outside it, with one exception: Gatekeeper's own control plane is refused on
+// every route. The query-wide allowlist check for ambiguous caller syntax holds for the implementation DuckDB
+// selects wherever it selects it, as documented.
 static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                               const string &name, bool attributable, gatekeeper::Result &result) {
 	auto canonical = gatekeeper::CanonicalFunction(name);
-	if (gatekeeper::NeverBind(name) || (attributable && gatekeeper::FunctionBlocked(policy, name)) ||
+	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
 	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
 		result.violations.emplace("function", "resolved function is not allowed: " + canonical, "", "", "", canonical);
 		throw PermissionException("resolved function is not allowed");

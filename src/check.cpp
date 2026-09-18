@@ -351,13 +351,12 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	}
 	// A name the caller wrote chooses the reader, so the reader must be allowed like a caller-written table
 	// function. A name reachable only through a trusted view or macro body is that definition's reader and is
-	// not subject to function policy, exactly as the readers such bodies name explicitly are not; only the
-	// never-bind list holds everywhere. The callback cannot see which binder asked: a name the caller also
-	// wrote is the caller's, query-wide.
+	// outside function policy, exactly as the readers such bodies name explicitly are. The callback cannot see
+	// which binder asked: a name the caller also wrote is the caller's, query-wide.
 	bool caller_written = !binding || binding->caller_table_refs.count(gatekeeper::TableRefPath(
 	                                      input.catalog_name, input.schema_name, input.table_name));
 	auto reader_permitted = [&](const gatekeeper::Policy &layer, const string &name) {
-		return caller_written ? gatekeeper::FunctionAllowed(layer, name) : !gatekeeper::NeverBind(name);
+		return !caller_written || gatekeeper::FunctionAllowed(layer, name);
 	};
 	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
@@ -445,8 +444,8 @@ static bool FunctionEntry(CatalogType type) {
 // The function names a scalar macro's definition introduces, read the way the binding boundary reads the
 // caller's text: each overload's expression and default arguments are serialized as the select list of an
 // empty SELECT and walked by the same grammar walker, so syntax-implied names (list_value for [..],
-// struct_extract for x.y, the collation functions for COLLATE) are learned the same way. The walk's verdict is
-// irrelevant here and discarded; only the names it records are kept.
+// struct_extract for x.y) are learned the same way. The walk's verdict is irrelevant here and discarded; only
+// the names it records are kept.
 static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names) {
 	auto node = make_uniq<SelectNode>();
 	for (auto &overload : macro.macros) {
@@ -476,8 +475,9 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 	gatekeeper::Validate(yyjson_doc_get_root(ast.get()), gatekeeper::Policy(), &body);
 	for (const auto *set : {&body.caller_functions, &body.synthesized_functions, &body.literal_constructors})
 		names.insert(set->begin(), set->end());
-	if (body.caller_collates)
-		names.insert({"lower", "strip_accents", "nfc_normalize"});
+	// A COLLATE in the body binds its collation's function (lower, icu_collate_de, ...) directly, never through
+	// the catalog callback, so there is no lookup to recognize here: the plan walk attributes a collation
+	// function to the caller only when the caller wrote COLLATE (BindingPolicy::caller_collates).
 }
 
 // The catalog-lookup callback of one binder. The binder gives no other signal of scope, so the callback carries
@@ -507,10 +507,11 @@ struct LookupCallback {
 		auto &s = *shared;
 		bool function = FunctionEntry(entry.type);
 		auto canonical = gatekeeper::CanonicalFunction(entry.name);
-		// A name a host scalar-macro body introduced is the body's, unless the caller wrote it too: then it is
-		// the caller's, query-wide, since both bind in the same binder.
+		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
+		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
+		// bind in the same binder.
 		bool attributable = !trusted && !(function && s.provenance.trusted_names.count(canonical) &&
-		                                  !s.binding.caller_functions.count(canonical));
+		                                  !s.provenance.CallerCanName(s.binding, canonical));
 		AuthorizeObject(s.ceiling, s.binding, entry, s.result, attributable);
 		AuthorizeObject(s.policy, s.binding, entry, s.result, attributable);
 		if (!function) {
@@ -524,9 +525,15 @@ struct LookupCallback {
 			return;
 		if (entry.type == CatalogType::TABLE_MACRO_ENTRY && !entry.internal)
 			armed = true;
-		// A host scalar macro's body, and the default macros such a body expands to, are trusted names.
-		if (entry.type == CatalogType::MACRO_ENTRY && (!entry.internal || !attributable))
-			MacroBodyNames(entry.Cast<ScalarMacroCatalogEntry>(), s.provenance.trusted_names);
+		if (entry.type != CatalogType::MACRO_ENTRY)
+			return;
+		auto &macro = entry.Cast<ScalarMacroCatalogEntry>();
+		// A host scalar macro's body, and the default macros such a body expands to, are trusted names. A default
+		// macro the caller reached is the caller's, and so is everything its body names.
+		if (!entry.internal || !attributable)
+			MacroBodyNames(macro, s.provenance.trusted_names);
+		else
+			MacroBodyNames(macro, s.provenance.caller_expansions);
 	}
 };
 

@@ -422,10 +422,14 @@ def test_qualified_suffix_catalog_table_uses_table_policy(db, name):
 
 
 def test_internal_dependency_of_trusted_view_requires_opt_in(db):
+    # The internal duckdb_tables view needs an exact table rule even through a host view; once granted, the
+    # never-bind reader behind it is the definition's own, not the caller's.
     db.execute("CREATE VIEW my_tables AS SELECT table_name FROM duckdb_tables")
     assert validate(db, "SELECT * FROM my_tables")["violations"][0]["rule"] == "internal_object"
     options = {"allowed_tables": [{"schema": "main", "table": "my_tables"},
                                   {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
     configure(db, options)
     result = validate(db, "SELECT * FROM my_tables", options)
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "duckdb_tables"
+    assert result["allowed"] and any(f["name"] == "duckdb_tables" for f in result["functions"]), result
+    assert validate(db, "SELECT * FROM duckdb_tables()", options)["code"] == "forbidden"
+    assert validate(db, "SELECT * FROM my_tables, duckdb_tables()", options)["code"] == "forbidden"

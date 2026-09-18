@@ -86,12 +86,19 @@ struct BindingPolicy {
 struct Provenance {
 	// Canonical function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
+	// Canonical function names the default macros the caller's text expands to introduce (list_count names
+	// list_aggr without the caller writing it). With the text's own names, these are the names the caller can
+	// produce; a trusted scalar-macro body sharing one of them does not make it the body's.
+	Names caller_expansions;
 	// Canonical function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
-	// so its names are recognized by name; a name the caller also wrote is checked as the caller's, query-wide.
+	// so its names are recognized by name; a name the caller can also produce is checked as the caller's,
+	// query-wide.
 	Names trusted_names;
 	// No text and no private bind on record (a Prepare() pre-screen): nothing can be attributed, and blocks are
 	// deferred to execution, which rebinds inside the query.
 	bool unattributed = false;
+	// The caller's text, or a default macro it expands to, can produce this name.
+	bool CallerCanName(const BindingPolicy &binding, const std::string &name) const;
 	bool Attributable(const BindingPolicy &binding, const std::string &name) const;
 };
 // The qualified name DuckDB hands its replacement-scan callbacks (ReplacementScan::GetFullPath): the non-empty

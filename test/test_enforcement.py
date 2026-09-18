@@ -413,12 +413,19 @@ def test_trusted_expansions_stay_trusted(catalog, agent):
         assert validate(catalog, sql)["code"] == "forbidden", sql
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql).fetchall()
-    # ...and the never-bind list still reaches into a view; a view over an elevated (non-default) function is
-    # allowed when the view is.
+    # ...and the trusted boundary is absolute: a view over a never-bind function is the host's decision to
+    # expose it, allowed when the view is, on both paths. Only Gatekeeper's own control plane stays refused on
+    # every route: a view over it would let a SELECT rewrite the policy or erase the audit trail.
     catalog.execute("CREATE VIEW reporting.settings_count AS SELECT count(*) AS n FROM duckdb_settings()")
-    assert validate(catalog, "SELECT * FROM reporting.settings_count")["code"] == "forbidden"  # never-bind
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
-        agent.execute("SELECT * FROM reporting.settings_count").fetchall()
+    assert validate(catalog, "SELECT * FROM reporting.settings_count")["allowed"]
+    assert agent.execute("SELECT * FROM reporting.settings_count").fetchone()[0] > 0
+    for body in ["gatekeeper_configure()", "truncate_duckdb_logs()", "enable_logging('Gatekeeper')"]:
+        catalog.execute(f"CREATE VIEW reporting.control AS SELECT * FROM {body}")
+        result = validate(catalog, "SELECT * FROM reporting.control")
+        assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function", (body, result)
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute("SELECT * FROM reporting.control").fetchall()
+        catalog.execute("DROP VIEW reporting.control")
     catalog.execute("CREATE VIEW reporting.version AS SELECT * FROM pragma_version()")
     expected = validate(catalog, "SELECT library_version FROM reporting.version")
     if expected["allowed"]:

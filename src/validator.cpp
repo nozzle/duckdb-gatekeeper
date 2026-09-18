@@ -144,16 +144,19 @@ bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	        (policy.defaults && inventory.defaults.count(Lower(name))));
 }
 
+bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
+	auto canonical = CanonicalFunction(name);
+	return binding.caller_functions.count(canonical) || binding.synthesized_functions.count(canonical) ||
+	       binding.literal_constructors.count(canonical) || caller_expansions.count(canonical) ||
+	       (binding.caller_collates && CollationFunction(canonical));
+}
+
 bool Provenance::Attributable(const BindingPolicy &binding, const std::string &name) const {
 	if (unattributed)
 		return false;
-	auto canonical = CanonicalFunction(name);
-	// A name the caller wrote, or that the caller's own binders retrieved, is the caller's. A name only a
+	// A name the caller can produce, or that the caller's own binders retrieved, is the caller's. A name only a
 	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
-	if (binding.caller_functions.count(canonical) || binding.synthesized_functions.count(canonical) ||
-	    binding.literal_constructors.count(canonical) || caller_lookups.count(canonical))
-		return true;
-	return binding.caller_collates && CollationFunction(canonical);
+	return CallerCanName(binding, name) || caller_lookups.count(CanonicalFunction(name));
 }
 struct Stop {
 	std::string message;

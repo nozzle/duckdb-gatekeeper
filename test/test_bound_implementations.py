@@ -1,5 +1,6 @@
 """Executable bound implementations obey both layers where the caller wrote them; inside a trusted definition
-they are that definition's own, subject to the never-bind list and nothing else."""
+they are that definition's own, outside function policy altogether."""
+import duckdb
 import json
 import re
 
@@ -65,6 +66,33 @@ def test_null_list_has_no_executable_aggregate(db, expression):
     result = validate(db, "SELECT " + expression)
     assert result["allowed"], result
     assert not any(f["type"] == "aggregate" for f in result["functions"])
+
+
+@pytest.mark.parametrize("order", ["macro_first", "caller_first"])
+def test_trusted_macro_body_does_not_launder_caller_expansions(db, order):
+    """A host scalar macro body binds in the caller's own binder, so its names are recognized by name. The
+    caller's text can reach the same implementation without naming it, through a default macro it expands to
+    (list_count names list_aggr); that expansion is the caller's, in either order, and the aggregate it
+    dispatches stays subject to the caller's blocks. The host macro's own dispatch stays its own."""
+    from test_enforcement import DENIED, enforce
+    db.execute("CREATE MACRO m() AS list_sum([1,2])")
+    configure(db, {"allowed_functions": ["m"], "blocked_functions": ["count"]})
+    mixed = "SELECT m(), list_count([3])" if order == "macro_first" else "SELECT list_count([3]), m()"
+    for sql in ["SELECT list_count([3])", mixed]:
+        result = validate(db, sql)
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "count", (sql, result)
+    assert validate(db, "SELECT m()")["allowed"]
+    assert validate(db, "SELECT m()", {"blocked_functions": ["sum", "list_aggr", "list_sum"]})["allowed"]
+    # Blocking the shared dispatcher itself reaches the caller's expansion and, since the name is then the
+    # caller's query-wide, the macro's use in the same statement; the macro alone is untouched.
+    assert validate(db, mixed.replace("list_count([3])", "list_avg([3])"), {"blocked_functions": ["list_aggr"]})["code"] == "forbidden"
+    assert validate(db, "SELECT m()", {"blocked_functions": ["list_aggr"]})["allowed"]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute("SELECT m()").fetchone() == (3,)
+        for sql, parameters in [(mixed, None), (mixed.replace("[3]", "[?]"), [3])]:
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute(sql, parameters).fetchall()
 
 
 @pytest.mark.parametrize("expression,blocked", [

@@ -231,9 +231,9 @@ under residuals.
   executing the statement directly (with or without parameters) binds inside the query,
   where the text is on record, and a view written with an explicit `read_parquet(...)` call
   is unaffected either way. The plan pre-screen after that bind has no record either, so it
-  applies table policy and the never-bind list and defers `blocked_functions` to execution:
-  a prepared statement whose text names a blocked function is refused when executed, not
-  when prepared.
+  applies table policy and Gatekeeper's control plane and defers the rest of function policy
+  to execution: a prepared statement whose text names a blocked or never-bind function is
+  refused when executed, not when prepared.
 - **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
@@ -479,15 +479,22 @@ macro the host created (any non-internal catalog entry), and the scan an attache
 uses for a table the policy allows, are trusted definitions. What their bodies introduce is
 theirs, not the caller's: an explicit `read_parquet(...)`, a file path (`FROM 'x.parquet'`),
 `md5`, `list_sum` and the `sum` it dispatches, the `lower` behind a `COLLATE nocase`,
-`iceberg_scan`. None of it is subject to the allowlist or to `blocked_functions`. Only the
-non-overridable never-bind list below reaches inside a body, and table policy still
-governs the view or table itself (and every table the body reads), while a macro must
-itself be allowed by name. Blocks govern what is attributable to the caller: the names in
-the caller's text, the names the caller's own binders retrieve while binding it (the
-default macros a caller-written name expands to, such as `list_sum` to `list_aggr`), the
-aggregate a caller-attributable dispatcher selects, and the collation functions when the
-caller wrote `COLLATE`. The exemption is by origin, not by name: the same function
-written by the caller next to a view that also uses it is the caller's, and the caller's
+`duckdb_tables()`, `iceberg_scan`. None of it is subject to the allowlist, to
+`blocked_functions`, or to the never-bind list; a host view over `duckdb_settings()` is the
+host's decision to expose settings. The one exception is Gatekeeper's own control plane
+(`gatekeeper_configure`, `gatekeeper_enforce`, `enable_logging`, `disable_logging`,
+`truncate_duckdb_logs`, `write_log`, `ControlPlaneFunctions()` in
+`src/include/function_policy.hpp`), refused on every route: a definition over one of these
+would let a `SELECT` rewrite the policy or erase its own record, which no definition
+legitimately intends. Table policy still governs the view or table itself (and every table
+the body reads, internal views included, which need their exact rule), while a macro must
+itself be allowed by name. Function policy governs what is attributable to the caller: the
+names in the caller's text, the names the caller's own binders retrieve while binding it
+(the default macros a caller-written name expands to, such as `list_sum` to `list_aggr`,
+and everything those name in turn), the aggregate a caller-attributable dispatcher
+selects, and the collation functions when the caller wrote `COLLATE`. The exemption is by
+origin, not by name: the same function written by the caller next to a view that also
+uses it is the caller's, and the caller's
 rules then apply query-wide, since the bound plan carries no scope.
 
 Origin is established during the private bind. DuckDB copies a binder's catalog-lookup
@@ -497,12 +504,15 @@ retrieving a host view or table macro arms the copy that made the lookup, the ne
 made from it (the body's binder) starts trusted, and trusted copies beget trusted copies.
 Lookups a trusted copy makes are the definition's own. A scalar macro body binds in the
 caller's own binder, so its names are learned from its definition: the macro's expression
-is walked by the same grammar walker as the caller's text, and a name it introduces that
-the caller did not also write is the macro's. The execution boundary then applies blocks
-only to names the record attributes to the caller; an attached table's scan
-(`LogicalGet` with a table entry) is never attributed. A `Prepare()` bind outside any
-statement has no text and no record; its pre-screen applies table policy and the
-never-bind list and defers blocks to execution, which rebinds inside the query.
+is walked by the same grammar walker as the caller's text, and a name it introduces is the
+macro's unless the caller can produce it too, in its text or through a default macro its
+text expands to (the caller's `list_count` names `list_aggr` without writing it, and a host
+macro over `list_sum` does not make that `list_aggr`, or the `count` it dispatches, the
+macro's). The execution boundary then applies function policy only to names the record
+attributes to the caller; an attached table's scan (`LogicalGet` with a table entry) is
+never attributed. A `Prepare()` bind outside any statement has no text and no record; its
+pre-screen applies table policy and the control plane and defers the rest of function
+policy to execution, which rebinds inside the query.
 
 The callback exposes no expression origin within one binder: when caller syntax requires
 an implementation check, a trusted expansion using the same implementation must also pass
@@ -526,7 +536,7 @@ fixed `histogram` behind `list_distinct`/`list_unique`, are those definitions' o
 Defaults are admitted by leaf name, so a host-created macro or function that shadows a
 default name is a trusted definition: `CREATE MACRO ltrim(x) AS ...` in a schema ahead of
 `system` on the search path is admitted whenever `ltrim` is, and its body is checked
-against the never-bind list only. The same holds for views, types, casts, and
+against Gatekeeper's control plane only. The same holds for views, types, casts, and
 collations. Gatekeeper assumes catalog integrity; letting untrusted users create
 definitions in a shared catalog is outside its model, and restricting defaults to
 `system.main` would not by itself make such DDL safe.
@@ -556,6 +566,12 @@ duckdb_profiling_settings duckdb_schemas duckdb_secret_types duckdb_secrets
 duckdb_sequences duckdb_settings duckdb_table_sample duckdb_tables
 duckdb_temporary_files duckdb_types duckdb_variables duckdb_views
 ```
+
+It governs what the caller's text reaches, directly or through the implementations
+binding derives from it; a host view or macro that uses one of these is a trusted
+definition and is admitted when the view is. The control-plane subset (`gatekeeper_configure`,
+`gatekeeper_enforce`, `enable_logging`, `disable_logging`, `truncate_duckdb_logs`,
+`write_log`) is refused on every route.
 
 Source review at the pinned revision: `src/function/table/query_function.cpp`
 reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
@@ -646,8 +662,8 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   implementations still need verification.
 - Binding may perform remote I/O or evaluate bind-time expressions before returning,
   even for a request eventually denied. Caller-authored prohibited functions are
-  rejected first; trusted expansions are outside function policy and pass the
-  never-bind list only. Lookup-triggered autoload can occur before the callback; use
+  rejected first; trusted expansions are outside function policy, Gatekeeper's control
+  plane excepted. Lookup-triggered autoload can occur before the callback; use
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
 - Default functions are a reviewed name inventory, not a proof of harmlessness for
@@ -671,7 +687,7 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   in any clause, including `DESCRIBE`, `PIVOT`, CTEs and subqueries) is the caller's reader
   choice and must pass every allowlist layer; a name reachable only through a view or
   macro body is that trusted definition's reader, outside function policy exactly as an
-  explicit `read_parquet(...)` in that body is, and passes the never-bind list only. The
+  explicit `read_parquet(...)` in that body is. The
   callback receives only the name, so the text walk records every table name the caller
   wrote and the gate consults that record (the private bind's, or the admitted statement's
   on an enforced connection); a name both sides use is checked as the caller's. A
@@ -696,7 +712,8 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   access. Resolved bindings do not provide an argument-level sandbox.
 - Explicitly admitting eligible elevated readers transfers responsibility
   for their resources and trusted implementation to the application. The never-bind
-  list cannot be overridden by any option.
+  list cannot be overridden by any option for what the caller writes; a host definition
+  over one of its entries is the host's decision, Gatekeeper's control plane excepted.
 - A fixed internal cap rejects multiple statements before binding with code `forbidden`
   and violation rule `limit`; empty or comment-only SQL returns `invalid_input`.
 - Fixed internal limits cap SQL input and serialized AST size at 8 MiB, AST traversal

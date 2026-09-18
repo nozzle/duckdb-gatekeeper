@@ -297,7 +297,8 @@ macros; they match resolved objects, not CTE names, file paths, or reader argume
 > **Internal objects** (`duckdb_*`, `information_schema.*`) need a rule with exact schema
 > and table names in each policy layer; schema/table wildcards never grant them, though
 > the catalog may be `'*'` or omitted. Block wildcards do match them. Metadata *readers*
-> stay on the never-bind list regardless. Schema-wide `SHOW` is denied whenever any table
+> stay on the never-bind list for the caller's own text regardless; a host view over one
+> is the host's decision. Schema-wide `SHOW` is denied whenever any table
 > restriction is configured; `DESCRIBE table` checks the resolved table normally.
 
 Table rules govern tables and views only. Types, casts, and collations are trusted as
@@ -322,10 +323,11 @@ flowchart LR
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
   `FROM read_parquet(...)`) all use the same policy, by leaf name.
 - Trusted **views, macros, and attached tables** are opaque to function policy. What
-  their definitions introduce is theirs, not the caller's: exempt from the allowlist and
-  from `blocked_functions` alike, whether an explicit `read_parquet(...)`, a file path
-  (`FROM 'x.parquet'`), or the scan an attached catalog uses. Only the never-bind list
-  reaches inside. Table policy still governs the view or table itself, and a macro must
+  their definitions introduce is theirs, not the caller's: exempt from the allowlist,
+  from `blocked_functions`, and from the never-bind list alike, whether an explicit
+  `read_parquet(...)`, a file path (`FROM 'x.parquet'`), `duckdb_tables()`, or the scan
+  an attached catalog uses. Only Gatekeeper's own control plane (below) is refused
+  inside a body. Table policy still governs the view or table itself, and a macro must
   itself be allowed. The exemption is by origin, not by name: the same function written
   by the caller next to the view is the caller's, and ambiguous caller syntax such as
   `t.x` or `list[i]` triggers a query-wide implementation check that can also reach a
@@ -371,12 +373,18 @@ outside function policy like any other trusted expansion.
 
 ### Never-bind list
 
-Denied regardless of options, in every layer:
+Denied regardless of options, in every layer, wherever the caller's text reaches them:
 
 - Dynamic SQL: `query`, `query_table`, `json_execute_serialized_sql`, `json_serialize_plan`
 - Metadata readers: `duckdb_tables`, `information_schema.*`, `SHOW TABLES`
 - Sequence and storage functions
-- `gatekeeper_configure` itself, including through views or macros
+
+A host view or macro that uses one of these is the host's decision to expose it, and is
+admitted when the view is (trusted definitions are opaque to function policy). The one
+exception is Gatekeeper's own control plane, `gatekeeper_configure`, `gatekeeper_enforce`,
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log`, which is
+refused on every route, views and macros included: a definition over one of these would
+let a `SELECT` rewrite the policy or erase the audit trail.
 
 The full list is in [docs/security.md](docs/security.md#never-bind-functions).
 

@@ -129,9 +129,9 @@ forbidden
 statement ok
 RESET gatekeeper_policy;
 
-# Trusted views and macros: what they introduce is theirs, outside the allowlist and outside blocks; only the
-# never-bind list reaches into a body. The caller's own use of the same function next to the definition is
-# the caller's and stays subject to both.
+# Trusted views and macros: what they introduce is theirs, outside function policy altogether; only
+# Gatekeeper's own control plane is refused inside a body. The caller's own use of the same function next to
+# the definition is the caller's and stays subject to the allowlist and blocks.
 statement ok
 CREATE VIEW hashed AS SELECT md5(s) AS h FROM t;
 
@@ -188,13 +188,28 @@ SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting', blocked_func
 ----
 true
 
+# The trusted boundary is absolute: a view over a never-bind function is the host's decision to expose it,
+# allowed when the view is. Only Gatekeeper's own control plane stays refused on every route.
 statement ok
 CREATE VIEW enumerating AS SELECT * FROM duckdb_tables();
 
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM enumerating');
+----
+true
+
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM enumerating');
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM enumerating, duckdb_tables()');
 ----
 forbidden	function	duckdb_tables
+
+statement ok
+CREATE VIEW erasing AS SELECT * FROM truncate_duckdb_logs();
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM erasing');
+----
+forbidden	function	truncate_duckdb_logs
 
 # A host macro that shadows a default name is a trusted definition: it is admitted by the leaf name and its
 # body is checked against the never-bind list only. Hosts must control the catalog.

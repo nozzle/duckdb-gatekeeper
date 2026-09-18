@@ -89,9 +89,23 @@ inline std::string CanonicalFunction(std::string name) {
 	return name;
 }
 
-// The never-bind list: functions no policy can admit, wherever they appear, trusted definitions included.
+// The never-bind list: functions no policy can admit on any caller-authored route.
 inline bool NeverBind(const std::string &name) {
 	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
+}
+
+// Gatekeeper's own control plane: the policy and the lifecycle of the log that records its decisions. These
+// are refused on every route, trusted definitions included. A host view or macro that exposed one would let
+// a caller's SELECT rewrite the policy or erase its own record, which no definition legitimately intends;
+// everything else a trusted definition uses is that definition's business.
+inline const Names &ControlPlaneFunctions() {
+	static const Names names = {"disable_logging",    "enable_logging",       "gatekeeper_configure",
+	                            "gatekeeper_enforce", "truncate_duckdb_logs", "write_log"};
+	return names;
+}
+
+inline bool ControlPlane(const std::string &name) {
+	return ControlPlaneFunctions().count(Lower(name)) || ControlPlaneFunctions().count(CanonicalFunction(name));
 }
 
 // The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
