@@ -296,10 +296,13 @@ def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypat
     db.execute("COPY (SELECT 2 AS x) TO 'other.parquet'")
     result = validate(db, "SELECT * FROM v, 'other.parquet'")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
-    # Admitting the reader restores every spelling, and the collision case lists both objects.
+    # Admitting the reader restores every spelling, and the collision case lists both objects. The upper-case
+    # spelling is denied by name (provenance is case-folded) but names a file only case-insensitive filesystems
+    # have, so once admitted its outcome is the filesystem's: a bind error there is not a denial.
     configure(db, {"allowed_functions": ["parquet_scan"]})
     for sql in denied:
-        assert validate(db, sql)["allowed"], sql
+        result = validate(db, sql)
+        assert result["allowed"] or (sql == "SELECT * FROM 'DATA.PARQUET'" and result["code"] == "binding"), (sql, result)
     result = validate(db, "SELECT * FROM v, 'data.parquet'")
     assert {o["table"] for o in result["objects"]} == {"v", "data.parquet"}
 
