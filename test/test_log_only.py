@@ -135,13 +135,14 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     assert [(r["statement"].strip(), r["boundary"], r["code"]) for r in found] == [
         ("SELECT 1", "execution", "ok"), ("CREATE TABLE v(x INTEGER)", "binding", "unsupported"),
         ("SELECT 2", "execution", "ok")]
-    # Parameters: authorized in PostBind with the bound values, once.
+    # Parameters defer authorization to the engine's bind: a reader is decided at the replacement gate the
+    # engine's bind reaches first, everything else in PostBind with the bound values. Once either way.
     agent.execute(f"SELECT * FROM '{path}' WHERE a = ?", [1]).fetchall()
     agent.execute("SELECT * FROM secret.salaries WHERE amount > ?", [0]).fetchall()
     agent.execute("SELECT id FROM reporting.orders WHERE id = ?", [1]).fetchall()
     found = decisions(catalog, "statement LIKE '%?%'")
-    assert [(r["boundary"], r["code"]) for r in found] == [("authorize", "forbidden"), ("authorize", "forbidden"),
-                                                            ("execution", "ok")]
+    assert [(r["boundary"], r["code"]) for r in found] == [("replacement_scan", "forbidden"),
+                                                            ("authorize", "forbidden"), ("execution", "ok")]
     # The relation API goes through the same hooks with the relation's SQL rendering.
     assert agent.table("secret.salaries").fetchall() == [("x", 1.0)]
     assert [r["statement"] for r in decisions(catalog, "statement LIKE '%\"secret\"%'")] == ['SELECT * FROM "secret".salaries']
@@ -157,6 +158,33 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     assert len(decisions(catalog, "mode = 'log_only' AND NOT allowed")) == 4 + 1 + 2 + 1 + 3
     # Both tables were created: log-only refused nothing.
     assert catalog.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('u', 'v')").fetchone() == (2,)
+
+
+def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
+    # A parameterized statement is authorized after the engine binds, so the engine's own bind reaches the
+    # replacement gate first. With a file that does not exist the bind then fails before PostBind: the gate is
+    # the only place the reader can be recorded, and it must be, in both modes, with the same record.
+    enable(catalog)
+    sql = "SELECT * FROM '/nonexistent/review52.parquet' WHERE x = ?"
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute(sql, [1])
+    catalog.execute("SET gatekeeper_log_only = true")
+    strict, relaxed = outcome_with(agent, sql, [1]), outcome_with(catalog.cursor(), sql, [1])
+    assert strict == relaxed and strict[:2] == ("error", "IOException"), (strict, relaxed)
+    [enforced, logged] = decisions(catalog)
+    assert (enforced["mode"], logged["mode"]) == ("enforce", "log_only")
+    for column in ["boundary", "code", "violations", "statement", "policy_hash"]:
+        assert enforced[column] == logged[column], column
+    assert logged["boundary"] == "replacement_scan" and logged["violations"][0]["function_name"] == "read_parquet"
+    assert logged["statement"] == sql
+    # The same through Prepare(): the gate decides the bind outside any statement (no text is available), the
+    # failed bind runs no pre-screen, and the mark it left does not leak into the next Prepare().
+    with pytest.raises(duckdb.IOException):
+        agent.executemany(sql, [[1]])
+    agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0]])
+    found = decisions(catalog, "mode = 'log_only'")[1:]
+    assert [(r["boundary"], r["statement"]) for r in found] == [("replacement_scan", None), ("prepare", None),
+                                                                 ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
 
 
 def test_prepared_statements_are_recorded_when_prepared_and_when_executed(catalog, agent):

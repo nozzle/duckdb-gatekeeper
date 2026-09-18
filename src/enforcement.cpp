@@ -63,13 +63,14 @@ static bool ReadPolicy(ClientContext &context, gatekeeper::Policy &policy, gatek
 // execute the statement as it would on an unenforced connection. The record already stands, so the hooks the
 // engine then reaches for that statement do not decide it again.
 struct EnforcementState : ClientContextState {
-	gatekeeper::Policy policy; // one snapshot for the whole statement
-	gatekeeper::Result result; // the decision in progress
-	bool log_only = false;     // this statement is recorded and never refused
-	bool in_statement = false; // QueryBegin has run: the snapshots describe the statement in progress
-	bool decided = false;      // the statement's record has been written
-	bool admitted = false;     // text passed the binding boundary
-	bool authorized = false;   // private bind with catalog authorization passed
+	gatekeeper::Policy policy;    // one snapshot for the whole statement
+	gatekeeper::Result result;    // the decision in progress
+	bool log_only = false;        // this statement is recorded and never refused
+	bool in_statement = false;    // QueryBegin has run: the snapshots describe the statement in progress
+	bool decided = false;         // the statement's record has been written
+	bool prepare_decided = false; // a Prepare() outside any statement was decided at the replacement gate
+	bool admitted = false;        // text passed the binding boundary
+	bool authorized = false;      // private bind with catalog authorization passed
 	gatekeeper::BindingPolicy binding;
 	unique_ptr<SQLStatement> statement; // admitted statement awaiting parameter values
 
@@ -79,6 +80,7 @@ struct EnforcementState : ClientContextState {
 		log_only = false;
 		in_statement = false;
 		decided = false;
+		prepare_decided = false;
 		admitted = false;
 		authorized = false;
 		binding = gatekeeper::BindingPolicy();
@@ -144,6 +146,18 @@ struct EnforcementState : ClientContextState {
 			Authorize(context, nullptr);
 	}
 	void QueryEnd(ClientContext &, optional_ptr<ErrorData>) override { Reset(); }
+	// A Prepare() that failed to bind after the gate decided it runs no pre-screen to consume the mark. An
+	// auto-committed Prepare() ends its own transaction, which clears it; inside an explicit transaction the
+	// next statement's QueryBegin does.
+	void TransactionBegin(MetaTransaction &, ClientContext &) override { prepare_decided = false; }
+	void TransactionCommit(MetaTransaction &, ClientContext &) override {
+		if (!in_statement)
+			prepare_decided = false;
+	}
+	void TransactionRollback(MetaTransaction &, ClientContext &, optional_ptr<ErrorData>) override {
+		if (!in_statement)
+			prepare_decided = false;
+	}
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
 	                                  RebindQueryInfo) override {
 		if (!admitted && !decided) {
@@ -162,13 +176,30 @@ static shared_ptr<EnforcementState> StateOf(ClientContext &context) {
 
 static void Latch(ClientContext &context) { context.registered_state->GetOrCreate<EnforcementState>(STATE_KEY); }
 
-bool IsEnforcing(ClientContext &context) {
+GateMode ReplacementGate(ClientContext &context) {
 	auto state = StateOf(context);
 	if (!state)
-		return false;
+		return GateMode::OPEN;
 	// Inside a statement the snapshot QueryBegin took governs every check of it; a Prepare() bind outside any
 	// statement reads the setting as it stands.
-	return state->in_statement ? !state->log_only : !LogOnlySetting(context);
+	if (state->in_statement) {
+		if (!state->log_only)
+			return GateMode::ENFORCE;
+		return state->decided ? GateMode::OPEN : GateMode::LOG_ONLY;
+	}
+	if (!LogOnlySetting(context))
+		return GateMode::ENFORCE;
+	return state->prepare_decided ? GateMode::OPEN : GateMode::LOG_ONLY;
+}
+
+void MarkGateDecided(ClientContext &context) {
+	auto state = StateOf(context);
+	if (!state)
+		return;
+	if (state->in_statement)
+		state->decided = true;
+	else
+		state->prepare_decided = true;
 }
 
 optional_ptr<const string> AdmittedQuery(ClientContext &context) {
@@ -194,6 +225,11 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	if (!state->in_statement) {
 		// Prepare(): no query is active and the text has not been seen. This plan cannot execute before
 		// OnExecutePrepared forces a rebind inside a query, so only pre-screen it here.
+		if (state->prepare_decided) {
+			// The replacement gate already recorded this bind's denial (log-only) and let it continue.
+			state->prepare_decided = false;
+			return;
+		}
 		auto mode = ModeFor(LogOnlySetting(context));
 		gatekeeper::Policy policy;
 		gatekeeper::Result result;

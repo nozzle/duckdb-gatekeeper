@@ -271,8 +271,13 @@ Semantics that follow from "the same decision, without the refusal":
   and latency alike, is what enforcement will do.
 - Exactly one record per statement, at the boundary that decided it, in both modes. Once a
   log-only statement has been decided, the hooks the engine reaches while binding and
-  executing it anyway do not decide it again; the replacement-scan gate lets the engine's own
-  bind through because the private bind has already recorded the reader.
+  executing it anyway do not decide it again. The replacement-scan gate lets the engine's own
+  bind through for a statement already decided; for one not yet decided (parameters defer
+  authorization to the engine's bind, and a `Prepare()` has no statement in progress) the gate
+  records the denied reader itself, under the statement's snapshotted mode and policy, marks
+  the statement decided, and then lets the bind continue. That ordering matters: a reader
+  whose file does not exist fails the bind before any later hook runs, and the gate's record is
+  the only trace of the would-be denial.
 - Nothing from the private path surfaces. An engine error raised while Gatekeeper binds
   privately propagates on an enforcing connection (DuckDB's own message is the outcome); in
   log-only mode it is recorded as `gatekeeper_validate` reports it (`code = 'binding'`) and the
