@@ -242,9 +242,10 @@ under residuals.
     (an upstream `FIXME`), it is created before the pivoting `SELECT` is checked, and it stays
     when that `SELECT` is denied. It holds the distinct values of a column the policy let the
     caller read, in the caller's own temporary catalog, and nothing else can reach it.
-  - The audit trail is one record per rewritten statement, each on DuckDB's rewritten text
-    rather than the caller's. Enforcement stops at the first denied record; log-only mode
-    records every statement.
+  - On an enforced connection the audit trail is one record per rewritten statement, each on
+    DuckDB's rewritten text rather than the caller's. Enforcement stops at the first denied
+    record; log-only mode records every statement. `gatekeeper_validate` writes its usual one
+    `validate` record, on the caller's text, carrying the decision described above.
   - Each rewritten statement is a statement to the engine, so each reads its own policy
     snapshot at `QueryBegin`, exactly as the statements of `SELECT 1; SELECT 2` do. A policy
     change that lands between the enum's `CREATE` and the pivoting `SELECT` governs the
