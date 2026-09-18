@@ -7,8 +7,9 @@ require gatekeeper
 statement ok
 CREATE TABLE t(x INTEGER);
 
-# Statement types are an allowlist: SELECT only. Everything else returns `unsupported` with a
-# `statement` violation before binding, so nothing referenced below needs to exist or be reachable.
+# Statement types are an allowlist: SELECT, plus the temporary enum type DuckDB's own parser derives from a
+# dynamic PIVOT. Everything else returns `unsupported` with a `statement` violation before binding, so nothing
+# referenced below needs to exist or be reachable.
 
 query TT
 SELECT code, violations[1].rule FROM gatekeeper_validate('INSERT INTO t VALUES (1)');
@@ -240,8 +241,40 @@ SELECT code, violations[1].rule FROM gatekeeper_validate('ROLLBACK');
 ----
 unsupported	statement
 
+# A dynamic PIVOT is the statements DuckDB rewrites it into: temporary enum types defined by SELECTs the policy
+# allows, then the SELECT that names them. Only that exact rewrite is admitted; temporary DDL is not.
+query I
+SELECT allowed FROM gatekeeper_validate('PIVOT t ON x USING sum(x)');
+----
+true
+
+query I
+SELECT allowed FROM gatekeeper_validate('CREATE OR REPLACE TEMP TYPE "__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" AS ENUM (SELECT DISTINCT CAST(x AS VARCHAR) FROM t WHERE (x IS NOT NULL) ORDER BY 1 ASC)');
+----
+true
+
 query TT
-SELECT code, violations[1].rule FROM gatekeeper_validate('PIVOT t ON x USING sum(x)');
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE OR REPLACE TEMP TYPE "__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" AS ENUM (''a'', ''b'')');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE OR REPLACE TEMP TYPE mood AS ENUM (SELECT DISTINCT x FROM t)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE TEMP TYPE "__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" AS ENUM (SELECT DISTINCT x FROM t)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE OR REPLACE TYPE "__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" AS ENUM (SELECT DISTINCT x FROM t)');
+----
+unsupported	statement
+
+query TT
+SELECT code, violations[1].rule FROM gatekeeper_validate('CREATE OR REPLACE TEMP TYPE main."__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" AS ENUM (SELECT DISTINCT x FROM t)');
 ----
 unsupported	statement
 

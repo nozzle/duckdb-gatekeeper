@@ -9,7 +9,7 @@ DuckDB itself refuses to run anything the policy denies (`CALL gatekeeper_enforc
 | --- | --- |
 | **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
 | **Function ACL** | Only the functions you allow, starting from 953 reviewed defaults, with exact-name allow and block lists. |
-| **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
+| **Read-only, no introspection** | `SELECT` statements only (including `PIVOT`, whose dynamic form DuckDB itself rewrites into a temporary enum type plus a `SELECT`). `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
 Every validation decision comes back as one row of named columns with structured diagnostics;
@@ -615,6 +615,12 @@ SET lock_configuration = true;
   passes the execution check.
 - **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
   are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
+- **Dynamic `PIVOT`** (`PIVOT t ON col USING sum(x)`, with no `IN` list) is rewritten by DuckDB's
+  parser into a temporary enum type built from `SELECT DISTINCT col FROM t` followed by the
+  `SELECT` that pivots on it, and the engine runs each as its own statement. Both paths admit
+  exactly that rewrite: the enum's `SELECT` and the pivoting `SELECT` each pass the same checks
+  as any other, in the engine's order, and `gatekeeper_validate` creates nothing. Any other
+  `CREATE TYPE` remains `unsupported`.
 - **`gatekeeper_validate` on the enforced connection**, when the policy allows it
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
   before they run the statement.
@@ -672,6 +678,11 @@ execute. A failure at any step raises; nothing executes.
   values) must be literals or parameters; `range(1+2)` is rejected. The one exception is a
   **correlated** call to `unnest`, `range`, or `generate_series`, whose arguments DuckDB
   evaluates per row: `FROM t, unnest(list_transform(t.arr, lambda x: x + 1))` is accepted.
+- A dynamic `PIVOT` produces as many columns as the data has distinct values, so
+  `gatekeeper_validate` binds the pivoting `SELECT` against placeholder values (one per plan
+  shape DuckDB chooses between). Text whose binding depends on that column count, such as a
+  column alias list or a set operation over the pivot, can bind differently at execution.
+  The enforced connection binds the real type and is exact.
 - File-shaped catalog names such as `"data.parquet"` use ordinary table policy when they
   resolve to a catalog object. Unclaimed names return binding errors.
 - Function policies apply by name, so blocking a table function also blocks a scalar

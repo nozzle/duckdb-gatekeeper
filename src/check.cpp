@@ -7,13 +7,21 @@
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_create.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "enforcement.hpp"
 #include "engine_errors.hpp"
@@ -24,8 +32,98 @@
 namespace duckdb {
 using namespace duckdb_yyjson;
 
-TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-                    const string &sql, const gatekeeper::Limits &limits) {
+// A dynamic PIVOT (one whose IN list is left to the data) is the one read-only text DuckDB's parser rewrites
+// into more than a SELECT (Transformer::CreatePivotStatement): for each such column it emits
+//   CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" AS ENUM (SELECT DISTINCT CAST(col AS VARCHAR) FROM source ...)
+// and then the SELECT with that type in the IN list. Gatekeeper admits exactly that CREATE, by shape, so the
+// enum is created only from a SELECT the policy allows and only ever in the connection's temporary catalog. The
+// shape is the parser's, not a grant of temporary DDL: any other name, catalog, schema, conflict clause, or an
+// enum spelled out as literals is an unsupported statement.
+static bool PivotEnumName(const string &name) {
+	static const string prefix = "__pivot_enum_";
+	static const string uuid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+	if (name.size() != prefix.size() + uuid.size() || name.compare(0, prefix.size(), prefix) != 0)
+		return false;
+	for (size_t i = 0; i < uuid.size(); i++) {
+		auto c = name[prefix.size() + i];
+		if (uuid[i] == '-' ? c != '-' : !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+			return false;
+	}
+	return true;
+}
+
+static bool PivotEnumInfo(const CreateInfo &info) {
+	if (info.type != CatalogType::TYPE_ENTRY || !info.temporary || info.internal ||
+	    info.on_conflict != OnCreateConflict::REPLACE_ON_CONFLICT)
+		return false;
+	auto &type = info.Cast<CreateTypeInfo>();
+	return type.type.id() == LogicalTypeId::INVALID && PivotEnumName(type.name);
+}
+
+// The statement as parsed from text: unqualified, with the SELECT that defines the enum still attached.
+static bool PivotEnumStatement(const SQLStatement &statement) {
+	if (statement.type != StatementType::CREATE_STATEMENT)
+		return false;
+	auto &info = *statement.Cast<CreateStatement>().info;
+	if (!PivotEnumInfo(info) || !info.catalog.empty() || !info.schema.empty())
+		return false;
+	auto &query = info.Cast<CreateTypeInfo>().query;
+	return query && query->type == StatementType::SELECT_STATEMENT;
+}
+
+// The statement as bound: the binder has resolved the temporary catalog and moved the SELECT into the plan as
+// the root's single child.
+static bool PivotEnumPlan(const LogicalOperator &plan) {
+	if (plan.type != LogicalOperatorType::LOGICAL_CREATE_TYPE || plan.children.size() != 1)
+		return false;
+	auto &info = plan.Cast<LogicalCreate>().info;
+	return info && PivotEnumInfo(*info) && info->catalog == TEMP_CATALOG && !info->Cast<CreateTypeInfo>().query;
+}
+
+static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Policy &policy,
+                                    const gatekeeper::Policy &ceiling, const string &sql,
+                                    const gatekeeper::Limits &limits, bool nested);
+
+// gatekeeper_validate on a dynamic PIVOT decides the statements the engine will run for it, each on the text
+// the engine will run (the parser stamps every rewritten statement with its own text, which is what an
+// enforced connection's hooks then see), in the engine's order, stopping at the first denial. Only the parser
+// produces a batch, and only in this shape: enum types followed by the SELECT that names them.
+static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy &policy,
+                                const gatekeeper::Policy &ceiling, const MultiStatement &batch,
+                                const gatekeeper::Limits &limits) {
+	TextCheck check;
+	auto &statements = batch.statements;
+	auto unsupported = [&] {
+		check.result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+		check.units.clear();
+		return std::move(check);
+	};
+	if (statements.size() < 2 || statements.back()->type != StatementType::SELECT_STATEMENT)
+		return unsupported();
+	gatekeeper::Names enums;
+	for (size_t i = 0; i + 1 < statements.size(); i++) {
+		if (!PivotEnumStatement(*statements[i]))
+			return unsupported();
+		enums.insert(statements[i]->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().name);
+	}
+	for (auto &statement : statements) {
+		auto part = CheckStatementText(context, policy, ceiling, statement->query, limits, true);
+		if (!part.result.allowed) {
+			check.result = std::move(part.result);
+			return check;
+		}
+		if (part.units.size() != 1)
+			return unsupported();
+		check.units.push_back(std::move(part.units[0]));
+	}
+	check.units.back().pivot_enums = std::move(enums);
+	check.result = {true, "ok"};
+	return check;
+}
+
+static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Policy &policy,
+                                    const gatekeeper::Policy &ceiling, const string &sql,
+                                    const gatekeeper::Limits &limits, bool nested) {
 	TextCheck check;
 	if (sql.find('\0') != string::npos)
 		throw InvalidInputException("SQL contains a NUL byte");
@@ -41,6 +139,19 @@ TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, co
 		check.result = {false, "forbidden", "", "", {{"limit", "statement count exceeds fixed limit"}}};
 		return check;
 	}
+	auto &statement = parser.statements[0]; // MAX_STATEMENTS is 1
+	if (statement->type == StatementType::MULTI_STATEMENT && !nested)
+		return CheckBatchText(context, policy, ceiling, statement->Cast<MultiStatement>(), limits);
+	// The SELECT the statement stands for: itself, or the one that defines a dynamic PIVOT's enum type.
+	optional_ptr<const SelectStatement> select;
+	if (statement->type == StatementType::SELECT_STATEMENT)
+		select = &statement->Cast<SelectStatement>();
+	else if (PivotEnumStatement(*statement))
+		select = &statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().query->Cast<SelectStatement>();
+	if (!select) {
+		check.result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+		return check;
+	}
 	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
 	if (!doc)
 		throw std::bad_alloc();
@@ -51,15 +162,8 @@ TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, co
 	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
 	SerializationOptions serialization_options;
 	serialization_options.serialization_compatibility = SerializationCompatibility::Latest();
-	for (auto &statement : parser.statements) {
-		if (statement->type != StatementType::SELECT_STATEMENT) {
-			check.result = {
-			    false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
-			return check;
-		}
-		yyjson_mut_arr_append(statements, JsonSerializer::Serialize(statement->Cast<SelectStatement>(), doc.get(), true,
-		                                                            true, true, serialization_options));
-	}
+	yyjson_mut_arr_append(statements,
+	                      JsonSerializer::Serialize(*select, doc.get(), true, true, true, serialization_options));
 	unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
 	                                                       yyjson_doc_free);
 	if (!ast)
@@ -72,10 +176,18 @@ TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, co
 		check.result = {false, "forbidden", "", "", {{"limit", "serialized AST exceeds fixed size limit"}}};
 		return check;
 	}
-	check.result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &check.binding, &ceiling, limits);
-	if (check.result.allowed)
-		check.statements = std::move(parser.statements);
+	TextCheck::Unit unit;
+	check.result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &unit.binding, &ceiling, limits);
+	if (check.result.allowed) {
+		unit.statement = std::move(statement);
+		check.units.push_back(std::move(unit));
+	}
 	return check;
+}
+
+TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
+                    const string &sql, const gatekeeper::Limits &limits) {
+	return CheckStatementText(context, policy, ceiling, sql, limits, false);
 }
 
 // Plan operators a bound SELECT can contain before the optimizer runs, reviewed against
@@ -128,15 +240,19 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 		result.violations.emplace("statement", message);
 		throw PermissionException("only supported read statements are permitted");
 	};
+	// A dynamic PIVOT's enum type: the engine reports it as a statement that creates a temporary object and
+	// returns nothing, over the plan of the SELECT that defines it. Its temporary catalog is not a modified
+	// database; nothing else may be one either.
+	bool pivot_enum = PivotEnumPlan(plan);
 	if (!properties.modified_databases.empty())
 		deny("statement modifies a database");
-	if (properties.return_type != StatementReturnType::QUERY_RESULT)
+	if (properties.return_type != (pivot_enum ? StatementReturnType::NOTHING : StatementReturnType::QUERY_RESULT))
 		deny("statement does not return a query result");
 	vector<LogicalOperator *> operators{&plan};
 	while (!operators.empty()) {
 		auto op = operators.back();
 		operators.pop_back();
-		if (!ReadOperator(op->type))
+		if (!ReadOperator(op->type) && !(pivot_enum && op == &plan))
 			deny("unsupported plan operator: " + LogicalOperatorToString(op->type));
 		// Base tables the plan actually scans are authorized by resolved identity here as well as in the
 		// private bind's catalog callback, so a plan that did not come from that bind (a relation whose SQL
@@ -286,9 +402,11 @@ void InstallReplacementScan(DBConfig &config) {
 	config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
 }
 
-void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               SQLStatement &statement, const gatekeeper::BindingPolicy &binding,
-               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result) {
+static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy &policy,
+                               const gatekeeper::Policy &ceiling, SQLStatement &statement,
+                               const gatekeeper::BindingPolicy &binding,
+                               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
+                               gatekeeper::Result &result) {
 	case_insensitive_map_t<BoundParameterData> parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
@@ -324,6 +442,74 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 			                          entry.first);
 	if (!result.violations.empty())
 		throw PermissionException("unauthorized replacement scan");
+}
+
+// The IN-list sizes under which the final SELECT of a dynamic PIVOT is bound when the enum types it names do
+// not exist yet. Binder::BindPivot plans a PIVOT two ways by the number of values: filtered aggregates up to
+// pivot_filter_threshold, and above it a LIST aggregate (with concat for several columns) under a PIVOT
+// operator. The values themselves only name output columns, so one bind of each shape authorizes every plan the
+// engine can produce for the statement whatever the data holds; a plan the data selects at execution has then
+// been checked here. pivot_limit bounds the total, and a threshold at or beyond it leaves the engine only the
+// first shape.
+static vector<idx_t> PivotShapes(ClientContext &context) {
+	auto threshold = Settings::Get<PivotFilterThresholdSetting>(context);
+	auto limit = Settings::Get<PivotLimitSetting>(context);
+	vector<idx_t> shapes{1};
+	if (threshold + 1 > 1 && threshold + 1 < limit)
+		shapes.push_back(threshold + 1);
+	return shapes;
+}
+
+// Replaces every reference to one of the enum types with an IN list of `count` placeholder values on the first
+// such column of each PIVOT and one on the rest, so the product per PIVOT is `count`. Dynamic columns can sit in
+// any PIVOT of the statement: the FROM clause, a subquery, a CTE, a set operand, or a scalar subquery.
+static void SubstitutePivotEnums(QueryNode &node, const gatekeeper::Names &enums, idx_t count) {
+	std::function<void(ParsedExpression &)> expression = [&](ParsedExpression &expr) {
+		if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY)
+			SubstitutePivotEnums(*expr.Cast<SubqueryExpression>().subquery->node, enums, count);
+		ParsedExpressionIterator::EnumerateChildren(expr, expression);
+	};
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node,
+	    [&](unique_ptr<ParsedExpression> &child) {
+		    if (child)
+			    expression(*child);
+	    },
+	    [&](TableRef &ref) {
+		    if (ref.type != TableReferenceType::PIVOT)
+			    return;
+		    bool first = true;
+		    for (auto &column : ref.Cast<PivotRef>().pivots) {
+			    if (column.pivot_enum.empty() || !enums.count(column.pivot_enum))
+				    continue;
+			    column.pivot_enum.clear();
+			    for (idx_t i = 0; i < (first ? count : 1); i++) {
+				    PivotColumnEntry entry;
+				    entry.alias = std::to_string(i);
+				    for (size_t n = 0; n < column.pivot_expressions.size(); n++)
+					    entry.values.emplace_back(entry.alias);
+				    column.entries.push_back(std::move(entry));
+			    }
+			    first = false;
+		    }
+	    });
+}
+
+void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
+               TextCheck::Unit &unit, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
+               gatekeeper::Result &result) {
+	if (unit.pivot_enums.empty()) {
+		if (unit.statement->type == StatementType::SELECT_STATEMENT)
+			return AuthorizeStatement(context, policy, ceiling, *unit.statement, unit.binding, parameters, result);
+		// Binder::Bind moves a CreateStatement's definition into the plan; keep the admitted statement intact.
+		auto copy = unit.statement->Copy();
+		return AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
+	}
+	for (auto count : PivotShapes(context)) {
+		auto copy = unit.statement->Copy();
+		SubstitutePivotEnums(*copy->Cast<SelectStatement>().node, unit.pivot_enums, count);
+		AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
+	}
 }
 
 bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
@@ -377,12 +563,16 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 	bool binding = false;
 	try {
 		auto text = CheckText(context, policy, ceiling, sql, limits);
+		binding = true;
+		// The engine runs a batch in order and stops at the first statement that fails, so the statements
+		// admitted before a denied one bind first: a bind that fails among them is the decision, as it would
+		// be the engine's error, and only if they all pass is the later text denial reported.
+		for (auto &unit : text.units)
+			Authorize(context, policy, ceiling, unit, nullptr, result);
 		if (!text.result.allowed)
 			return text.result;
-		result = std::move(text.result);
-		binding = true;
-		for (auto &statement : text.statements)
-			Authorize(context, policy, ceiling, *statement, text.binding, nullptr, result);
+		result.allowed = true;
+		result.code = "ok";
 		return result;
 	} catch (const std::exception &error) {
 		if (!DescribeError(error, binding, result))

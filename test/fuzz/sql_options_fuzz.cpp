@@ -231,8 +231,8 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 		Fail("log-only: cannot read the records");
 	auto count = records->GetValue(0, 0).GetValue<int64_t>();
 	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
-	// dynamic PIVOT into several statements (several records, the first being the decision on the text) or a
-	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text).
+	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text). A dynamic
+	// PIVOT is rewritten into several statements, which PendingQuery refuses as a batch before any hook runs.
 	if (pragma_rewrite) {
 		if (connection.Query("SET gatekeeper_log_only = false")->HasError())
 			Fail("log-only: cannot reset the switch");
@@ -251,9 +251,17 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 			Fail("log-only: the record disagrees with gatekeeper_validate");
 	}
 	if (count > 1) {
-		auto first = connection.Query("SELECT " + same + from + " ORDER BY timestamp, context_id LIMIT 1");
+		// A rewritten batch leaves one record per statement it ran, and gatekeeper_validate decides the batch in
+		// that order: it says what the first denied record says, or allowed when every record is.
+		auto first = connection.Query("SELECT " + same + from + (allowed ? "" : " AND NOT allowed") +
+		                              " ORDER BY timestamp, context_id LIMIT 1");
 		if (first->HasError() || !first->GetValue(0, 0).GetValue<bool>())
-			Fail("log-only: the first record of a rewritten batch disagrees with gatekeeper_validate");
+			Fail("log-only: the deciding record of a rewritten batch disagrees with gatekeeper_validate");
+		if (allowed) {
+			auto every = connection.Query("SELECT bool_and(" + same + ")" + from);
+			if (every->HasError() || !every->GetValue(0, 0).GetValue<bool>())
+				Fail("log-only: a record of an allowed batch disagrees with gatekeeper_validate");
+		}
 	}
 	if (connection.Query("SET gatekeeper_log_only = false")->HasError())
 		Fail("log-only: cannot reset the switch");

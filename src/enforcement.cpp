@@ -71,8 +71,7 @@ struct EnforcementState : ClientContextState {
 	bool prepare_decided = false; // a Prepare() outside any statement was decided at the replacement gate
 	bool admitted = false;        // text passed the binding boundary
 	bool authorized = false;      // private bind with catalog authorization passed
-	gatekeeper::BindingPolicy binding;
-	unique_ptr<SQLStatement> statement; // admitted statement awaiting parameter values
+	TextCheck::Unit unit;         // the admitted statement, awaiting parameter values when it has any
 
 	void Reset() {
 		policy = gatekeeper::Policy();
@@ -83,8 +82,7 @@ struct EnforcementState : ClientContextState {
 		prepare_decided = false;
 		admitted = false;
 		authorized = false;
-		binding = gatekeeper::BindingPolicy();
-		statement.reset();
+		unit = TextCheck::Unit();
 	}
 	// The statement's record, and in ENFORCE mode its refusal. Marked before Decide can throw.
 	void Record(ClientContext &context, Boundary boundary, optional_ptr<const gatekeeper::Policy> in_force,
@@ -99,7 +97,7 @@ struct EnforcementState : ClientContextState {
 	// location a hook cannot attach, or runs the statement if it binds after all.
 	void Authorize(ClientContext &context, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters) {
 		try {
-			duckdb::Authorize(context, policy, policy, *statement, binding, parameters, result);
+			duckdb::Authorize(context, policy, policy, unit, parameters, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
 			Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
@@ -139,10 +137,16 @@ struct EnforcementState : ClientContextState {
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
+		// The engine presents one statement at a time here: a dynamic PIVOT arrives as the statements its
+		// preprocessor rewrote it into, each with its own text, never as the batch. Fail closed on anything else.
+		if (text.units.size() != 1 || !text.units[0].pivot_enums.empty()) {
+			result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+			Record(context, Boundary::BINDING, &policy, &sql);
+			return;
+		}
 		admitted = true;
-		binding = std::move(text.binding);
-		statement = std::move(text.statements[0]); // MAX_STATEMENTS is 1
-		if (statement->named_param_map.empty())
+		unit = std::move(text.units[0]);
+		if (unit.statement->named_param_map.empty())
 			Authorize(context, nullptr);
 	}
 	void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) override {
@@ -153,7 +157,7 @@ struct EnforcementState : ClientContextState {
 			// engine has already closed the query, so the record carries no query id.
 			if (DescribeError(*error, true, result)) {
 				MarkDenied(result);
-				Record(context, Boundary::AUTHORIZE, &policy, statement ? &statement->query : nullptr);
+				Record(context, Boundary::AUTHORIZE, &policy, unit.statement ? &unit.statement->query : nullptr);
 			}
 		}
 		Reset();
@@ -297,8 +301,8 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 			return;
 	}
 	try {
-		CheckPlan(state->policy, state->policy, state->binding, input.binder.GetStatementProperties(), *statement.plan,
-		          state->result);
+		CheckPlan(state->policy, state->policy, state->unit.binding, input.binder.GetStatementProperties(),
+		          *statement.plan, state->result);
 	} catch (const PermissionException &) {
 		MarkDenied(state->result);
 	}
