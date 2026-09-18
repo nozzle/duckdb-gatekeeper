@@ -224,11 +224,15 @@ static void SetEnforcement(ClientContext &context, SetScope scope, Value &value)
 	if (text != "off" && text != "new_connections" && text != "all")
 		throw InvalidInputException("gatekeeper_enforcement must be 'off', 'new_connections', or 'all'");
 	value = Value(text);
+	// Record first: a log sink that refuses the entry fails this statement with nothing changed, rather than
+	// leaving a published mode without its record or, for 'all', without its sweep. Nothing after the record
+	// can fail. SetPolicy and gatekeeper_configure already have this shape: they record inside the callback
+	// and the engine stores the value only after it returns.
+	LogSettingChange(context, "enforcement_changed", value);
 	// Publish the mode now rather than when PhysicalSet stores it after this callback returns: a
 	// connection that opens in between must already see the new mode in OnConnectionOpened. The later
 	// store writes the same value again.
 	DBConfig::GetConfig(context).SetOption(ENFORCEMENT_SETTING, value);
-	LogSettingChange(context, "enforcement_changed", value);
 	if (text == "all") {
 		// Every connection open now, including the one issuing this SET. A connection that opened before
 		// this snapshot is in it; one that opens after it was latched by OnConnectionOpened because the

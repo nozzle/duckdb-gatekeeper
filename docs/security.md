@@ -319,7 +319,9 @@ Properties that make the record trustworthy as evidence:
   callback and writes no entry, but the next decision's `policy_hash` changes, so a policy that
   was altered that way is still visible.
 - Log writes are not guarded: if the configured storage fails (an unwritable file), the
-  statement fails with that error rather than executing unrecorded.
+  statement fails with that error rather than executing unrecorded, and a setting change whose
+  record cannot be written is not applied (the record is written before the setting is
+  published or any connection is latched).
 
 Under `SET gatekeeper_enforcement = 'all'` no in-process connection can read `duckdb_logs`, so
 use `file` or `stdout` storage. The record names rules, objects, functions, and the caller's
