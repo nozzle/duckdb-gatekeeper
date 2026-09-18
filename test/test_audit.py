@@ -213,10 +213,14 @@ def test_statement_text_is_capped_and_kept_parseable(db):
     validate(db, long_sql)
     # A NUL byte would truncate the record on the way into storage; it is replaced so the record still parses.
     db.execute("SELECT * FROM gatekeeper_validate('SELECT 1' || chr(0) || '2')").fetchall()
-    capped, nul = decisions(db)
+    # The cap bounds the stored bytes after NUL replacement: 70,000 NULs would otherwise store 210,000 bytes.
+    db.execute("SELECT * FROM gatekeeper_validate('SELECT ' || chr(39) || repeat(chr(0), 70000) || chr(39))").fetchall()
+    capped, nul, nuls = decisions(db)
     assert capped["statement_length"] == len(long_sql) and len(capped["statement"]) == 65536
     assert long_sql.startswith(capped["statement"])
     assert nul["code"] == "invalid_input" and nul["statement"] == "SELECT 1\ufffd2" and nul["statement_length"] == 10
+    assert nuls["statement_length"] == 70009 and len(nuls["statement"].encode()) <= 65536
+    assert nuls["statement"].startswith("SELECT '\ufffd") and set(nuls["statement"][8:]) == {"\ufffd"}
 
 
 def test_multibyte_text_is_cut_on_a_character_boundary(db):

@@ -88,15 +88,17 @@ static Value PolicyHash(optional_ptr<const gatekeeper::Policy> policy) {
 	return Value(HashText(gatekeeper::PolicyValue(*policy).ToString()));
 }
 
-// Statement text as the record stores it: cut at the cap on a UTF-8 boundary, with NUL bytes (which would
-// truncate the message on the way into storage) replaced so every record stays parseable.
+// Statement text as the record stores it: NUL bytes (which would truncate the message on the way into storage)
+// replaced first so every record stays parseable, then cut at the cap on a UTF-8 boundary, so the stored text
+// never exceeds MAX_LOGGED_STATEMENT bytes whatever the input contained.
 static Value StatementText(const string &statement) {
-	auto length = MinValue<idx_t>(statement.size(), MAX_LOGGED_STATEMENT);
-	while (length > 0 && length < statement.size() && (static_cast<uint8_t>(statement[length]) & 0xC0) == 0x80)
-		length--;
-	string text = statement.substr(0, length);
+	string text = statement;
 	for (size_t at = text.find('\0'); at != string::npos; at = text.find('\0', at + 3))
 		text.replace(at, 1, "\xEF\xBF\xBD");
+	auto length = MinValue<idx_t>(text.size(), MAX_LOGGED_STATEMENT);
+	while (length > 0 && length < text.size() && (static_cast<uint8_t>(text[length]) & 0xC0) == 0x80)
+		length--;
+	text.resize(length);
 	return Value(std::move(text));
 }
 
