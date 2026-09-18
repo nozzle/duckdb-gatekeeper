@@ -76,7 +76,9 @@ try {
       check('bind-time computation denied', !d.allowed && d.violations.some(v => v.rule === 'bind_time_expression'));
       await con.query('CREATE VIEW unnested AS SELECT unnest([1,2]) x');
       d = await decision('SELECT * FROM unnested', ", blocked_functions := ['unnest']");
-      check('UNNEST in trusted expansion blocked', d.code === 'forbidden');
+      check('UNNEST in trusted expansion is the view\'s, not blocked', d.allowed && d.functions.some(f => f.name === 'unnest'));
+      d = await decision('SELECT unnest([3]) FROM unnested', ", blocked_functions := ['unnest']");
+      check('caller UNNEST next to the view blocked', d.code === 'forbidden');
       d = await decision("SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')", ", blocked_functions := ['lower']");
       check('lambda collation implementation blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])', ", blocked_functions := ['sum']");
