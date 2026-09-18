@@ -246,6 +246,11 @@ under residuals.
     DuckDB's rewritten text rather than the caller's. Enforcement stops at the first denied
     record; log-only mode records every statement. `gatekeeper_validate` writes its usual one
     `validate` record, on the caller's text, carrying the decision described above.
+  - The fixed text, AST, node, and depth limits apply to each rewritten statement, as an
+    enforced connection applies them to each statement it runs. The expansion itself, one
+    copy of the source per dynamic column, is DuckDB's parser's and happens for every
+    connection before any hook; `gatekeeper_validate` then spends one check and one or two
+    binds per rewritten statement, proportional to what executing the text costs.
   - Each rewritten statement is a statement to the engine, so each reads its own policy
     snapshot at `QueryBegin`, exactly as the statements of `SELECT 1; SELECT 2` do. A policy
     change that lands between the enum's `CREATE` and the pivoting `SELECT` governs the
