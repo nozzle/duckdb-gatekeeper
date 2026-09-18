@@ -191,10 +191,9 @@ source notes and baselines remain independent of build-engine versions. Follow t
   callback and replacement-scan interception, `CheckPlan` is the execution boundary
   (read-only operator allowlist and bound-plan authorization), and `Check` composes them
   into `gatekeeper_validate`'s structured result.
-- `src/enforcement.cpp`: enforced connections. The per-connection latch
+- `src/enforcement.cpp`: enforced connections. The per-connection enforced state
   (`ClientContextState`), the `QueryBegin`/`OnExecutePrepared`/post-bind hooks that run the
-  same decision inside the engine, the `gatekeeper_enforcement` setting and its
-  connection-open callback, `CALL gatekeeper_enforce()`, and posture warnings.
+  same decision inside the engine, `CALL gatekeeper_enforce()`, and posture warnings.
 - `src/audit.cpp`: the audit log. `Decide` is the one place a decision becomes observable:
   it writes the `Gatekeeper` log record (the `gatekeeper_validate` columns plus mode,
   boundary, statement, and policy hash) and throws the denial on an enforced connection.

@@ -21,22 +21,12 @@ CREATE VIEW leak AS SELECT * FROM secret;
 statement ok
 CALL gatekeeper_configure(allowed_tables := [{schema: 'main', 'table': 'reporting_orders'}], blocked_functions := ['md5']);
 
-# The enforcement mode is global-only and takes exactly three spellings.
-
-statement error
-SET gatekeeper_enforcement = 'sometimes';
-----
-gatekeeper_enforcement must be
-
-statement error
-SET SESSION gatekeeper_enforcement = 'off';
-----
-global-only
+# Enforcement is per connection; there is no instance-wide setting to find or flip.
 
 query I
-SELECT current_setting('gatekeeper_enforcement');
+SELECT count(*) FROM duckdb_settings() WHERE name = 'gatekeeper_enforcement';
 ----
-off
+0
 
 # Explaining or preparing the latch does not engage it; only executing it does.
 
@@ -138,11 +128,6 @@ Gatekeeper denied this statement
 
 statement error
 SELECT * FROM gatekeeper_enforce();
-----
-Gatekeeper denied this statement
-
-statement error
-RESET gatekeeper_enforcement;
 ----
 Gatekeeper denied this statement
 

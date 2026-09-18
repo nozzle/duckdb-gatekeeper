@@ -35,9 +35,9 @@ or matching `blocked_tables`; binds a caller-written function outside the allowl
 matching `blocked_functions`; reaches a never-bind function by any route; is not a single
 `SELECT`; or executes, writes, or performs I/O the validator claims it does not. Also in
 scope: any statement executing on an enforced connection that `gatekeeper_validate` would
-deny, any way to release or bypass the enforcement latch from SQL, `gatekeeper_configure`,
-`SET gatekeeper_policy`, or `SET gatekeeper_enforcement` widening the policy or releasing
-enforcement from a connection that should not be able to, and a distributed artifact
+deny, any way to release or bypass enforcement from SQL, `gatekeeper_configure` or
+`SET gatekeeper_policy` widening the policy from a connection that should not be able to, and
+a distributed artifact
 loading into an engine it was not built for.
 
 Out of scope, by design and documented in

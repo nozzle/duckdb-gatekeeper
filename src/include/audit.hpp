@@ -34,7 +34,7 @@ struct DecisionSite {
 // PermissionException with the denial message. Allowed decisions and VALIDATE mode return.
 void Decide(ClientContext &context, const DecisionSite &site, const gatekeeper::Result &result);
 
-// Records a host change to one of Gatekeeper's global settings (event names end in _changed).
+// Records a host change to one of Gatekeeper's global settings (event names end in _changed: policy_changed).
 void LogSettingChange(ClientContext &context, const string &event, const Value &value,
                       optional_ptr<const gatekeeper::Policy> policy = nullptr);
 

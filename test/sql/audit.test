@@ -165,12 +165,12 @@ SELECT code FROM gatekeeper_validate('SELECT * FROM disable_logging()', allowed_
 ----
 forbidden
 
-# A mode change is a record naming the new value.
+# Resetting the policy goes through the same setting callback, so it is recorded like any other change.
 
 statement ok
-SET gatekeeper_enforcement = 'off';
+RESET gatekeeper_policy;
 
-query II
-SELECT event, new_value FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'enforcement_changed';
+query I
+SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'policy_changed';
 ----
-enforcement_changed	off
+2
