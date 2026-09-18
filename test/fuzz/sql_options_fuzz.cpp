@@ -554,6 +554,37 @@ static void CheckReplacementCallbacks() {
 	probe.calls = 0;
 	if (Code(connection, "SELECT * FROM missing_table") != "binding" || probe.calls != 1)
 		std::abort();
+	// Log-only, a parameterized statement reaches the gate on the engine's bind before any private
+	// authorization. The gate records the denied reader and hands back the replacement the callback already
+	// produced, so the callback runs once for that bind; the reader then fails to bind (external access is off),
+	// which is the engine's error and, the statement being decided, no second record.
+	if (connection.Query("SET gatekeeper_log_only = true")->HasError())
+		std::abort();
+	Connection observed(database);
+	if (observed.Query("CALL gatekeeper_enforce()")->HasError())
+		std::abort();
+	probe.calls = 0;
+	vector<Value> values{Value::INTEGER(1)};
+	auto pending = observed.PendingQuery("SELECT * FROM denied_probe WHERE 1 = $1", values);
+	if (!pending->HasError())
+		Fail("log-only probe: the missing reader bound");
+	if (GatekeeperDenial(pending->GetErrorObject()))
+		Fail("log-only probe: a Gatekeeper denial escaped");
+	if (probe.calls != 1) {
+		fprintf(stderr, "probe calls: %d; error: %s\n", probe.calls, pending->GetErrorObject().RawMessage().c_str());
+		Fail("log-only probe: the callback did not run exactly once");
+	}
+	pending.reset();
+	auto recorded = connection.Query("SELECT count(*), any_value(boundary), any_value(code) FROM "
+	                                 "duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only'");
+	if (recorded->HasError() || recorded->GetValue(0, 0).GetValue<int64_t>() != 1 ||
+	    recorded->GetValue(1, 0).GetValue<string>() != "replacement_scan" ||
+	    recorded->GetValue(2, 0).GetValue<string>() != "forbidden") {
+		fprintf(stderr, "%s\n", recorded->ToString().c_str());
+		Fail("log-only probe: expected one replacement_scan/forbidden record");
+	}
+	if (connection.Query("SET gatekeeper_log_only = false")->HasError())
+		std::abort();
 }
 
 static void CheckFuzzLimits(Connection &connection) {

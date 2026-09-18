@@ -570,7 +570,11 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   claims a name, Gatekeeper raises the engine's missing-table error itself rather than
   returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and
   only behind this authorization; DuckDB's autoload retry and `FileExists` probe do not
-  run. If a catalog without transactional DDL finds the object on that lookup, the
+  run. The one exception is a [log-only](#log-only-mode) statement not yet decided when
+  the engine's bind reaches the gate: a claimed replacement is recorded and handed back as
+  produced (still once per lookup), and an unclaimed name returns to DuckDB's loop, which
+  asks the declining callbacks again and then resolves the name exactly as an unenforced
+  connection would. If a catalog without transactional DDL finds the object on that lookup, the
   validation fails closed with a `binding` retry error rather than resuming the loop. The callback is keyed to the validating connection and nested validations
   restore the outer scope, so reentrant host callbacks cannot disable interception.
   Catalog objects with file-shaped names use ordinary object policy; unclaimed

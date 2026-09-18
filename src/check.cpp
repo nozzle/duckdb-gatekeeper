@@ -189,14 +189,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// denial is decided and recorded here, against the statement the connection is executing when there is one.
 	// That statement's policy snapshot is the one every check of it must use; only a Prepare() bind, which has
 	// no statement in progress, reads the global setting itself. In log-only mode the record is the whole
-	// decision: the statement is marked decided so nothing records it again, and the bind continues without
-	// Gatekeeper's callback so the engine resolves the reader exactly as on an unenforced connection.
+	// decision: the statement is marked decided so nothing records it again, and the bind continues with the
+	// replacement the host callback already produced, so the engine resolves the reader exactly as on an
+	// unenforced connection and no callback runs a second time for it.
 	auto mode = gate == GateMode::LOG_ONLY ? DecisionMode::LOG_ONLY : DecisionMode::ENFORCE;
 	auto record = [&](gatekeeper::Result &result, optional_ptr<const gatekeeper::Policy> in_force) {
 		MarkGateDecided(context);
 		Decide(context, {mode, Boundary::REPLACEMENT_SCAN, in_force, AdmittedQuery(context)}, result);
 		if (mode == DecisionMode::LOG_ONLY)
-			return true;                                                // let the engine bind
+			return true; // let the engine bind what the callback produced
 		throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
 	};
 	gatekeeper::Policy prepared;
@@ -216,7 +217,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			}
 		}
 	}
-	// Returns true when the engine should go on to bind the reader itself (log-only); refuses otherwise.
+	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
 			gatekeeper::Result result;
@@ -238,12 +239,12 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			continue;
 		if (replacement->type != TableReferenceType::TABLE_FUNCTION) {
 			if (deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path))
-				return nullptr;
+				return replacement;
 		}
 		auto &function = replacement->Cast<TableFunctionRef>().function;
 		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION) {
 			if (deny("replacement_scan", "replacement scan has no resolvable function: " + path))
-				return nullptr;
+				return replacement;
 		}
 		auto name = function->Cast<FunctionExpression>().function_name;
 		vector<const gatekeeper::Policy *> layers;
@@ -255,7 +256,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			if (!gatekeeper::FunctionAllowed(*layer, name)) {
 				if (deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
 				         gatekeeper::CanonicalFunction(name)))
-					return nullptr;
+					return replacement;
 			}
 		}
 		if (scope) {
@@ -269,7 +270,9 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// The lookup throws for every catalog with transactional DDL. If a catalog without it finds the
 	// entry after all, returning nullptr would still resume DuckDB's callback loop rather than the
 	// later catalog lookup, so fail closed and let the caller retry. A log-only statement has nothing
-	// to protect here: the engine runs its own loop and raises its own error, as on any connection.
+	// to protect here and must resolve exactly as an unenforced connection would (autoload retry and
+	// FileExists probe included), so it returns to the engine's loop; the callbacks that declined above
+	// are asked a second time, which is the one place log-only departs from once-per-lookup.
 	if (mode == DecisionMode::LOG_ONLY)
 		return nullptr;
 	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
