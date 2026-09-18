@@ -576,10 +576,10 @@ static void CheckReplacementCallbacks() {
 	probe.calls = 0;
 	if (Code(connection, "SELECT * FROM missing_table") != "binding" || probe.calls != 1)
 		std::abort();
-	// A replacement reached only through a trusted view body is that view's reader and passes the deny layer;
+	// A replacement reached only through a trusted view body is that view's reader, outside function policy;
 	// the same name in the caller's text is the caller's reader choice and must pass the allowlist, also when
-	// it stands next to the view. Blocks reach the view's reader. The view binds on the unenforced connection,
-	// where the gate is open.
+	// it stands next to the view. A block on the reader reaches the caller's, not the view's. The view binds on
+	// the unenforced connection, where the gate is open.
 	if (connection.Query("CREATE VIEW probe_view AS SELECT * FROM trusted_probe")->HasError())
 		std::abort();
 	if (StrictCode(connection, "SELECT * FROM probe_view") != "ok")
@@ -588,8 +588,19 @@ static void CheckReplacementCallbacks() {
 		Fail("trusted probe: the caller's replacement reader escaped the allowlist");
 	if (StrictCode(connection, "SELECT * FROM probe_view, trusted_probe") != "forbidden")
 		Fail("trusted probe: a caller-written name borrowed the view's exemption");
-	if (StrictCode(connection, "SELECT * FROM probe_view", "range") != "forbidden")
-		Fail("trusted probe: a block did not reach the view's replacement reader");
+	if (StrictCode(connection, "SELECT * FROM probe_view", "range") != "ok")
+		Fail("trusted probe: a block reached the view's replacement reader");
+	if (Code(connection, "SELECT * FROM probe_view, trusted_probe") != "ok")
+		Fail("trusted probe: the admitted caller reader next to the view was refused");
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'], blocked_functions := ['range'])")
+	        ->HasError())
+		std::abort();
+	if (Code(connection, "SELECT * FROM probe_view") != "ok")
+		Fail("trusted probe: a global block reached the view's replacement reader");
+	if (Code(connection, "SELECT * FROM trusted_probe") != "forbidden")
+		Fail("trusted probe: a global block did not reach the caller's replacement reader");
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'])")->HasError())
+		std::abort();
 	if (connection.Query("DROP VIEW probe_view")->HasError())
 		std::abort();
 	// Log-only, a parameterized statement reaches the gate on the engine's bind before any private
@@ -662,7 +673,8 @@ static void CheckForeignAggregateProvenance() {
 				LogicalProjection plan(0, std::move(expressions));
 				gatekeeper::Result result;
 				try {
-					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), plan, result);
+					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
+					              result);
 					std::abort();
 				} catch (const BinderException &error) {
 					if (ErrorData(error).RawMessage().find("not the pinned builtin") == string::npos)

@@ -48,7 +48,9 @@ perform during binding, including the bind DuckDB performs for a prepared statem
 any extension hook runs; scalar functions and query pragmas DuckDB's statement preprocessor
 runs while parsing `PRAGMA` statements, before any extension hook runs (a documented, pinned
 residual, upstream [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875));
-behavior of host-created definitions that shadow default names
+functions and readers that host-created views, macros, and attached tables use inside their
+own definitions, which are outside the function allowlist and `blocked_functions` by design
+(the never-bind list still applies); behavior of host-created definitions that shadow default names
 or otherwise rely on an untrusted party having DDL in the shared catalog; the contents
 of engine `error_message` text; and hosts that leave `autoload_known_extensions`,
 `autoinstall_known_extensions`, or configuration changes enabled on validating or

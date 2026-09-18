@@ -277,7 +277,12 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		}
 		result.allowed = true;
 		try {
-			CheckPlan(policy, policy, gatekeeper::BindingPolicy(), input.binder.GetStatementProperties(),
+			// No text and no private bind on record: nothing in this plan can be attributed to the caller, so
+			// blocks are deferred to execution, which rebinds inside the query. Table policy and the never-bind
+			// list still hold here.
+			gatekeeper::Provenance unattributed;
+			unattributed.unattributed = true;
+			CheckPlan(policy, policy, gatekeeper::BindingPolicy(), unattributed, input.binder.GetStatementProperties(),
 			          *statement.plan, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
@@ -308,8 +313,8 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 			return;
 	}
 	try {
-		CheckPlan(state->policy, state->policy, state->unit.binding, input.binder.GetStatementProperties(),
-		          *statement.plan, state->result);
+		CheckPlan(state->policy, state->policy, state->unit.binding, state->unit.provenance,
+		          input.binder.GetStatementProperties(), *statement.plan, state->result);
 	} catch (const PermissionException &) {
 		MarkDenied(state->result);
 	}

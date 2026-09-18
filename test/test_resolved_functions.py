@@ -50,10 +50,14 @@ def test_variant_indexing_resolves_to_variant_extract(expressions):
     configure(expressions)
 
 
-def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
+def test_blocks_do_not_reach_into_trusted_expansions(expressions, tmp_path):
+    # What a host macro or view uses is that definition's own; blocks govern what the caller writes and the
+    # implementations it binds, and a caller-written use next to the definition is still the caller's.
     configure(expressions, {"allowed_functions": ["trusted_abs"]})
     assert validate(expressions, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
-    assert not validate(expressions, "SELECT trusted_abs(-1)", {
+    assert validate(expressions, "SELECT trusted_abs(-1)", {
+        "allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]})["allowed"]
+    assert not validate(expressions, "SELECT trusted_abs(-1) + abs(-2)", {
         "allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]})["allowed"]
     path = str(tmp_path / "trusted.parquet").replace("'", "''")
     expressions.execute(f"COPY (SELECT 1 x) TO '{path}' (FORMAT PARQUET)")
@@ -61,6 +65,9 @@ def test_blocks_apply_in_trusted_expansions(expressions, tmp_path):
     options = {"allowed_tables": [{"schema": "main", "table": "file_view"}]}
     assert validate(expressions, "SELECT * FROM file_view", options)["allowed"]
     result = validate(expressions, "SELECT * FROM file_view", {**options, "blocked_functions": ["read_parquet"]})
+    assert result["allowed"] and any(f["name"] == "read_parquet" for f in result["functions"]), result
+    result = validate(expressions, f"SELECT * FROM file_view, read_parquet('{path}')",
+                      {**options, "allowed_functions": ["read_parquet"], "blocked_functions": ["read_parquet"]})
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
 
 
@@ -204,9 +211,13 @@ def test_single_arrow_lambda_overlap_and_keyword_workaround(expressions):
 
 @pytest.mark.parametrize("name", ["row_number", "rank", "dense_rank"])
 def test_nonaggregate_windows_in_trusted_view(db, name):
+    # Non-aggregate windows have no catalog entry; the plan walk names them so they are reported and, where the
+    # caller wrote them, blockable. Inside the view they are the view's.
     db.execute(f"CREATE VIEW w AS SELECT {name}() OVER () n")
-    assert validate(db, "SELECT * FROM w")["allowed"]
-    result = validate(db, "SELECT * FROM w", {"blocked_functions": [name]})
+    result = validate(db, "SELECT * FROM w")
+    assert result["allowed"] and any(f["name"] == name and f["type"] == "window" for f in result["functions"])
+    assert validate(db, "SELECT * FROM w", {"blocked_functions": [name]})["allowed"]
+    result = validate(db, f"SELECT {name}() OVER () FROM w", {"blocked_functions": [name]})
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
 
 

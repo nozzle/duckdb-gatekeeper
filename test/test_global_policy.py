@@ -288,11 +288,18 @@ def test_table_ceiling_does_not_restrict_types(db):
 
 
 def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):
+    # A global block reaches what the caller writes, whether the request repeats it or not; a host macro's or
+    # view's own use of the blocked function is the definition's and is not reached in either layer.
     db.execute("CREATE MACRO m(x) AS abs(x); CREATE VIEW v AS SELECT abs(1) x")
     configure(db, {"allowed_functions": ["m"], "blocked_functions": ["abs"]})
     for sql in ["SELECT m(1)", "SELECT * FROM v"]:
         result = validate(db, sql, {"blocked_functions": []})
-        assert result["code"] == "forbidden" and result["objects"] == result["functions"] == []
+        assert result["allowed"], (sql, result)
+        assert any(f["name"] == "abs" for f in result["functions"]), (sql, result)
+    for sql in ["SELECT abs(1)", "SELECT m(1), abs(2)", "SELECT abs(x) FROM v"]:
+        result = validate(db, sql, {"blocked_functions": []})
+        assert result["code"] == "forbidden" and result["objects"] == result["functions"] == [], (sql, result)
+        assert result["violations"][0]["function_name"] == "abs", (sql, result)
 
 
 @pytest.mark.parametrize("sql", [

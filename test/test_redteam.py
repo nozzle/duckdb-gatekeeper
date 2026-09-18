@@ -147,11 +147,16 @@ def test_quoted_names_and_exact_catalog(db):
 
 
 def test_trusted_implementation_is_not_caller_code(catalog):
+    # The host macro's abs is the macro's: allowing the macro admits its body whatever the caller may not write
+    # directly. The caller's own abs stays blocked, alone or next to the macro, and the macro cannot be used to
+    # launder a caller-written argument that is itself blocked.
     configure(catalog, {"allowed_functions": ["trusted_abs"]})
     options = {"allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]}
     assert validate(catalog, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
-    assert not validate(catalog, "SELECT trusted_abs(-1)", options)["allowed"]
-    assert not validate(catalog, "SELECT abs(-1)", options)["allowed"]
+    assert validate(catalog, "SELECT trusted_abs(-1)", options)["allowed"]
+    for sql in ["SELECT abs(-1)", "SELECT trusted_abs(-1), abs(-2)", "SELECT trusted_abs(abs(-1))"]:
+        result = validate(catalog, sql, options)
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "abs", (sql, result)
 
 
 def test_validation_cannot_execute_configuration(db):

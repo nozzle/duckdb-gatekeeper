@@ -146,7 +146,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
-| `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
+| `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
 segments, so `SELECT 1;`, `SELECT 1;;`, and `;SELECT 1` are accepted. Empty,
@@ -321,21 +321,23 @@ flowchart LR
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
   `FROM read_parquet(...)`) all use the same policy, by leaf name.
-- Functions that trusted **views and macros** introduce internally are normally exempt
-  from the allowlist but always honor `blocked_functions` and the never-bind list. This
-  covers the reader behind a file path written inside the body (`FROM 'x.parquet'`) as
-  much as an explicit `read_parquet(...)` there. The
-  exemption is not unconditional: ambiguous caller syntax such as `t.x` or `list[i]`
-  triggers a query-wide implementation check that can also reach a trusted expansion
-  using the same function (for example `struct_extract`), and a file path the caller
-  also writes is checked as the caller's. See
+- Trusted **views, macros, and attached tables** are opaque to function policy. What
+  their definitions introduce is theirs, not the caller's: exempt from the allowlist and
+  from `blocked_functions` alike, whether an explicit `read_parquet(...)`, a file path
+  (`FROM 'x.parquet'`), or the scan an attached catalog uses. Only the never-bind list
+  reaches inside. Table policy still governs the view or table itself, and a macro must
+  itself be allowed. The exemption is by origin, not by name: the same function written
+  by the caller next to the view is the caller's, and ambiguous caller syntax such as
+  `t.x` or `list[i]` triggers a query-wide implementation check that can also reach a
+  trusted expansion using the same function (for example `struct_extract`). See
   [function enforcement and trusted expansion](docs/security.md#function-enforcement-and-trusted-expansion).
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
 
-Blocks also cover bound implementations: `unnest` inside a view, `lower` introduced
-by `nocase` comparisons inside list lambdas, and `sum` dispatched by `list_sum`.
-These implementations are included in successful function dependency lists.
+Blocks also cover the implementations DuckDB binds for the caller's own expressions:
+`lower` introduced by a `COLLATE nocase` the caller wrote, `sum` dispatched by a
+caller-written `list_sum`, `list_aggr` behind it. These implementations are included in
+successful function dependency lists, as are the ones trusted definitions introduce.
 When the caller writes a name-selected dispatcher (`list_aggregate`, `list_aggr`,
 `aggregate`, `array_aggregate`, `array_aggr`), the aggregate it names is caller-chosen
 text and must also be allowed in both layers, not merely unblocked.
@@ -365,7 +367,7 @@ The decision is made before the reader binds, so a denied path is never opened. 
 paths appear in `objects` with type `replacement`. Host-language scans (DataFrames,
 relations in scope) are always denied. These rules govern paths the caller writes; a
 path inside a host-defined view or macro body is that definition's own reader and is
-exempt from the allowlist like any other trusted expansion, subject to `blocked_functions`.
+outside function policy like any other trusted expansion.
 
 ### Never-bind list
 

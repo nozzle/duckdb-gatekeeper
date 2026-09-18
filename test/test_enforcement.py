@@ -404,13 +404,21 @@ def test_validate_is_available_when_allowed(catalog, agent):
 
 def test_trusted_expansions_stay_trusted(catalog, agent):
     catalog.execute("CREATE VIEW reporting.hashed AS SELECT md5(tag) AS h FROM reporting.orders")
-    # md5 is blocked by name, so the trusted view is denied just as validate denies it...
-    assert validate(catalog, "SELECT * FROM reporting.hashed")["code"] == "forbidden"
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
-        agent.execute("SELECT * FROM reporting.hashed").fetchall()
-    # ...while a view over an elevated (non-default) function is allowed when the view is.
+    # md5 is blocked by name, but the view's md5 is the view's: allowed on both paths, and reported...
+    expected = validate(catalog, "SELECT * FROM reporting.hashed")
+    assert expected["allowed"] and any(f["name"] == "md5" for f in expected["functions"]), expected
+    assert len(agent.execute("SELECT * FROM reporting.hashed").fetchall()) == 3
+    # ...while the caller's own md5 stays blocked, alone or next to the view, on both paths...
+    for sql in ["SELECT md5(tag) FROM reporting.orders", "SELECT md5(h) FROM reporting.hashed"]:
+        assert validate(catalog, sql)["code"] == "forbidden", sql
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql).fetchall()
+    # ...and the never-bind list still reaches into a view; a view over an elevated (non-default) function is
+    # allowed when the view is.
     catalog.execute("CREATE VIEW reporting.settings_count AS SELECT count(*) AS n FROM duckdb_settings()")
     assert validate(catalog, "SELECT * FROM reporting.settings_count")["code"] == "forbidden"  # never-bind
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("SELECT * FROM reporting.settings_count").fetchall()
     catalog.execute("CREATE VIEW reporting.version AS SELECT * FROM pragma_version()")
     expected = validate(catalog, "SELECT library_version FROM reporting.version")
     if expected["allowed"]:
@@ -420,9 +428,31 @@ def test_trusted_expansions_stay_trusted(catalog, agent):
             agent.execute("SELECT library_version FROM reporting.version").fetchall()
 
 
+def test_blocks_reach_caller_implementations_but_not_view_bodies_on_enforced_connections(catalog, agent):
+    # The implementation DuckDB binds for the caller's own expression (the aggregate list_sum dispatches, the
+    # collation's lower) is the caller's on an enforced connection too, including when it is bound in a child
+    # binder created after a trusted view in the same statement, and including parameterized statements. The
+    # same implementation inside the view is the view's.
+    catalog.execute("CREATE VIEW reporting.sums AS SELECT list_sum([amount]) AS s, tag FROM reporting.orders")
+    catalog.execute("CREATE VIEW reporting.folded AS SELECT tag FROM reporting.orders WHERE tag COLLATE nocase = 'A'")
+    configure(catalog, {**CATALOG_POLICY, "blocked_functions": ["sum", "lower"]})
+    for sql in ["SELECT s FROM reporting.sums", "SELECT tag FROM reporting.folded",
+                "SELECT s FROM reporting.sums WHERE tag = ?"]:
+        assert validate(catalog, sql.replace("?", "'a'"))["allowed"], sql
+        assert agent.execute(sql, ["a"] if "?" in sql else None).fetchall()
+    for sql in ["SELECT list_sum([amount]) FROM reporting.orders",
+                "SELECT (SELECT list_sum([1])) FROM reporting.sums",
+                "SELECT * FROM reporting.sums, (SELECT list_sum([1]) AS q)",
+                "SELECT tag FROM reporting.folded WHERE tag COLLATE nocase = 'B'",
+                "SELECT list_sum([?]) FROM reporting.sums"]:
+        assert validate(catalog, sql.replace("?", "1"))["code"] == "forbidden", sql
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql, [1] if "?" in sql else None).fetchall()
+
+
 def test_file_shorthand_inside_trusted_views_is_enforced_like_the_reader_call(catalog, agent, tmp_path):
-    # FROM 'file' in a host view is that view's reader, exempt from the allowlist and subject to blocks, on an
-    # enforced connection exactly as gatekeeper_validate decides it. The engine's own bind reaches the
+    # FROM 'file' in a host view is that view's reader, outside function policy like an explicit call there, on
+    # an enforced connection exactly as gatekeeper_validate decides it. The engine's own bind reaches the
     # replacement gate outside the private bind, parameterized statements reach it before the private bind
     # runs, and neither may treat the view's name as one the caller wrote.
     path = str(tmp_path / "trusted.parquet").replace("'", "''")
@@ -440,14 +470,12 @@ def test_file_shorthand_inside_trusted_views_is_enforced_like_the_reader_call(ca
         assert validate(catalog, sql)["code"] == "forbidden", sql
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql).fetchall()
-    # A block reaches into either body through the same gate.
+    # A block on the reader does not reach into either body, on either path, with or without parameters.
     configure(catalog, {**CATALOG_POLICY, "blocked_functions": ["parquet_scan"]})
     for view in ["reporting.by_path", "reporting.by_call"]:
-        assert validate(catalog, f"SELECT * FROM {view}")["code"] == "forbidden"
-        with pytest.raises(duckdb.PermissionException, match=DENIED):
-            agent.execute(f"SELECT * FROM {view}").fetchall()
-        with pytest.raises(duckdb.PermissionException, match=DENIED):
-            agent.execute(f"SELECT * FROM {view} WHERE x > ?", [0]).fetchall()
+        assert validate(catalog, f"SELECT * FROM {view}")["allowed"]
+        assert agent.execute(f"SELECT sum(x) FROM {view}").fetchone() == (3,)
+        assert agent.execute(f"SELECT x FROM {view} WHERE x > ?", [0]).fetchall() == [(1,), (2,)]
     # Prepare() (executemany) binds before any hook and outside any statement, so no text is on record and the
     # gate pre-screens every replacement as caller-written: the shorthand view is refused at prepare time, the
     # explicit-call view is not. The one entry point where the two spellings differ; execute() above does not.

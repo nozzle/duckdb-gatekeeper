@@ -64,13 +64,35 @@ struct BindingPolicy {
 	// Caller-written list_aggregate/aggregate family calls: the aggregate they select by name is caller-chosen
 	// text, so the bound implementation must pass the allowlists like any other caller-written function.
 	Names caller_dispatchers;
+	// Every function name the caller wrote, canonical: the names the text check decided, kept for the bind and
+	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
+	Names caller_functions;
+	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
+	// though it never appears in the text.
+	bool caller_collates = false;
 	// Caller-written table references by qualified name (catalog.schema.table as written, case-folded). A
 	// replacement scan for one of them substitutes a reader the caller chose, so that reader must pass the
 	// allowlists like a caller-written table function. A replacement reached only through a trusted view or
-	// macro body is that definition's own reader and passes the deny layer, exactly as the readers such bodies
-	// name explicitly do. The replacement callback sees no origin, so a name both sides use is checked as the
-	// caller's, query-wide, like other ambiguous caller syntax.
+	// macro body is that definition's own reader and is not subject to function policy, exactly like the
+	// readers such bodies name explicitly. The replacement callback sees no origin, so a name both sides use
+	// is checked as the caller's, query-wide, like other ambiguous caller syntax.
 	Names caller_table_refs;
+};
+// What the private bind learned about origin, for the execution boundary. Trusted definitions (host views,
+// macros, attached tables) are exempt from blocked_functions; the bound plan carries no scope, so the plan walk
+// applies blocks to the names it can attribute to the caller: the text's names (BindingPolicy), the names the
+// caller's own binders looked up (default-macro expansions of caller-written names included), and the
+// implementations those select. Everything else in the plan came from a trusted definition.
+struct Provenance {
+	// Canonical function names the caller's binders retrieved from the catalog.
+	Names caller_lookups;
+	// Canonical function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
+	// so its names are recognized by name; a name the caller also wrote is checked as the caller's, query-wide.
+	Names trusted_names;
+	// No text and no private bind on record (a Prepare() pre-screen): nothing can be attributed, and blocks are
+	// deferred to execution, which rebinds inside the query.
+	bool unattributed = false;
+	bool Attributable(const BindingPolicy &binding, const std::string &name) const;
 };
 // The qualified name DuckDB hands its replacement-scan callbacks (ReplacementScan::GetFullPath): the non-empty
 // parts joined with dots. Case-folded here because caller_table_refs is matched by name, never by file identity.

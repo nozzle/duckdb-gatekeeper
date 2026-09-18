@@ -143,6 +143,18 @@ bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
 	        (policy.defaults && inventory.defaults.count(Lower(name))));
 }
+
+bool Provenance::Attributable(const BindingPolicy &binding, const std::string &name) const {
+	if (unattributed)
+		return false;
+	auto canonical = CanonicalFunction(name);
+	// A name the caller wrote, or that the caller's own binders retrieved, is the caller's. A name only a
+	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
+	if (binding.caller_functions.count(canonical) || binding.synthesized_functions.count(canonical) ||
+	    binding.literal_constructors.count(canonical) || caller_lookups.count(canonical))
+		return true;
+	return binding.caller_collates && CollationFunction(canonical);
+}
 struct Stop {
 	std::string message;
 	std::string rule = "unsupported_structure";
@@ -302,6 +314,9 @@ struct Walker {
 		if (kind == "BaseTableRef" && binding)
 			binding->caller_table_refs.insert(
 			    TableRefPath(Field(value, "catalog_name"), Field(value, "schema_name"), Field(value, "table_name")));
+		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
+		if (kind == "CollateExpression" && binding)
+			binding->caller_collates = true;
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
@@ -557,6 +572,8 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
+		if (binding)
+			binding->caller_functions.insert(CanonicalFunction(name));
 		if (!walker.Both([&](const Policy &p) { return FunctionAllowed(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;

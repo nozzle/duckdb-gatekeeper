@@ -91,8 +91,9 @@ forbidden	function	read_csv_auto
 statement ok
 RESET gatekeeper_policy;
 
-# A path inside a host-defined view or macro body is that definition's own reader: exempt from the allowlist
-# like an explicit read_parquet(...) there, and subject to blocks like one. The view still needs table policy.
+# A path inside a host-defined view or macro body is that definition's own reader, outside function policy
+# like an explicit read_parquet(...) there: neither the allowlist nor a block reaches it. The view still needs
+# table policy, and the caller's own spelling of the same path next to the view is still the caller's.
 statement ok
 CREATE VIEW by_path AS SELECT * FROM '__TEST_DIR__/data.parquet';
 
@@ -109,15 +110,15 @@ SELECT code FROM gatekeeper_validate('SELECT * FROM by_call');
 ----
 ok
 
-query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_path', blocked_functions := ['parquet_scan']);
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', blocked_functions := ['parquet_scan']);
 ----
-forbidden	function	read_parquet
+ok
 
-query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_call', blocked_functions := ['parquet_scan']);
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_call', blocked_functions := ['parquet_scan']);
 ----
-forbidden	function	read_parquet
+ok
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', allowed_tables := []);
@@ -156,10 +157,15 @@ SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()');
 ----
 ok
 
-query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['read_parquet']);
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['read_parquet']);
 ----
-forbidden	function	read_parquet
+ok
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['by_macro']);
+----
+forbidden	function	by_macro
 
 statement ok
 RESET gatekeeper_policy;

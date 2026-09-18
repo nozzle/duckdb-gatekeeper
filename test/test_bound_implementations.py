@@ -1,4 +1,5 @@
-"""Executable bound implementations must obey both layers, including inside expansions."""
+"""Executable bound implementations obey both layers where the caller wrote them; inside a trusted definition
+they are that definition's own, subject to the never-bind list and nothing else."""
 import json
 import re
 
@@ -20,30 +21,43 @@ CASES = [
     ("array_distinct([1,2])", "histogram", "aggregate"),
     ("array_unique([1,2])", "histogram", "aggregate"),
 ]
+WRAPPERS = {"view": "SELECT * FROM v", "macro": "SELECT m()", "table_macro": "SELECT * FROM tm()"}
 
 
 @pytest.mark.parametrize("expression,blocked,kind", CASES)
-@pytest.mark.parametrize("wrapper", ["direct", "view", "macro", "table_macro"])
 @pytest.mark.parametrize("global_block", [False, True])
-def test_bound_implementations_obey_blocks(db, expression, blocked, kind, wrapper, global_block):
+def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expression, blocked, kind, global_block):
+    """The implementation DuckDB binds for a caller-written expression (the collation's lower, the dispatched
+    aggregate, unnest) is the caller's, and blocks in either layer reach it. The same expression inside a host
+    view, scalar macro, or table macro is that definition's own: exempt from blocks like the rest of its body,
+    still reported in the dependency list. Writing the expression next to the wrapper makes the implementation
+    the caller's again, query-wide."""
     db.execute("SET autoload_known_extensions=false; SET autoinstall_known_extensions=false")
     db.execute("CREATE VIEW v AS SELECT " + expression + " AS x")
     db.execute("CREATE MACRO m() AS " + expression)
     db.execute("CREATE MACRO tm() AS TABLE SELECT " + expression + " AS x")
-    sql = {"direct": "SELECT " + expression, "view": "SELECT * FROM v",
-           "macro": "SELECT m()", "table_macro": "SELECT * FROM tm()"}[wrapper]
+    direct = "SELECT " + expression
     configure(db, {"allowed_functions": ["m", "tm"]})
-    result = validate(db, sql)
-    assert result["allowed"], result
-    assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), result
-    db.execute(sql).fetchall()
+    for sql in [direct, *WRAPPERS.values()]:
+        result = validate(db, sql)
+        assert result["allowed"], (sql, result)
+        assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (sql, result)
+        db.execute(sql).fetchall()
     if global_block:
         configure(db, {"allowed_functions": ["m", "tm"], "blocked_functions": [blocked]})
         db.execute("SET lock_configuration=true")
-    result = validate(db, sql, {"blocked_functions": [] if global_block else [blocked]})
+    layer = {"blocked_functions": [] if global_block else [blocked]}
+    result = validate(db, direct, layer)
     assert result["code"] == "forbidden", result
     assert any(v["function_name"] == blocked for v in result["violations"]), result
     assert result["objects"] == result["functions"] == []
+    for wrapper, sql in WRAPPERS.items():
+        result = validate(db, sql, layer)
+        assert result["allowed"], (wrapper, result)
+        assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (wrapper, result)
+    result = validate(db, direct + " FROM v", layer)
+    assert result["code"] == "forbidden", result
+    assert any(v["function_name"] == blocked for v in result["violations"]), result
 
 
 @pytest.mark.parametrize("expression", ["list_sum(NULL)", "list_distinct(NULL)", "list_unique(NULL)"])
@@ -129,13 +143,15 @@ def test_caller_written_dispatch_target_must_be_allowed(db, dispatcher):
 
 
 def test_dispatch_target_check_is_scoped_to_caller_written_dispatchers(db):
-    """Fixed implementations and dispatchers introduced only by trusted definitions keep the block-only rule;
-    once the caller writes a dispatcher, the check applies query-wide like other ambiguous caller syntax."""
+    """Fixed implementations and dispatchers introduced only by trusted definitions are those definitions' own;
+    once the caller writes a dispatcher, the allowlist check applies query-wide like other ambiguous caller
+    syntax."""
     db.execute("CREATE VIEW v AS SELECT list_aggregate([1,2], 'sum') AS s")
     configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]})
     assert validate(db, "SELECT list_distinct([1,2])", STRICT)["allowed"]
     assert validate(db, "SELECT s FROM v", STRICT)["allowed"]
-    assert validate(db, "SELECT s FROM v", {**STRICT, "blocked_functions": ["sum"]})["code"] == "forbidden"
+    # The view's dispatched aggregate is the view's: a block on it does not reach into the body.
+    assert validate(db, "SELECT s FROM v", {**STRICT, "blocked_functions": ["sum"]})["allowed"]
     request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]}
     assert validate(db, "SELECT list_aggregate([1], 'count')", request)["allowed"]
     # The view's own dispatch is bound into the same plan, so the caller's dispatcher makes it subject to the check.
@@ -193,15 +209,16 @@ def test_list_lambda_function_names_match_the_engine():
 @pytest.mark.parametrize("function", sorted(LAMBDA_CALLS))
 def test_every_list_lambda_alias_exposes_its_body(db, function):
     """Each alias binds ListLambdaBindData and its body is walked: the nocase comparison inside binds `lower`,
-    which is reported and blockable, directly and through a trusted view."""
+    which is reported directly and through a trusted view, and blockable where the caller wrote it."""
     expression = LAMBDA_CALLS[function].format(f=function)
     db.execute("CREATE VIEW v AS SELECT " + expression + " AS x")
     for sql in ("SELECT " + expression, "SELECT * FROM v"):
         result = validate(db, sql)
         assert result["allowed"], result
         assert any(f["name"] == "lower" for f in result["functions"]), result
-        result = validate(db, sql, {"blocked_functions": ["lower"]})
-        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower", result
+    result = validate(db, "SELECT " + expression, {"blocked_functions": ["lower"]})
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower", result
+    assert validate(db, "SELECT * FROM v", {"blocked_functions": ["lower"]})["allowed"]
     # A NULL list still binds the builtin with an empty body; nothing to inspect, nothing to deny.
     assert validate(db, f"SELECT {function}(NULL, lambda x: x)" if "reduce" not in function
                     else f"SELECT {function}(NULL, lambda x, y: x)")["allowed"]

@@ -133,7 +133,8 @@ def test_file_backed_view_requires_own_permission(db,tmp_path):
     assert validate(db,"SELECT * FROM v",{"allowed_tables":[{"schema":"main","table":"v"}]})["allowed"]
     result = validate(db, f"SELECT * FROM read_parquet('{path}')")
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
-    assert not validate(db, "SELECT * FROM v", {"blocked_functions": ["read_parquet"]})["allowed"]
+    # The view's reader is the view's: neither the allowlist nor a block on it reaches into the body.
+    assert validate(db, "SELECT * FROM v", {"blocked_functions": ["read_parquet"]})["allowed"]
 
 
 def test_view_and_underlying_table_must_both_pass(db):
@@ -243,30 +244,30 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
 
 
 def test_replacement_scan_inside_view_is_a_trusted_expansion(db, tmp_path, monkeypatch):
-    # FROM 'file' inside a host-defined view is that view's own reader, checked like an explicit
-    # read_parquet(...) in the same body: exempt from the allowlist, subject to blocks.
+    # FROM 'file' inside a host-defined view is that view's own reader, treated like an explicit
+    # read_parquet(...) in the same body: outside function policy altogether, allowlist and blocks alike.
     monkeypatch.chdir(tmp_path)
     db.execute("COPY (SELECT 1 AS x) TO 'data.parquet'; CREATE VIEW v AS SELECT * FROM 'data.parquet'")
     result = validate(db, "SELECT * FROM v")
     assert result["allowed"] and {o["table"] for o in result["objects"]} == {"v", "data.parquet"}
     assert {(o["table"], o["type"]) for o in result["objects"]} == {("v", "view"), ("data.parquet", "replacement")}
-    # Blocks reach it under either Parquet alias, in the global layer or the request layer.
+    # A block under either Parquet alias, in either layer, does not reach into the body.
     for blocked in ["read_parquet", "parquet_scan"]:
-        result = validate(db, "SELECT * FROM v", {"blocked_functions": [blocked]})
-        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
+        assert validate(db, "SELECT * FROM v", {"blocked_functions": [blocked]})["allowed"]
     configure(db, {"blocked_functions": ["read_parquet"]})
-    assert validate(db, "SELECT * FROM v")["code"] == "forbidden"
+    assert validate(db, "SELECT * FROM v")["allowed"]
     configure(db, {})
     # The view still needs its own permission; the reader's exemption does not grant the object.
     assert not validate(db, "SELECT * FROM v", {"allowed_tables": []})["allowed"]
     # Nesting keeps the trust: a view over the view, a CTE or subquery inside the body, a table macro body.
     db.execute("CREATE VIEW outer_v AS WITH c AS (SELECT * FROM (SELECT * FROM 'data.parquet')) SELECT c.x FROM c, v")
-    assert validate(db, "SELECT * FROM outer_v")["allowed"]
+    assert validate(db, "SELECT * FROM outer_v", {"blocked_functions": ["read_parquet"]})["allowed"]
     db.execute("CREATE MACRO m() AS TABLE SELECT * FROM 'data.parquet'")
     assert validate(db, "SELECT * FROM m()")["code"] == "forbidden"  # the macro itself is caller-written
     configure(db, {"allowed_functions": ["m"]})
     assert validate(db, "SELECT * FROM m()")["allowed"]
-    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["read_parquet"]})["code"] == "forbidden"
+    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["read_parquet"]})["allowed"]
+    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["m"]})["code"] == "forbidden"
     configure(db, {})
 
 

@@ -89,14 +89,32 @@ inline std::string CanonicalFunction(std::string name) {
 	return name;
 }
 
-inline bool FunctionDenied(const Policy &policy, const std::string &name) {
+// The never-bind list: functions no policy can admit, wherever they appear, trusted definitions included.
+inline bool NeverBind(const std::string &name) {
+	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
+}
+
+// The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
+// implementations binding derives from it, and the readers its file paths choose. A host view, macro, or
+// attached table is a trusted definition; nothing inside one is subject to blocks.
+inline bool FunctionBlocked(const Policy &policy, const std::string &name) {
 	auto canonical = CanonicalFunction(name);
-	if (NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(canonical))
-		return true;
 	for (const auto &blocked : policy.blocked_functions)
 		if (CanonicalFunction(blocked) == canonical)
 			return true;
 	return false;
+}
+
+inline bool FunctionDenied(const Policy &policy, const std::string &name) {
+	return NeverBind(name) || FunctionBlocked(policy, name);
+}
+
+// Functions DuckDB binds for a collation (function.cpp: nocase, noaccent, nfc; the ICU extension registers
+// icu_collate_<name> for each of its collations). A caller-written COLLATE chooses one without naming it.
+inline bool CollationFunction(const std::string &name) {
+	auto lower = Lower(name);
+	return lower == "lower" || lower == "strip_accents" || lower == "nfc_normalize" ||
+	       lower.compare(0, 12, "icu_collate_") == 0;
 }
 
 bool FunctionAllowed(const Policy &policy, const std::string &name);
