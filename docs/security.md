@@ -252,9 +252,10 @@ sandbox setting fails closed. `SET lock_configuration=true` freezes the setting.
 
 On an enforced connection the denial goes to the caller, not the host. What the host gets is a
 record: every decision Gatekeeper makes, on an enforced connection or in `gatekeeper_validate`,
-and every change to its global settings made through `SET` or `CALL gatekeeper_configure`, is
-written as a structured entry of DuckDB log type `Gatekeeper` (`RESET` and native option writes
-bypass the `SET` callback and leave no entry; the next decision's `policy_hash` still changes). The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
+and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
+gatekeeper_configure`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
+`DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
+`policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
 `code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
 the enforcement parity corpus. The rest of the record is:
@@ -312,10 +313,11 @@ Properties that make the record trustworthy as evidence:
   Hosts that need the log as evidence against an adversarial caller should validate first,
   which keeps `PRAGMA` text away from the preprocessor entirely, and can read the raw
   `duckdb_logs` rows with `TRY_CAST` if a malformed entry must be tolerated.
-- **The host's own changes are on the record.** `SET gatekeeper_policy`, `CALL
-  gatekeeper_configure`, and `SET gatekeeper_enforcement` each write a `*_changed` entry.
-  `RESET` and native `DBConfig::SetOption` bypass the `SET` callback and write no entry, but the
-  next decision's `policy_hash` changes, so a policy that was altered that way is still visible.
+- **The host's own changes are on the record.** `SET` and `RESET` of `gatekeeper_policy` and
+  `gatekeeper_enforcement`, and `CALL gatekeeper_configure`, each write a `*_changed` entry (a
+  `RESET` reports the default value). A native `DBConfig::SetOption` write bypasses the `SET`
+  callback and writes no entry, but the next decision's `policy_hash` changes, so a policy that
+  was altered that way is still visible.
 - Log writes are not guarded: if the configured storage fails (an unwritable file), the
   statement fails with that error rather than executing unrecorded.
 
