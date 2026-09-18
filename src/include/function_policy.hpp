@@ -54,7 +54,8 @@ inline const Names &NeverBindFunctions() {
 	                            "read_duckdb",
 	                            "seq_scan",
 	                            "truncate_duckdb_logs",
-	                            "which_secret"};
+	                            "which_secret",
+	                            "write_log"};
 	return names;
 }
 

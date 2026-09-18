@@ -1,4 +1,7 @@
 """Audit log: every decision Gatekeeper makes is a structured record of log type 'Gatekeeper'."""
+import concurrent.futures
+import threading
+
 import duckdb
 import pytest
 
@@ -231,14 +234,49 @@ def test_sandboxed_connection_cannot_reach_the_log(catalog, agent):
                 "SELECT * FROM duckdb_log_contexts()", "CALL disable_logging()", "SELECT * FROM disable_logging()",
                 "SELECT * FROM truncate_duckdb_logs()", "CALL truncate_duckdb_logs()",
                 "SELECT * FROM enable_logging(storage := 'file', storage_path := '/tmp/gatekeeper_agent.csv')",
+                "SELECT write_log('forged', log_type := 'Gatekeeper', level := 'info')",
                 "SET enable_logging = false", "SET logging_level = 'fatal'", "SET logging_storage = 'stdout'"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
     # Never-bind: the host cannot allowlist them either.
-    for name in ["enable_logging", "disable_logging", "truncate_duckdb_logs"]:
-        result = validate(catalog, f"SELECT * FROM {name}()", {"allowed_functions": [name]})
-        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
+    for name, call in [("enable_logging", "SELECT * FROM enable_logging()"),
+                       ("disable_logging", "SELECT * FROM disable_logging()"),
+                       ("truncate_duckdb_logs", "SELECT * FROM truncate_duckdb_logs()"),
+                       ("write_log", "SELECT write_log('x', log_type := 'Gatekeeper')")]:
+        result = validate(catalog, call, {"allowed_functions": [name]})
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name, (name, result)
     assert catalog.execute("SELECT current_setting('enable_logging')").fetchone() == (True,)
+    # Nothing above reached the log: every Gatekeeper-typed entry is one of Gatekeeper's own records.
+    for record in records(catalog):
+        assert record["event"] == "decision" and not record["allowed"]
+
+
+def test_write_log_forgery_is_refused_even_when_allowlisted(catalog, agent):
+    # write_log writes any message under any log type. With it allowlisted, an agent could plant a
+    # Gatekeeper-typed entry that forges a decision or that duckdb_logs_parsed cannot cast, which would
+    # break the reader for the host. Never-bind keeps it unreachable whatever the policy says.
+    enable(catalog)
+    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}], "allowed_functions": ["write_log"]})
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("SELECT write_log('not-a-struct', log_type := 'Gatekeeper', level := 'info')").fetchall()
+    assert all(r["event"] in {"decision", "policy_changed"} for r in records(catalog))
+    assert catalog.execute("SELECT count(*) FROM duckdb_logs WHERE type = 'Gatekeeper' AND message = 'not-a-struct'"
+                           ).fetchone()[0] == 0
+
+
+@pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
+                                       "preprocessor before any extension hook (nozzle/duckdb-gatekeeper#46)")
+def test_pragma_preprocessing_cannot_forge_a_record(catalog, agent):
+    # Pins the audit-integrity residual: the never-bind list cannot reach the preprocessor. When this starts
+    # passing, remove the xfail and the residual wording in docs/security.md#audit-log.
+    enable(catalog)
+    # write_log goes through the connection's own logger, which is refreshed at query end; a fresh cursor
+    # opened before enable_logging still holds a NopLogger, so run one statement first as a real agent would.
+    agent.execute("SELECT count(*) FROM reporting.orders").fetchall()
+    with pytest.raises(duckdb.Error):
+        agent.execute("PRAGMA no_such_pragma(write_log('forged', log_type := 'Gatekeeper', level := 'info'))")
+    assert catalog.execute("SELECT count(*) FROM duckdb_logs WHERE type = 'Gatekeeper' AND message = 'forged'"
+                           ).fetchone()[0] == 0
 
 
 def test_posture_warning_names_the_log(catalog):
@@ -260,3 +298,51 @@ def test_file_storage_receives_records(catalog, agent, tmp_path):
     catalog.execute("CALL disable_logging()")  # flushes
     text = path.read_text()
     assert "Gatekeeper" in text and "SELECT * FROM secret.salaries" in text and "object is not allowed" in text
+
+
+def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog, tmp_path):
+    # A parameterized statement is authorized after the engine binds, so the engine's own bind reaches the
+    # replacement-scan gate first, outside the private bind, in the window after QueryBegin snapshotted the
+    # policy. The gate must decide under that snapshot, not a fresh read of the setting: with a fresh read, a
+    # flip landing in the window let the gate admit the reader under the new policy and the private bind then
+    # deny it under the snapshot, an 'authorize' denial this statement can never otherwise produce. With the
+    # snapshot, every denial is the gate's, and the hash on each record agrees with the decision.
+    path = tmp_path / "flip.parquet"
+    catalog.execute("COPY (SELECT range AS x FROM range(3)) TO ? (FORMAT parquet)", [str(path)])
+    tables = [{"schema": "reporting", "table": "*"}]
+    reader_allowed = {"allowed_tables": tables, "allowed_functions": ["read_parquet"]}
+    reader_denied = {"allowed_tables": tables}
+    enable(catalog, "debug")
+    configure(catalog, reader_denied)  # both policies are installed after logging is on, so both hashes are recorded
+    statement = f"SELECT * FROM '{path}' WHERE x = ?"
+    stop = threading.Event()
+    errors = []
+
+    def worker():
+        with catalog.cursor() as cursor:
+            enforce(cursor)
+            while not stop.is_set():
+                try:
+                    cursor.execute(statement, [1]).fetchall()
+                except duckdb.PermissionException:
+                    pass
+                except duckdb.Error as error:
+                    errors.append(str(error))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(worker) for _ in range(4)]
+        for i in range(60):
+            configure(catalog, reader_allowed if i % 2 else reader_denied)
+        stop.set()
+        for future in futures:
+            future.result()
+    assert errors == []
+    hashes = {r["policy_hash"]: "read_parquet" in r["new_value"] for r in records(catalog, "event = 'policy_changed'")}
+    assert set(hashes.values()) == {True, False}
+    found = [r for r in decisions(catalog, "mode = 'enforce'") if r["statement"] == statement]
+    assert found and any(r["allowed"] for r in found) and any(not r["allowed"] for r in found)
+    for record in found:
+        assert record["policy_hash"] in hashes, record
+        # The decision is the one the snapshot dictates, and the record names that snapshot.
+        assert record["allowed"] == hashes[record["policy_hash"]], record
+        assert record["boundary"] == ("execution" if record["allowed"] else "replacement_scan"), record

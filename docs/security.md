@@ -161,7 +161,11 @@ under residuals.
   UDFs, and scalar macros. What it cannot reach: table data (the binder rejects subqueries
   and column references, including inside macros), table functions, and any statement (DDL,
   DML, `COPY`, `ATTACH`, `LOAD`, `SET`). Core scalars that touch state include `nextval`
-  (writes), `write_log` (writes when the host enabled logging), `setseed` (own connection),
+  (writes), `write_log` (when the host enabled logging: it writes any message under any log
+  type, so `PRAGMA x(write_log('...', log_type := 'Gatekeeper'))` plants an entry in the
+  [audit log](#audit-log) that either forges a decision or cannot be cast by
+  `duckdb_logs_parsed`; a well-formed forgery is not distinguishable from a real record by
+  content, and validate-first hosts are not exposed), `setseed` (own connection),
   and readers such as `current_setting`, `which_secret`, `getvariable`, `current_schemas`,
   `txid_current`; the inventory's `elevated` group is the full list of core names that read
   catalog, session, configuration, or planner state. What that is worth depends on the host:
@@ -293,11 +297,20 @@ Properties that make the record trustworthy as evidence:
 - **Engine errors are not decisions.** A missing table or a type error on an enforced connection
   is DuckDB's error, in DuckDB's words, and is not recorded; `gatekeeper_validate` maps the same
   outcome to `code = 'binding'` and that call is recorded.
-- **The sandboxed connection cannot read, redirect, silence, or erase the log.** `duckdb_logs`,
-  `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose `storage_path` writes a
-  file of the caller's choosing), `disable_logging`, and `truncate_duckdb_logs` are on the
-  never-bind list, so no policy can admit them; `SET`, `RESET`, and `CALL` are unsupported
-  statements. `CALL gatekeeper_enforce()` warns when logging would not record a denial.
+- **The sandboxed connection cannot read, redirect, silence, erase, or forge the log.**
+  `duckdb_logs`, `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose
+  `storage_path` writes a file of the caller's choosing), `disable_logging`,
+  `truncate_duckdb_logs`, and `write_log` (which writes any message under any log type,
+  `'Gatekeeper'` included) are on the never-bind list, so no policy can admit them; `SET`,
+  `RESET`, and `CALL` are unsupported statements. `CALL gatekeeper_enforce()` warns when logging
+  would not record a denial. One path is outside this control and is listed under residuals:
+  DuckDB's `PRAGMA` preprocessing evaluates argument expressions before any hook, so on an
+  enforced connection without validate-first, `PRAGMA x(write_log(...))` can plant a
+  `Gatekeeper`-typed entry before the statement is denied. A malformed one makes
+  `duckdb_logs_parsed('Gatekeeper')` fail for the reader; a well-formed one is a forgery.
+  Hosts that need the log as evidence against an adversarial caller should validate first,
+  which keeps `PRAGMA` text away from the preprocessor entirely, and can read the raw
+  `duckdb_logs` rows with `TRY_CAST` if a malformed entry must be tolerated.
 - **The host's own changes are on the record.** `SET gatekeeper_policy`, `CALL
   gatekeeper_configure`, and `SET gatekeeper_enforcement` each write a `*_changed` entry.
   `RESET` and native `DBConfig::SetOption` bypass the `SET` callback and write no entry, but the
@@ -368,7 +381,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
 query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
-enable_logging disable_logging truncate_duckdb_logs
+enable_logging disable_logging truncate_duckdb_logs write_log
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
 duckdb_approx_database_count duckdb_columns duckdb_connection_count duckdb_constraints
@@ -392,8 +405,11 @@ uses inside trusted views/macros.
 `enable_logging`, `disable_logging`, and `truncate_duckdb_logs`
 (`src/function/table/system/logging_utils.cpp`) reconfigure, silence, or erase the log
 that records Gatekeeper's own decisions, and `enable_logging(storage_path := ...)` writes a
-file at a caller-chosen path; the [audit log](#audit-log) is evidence only if the sandboxed
-side cannot reach them under any policy.
+file at a caller-chosen path; `write_log` (`src/function/scalar/system/write_log.cpp`)
+writes an arbitrary message under any `log_type`, `'Gatekeeper'` included, so it could forge
+a decision record or plant one `duckdb_logs_parsed` cannot cast. The
+[audit log](#audit-log) is evidence only if the sandboxed side cannot reach any of them
+under any policy.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.

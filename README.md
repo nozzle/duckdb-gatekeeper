@@ -689,7 +689,8 @@ it **executes**. It does not:
 - prevent binding from performing I/O through trusted views and macros before a denial,
   or before a denial of a prepared statement, which DuckDB binds before any extension hook runs;
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
-  parsing, before any extension hook, which can run any scalar function the connection can see;
+  parsing, before any extension hook, which can run any scalar function the connection can see,
+  `write_log` into the audit log included;
 - stop that same preprocessor from running query pragmas such as `import_database`, which reads
   `schema.sql` and `load.sql` before any hook when external access allows it;
 - prove that every overload of a default function is harmless (defaults are a
