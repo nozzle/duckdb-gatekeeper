@@ -170,6 +170,65 @@ static bool GatekeeperDenial(const ErrorData &error) {
 	       error.RawMessage().find("Gatekeeper denied this statement") != std::string::npos;
 }
 
+// Whether the text is one PRAGMA statement, which DuckDB rewrites into a SELECT before any hook runs: the
+// enforced path then decides that SELECT, while gatekeeper_validate reports the raw text as unsupported.
+static bool IsSinglePragma(Connection &connection, const std::string &bytes) {
+	try {
+		Parser parser(connection.context->GetParserOptions());
+		parser.ParseQuery(bytes);
+		return parser.statements.size() == 1 && parser.statements[0]->type == StatementType::PRAGMA_STATEMENT;
+	} catch (const Exception &error) {
+		CheckError(ErrorData(error).Type());
+		std::abort(); // validate parsed this text; the engine's parser must too
+	}
+}
+
+// Under gatekeeper_log_only the same text on a fresh enforced connection must never surface a Gatekeeper
+// denial, and the one record it leaves must say what gatekeeper_validate said. The engine then plans the
+// statement itself, so DuckDB's own errors for it are permitted; a decision that was refused above is
+// exactly what must not be refused here.
+static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const std::string &bytes, bool allowed,
+                               const string &code, bool pragma_rewrite) {
+	if (connection.Query("SET gatekeeper_log_only = true")->HasError())
+		std::abort();
+	Connection observed(database);
+	if (observed.Query("CALL gatekeeper_enforce()")->HasError())
+		std::abort();
+	if (connection.Query("CALL truncate_duckdb_logs()")->HasError())
+		std::abort();
+	auto pending = observed.PendingQuery(bytes);
+	if (pending->HasError()) {
+		CheckError(pending->GetErrorObject().Type());
+		if (GatekeeperDenial(pending->GetErrorObject()))
+			std::abort();
+	}
+	pending.reset();
+	// Query() without parameters materializes; the code is one of Gatekeeper's fixed identifiers.
+	std::string same = "allowed = " + std::string(allowed ? "true" : "false") + " AND code = '" + code + "'";
+	std::string from = " FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only'";
+	auto records = connection.Query("SELECT count(*), bool_and(" + same + ")" + from);
+	if (records->HasError())
+		std::abort();
+	auto count = records->GetValue(0, 0).GetValue<int64_t>();
+	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
+	// dynamic PIVOT into several statements (several records, the first being the decision on the text) or a
+	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text).
+	if (pragma_rewrite) {
+		if (connection.Query("SET gatekeeper_log_only = false")->HasError())
+			std::abort();
+		return;
+	}
+	if (count == 1 && !records->GetValue(1, 0).GetValue<bool>())
+		std::abort();
+	if (count > 1) {
+		auto first = connection.Query("SELECT " + same + from + " ORDER BY timestamp, context_id LIMIT 1");
+		if (first->HasError() || !first->GetValue(0, 0).GetValue<bool>())
+			std::abort();
+	}
+	if (connection.Query("SET gatekeeper_log_only = false")->HasError())
+		std::abort();
+}
+
 // An enforced connection must agree with gatekeeper_validate under the same global policy. Plan the
 // text on a latched connection: PendingQuery runs the binding boundary, the engine's bind, and the
 // execution boundary, then schedules pipeline events. Setup() pins the database to threads=1, so no
@@ -215,22 +274,15 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 		std::abort();
 	// Unsupported statement types must not plan either, except pragmas DuckDB rewrites into SELECTs
 	// before Gatekeeper sees them, which then follow the policy on that SELECT.
-	if (code == "unsupported" && !pending->HasError()) {
-		try {
-			Parser parser(connection.context->GetParserOptions());
-			parser.ParseQuery(bytes);
-			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::PRAGMA_STATEMENT)
-				std::abort();
-		} catch (const Exception &error) {
-			CheckError(ErrorData(error).Type());
-			std::abort(); // validate parsed this text; the engine's parser must too
-		}
-	}
+	bool pragma_rewrite = code == "unsupported" && IsSinglePragma(connection, bytes);
+	if (code == "unsupported" && !pending->HasError() && !pragma_rewrite)
+		std::abort();
 	pending.reset();
 	// Every record written for this input, whatever the text contained, must parse back into the log type.
 	auto parsed = connection.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper')");
 	if (parsed->HasError())
 		std::abort();
+	CheckLogOnlyParity(database, connection, bytes, allowed, code, pragma_rewrite);
 }
 
 // Deterministic latch checks, once per process.
@@ -256,6 +308,22 @@ static void CheckEnforcedLatch(DuckDB &database) {
 		std::abort();
 	auto relatch = enforced.Query("CALL gatekeeper_enforce()");
 	if (!relatch->HasError() || !GatekeeperDenial(relatch->GetErrorObject()))
+		std::abort();
+	// Log-only: the same statement runs, is recorded as mode log_only, and the flip applies at the next statement.
+	if (host.Query("SET gatekeeper_log_only = true")->HasError())
+		std::abort();
+	auto observed = enforced.Query("CREATE TABLE fuzz_observed(x INTEGER)");
+	if (observed->HasError())
+		std::abort();
+	auto logged =
+	    host.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND "
+		           "mode = 'log_only' AND NOT allowed AND statement = 'CREATE TABLE fuzz_observed(x INTEGER)'");
+	if (logged->HasError() || logged->GetValue(0, 0).GetValue<int64_t>() != 1)
+		std::abort();
+	if (host.Query("SET gatekeeper_log_only = false")->HasError())
+		std::abort();
+	auto refused = enforced.Query("DROP TABLE fuzz_observed");
+	if (!refused->HasError() || !GatekeeperDenial(refused->GetErrorObject()))
 		std::abort();
 }
 
@@ -311,7 +379,27 @@ static void CheckNativeSettingBypass() {
 	Connection connection(database);
 	Setup(connection);
 	auto &config = DBConfig::GetConfig(*database.instance);
-	// Native host APIs skip SQL SET callbacks. Enforcement must decode the actual value.
+	// Native host APIs skip SQL SET callbacks. Only a BOOLEAN true written to gatekeeper_log_only suspends
+	// refusals; anything else an enforced connection reads as enforcing.
+	{
+		Connection enforced(database);
+		if (enforced.Query("CALL gatekeeper_enforce()")->HasError())
+			std::abort();
+		for (const auto &value : {Value("true"), Value(LogicalType::BOOLEAN), Value::INTEGER(1), Value("yes")}) {
+			config.SetOption("gatekeeper_log_only", value);
+			auto refused = enforced.Query("CREATE TABLE fuzz_native(x INTEGER)");
+			if (!refused->HasError() || !GatekeeperDenial(refused->GetErrorObject()))
+				std::abort();
+		}
+		config.SetOption("gatekeeper_log_only", Value::BOOLEAN(true));
+		if (enforced.Query("CREATE TABLE fuzz_native(x INTEGER)")->HasError())
+			std::abort();
+		config.SetOption("gatekeeper_log_only", Value::BOOLEAN(false));
+		auto refused = enforced.Query("DROP TABLE fuzz_native");
+		if (!refused->HasError() || !GatekeeperDenial(refused->GetErrorObject()))
+			std::abort();
+	}
+	// Enforcement must decode the actual policy value.
 	config.SetOption("gatekeeper_policy", Value("invalid"));
 	auto invalid = connection.Query("SELECT * FROM gatekeeper_validate('SELECT 1')");
 	auto decision = Decision(*invalid);

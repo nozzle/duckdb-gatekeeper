@@ -47,6 +47,8 @@ static const char *ModeName(DecisionMode mode) {
 	switch (mode) {
 	case DecisionMode::ENFORCE:
 		return "enforce";
+	case DecisionMode::LOG_ONLY:
+		return "log_only";
 	case DecisionMode::VALIDATE:
 		return "validate";
 	}

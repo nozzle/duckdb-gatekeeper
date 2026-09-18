@@ -483,7 +483,8 @@ There is no instance-wide switch.
 | `CALL gatekeeper_configure(...)` | The policy every enforced connection follows. |
 | `SET enable_external_access = false`, autoload off | Where the deployment allows; `gatekeeper_enforce()` warns when these are loose. |
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
-| `SET lock_configuration = true` | Freezes the policy. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
+| `SET gatekeeper_log_only = true`, while rolling out | Optional. Enforced connections record every decision and refuse nothing until you set it back; see [log-only mode](#log-only-mode). |
+| `SET lock_configuration = true` | Freezes the policy and the log-only switch. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
 | `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. |
 
 Enforce this connection:
@@ -499,8 +500,8 @@ SELECT enforced FROM gatekeeper_enforce();
 
 > [!NOTE]
 > The full row also carries `warnings`, naming host settings that weaken the sandbox
-> (`enable_external_access`, autoload, `lock_configuration`, and logging that would not record
-> a denial). Gatekeeper reports them; it never changes them.
+> (`enable_external_access`, autoload, `lock_configuration`, log-only mode, and logging that
+> would not record a denial). Gatekeeper reports them; it never changes them.
 
 From then on, on that connection only, allowed reads work as before:
 
@@ -548,8 +549,8 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 
 | Record column | Meaning |
 | --- | --- |
-| `event` | `decision`, or `policy_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
-| `mode`, `boundary` | `enforce` or `validate`; where the statement was decided (`binding`, `authorize`, `execution`, ...) |
+| `event` | `decision`, or `policy_changed` / `log_only_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
+| `mode`, `boundary` | `enforce`, `log_only`, or `validate`; where the statement was decided (`binding`, `authorize`, `execution`, ...) |
 | `allowed`, `code`, `violations`, `objects`, `functions`, ... | Exactly `gatekeeper_validate`'s [result columns](#result) |
 | `statement` | The SQL the engine ran, capped at 64 KiB (`statement_length` is the full size) |
 | `policy_hash` | The policy in force, matching the `policy_changed` record that installed it |
@@ -567,6 +568,42 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 > never-bind list. The one path outside that control is described with the rest of the
 > [audit log](docs/security.md#audit-log) in the security model.
 
+### Log-only mode
+
+To see what a policy would refuse before it refuses anything, turn refusals off for the whole
+instance and leave everything else in place:
+
+```text
+D SET gatekeeper_log_only = true;
+```
+
+Enforced connections keep making and recording every decision exactly as before; a denial is
+written to the log and the statement then runs as it would on an unenforced connection. Set it
+back to `false` (or `RESET` it) and the next statement on every enforced connection is refused
+again. The switch is global, boolean, frozen by `lock_configuration`, and on the record as
+`log_only_changed`. The rollout, end to end:
+
+```text
+CALL enable_logging('Gatekeeper', storage := 'file', storage_path := 'gatekeeper.csv');
+SET logging_level = 'debug';           -- allowed statements too, with what they resolved to
+SET gatekeeper_log_only = true;
+-- hand out enforced connections; run real traffic
+SELECT code, violations, statement FROM duckdb_logs_parsed('Gatekeeper')
+ WHERE mode = 'log_only' AND code IN ('forbidden', 'unsupported');  -- what enforcement would refuse
+SELECT DISTINCT o.schema, o."table" FROM duckdb_logs_parsed('Gatekeeper'), UNNEST(objects) AS t(o)
+ WHERE allowed;                                                     -- a draft allowed_tables
+SET gatekeeper_log_only = false;
+SET lock_configuration = true;
+```
+
+> [!WARNING]
+> Log-only mode protects nothing while it is on. The connections are still enforced, so the
+> switch is remembered when it flips back, but until then an agent's `SET gatekeeper_policy`,
+> `CALL gatekeeper_configure()`, or `SET gatekeeper_log_only = false` executes (and is recorded).
+> `SET lock_configuration = true` before handing out connections if the rollout is not
+> supervised. Records with `code = 'binding'` or `'parser'` are statements DuckDB itself
+> rejected; enforcement would have refused only `forbidden` and `unsupported`.
+
 ### What enforcement covers
 
 - **Parameters** (`execute(sql, [values])`): the statement is authorized with the values it is
@@ -577,7 +614,8 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 - **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
   are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
 - **`gatekeeper_validate` on the enforced connection**, when the policy allows it
-  (`allowed_functions := ['gatekeeper_validate']`), for agents that want a structured dry run.
+  (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
+  before they run the statement.
 - **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
   a rebind for prepared executions). Negligible next to model latency, measurable on hot paths;
   keep enforced connections for untrusted callers.
@@ -653,6 +691,7 @@ db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 tables = [{"catalog": "memory", "schema": "reporting", "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("CALL enable_logging('Gatekeeper')")
+db.execute("SET gatekeeper_log_only = false")  # true while rolling out: record denials, refuse nothing
 db.execute("SET lock_configuration = true")
 
 # Enforced connection: hand this cursor to the agent. Denials raise duckdb.PermissionException.

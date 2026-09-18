@@ -17,8 +17,9 @@ Preferred: hand untrusted callers an enforced connection and execute their SQL o
    `autoload_known_extensions=false` and `autoinstall_known_extensions=false`, and
    `enable_external_access=false` where the deployment allows. Gatekeeper does not
    mutate those settings; `CALL gatekeeper_enforce()` reports them in `warnings`.
-2. Install the global policy through trusted `CALL gatekeeper_configure`, then
-   `SET lock_configuration=true`.
+2. Install the global policy through trusted `CALL gatekeeper_configure`. To observe a policy
+   against real traffic before it refuses anything, `SET gatekeeper_log_only=true` ([log-only
+   mode](#log-only-mode)). Then `SET lock_configuration=true`, which freezes both.
 3. `CALL enable_logging('Gatekeeper')` so denials are [recorded](#audit-log); choose a
    storage the sandboxed connections cannot reach in-process (`storage := 'file'` or
    `'stdout'`) when no host connection will remain to read the in-memory log.
@@ -251,12 +252,54 @@ the policy) and depending on connection-open ordering, and a setting is one more
 trusted connection can be talked into flipping. A connection is enforced because the host said
 so on that connection, at that moment.
 
+### Log-only mode
+
+`SET gatekeeper_log_only = true` is a global BOOLEAN setting, default `false`, reversible, and
+frozen by `lock_configuration`. While it is true, every enforced connection makes and records
+every decision exactly as it otherwise would, and refuses nothing: a denial is written to the
+log with `mode = 'log_only'` and the engine then binds and executes the statement as it would
+on an unenforced connection. It exists so a policy can be measured against real traffic (what
+would be refused, and what the traffic resolves to) before any of it is refused.
+
+Semantics that follow from "the same decision, without the refusal":
+
+- The switch is read once per statement, in `QueryBegin` next to the policy, and snapshotted
+  with it, so every boundary of one statement agrees; a flip applies at the next statement on
+  every enforced connection, in both directions.
+- Identical checks at identical cost: the text check, the private authorizing bind, the
+  rebind of prepared executions, and the plan check all run. What log-only measures, denials
+  and latency alike, is what enforcement will do.
+- Exactly one record per statement, at the boundary that decided it, in both modes. Once a
+  log-only statement has been decided, the hooks the engine reaches while binding and
+  executing it anyway do not decide it again; the replacement-scan gate lets the engine's own
+  bind through because the private bind has already recorded the reader.
+- Nothing from the private path surfaces. An engine error raised while Gatekeeper binds
+  privately propagates on an enforcing connection (DuckDB's own message is the outcome); in
+  log-only mode it is recorded as `gatekeeper_validate` reports it (`code = 'binding'`) and the
+  engine's own bind raises the error, with the query location a hook cannot attach. The caller
+  sees exactly what an unenforced connection shows; `test/test_log_only.py` asserts this over
+  the enforcement parity corpus on identical fresh instances, and asserts the record equals
+  the `gatekeeper_validate` row.
+- A `Prepare()` outside any query is pre-screened as before and a denial there is recorded
+  with `mode = 'log_only'`; each later execution is its own record.
+- **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
+  gatekeeper_policy`, `CALL gatekeeper_configure()`, and `SET gatekeeper_log_only` are
+  unsupported statements that are recorded and then execute, exactly like every other
+  statement. The connection stays enforced, so flipping the switch back restores refusals on
+  it, but until then the caller has the whole engine. `lock_configuration` is the mitigation,
+  as for the policy; the `lock_configuration` posture warning names both settings, and
+  `gatekeeper_enforce()` warns whenever the switch is on.
+- Only a BOOLEAN `true` suspends refusals. A value written natively through
+  `DBConfig::SetOption` without the `SET` callback is read as it is stored; anything that is
+  not a BOOLEAN `true` (a NULL, a VARCHAR `'true'`) is enforcing. The unvalidated direction
+  fails closed.
+
 ### Audit log
 
 On an enforced connection the denial goes to the caller, not the host. What the host gets is a
 record: every decision Gatekeeper makes, on an enforced connection or in `gatekeeper_validate`,
 and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
-gatekeeper_configure`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
+gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
 `DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
 `code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`), so the
@@ -265,8 +308,8 @@ the enforcement parity corpus. The rest of the record is:
 
 | column | meaning |
 | --- | --- |
-| `event` | `decision` or `policy_changed` |
-| `mode` | `enforce` (an enforced connection) or `validate` (`gatekeeper_validate`) |
+| `event` | `decision`, `policy_changed`, or `log_only_changed` |
+| `mode` | `enforce` (an enforced connection), `log_only` (an enforced connection while `gatekeeper_log_only` is true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
 | `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
 | `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
 | `policy_hash` | sixteen hex digits over the canonical `gatekeeper_policy` value in force for the decision; the same hash appears on the `policy_changed` record that installed it, whose `new_value` is the full policy |
@@ -299,9 +342,12 @@ Properties that make the record trustworthy as evidence:
   and at query end; on a connection opened before `enable_logging` it would drop the first
   denial. The database logger tracks the configuration live, and the record is stamped with the
   statement's own connection, transaction, and query identity.
-- **Engine errors are not decisions.** A missing table or a type error on an enforced connection
+- **Engine errors are not decisions.** A missing table or a type error on an enforcing connection
   is DuckDB's error, in DuckDB's words, and is not recorded; `gatekeeper_validate` maps the same
-  outcome to `code = 'binding'` and that call is recorded.
+  outcome to `code = 'binding'` and that call is recorded, and so is a log-only statement, whose
+  record is what `gatekeeper_validate` would have said (the engine then raises its own error).
+  When reading a log-only trail for what enforcement would refuse, `forbidden` and `unsupported`
+  are the codes to count; `binding` and `parser` are statements DuckDB rejects on its own.
 - **The sandboxed connection cannot read, redirect, silence, erase, or forge the log.**
   `duckdb_logs`, `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose
   `storage_path` writes a file of the caller's choosing), `disable_logging`,
@@ -317,8 +363,8 @@ Properties that make the record trustworthy as evidence:
   which keeps `PRAGMA` text away from the preprocessor entirely, and can read the raw
   `duckdb_logs` rows with `TRY_CAST` if a malformed entry must be tolerated.
 - **The host's own changes are on the record.** `SET` and `RESET` of `gatekeeper_policy` and
-  `CALL gatekeeper_configure` each write a `policy_changed` entry (a `RESET` reports the
-  default value). A native `DBConfig::SetOption` write bypasses the `SET`
+  `CALL gatekeeper_configure` each write a `policy_changed` entry, and of `gatekeeper_log_only`
+  a `log_only_changed` entry (a `RESET` reports the default value). A native `DBConfig::SetOption` write bypasses the `SET`
   callback and writes no entry, but the next decision's `policy_hash` changes, so a policy that
   was altered that way is still visible.
 - Log writes are not guarded: if the configured storage fails (an unwritable file), the

@@ -193,7 +193,9 @@ source notes and baselines remain independent of build-engine versions. Follow t
   into `gatekeeper_validate`'s structured result.
 - `src/enforcement.cpp`: enforced connections. The per-connection enforced state
   (`ClientContextState`), the `QueryBegin`/`OnExecutePrepared`/post-bind hooks that run the
-  same decision inside the engine, `CALL gatekeeper_enforce()`, and posture warnings.
+  same decision inside the engine, the global `gatekeeper_log_only` switch (snapshotted per
+  statement; a denial is recorded and not refused), `CALL gatekeeper_enforce()`, and posture
+  warnings.
 - `src/audit.cpp`: the audit log. `Decide` is the one place a decision becomes observable:
   it writes the `Gatekeeper` log record (the `gatekeeper_validate` columns plus mode,
   boundary, statement, and policy hash) and throws the denial on an enforced connection.

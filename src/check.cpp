@@ -181,8 +181,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	auto scope = active_scope;
 	if (scope && &context != &scope->context)
 		scope = nullptr; // A reentrant connection on this thread is not the one being validated.
-	if (!scope && !IsEnforced(context))
-		return nullptr; // Ordinary connections are unaffected.
+	if (!scope && !IsEnforcing(context))
+		return nullptr; // Ordinary and log-only connections bind as the engine would; the latter was decided already.
 	auto path = ReplacementScan::GetFullPath(input);
 	// An enforced connection binding outside Authorize has no request layer and no result in progress: the
 	// denial is decided and recorded here, against the statement the connection is executing when there is one.
@@ -304,6 +304,46 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 		throw PermissionException("unauthorized replacement scan");
 }
 
+bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
+	if (auto parser = dynamic_cast<const ParserException *>(&error)) {
+		ErrorData data(*parser);
+		result.code = "parser";
+		result.error_type = "parser";
+		result.error_message = data.RawMessage();
+		auto position = data.ExtraInfo().find("position");
+		if (position != data.ExtraInfo().end()) {
+			try {
+				result.position = std::stoll(position->second);
+			} catch (...) {
+			}
+		}
+		return true;
+	}
+	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
+		result.code = binding ? "binding" : "invalid_input";
+		result.error_message = invalid->what();
+		return true;
+	}
+	if (auto invalid = dynamic_cast<const InvalidInputException *>(&error)) {
+		result.code = binding ? "binding" : "invalid_input";
+		if (binding)
+			result.error_type = "Invalid Input";
+		result.error_message = ErrorData(*invalid).RawMessage();
+		return true;
+	}
+	if (dynamic_cast<const std::bad_alloc *>(&error))
+		return false;
+	ErrorData data(error);
+	if (gatekeeper::PropagateEngineError(data.Type()))
+		return false;
+	result.code = gatekeeper::EngineErrorCode(binding);
+	result.error_type = Exception::ExceptionTypeToString(data.Type());
+	result.error_message = data.RawMessage();
+	if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
+		result.error_message = "Validation cannot complete binding without parameter values or types";
+	return true;
+}
+
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
                          const string &sql, const gatekeeper::Limits &limits) {
 	gatekeeper::Result result;
@@ -317,44 +357,9 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 		for (auto &statement : text.statements)
 			Authorize(context, policy, ceiling, *statement, text.binding, nullptr, result);
 		return result;
-	} catch (const ParserException &error) {
-		ErrorData data(error);
-		result.code = "parser";
-		result.error_type = "parser";
-		result.error_message = data.RawMessage();
-		auto position = data.ExtraInfo().find("position");
-		if (position != data.ExtraInfo().end()) {
-			try {
-				result.position = std::stoll(position->second);
-			} catch (...) {
-			}
-		}
-	} catch (const std::invalid_argument &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		result.error_message = error.what();
-	} catch (const InvalidInputException &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		if (binding)
-			result.error_type = "Invalid Input";
-		result.error_message = ErrorData(error).RawMessage();
-	} catch (const Exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
-			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
-		if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
-			result.error_message = "Validation cannot complete binding without parameter values or types";
-	} catch (const std::bad_alloc &) {
-		throw;
 	} catch (const std::exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
+		if (!DescribeError(error, binding, result))
 			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
 	}
 	MarkDenied(result);
 	return result;

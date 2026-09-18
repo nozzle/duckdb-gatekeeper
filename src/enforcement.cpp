@@ -17,22 +17,27 @@
 namespace duckdb {
 
 static constexpr const char *STATE_KEY = "gatekeeper_enforcement";
+static constexpr const char *LOG_ONLY_SETTING = "gatekeeper_log_only";
 
-static DecisionSite Site(Boundary boundary, optional_ptr<const gatekeeper::Policy> policy,
-                         optional_ptr<const string> sql) {
-	return {DecisionMode::ENFORCE, boundary, policy, sql};
+// The global log-only switch as it stands now. Only a readable true suspends refusals: a value written natively
+// without passing the SET callback fails closed, toward enforcing.
+static bool LogOnlySetting(ClientContext &context) {
+	Value value;
+	if (!DBConfig::GetConfig(context).TryGetCurrentSetting(LOG_ONLY_SETTING, value))
+		return false;
+	return !value.IsNull() && value.type().id() == LogicalTypeId::BOOLEAN && BooleanValue::Get(value);
 }
 
-// Reads the policy snapshot for this statement. An unreadable setting refuses the statement as invalid_input:
-// the fail-closed outcome for a sandbox whose policy was written without validation.
-static bool SnapshotPolicy(ClientContext &context, Boundary boundary, optional_ptr<const string> sql,
-                           gatekeeper::Policy &policy, gatekeeper::Result &result) {
+static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG_ONLY : DecisionMode::ENFORCE; }
+
+// Reads the global policy. An unreadable setting is decided as invalid_input: the fail-closed outcome for a
+// sandbox whose policy was written without validation.
+static bool ReadPolicy(ClientContext &context, gatekeeper::Policy &policy, gatekeeper::Result &result) {
 	try {
 		policy = GlobalPolicy(context);
 		return true;
 	} catch (const std::invalid_argument &error) {
 		result = {false, "invalid_input", "", string("cannot read the global policy: ") + error.what()};
-		Decide(context, Site(boundary, nullptr, sql), result);
 		return false;
 	}
 }
@@ -52,9 +57,17 @@ static bool SnapshotPolicy(ClientContext &context, Boundary boundary, optional_p
 //
 // One result accumulates across the boundaries and is recorded exactly once per statement: at the boundary
 // that denies it, or as allowed once the plan the engine will execute has passed.
+//
+// gatekeeper_log_only is read once per statement next to the policy. In log-only mode the same checks run in
+// the same places and write the same record, and a denial refuses nothing: the engine goes on to bind and
+// execute the statement as it would on an unenforced connection. The record already stands, so the hooks the
+// engine then reaches for that statement do not decide it again.
 struct EnforcementState : ClientContextState {
 	gatekeeper::Policy policy; // one snapshot for the whole statement
 	gatekeeper::Result result; // the decision in progress
+	bool log_only = false;     // this statement is recorded and never refused
+	bool in_statement = false; // QueryBegin has run: the snapshots describe the statement in progress
+	bool decided = false;      // the statement's record has been written
 	bool admitted = false;     // text passed the binding boundary
 	bool authorized = false;   // private bind with catalog authorization passed
 	gatekeeper::BindingPolicy binding;
@@ -63,43 +76,65 @@ struct EnforcementState : ClientContextState {
 	void Reset() {
 		policy = gatekeeper::Policy();
 		result = gatekeeper::Result();
+		log_only = false;
+		in_statement = false;
+		decided = false;
 		admitted = false;
 		authorized = false;
 		binding = gatekeeper::BindingPolicy();
 		statement.reset();
 	}
-	// Runs the same private authorization gatekeeper_validate performs. Engine errors (missing tables, type
-	// errors) propagate unchanged so the caller gets DuckDB's own message; they are not decisions.
+	// The statement's record, and in ENFORCE mode its refusal. Marked before Decide can throw.
+	void Record(ClientContext &context, Boundary boundary, optional_ptr<const gatekeeper::Policy> in_force,
+	            optional_ptr<const string> sql) {
+		decided = true;
+		Decide(context, {ModeFor(log_only), boundary, in_force, sql}, result);
+	}
+	// Runs the same private authorization gatekeeper_validate performs. An engine error while binding privately
+	// (a missing table, a type error) is not a decision. Enforcing, it propagates unchanged: DuckDB's own message
+	// is the outcome. Log-only, nothing from the private path may surface: the statement is recorded as
+	// gatekeeper_validate would report it, and the engine's own bind raises the error, carrying the query
+	// location a hook cannot attach, or runs the statement if it binds after all.
 	void Authorize(ClientContext &context, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters) {
 		try {
 			duckdb::Authorize(context, policy, policy, *statement, binding, parameters, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
-			Decide(context, Site(Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery()), result);
+			Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
+			return;
+		} catch (const std::exception &error) {
+			if (!log_only || !DescribeError(error, true, result))
+				throw;
+			MarkDenied(result);
+			Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
 			return;
 		}
 		authorized = true;
 	}
 	void QueryBegin(ClientContext &context) override {
 		Reset();
+		in_statement = true;
+		log_only = LogOnlySetting(context);
 		const auto &sql = context.GetCurrentQuery();
-		if (!SnapshotPolicy(context, Boundary::BINDING, &sql, policy, result))
+		if (!ReadPolicy(context, policy, result)) {
+			Record(context, Boundary::BINDING, nullptr, &sql);
 			return;
+		}
 		TextCheck text;
 		try {
 			text = CheckText(context, policy, policy, sql, gatekeeper::Limits());
 		} catch (const ParserException &error) {
 			result = {false, "parser", "parser", ErrorData(error).RawMessage()};
-			Decide(context, Site(Boundary::BINDING, &policy, &sql), result);
+			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		} catch (const InvalidInputException &error) {
 			result = {false, "invalid_input", "", ErrorData(error).RawMessage()};
-			Decide(context, Site(Boundary::BINDING, &policy, &sql), result);
+			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
 		result = std::move(text.result);
 		if (!result.allowed) {
-			Decide(context, Site(Boundary::BINDING, &policy, &sql), result);
+			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
 		admitted = true;
@@ -111,9 +146,9 @@ struct EnforcementState : ClientContextState {
 	void QueryEnd(ClientContext &, optional_ptr<ErrorData>) override { Reset(); }
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
 	                                  RebindQueryInfo) override {
-		if (!admitted) {
+		if (!admitted && !decided) {
 			result = {false, "forbidden", "", "", {{"statement", "not admitted at the binding boundary"}}};
-			Decide(context, Site(Boundary::BINDING, &policy, &context.GetCurrentQuery()), result);
+			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
 		// The prepared plan was built before this query began. Rebinding inside the query means the plan
 		// that executes is the one PostBind authorizes under this statement's policy snapshot.
@@ -127,7 +162,14 @@ static shared_ptr<EnforcementState> StateOf(ClientContext &context) {
 
 static void Latch(ClientContext &context) { context.registered_state->GetOrCreate<EnforcementState>(STATE_KEY); }
 
-bool IsEnforced(ClientContext &context) { return StateOf(context) != nullptr; }
+bool IsEnforcing(ClientContext &context) {
+	auto state = StateOf(context);
+	if (!state)
+		return false;
+	// Inside a statement the snapshot QueryBegin took governs every check of it; a Prepare() bind outside any
+	// statement reads the setting as it stands.
+	return state->in_statement ? !state->log_only : !LogOnlySetting(context);
+}
 
 optional_ptr<const string> AdmittedQuery(ClientContext &context) {
 	auto state = StateOf(context);
@@ -149,21 +191,36 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	if (!state || !statement.plan)
 		return;
 	auto &context = input.context;
-	if (!state->admitted) {
+	if (!state->in_statement) {
 		// Prepare(): no query is active and the text has not been seen. This plan cannot execute before
 		// OnExecutePrepared forces a rebind inside a query, so only pre-screen it here.
+		auto mode = ModeFor(LogOnlySetting(context));
 		gatekeeper::Policy policy;
 		gatekeeper::Result result;
-		if (!SnapshotPolicy(context, Boundary::PREPARE, nullptr, policy, result))
+		if (!ReadPolicy(context, policy, result)) {
+			Decide(context, {mode, Boundary::PREPARE, nullptr, nullptr}, result);
 			return;
+		}
 		result.allowed = true;
 		try {
 			CheckPlan(policy, policy, gatekeeper::BindingPolicy(), input.binder.GetStatementProperties(),
 			          *statement.plan, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
-			Decide(context, Site(Boundary::PREPARE, &policy, nullptr), result);
+			Decide(context, {mode, Boundary::PREPARE, &policy, nullptr}, result);
 		}
+		return;
+	}
+	if (state->log_only && state->decided) {
+		// Decided at an earlier boundary and not refused: the engine is binding the statement anyway. The
+		// record stands; nothing is decided twice.
+		return;
+	}
+	if (!state->admitted) {
+		// In ENFORCE mode the binding-boundary denial refused the statement before the engine could plan it;
+		// should a plan arrive regardless, fail closed rather than authorize what was never admitted.
+		state->result = {false, "forbidden", "", "", {{"statement", "not admitted at the binding boundary"}}};
+		state->Record(context, Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery());
 		return;
 	}
 	if (!state->authorized) {
@@ -183,13 +240,25 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		MarkDenied(state->result);
 	}
 	// The one record an allowed statement produces: the plan the engine will execute has passed.
-	Decide(context, Site(Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery()), state->result);
+	state->Record(context, Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery());
+}
+
+static void SetLogOnly(ClientContext &context, SetScope scope, Value &value) {
+	if (scope == SetScope::SESSION || scope == SetScope::LOCAL)
+		throw InvalidInputException("gatekeeper_log_only is global-only");
+	if (value.IsNull())
+		throw InvalidInputException("gatekeeper_log_only must be true or false");
+	// Record first: a log sink that refuses the entry fails this statement with nothing changed. The engine
+	// stores the value after this returns; every enforced connection reads it at its next statement.
+	LogSettingChange(context, "log_only_changed", value);
 }
 
 // Host settings Gatekeeper documents but deliberately never changes. Reported, not enforced.
 static vector<string> PostureWarnings(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<string> warnings;
+	if (LogOnlySetting(context))
+		warnings.push_back("gatekeeper_log_only is true: this connection records decisions and refuses nothing");
 	if (Settings::Get<EnableExternalAccessSetting>(config))
 		warnings.push_back("enable_external_access is true: readers reached through trusted views or macros can "
 		                   "open files and URLs while binding");
@@ -198,7 +267,8 @@ static vector<string> PostureWarnings(ClientContext &context) {
 		warnings.push_back("autoload_known_extensions or autoinstall_known_extensions is true: binding can load "
 		                   "extensions on demand");
 	if (!Settings::Get<LockConfigurationSetting>(config))
-		warnings.push_back("lock_configuration is false: unenforced connections can still change gatekeeper_policy");
+		warnings.push_back("lock_configuration is false: unenforced connections can still change gatekeeper_policy "
+		                   "and gatekeeper_log_only");
 	if (!DenialsRecorded(context))
 		warnings.push_back("logging does not record Gatekeeper decisions: denials on this connection leave no "
 		                   "audit record; CALL enable_logging('Gatekeeper')");
@@ -242,6 +312,10 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 
 void RegisterEnforcement(ExtensionLoader &loader) {
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.AddExtensionOption(LOG_ONLY_SETTING,
+	                          "Whether enforced connections record every decision without refusing anything, "
+	                          "instead of refusing what the policy denies",
+	                          LogicalType::BOOLEAN, Value::BOOLEAN(false), SetLogOnly, SetScope::GLOBAL);
 	PlannerExtension planner;
 	planner.post_bind_function = PostBind;
 	PlannerExtension::Register(config, planner);

@@ -59,6 +59,11 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 // Installs Gatekeeper's replacement-scan callback in first position, once per database.
 void InstallReplacementScan(DBConfig &config);
 
+// Describes an exception raised while checking or binding as gatekeeper_validate reports it: parser errors as
+// 'parser', anything else as 'binding' once the text was admitted and 'invalid_input' before. Returns false for
+// errors that are never decisions and must propagate (fatal, internal, out of memory, interrupts).
+bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result);
+
 // One-line description of a denied result for exception messages.
 string DenialMessage(const gatekeeper::Result &result);
 

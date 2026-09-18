@@ -141,8 +141,8 @@ docs:
     > again.
 
     `CALL gatekeeper_enforce()` returns `warnings` naming host settings that weaken the
-    sandbox (`enable_external_access`, autoload, `lock_configuration`, logging that would not
-    record a denial); Gatekeeper reports them and never changes them. Parameters and the
+    sandbox (`enable_external_access`, autoload, `lock_configuration`, log-only mode, logging
+    that would not record a denial); Gatekeeper reports them and never changes them. Parameters and the
     relation API are covered, prepared executions are rebound under the policy current at
     that moment, query pragmas DuckDB rewrites into `SELECT`s (`PRAGMA version`) are checked
     as that `SELECT`, and enforcement agrees with `gatekeeper_validate` on every statement
@@ -170,7 +170,8 @@ docs:
     log type `Gatekeeper`: the `gatekeeper_validate` result columns, plus `mode`, the
     `boundary` that decided the statement, the statement text (64 KiB cap), and a
     `policy_hash` matching the `policy_changed` record that installed the policy. `SET`,
-    `RESET`, and `gatekeeper_configure` changes to the policy are recorded too.
+    `RESET`, and `gatekeeper_configure` changes to the policy and to `gatekeeper_log_only`
+    are recorded too.
 
     > Tip Denials and setting changes are `INFO`, so `CALL enable_logging('Gatekeeper')`
     > records them by itself. `SET logging_level = 'debug'` also records every allowed
@@ -183,6 +184,25 @@ docs:
     > `write_log` are never-bind, and `CALL gatekeeper_enforce()` warns when logging would not
     > record a denial. The `PRAGMA` path above is the one exception and is documented as a
     > residual.
+
+    ### Log-only mode
+
+    ```sql
+    SET gatekeeper_log_only = true;   -- enforced connections record every decision and refuse nothing
+    ```
+
+    To measure a policy against real traffic before it refuses anything. Enforced connections
+    keep making and recording the same decisions (`mode = 'log_only'`), and a denied statement
+    then runs as it would on an unenforced connection. `SET gatekeeper_log_only = false` (or
+    `RESET`) restores refusals at the next statement on every enforced connection. The switch
+    is global, boolean, frozen by `lock_configuration`, and recorded as `log_only_changed`.
+    Records with `code IN ('forbidden', 'unsupported')` are what enforcement would refuse;
+    `binding` and `parser` are statements DuckDB rejects on its own.
+
+    > Warning Log-only mode protects nothing while it is on, Gatekeeper's own settings
+    > included: an agent's `SET gatekeeper_policy` or `SET gatekeeper_log_only = false` is
+    > recorded and then executes. `SET lock_configuration = true` before handing out
+    > connections if the rollout is not supervised.
 
     ### Functions and options
 

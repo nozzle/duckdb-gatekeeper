@@ -34,11 +34,11 @@ in [docs/security.md](docs/security.md), reads a table or view outside `allowed_
 or matching `blocked_tables`; binds a caller-written function outside the allowlists or
 matching `blocked_functions`; reaches a never-bind function by any route; is not a single
 `SELECT`; or executes, writes, or performs I/O the validator claims it does not. Also in
-scope: any statement executing on an enforced connection that `gatekeeper_validate` would
-deny, any way to release or bypass enforcement from SQL, `gatekeeper_configure` or
-`SET gatekeeper_policy` widening the policy from a connection that should not be able to, and
-a distributed artifact
-loading into an engine it was not built for.
+scope: any statement executing on an enforced connection (with `gatekeeper_log_only` false)
+that `gatekeeper_validate` would deny, or executing there unrecorded while it is true; any way
+to release or bypass enforcement from SQL; `gatekeeper_configure`, `SET gatekeeper_policy`, or
+`SET gatekeeper_log_only` widening the policy or suspending refusals from a connection that
+should not be able to; and a distributed artifact loading into an engine it was not built for.
 
 Out of scope, by design and documented in
 [Remaining boundaries](docs/security.md#remaining-boundaries): row- or column-level
