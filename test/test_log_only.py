@@ -178,13 +178,26 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
     assert logged["boundary"] == "replacement_scan" and logged["violations"][0]["function_name"] == "read_parquet"
     assert logged["statement"] == sql
     # The same through Prepare(): the gate decides the bind outside any statement (no text is available), the
-    # failed bind runs no pre-screen, and the mark it left does not leak into the next Prepare().
+    # failed bind runs no pre-screen, and the mark it left is cleared with that prepare attempt, so the next
+    # Prepare() is decided on its own, whether or not a statement or transaction boundary came between.
     with pytest.raises(duckdb.IOException):
         agent.executemany(sql, [[1]])
     agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0]])
     found = decisions(catalog, "mode = 'log_only'")[1:]
     assert [(r["boundary"], r["statement"]) for r in found] == [("replacement_scan", None), ("prepare", None),
                                                                  ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
+    # Inside an explicit transaction no statement or transaction boundary separates two Prepare() calls (the
+    # first failure aborts the transaction, and Prepare() still binds in an aborted one).
+    agent.execute("BEGIN")
+    for _ in range(2):
+        with pytest.raises(duckdb.IOException):
+            agent.executemany(sql, [[1]])
+    agent.execute("ROLLBACK")
+    agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0]])
+    found = decisions(catalog, "mode = 'log_only'")[4:]
+    assert [(r["boundary"], r["statement"]) for r in found] == [
+        ("binding", "BEGIN"), ("replacement_scan", None), ("replacement_scan", None), ("binding", "ROLLBACK"),
+        ("prepare", None), ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
 
 
 def test_prepared_statements_are_recorded_when_prepared_and_when_executed(catalog, agent):

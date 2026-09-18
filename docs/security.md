@@ -351,8 +351,10 @@ Properties that make the record trustworthy as evidence:
   is DuckDB's error, in DuckDB's words, and is not recorded; `gatekeeper_validate` maps the same
   outcome to `code = 'binding'` and that call is recorded, and so is a log-only statement, whose
   record is what `gatekeeper_validate` would have said (the engine then raises its own error).
-  When reading a log-only trail for what enforcement would refuse, `forbidden` and `unsupported`
-  are the codes to count; `binding` and `parser` are statements DuckDB rejects on its own.
+  When reading a log-only trail for what enforcement would refuse, count `forbidden`,
+  `unsupported`, and `invalid_input` (the text check's limits and multi-statement text, and a
+  policy the host left unreadable through a native write, which refuses every statement);
+  `binding` and `parser` are statements DuckDB rejects on its own.
 - **The sandboxed connection cannot read, redirect, silence, erase, or forge the log.**
   `duckdb_logs`, `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose
   `storage_path` writes a file of the caller's choosing), `disable_logging`,

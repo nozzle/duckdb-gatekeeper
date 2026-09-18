@@ -146,17 +146,21 @@ struct EnforcementState : ClientContextState {
 			Authorize(context, nullptr);
 	}
 	void QueryEnd(ClientContext &, optional_ptr<ErrorData>) override { Reset(); }
-	// A Prepare() that failed to bind after the gate decided it runs no pre-screen to consume the mark. An
-	// auto-committed Prepare() ends its own transaction, which clears it; inside an explicit transaction the
-	// next statement's QueryBegin does.
-	void TransactionBegin(MetaTransaction &, ClientContext &) override { prepare_decided = false; }
-	void TransactionCommit(MetaTransaction &, ClientContext &) override {
+	// The gate's Prepare() mark must not outlive the prepare attempt that set it: a bind that fails after the
+	// gate decided it runs no pre-screen to consume the mark, and nothing else separates one Prepare() from the
+	// next inside an explicit transaction. Declaring that this state can request a rebind makes the engine
+	// report how every prepare attempt ended, OnFinalizePrepare or OnPlanningError, at the cost of binding a
+	// copy of the statement; no rebind is ever requested from here.
+	bool CanRequestRebind() override { return true; }
+	RebindQueryInfo OnPlanningError(ClientContext &, SQLStatement &, ErrorData &) override {
 		if (!in_statement)
 			prepare_decided = false;
+		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	void TransactionRollback(MetaTransaction &, ClientContext &, optional_ptr<ErrorData>) override {
+	RebindQueryInfo OnFinalizePrepare(ClientContext &, PreparedStatementData &, PreparedStatementMode) override {
 		if (!in_statement)
 			prepare_decided = false;
+		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
 	                                  RebindQueryInfo) override {
