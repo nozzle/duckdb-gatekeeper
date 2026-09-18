@@ -104,8 +104,9 @@ flowchart LR
     which -- validate first --> v["gatekeeper_validate(sql, ...)"]
     v --> ok{"allowed AND<br/>code = 'ok'?"}
     ok -- yes --> run[execute the same SQL<br/>on the same connection]
-    ok -- no --> deny[deny, log violations]
+    ok -- no --> deny[deny]
     v -. exception / no row .-> deny
+    run2 & v -.-> log[("audit log<br/>duckdb_logs_parsed('Gatekeeper')")]
 ```
 
 ## Functions
@@ -471,6 +472,18 @@ denies. There is no host glue to forget: the agent gets a connection, and every 
 submits is checked the way `gatekeeper_validate` would check it, then the plan the engine is
 about to execute is checked again.
 
+Turn on the audit log first, so that every denial the agent receives is also a record the host
+can read:
+
+```sql
+CALL enable_logging('Gatekeeper');
+SELECT current_setting('enabled_log_types') AS log_types;
+```
+
+| log_types |
+| --- |
+| Gatekeeper |
+
 Latch a single connection:
 
 ```sql
@@ -483,7 +496,8 @@ SELECT enforced FROM gatekeeper_enforce();
 
 The full `CALL gatekeeper_enforce()` row also carries a `warnings` list naming host settings
 that weaken the sandbox (`enable_external_access`, `autoload_known_extensions`,
-`lock_configuration`). Gatekeeper reports them; it never changes them.
+`lock_configuration`, and logging that would not record a denial). Gatekeeper reports them; it
+never changes them.
 
 From then on, on that connection only, allowed reads work as before:
 
@@ -506,6 +520,31 @@ D SELECT * FROM secret.salaries;
 Permission Error: Gatekeeper denied this statement: table: object is not allowed
 ```
 
+Those errors went to the agent. The host reads the same decisions, with the text that caused
+them, from any connection that is not latched:
+
+```text
+D SELECT boundary, code, violations[1].rule AS rule, statement
+  FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND NOT allowed;
+┌───────────┬─────────────┬──────────┬─────────────────────────────────────────────────────┐
+│ boundary  │    code     │   rule   │                      statement                      │
+├───────────┼─────────────┼──────────┼─────────────────────────────────────────────────────┤
+│ binding   │ unsupported │ statement│ CREATE TABLE scratch AS SELECT * FROM reporting.ord…│
+│ binding   │ forbidden   │ function │ SELECT * FROM read_csv('/etc/passwd');              │
+│ authorize │ forbidden   │ table    │ SELECT * FROM secret.salaries;                      │
+└───────────┴─────────────┴──────────┴─────────────────────────────────────────────────────┘
+```
+
+A record's decision columns are exactly `gatekeeper_validate`'s; the rest says where the
+statement was decided (`boundary`), on which connection and query (DuckDB's own log-context
+columns), and under which policy (`policy_hash`, matching the `policy_changed` record that
+installed it). Denials and setting changes are `INFO`; `SET logging_level = 'debug'` also
+records every allowed statement with the tables, views, and functions it resolved to, which is
+the raw material for an allowlist. Use `CALL enable_logging('Gatekeeper', storage := 'file',
+storage_path := '...')` for a durable log. The latched connection can neither read the log nor
+switch it off: the logging functions and `duckdb_logs` are on the never-bind list. Details in
+the [security model](docs/security.md#audit-log).
+
 The latch is **irreversible for the life of the connection** and lives in the connection's own
 state, not in a setting, so neither `RESET` nor a native configuration write releases it. Denied
 statements are ordinary errors: the transaction survives, and the agent can try again.
@@ -524,8 +563,9 @@ Global modes also latch connections that extensions open internally (some lakeho
 catalogs run their own metadata SQL that way); prefer per-connection latching with such catalogs.
 
 Recommended host sequence: load extensions and attach catalogs, `CALL gatekeeper_configure(...)`,
-tighten `enable_external_access` and autoload where the deployment allows, `SET lock_configuration = true`,
-then hand out enforced connections.
+tighten `enable_external_access` and autoload where the deployment allows,
+`CALL enable_logging('Gatekeeper')`, `SET lock_configuration = true`, then hand out enforced
+connections.
 
 What enforcement changes and does not change:
 

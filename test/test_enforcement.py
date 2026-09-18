@@ -458,9 +458,11 @@ def test_posture_warnings():
         warnings = enforce(loose.cursor())
         assert any("enable_external_access" in w for w in warnings)
         assert any("lock_configuration" in w for w in warnings)
+        assert any("enable_logging('Gatekeeper')" in w for w in warnings)
     with connect() as tight:
         tight.execute("""SET enable_external_access = false; SET autoinstall_known_extensions = false;
-                         SET autoload_known_extensions = false; SET lock_configuration = true""")
+                         SET autoload_known_extensions = false; CALL enable_logging('Gatekeeper');
+                         SET lock_configuration = true""")
         assert enforce(tight.cursor()) == []
         # With external access off the engine itself refuses readers, before Gatekeeper is consulted.
         with pytest.raises(duckdb.Error):

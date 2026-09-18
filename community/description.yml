@@ -127,7 +127,8 @@ docs:
     not in a setting. `gatekeeper_enforcement` accepts `off`, `new_connections`, and
     `all`; switching it back releases nobody, and `lock_configuration` freezes it.
     `CALL gatekeeper_enforce()` also returns `warnings` naming host settings that weaken
-    the sandbox (`enable_external_access`, autoload, `lock_configuration`); Gatekeeper
+    the sandbox (`enable_external_access`, autoload, `lock_configuration`, logging that
+    would not record a denial); Gatekeeper
     reports them and never changes them. Parameters and the relation API are covered.
     Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
     DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
@@ -139,6 +140,22 @@ docs:
     validate the complete text first and execute only on `allowed = true` and
     `code = 'ok'`, as the validate-first flow above requires. See the security model's
     residuals.
+
+    ### Audit log
+
+    ```sql
+    CALL enable_logging('Gatekeeper');
+    SELECT boundary, code, violations, statement FROM duckdb_logs_parsed('Gatekeeper') WHERE NOT allowed;
+    ```
+
+    Every decision on an enforced connection and every `gatekeeper_validate` call is a
+    structured record of DuckDB log type `Gatekeeper`, with the same decision columns as
+    `gatekeeper_validate` plus the statement text, the boundary that decided it, and a hash
+    of the policy in force; policy and mode changes are recorded too. Denials are `INFO`;
+    `SET logging_level = 'debug'` also records allowed statements with the objects and
+    functions they resolved to. The sandboxed connection cannot read, silence, or erase the
+    log: `duckdb_logs`, `enable_logging`, `disable_logging`, and `truncate_duckdb_logs` are
+    never-bind. `CALL gatekeeper_enforce()` warns when logging would not record a denial.
 
     ### Functions and options
 

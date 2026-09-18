@@ -6,6 +6,7 @@ namespace gatekeeper {
 inline const Names &NeverBindFunctions() {
 	static const Names names = {"checkpoint",
 	                            "currval",
+	                            "disable_logging",
 	                            "duckdb_approx_database_count",
 	                            "duckdb_columns",
 	                            "duckdb_connection_count",
@@ -34,6 +35,7 @@ inline const Names &NeverBindFunctions() {
 	                            "duckdb_types",
 	                            "duckdb_variables",
 	                            "duckdb_views",
+	                            "enable_logging",
 	                            "force_checkpoint",
 	                            "gatekeeper_configure",
 	                            "gatekeeper_enforce",
@@ -51,6 +53,7 @@ inline const Names &NeverBindFunctions() {
 	                            "query_table",
 	                            "read_duckdb",
 	                            "seq_scan",
+	                            "truncate_duckdb_logs",
 	                            "which_secret"};
 	return names;
 }

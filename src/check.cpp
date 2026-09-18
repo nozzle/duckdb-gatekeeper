@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -183,18 +184,30 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	if (!scope && !IsEnforced(context))
 		return nullptr; // Ordinary connections are unaffected.
 	auto path = ReplacementScan::GetFullPath(input);
-	// An enforced connection binding outside Authorize has no request layer or result to record into.
+	// An enforced connection binding outside Authorize has no request layer and no result in progress: the
+	// denial is decided and recorded here, against the statement the connection is executing when there is one.
 	gatekeeper::Policy enforced;
 	if (!scope) {
 		try {
 			enforced = GlobalPolicy(context);
 		} catch (const std::invalid_argument &error) {
-			throw PermissionException(string("Gatekeeper cannot read the global policy: ") + error.what());
+			gatekeeper::Result result;
+			result.code = "invalid_input";
+			result.error_message = string("cannot read the global policy: ") + error.what();
+			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, nullptr, AdmittedQuery(context)},
+			       result);
+			throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
 		}
 	}
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
-		if (!scope)
-			throw PermissionException("Gatekeeper denied this statement: " + rule + ": " + message);
+		if (!scope) {
+			gatekeeper::Result result;
+			result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name, function);
+			MarkDenied(result);
+			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, &enforced, AdmittedQuery(context)},
+			       result);
+			throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+		}
 		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
 		                                 function);
 		throw PermissionException("replacement scan is not allowed");
@@ -337,13 +350,17 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 		result.error_type = Exception::ExceptionTypeToString(data.Type());
 		result.error_message = data.RawMessage();
 	}
+	MarkDenied(result);
+	return result;
+}
+
+void MarkDenied(gatekeeper::Result &result) {
 	result.allowed = false;
 	if (!result.violations.empty()) {
 		result.code = "forbidden";
 		result.error_type.clear();
 		result.error_message.clear();
 	}
-	return result;
 }
 
 string DenialMessage(const gatekeeper::Result &result) {
