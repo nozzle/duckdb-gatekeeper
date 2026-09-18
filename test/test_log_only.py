@@ -31,8 +31,11 @@ def outcome(connection, sql):
         # DuckDB names a dynamic PIVOT's enum type after a fresh UUID; the engine's own error text carries it.
         # An enforced connection also binds a copy of the statement (its state can request a rebind), and
         # DuckDB's PivotRef::Copy drops the query location, so a binder error raised at a PIVOT loses its LINE
-        # excerpt there (see docs/security.md, "Errors are informative"); compare the message without it.
-        message = QUERY_LOCATION.sub("", PIVOT_ENUM.sub("__pivot_enum_", str(error)))
+        # excerpt there (see docs/security.md, "Errors are informative"); for PIVOT text only, compare the
+        # message without it. Every other error must match to the last character.
+        message = PIVOT_ENUM.sub("__pivot_enum_", str(error))
+        if "PIVOT" in sql.upper():
+            message = QUERY_LOCATION.sub("", message)
         return ("error", type(error).__name__, message)
     if sql.startswith("EXPLAIN ANALYZE"):
         return ("ok",)  # timings differ run to run

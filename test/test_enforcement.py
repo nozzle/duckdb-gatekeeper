@@ -215,8 +215,10 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     sql = "PIVOT reporting.orders ON tag USING sum(amount)"
     static = "PIVOT reporting.orders ON tag IN ('a', 'b') USING sum(amount)"
     assert validate(catalog, sql)["allowed"]
-    assert agent.execute(sql).fetchall() == catalog.execute(static).fetchall()
+    # Temporary types are connection-local, and validate ran on the catalog connection: an enum it created would
+    # be visible here and nowhere else. The agent then creates its own, in its own session.
     assert catalog.execute("SELECT count(*) FROM duckdb_types() WHERE type_name LIKE '__pivot_enum_%'").fetchone()[0] == 0
+    assert agent.execute(sql).fetchall() == catalog.execute(static).fetchall()
     # The pivoting SELECT is validated before the type exists, so it is bound against placeholder IN lists of
     # both sizes DuckDB plans differently: an aggregate FILTER per value up to pivot_filter_threshold, and a LIST
     # aggregate under a PIVOT operator above it. Blocking the LIST implementation denies the text as a whole, and
