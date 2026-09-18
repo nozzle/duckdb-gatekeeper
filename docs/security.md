@@ -508,7 +508,13 @@ The callback exposes no expression origin within one binder: when caller syntax 
 an implementation check, a trusted expansion using the same implementation must also pass
 it. This conservative query-wide restriction can deny a mixed caller/view expression; it
 does not grant an exception to caller code. Type names, casts, and collations are trusted
-host database configuration and are not authorized separately.
+host database configuration and are not authorized separately. Trust covers the whole
+body, arguments included: a host macro that forwards a caller argument into a reader
+(`CREATE MACRO files(p) AS TABLE SELECT * FROM read_parquet(p)`) hands the caller that
+choice, and neither the allowlist nor `blocked_functions` stands in the way. Do not create
+pass-through definitions for capabilities the policy is meant to withhold; DuckDB itself
+refuses a macro that forwards an aggregate name into a dispatcher, since the name must be
+a constant.
 Name-selected aggregate dispatch (`list_aggregate`, `list_aggr`, `aggregate`,
 `array_aggregate`, `array_aggr`) is elevated, and admitting a dispatcher does not admit
 every aggregate it can reach: when the caller writes one, the aggregate DuckDB resolves
