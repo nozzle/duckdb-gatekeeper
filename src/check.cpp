@@ -3,6 +3,7 @@
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -87,7 +88,9 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 // gatekeeper_validate on a dynamic PIVOT decides the statements the engine will run for it, each on the text
 // the engine will run (the parser stamps every rewritten statement with its own text, which is what an
 // enforced connection's hooks then see), in the engine's order, stopping at the first denial. Only the parser
-// produces a batch, and only in this shape: enum types followed by the SELECT that names them.
+// produces a batch, and only in this shape: enum types followed by the SELECT that names them. A nested
+// dynamic PIVOT puts an earlier enum type in a later enum type's own SELECT, so every statement learns the
+// types created before it.
 static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy &policy,
                                 const gatekeeper::Policy &ceiling, const MultiStatement &batch,
                                 const gatekeeper::Limits &limits) {
@@ -100,12 +103,10 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 	};
 	if (statements.size() < 2 || statements.back()->type != StatementType::SELECT_STATEMENT)
 		return unsupported();
-	gatekeeper::Names enums;
-	for (size_t i = 0; i + 1 < statements.size(); i++) {
+	for (size_t i = 0; i + 1 < statements.size(); i++)
 		if (!PivotEnumStatement(*statements[i]))
 			return unsupported();
-		enums.insert(statements[i]->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().name);
-	}
+	gatekeeper::Names enums;
 	for (auto &statement : statements) {
 		auto part = CheckStatementText(context, policy, ceiling, statement->query, limits, true);
 		if (!part.result.allowed) {
@@ -115,8 +116,10 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 		if (part.units.size() != 1)
 			return unsupported();
 		check.units.push_back(std::move(part.units[0]));
+		check.units.back().pivot_enums = enums;
+		if (statement->type == StatementType::CREATE_STATEMENT)
+			enums.insert(statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().name);
 	}
-	check.units.back().pivot_enums = std::move(enums);
 	check.result = {true, "ok"};
 	return check;
 }
@@ -444,29 +447,43 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 		throw PermissionException("unauthorized replacement scan");
 }
 
-// The IN-list sizes under which the final SELECT of a dynamic PIVOT is bound when the enum types it names do
-// not exist yet. Binder::BindPivot plans a PIVOT two ways by the number of values: filtered aggregates up to
-// pivot_filter_threshold, and above it a LIST aggregate (with concat for several columns) under a PIVOT
-// operator. The values themselves only name output columns, so one bind of each shape authorizes every plan the
-// engine can produce for the statement whatever the data holds; a plan the data selects at execution has then
-// been checked here. pivot_limit bounds the total, and a threshold at or beyond it leaves the engine only the
-// first shape.
-static vector<idx_t> PivotShapes(ClientContext &context) {
-	auto threshold = Settings::Get<PivotFilterThresholdSetting>(context);
-	auto limit = Settings::Get<PivotLimitSetting>(context);
-	vector<idx_t> shapes{1};
-	if (threshold + 1 > 1 && threshold + 1 < limit)
-		shapes.push_back(threshold + 1);
-	return shapes;
+// The SELECT a unit's statement stands for, where the PIVOTs to substitute live.
+static QueryNode &PivotQuery(SQLStatement &statement) {
+	if (statement.type == StatementType::SELECT_STATEMENT)
+		return *statement.Cast<SelectStatement>().node;
+	return *statement.Cast<CreateStatement>().info->Cast<CreateTypeInfo>().query->Cast<SelectStatement>().node;
 }
 
-// Replaces every reference to one of the enum types with an IN list of `count` placeholder values on the first
-// such column of each PIVOT and one on the rest, so the product per PIVOT is `count`. Dynamic columns can sit in
-// any PIVOT of the statement: the FROM clause, a subquery, a CTE, a set operand, or a scalar subquery.
-static void SubstitutePivotEnums(QueryNode &node, const gatekeeper::Names &enums, idx_t count) {
+// Values of a host-defined enum a static PIVOT column names, or 1 when the type cannot be read: the bind then
+// reports that in the engine's words, for either shape alike.
+static idx_t HostEnumSize(ClientContext &context, const string &name) {
+	try {
+		auto &entry = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, name);
+		if (entry.user_type.id() == LogicalTypeId::ENUM)
+			return EnumType::GetSize(entry.user_type);
+	} catch (const CatalogException &) {
+	}
+	return 1;
+}
+
+// Binds the statement of a dynamic PIVOT batch when the enum types it names do not exist yet: every reference
+// to one of them becomes an IN list of placeholder values. Binder::BindPivot plans a PIVOT two ways by its
+// total number of values, the product over its columns: filtered aggregates up to pivot_filter_threshold, and
+// above it a LIST aggregate (with concat for several columns) under a PIVOT operator. The values themselves
+// only name output columns, so one bind of each shape authorizes every plan the engine can produce for the
+// statement whatever the data holds. The small shape gives each dynamic column one value. The large shape gives
+// the first dynamic column of each PIVOT the fewest values that carry the PIVOT's total, static IN lists and
+// host enums included, past the threshold while staying under pivot_limit; a PIVOT with no such count has no
+// legal LIST plan either and keeps the small shape. Returns whether the large shape differs from the small
+// one anywhere. Dynamic columns can sit in any PIVOT of the statement: the FROM clause, a subquery, a CTE, a set
+// operand, or a scalar subquery.
+static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const gatekeeper::Names &enums, bool large) {
+	auto threshold = Settings::Get<PivotFilterThresholdSetting>(context);
+	auto limit = Settings::Get<PivotLimitSetting>(context);
+	bool distinct = false;
 	std::function<void(ParsedExpression &)> expression = [&](ParsedExpression &expr) {
 		if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY)
-			SubstitutePivotEnums(*expr.Cast<SubqueryExpression>().subquery->node, enums, count);
+			distinct |= SubstitutePivotEnums(context, *expr.Cast<SubqueryExpression>().subquery->node, enums, large);
 		ParsedExpressionIterator::EnumerateChildren(expr, expression);
 	};
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
@@ -478,21 +495,36 @@ static void SubstitutePivotEnums(QueryNode &node, const gatekeeper::Names &enums
 	    [&](TableRef &ref) {
 		    if (ref.type != TableReferenceType::PIVOT)
 			    return;
-		    bool first = true;
-		    for (auto &column : ref.Cast<PivotRef>().pivots) {
-			    if (column.pivot_enum.empty() || !enums.count(column.pivot_enum))
-				    continue;
-			    column.pivot_enum.clear();
-			    for (idx_t i = 0; i < (first ? count : 1); i++) {
+		    auto &pivots = ref.Cast<PivotRef>().pivots;
+		    vector<reference<PivotColumn>> dynamic;
+		    idx_t fixed = 1; // the PIVOT's values before the dynamic columns contribute
+		    for (auto &column : pivots) {
+			    if (!column.pivot_enum.empty() && enums.count(column.pivot_enum))
+				    dynamic.emplace_back(column);
+			    else if (!column.entries.empty())
+				    fixed *= column.entries.size();
+			    else if (!column.pivot_enum.empty())
+				    fixed *= HostEnumSize(context, column.pivot_enum);
+		    }
+		    if (dynamic.empty())
+			    return;
+		    idx_t count = 1;
+		    if (large && fixed <= threshold && fixed * (threshold / fixed + 1) < limit)
+			    count = threshold / fixed + 1;
+		    distinct |= count > 1;
+		    for (auto &column : dynamic) {
+			    column.get().pivot_enum.clear();
+			    for (idx_t i = 0; i < count; i++) {
 				    PivotColumnEntry entry;
 				    entry.alias = std::to_string(i);
-				    for (size_t n = 0; n < column.pivot_expressions.size(); n++)
+				    for (size_t n = 0; n < column.get().pivot_expressions.size(); n++)
 					    entry.values.emplace_back(entry.alias);
-				    column.entries.push_back(std::move(entry));
+				    column.get().entries.push_back(std::move(entry));
 			    }
-			    first = false;
+			    count = 1;
 		    }
 	    });
+	return distinct;
 }
 
 void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
@@ -505,9 +537,10 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 		auto copy = unit.statement->Copy();
 		return AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
 	}
-	for (auto count : PivotShapes(context)) {
+	for (bool large : {false, true}) {
 		auto copy = unit.statement->Copy();
-		SubstitutePivotEnums(*copy->Cast<SelectStatement>().node, unit.pivot_enums, count);
+		if (!SubstitutePivotEnums(context, PivotQuery(*copy), unit.pivot_enums, large) && large)
+			break;
 		AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
 	}
 }

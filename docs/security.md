@@ -245,18 +245,31 @@ under residuals.
   - The audit trail is one record per rewritten statement, each on DuckDB's rewritten text
     rather than the caller's. Enforcement stops at the first denied record; log-only mode
     records every statement.
-  - The enum types do not exist when `gatekeeper_validate` binds the pivoting `SELECT`, so it
-    is bound against placeholder `IN` lists instead, once per plan shape `Binder::BindPivot`
-    chooses between: filtered aggregates up to `pivot_filter_threshold` values and a `list`
-    aggregate under a `PIVOT` operator above it. Every plan the data can select at execution
-    has therefore passed validation. The reverse does not hold: with `list` (or `concat`, for
-    several pivot columns) in `blocked_functions`, `gatekeeper_validate` denies every dynamic
-    `PIVOT`, while an enforced connection denies it only when the data has more distinct values
-    than the threshold. The pivot's column count is also data-dependent, so text whose binding
-    depends on it (a column alias list over the pivot, a set operation with it as an operand)
-    can bind differently at execution than under the placeholders; the enforced connection
-    binds the real type and is exact. DuckDB itself refuses to `PREPARE` a dynamic `PIVOT` for
-    the same reason.
+  - Each rewritten statement is a statement to the engine, so each reads its own policy
+    snapshot at `QueryBegin`, exactly as the statements of `SELECT 1; SELECT 2` do. A policy
+    change that lands between the enum's `CREATE` and the pivoting `SELECT` governs the
+    `SELECT`; nothing executes under a snapshot older than its own statement, and a denial
+    then leaves only the temporary type above. `gatekeeper_validate` reads one snapshot for
+    the whole text, as it does for any statement whose execution a later policy change can
+    still refuse. There is no hook that spans the batch, so this is the boundary, not a gap
+    in it.
+  - The enum types do not exist when `gatekeeper_validate` binds the statements that name
+    them (the pivoting `SELECT`, and the `SELECT` of a later enum when a dynamic `PIVOT` is
+    nested inside another), so those are bound against placeholder `IN` lists instead, once
+    per plan shape `Binder::BindPivot` chooses between by a `PIVOT`'s total number of values:
+    filtered aggregates up to `pivot_filter_threshold` and a `list` aggregate under a `PIVOT`
+    operator above it. The large shape is sized per `PIVOT` from its static `IN` lists and
+    host enums so that it crosses the threshold and stays under `pivot_limit` wherever a legal
+    `list` plan exists. Every plan the data can select at execution has therefore passed
+    validation. The reverse does not hold: with `list` (or `concat`, for several pivot
+    columns) in `blocked_functions`, `gatekeeper_validate` denies every dynamic `PIVOT` that
+    has a legal `list` plan, while an enforced connection denies it only when the data has
+    more distinct values than the threshold. The pivot's column count is also
+    data-dependent, so text whose binding depends on it (a column alias list over the pivot,
+    a set operation with it as an operand, a value count that reaches `pivot_limit`) can bind
+    differently at execution than under the placeholders; the enforced connection binds the
+    real type and is exact. DuckDB itself refuses to `PREPARE` a dynamic `PIVOT` for the same
+    reason.
 - **Enforcement is opt-in per connection.** A connection the host opens without running
   `CALL gatekeeper_enforce()` on it is trusted, with the whole engine available. That is what
   lets the host keep a connection for the audit log and policy changes, and what lets

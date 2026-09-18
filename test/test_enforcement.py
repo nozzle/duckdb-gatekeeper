@@ -27,7 +27,8 @@ CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
     CREATE VIEW reporting.totals AS SELECT tag, sum(amount) AS total FROM reporting.orders GROUP BY tag;
     CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
     CREATE MACRO reporting.twice(x) AS x * 2;
-    CREATE SEQUENCE reporting.seq"""
+    CREATE SEQUENCE reporting.seq;
+    CREATE TYPE tags AS ENUM ('a', 'b')"""
 CATALOG_POLICY = {"allowed_tables": [{"schema": "reporting", "table": "*"}],
                   "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
 
@@ -67,6 +68,9 @@ PARITY_CORPUS = [
     "PIVOT reporting.orders ON tag USING sum(amount)",
     "PIVOT reporting.orders ON tag IN (SELECT DISTINCT tag FROM reporting.orders) USING sum(amount)",
     "PIVOT reporting.orders ON tag, id USING sum(amount) GROUP BY amount",
+    "PIVOT reporting.orders ON tag IN tags, id USING count(*)",
+    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)",
+    "WITH p AS (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) PIVOT p ON id USING count(*)",
     "WITH c AS (SELECT * FROM reporting.orders) PIVOT c ON tag USING sum(amount)",
     "SELECT (SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount)))",
     "SELECT 1 UNION ALL SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount))",
@@ -110,6 +114,8 @@ PARITY_CORPUS = [
     "PIVOT reporting.orders ON tag IN (SELECT who FROM secret.salaries) USING sum(amount)",
     "PIVOT reporting.orders ON tag IN (SELECT md5('x')) USING sum(amount)",
     "PIVOT reporting.orders ON tag USING sum(amount) LIMIT (SELECT 1)",
+    "PIVOT (PIVOT reporting.leak ON who USING sum(amount) GROUP BY amount) ON amount USING count(*)",
+    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*), md5(id)",
     # Only the parser's own rewrite of a dynamic PIVOT is a supported CREATE.
     "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
     "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT who FROM secret.salaries)",
@@ -224,6 +230,23 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
         agent.execute(sql).fetchall()
     configure(catalog, CATALOG_POLICY)
     catalog.execute("RESET GLOBAL pivot_filter_threshold")
+    # The large shape is sized per PIVOT from its static IN lists and host enums, so it stays under pivot_limit
+    # wherever a legal LIST plan exists (here 11 * 2 = 22 < 30, where the threshold alone would give 21 * 2).
+    catalog.execute("SET GLOBAL pivot_limit = 30")
+    mixed = "PIVOT reporting.orders ON tag, id IN (1, 2) USING count(*)"
+    assert validate(catalog, mixed)["allowed"]
+    assert sorted(agent.execute(mixed).fetchall()) == sorted(catalog.execute(
+        "PIVOT reporting.orders ON tag IN ('a', 'b'), id IN (1, 2) USING count(*)").fetchall())
+    configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
+    assert validate(catalog, mixed)["violations"][0]["function_name"] == "list"
+    configure(catalog, CATALOG_POLICY)
+    catalog.execute("RESET GLOBAL pivot_limit")
+    # An enum type's own SELECT can pivot dynamically too (a nested dynamic PIVOT): it is bound against
+    # placeholders for the types created before it in the batch, like the final SELECT.
+    nested = "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)"
+    assert validate(catalog, nested)["allowed"]
+    with catalog.cursor() as host:
+        assert sorted(agent.execute(nested).fetchall(), key=repr) == sorted(host.execute(nested).fetchall(), key=repr)
     # An enum whose defining SELECT the policy denies is refused before the pivoting SELECT runs; a pivoting
     # SELECT the policy denies is refused after the engine created the enum, which is a temporary type in the
     # agent's own session and nothing more.

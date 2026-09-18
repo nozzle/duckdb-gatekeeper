@@ -29,9 +29,9 @@ struct TextCheck {
 		unique_ptr<SQLStatement> statement;
 		// Ambiguous syntax the walker recorded for the execution boundary to resolve against the bound plan.
 		gatekeeper::BindingPolicy binding;
-		// Enum types the statements before it in the same batch create, which this statement names in PIVOT
-		// IN lists. Nonempty only for the final SELECT of a dynamic PIVOT checked as a whole, where those
-		// types do not exist yet: Authorize binds it against placeholder values instead (see PivotShapes).
+		// Enum types the statements before it in the same batch create, which this statement may name in PIVOT
+		// IN lists. Nonempty only inside a dynamic PIVOT checked as a whole, where those types do not exist yet:
+		// Authorize binds the statement against placeholder values instead (see SubstitutePivotEnums).
 		gatekeeper::Names pivot_enums;
 	};
 	// The decision on the text: allowed, or the first denial in the order the engine runs the statements.
