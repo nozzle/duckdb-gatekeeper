@@ -150,16 +150,18 @@ under residuals.
   `extract_statements` call (upstream:
   [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875)).
 
-  What it reaches: **every scalar function visible to the connection**, with literal
-  arguments, during the preprocessing of each statement and as many times as the argument
-  expression invokes it (a list lambda over `range(n)` calls it `n` times), so the function
-  allowlist does not apply on this path. That includes core functions, extension functions,
-  host-registered UDFs, and scalar macros. What it cannot reach: table data (the binder
-  rejects subqueries and column references, including inside macros), table functions, and
-  any statement (DDL, DML, `COPY`, `ATTACH`, `LOAD`, `SET`). Among core scalars the
-  state-touching ones are `nextval` (writes), `write_log` (writes when the host enabled
-  logging), `setseed` (own connection), and `current_setting`, `which_secret`, `getvariable`,
-  `current_schemas`, `txid_current` (reads). What that is worth depends on the host:
+  What it reaches: **every scalar function visible to the connection**, with any arguments
+  computable without table references (literals, casts, nested calls, lambdas), during the
+  preprocessing of each statement and as many times as the argument expression invokes it
+  (a list lambda over `range(n)` calls it `n` times), so the function allowlist does not
+  apply on this path. That includes core functions, extension functions, host-registered
+  UDFs, and scalar macros. What it cannot reach: table data (the binder rejects subqueries
+  and column references, including inside macros), table functions, and any statement (DDL,
+  DML, `COPY`, `ATTACH`, `LOAD`, `SET`). Core scalars that touch state include `nextval`
+  (writes), `write_log` (writes when the host enabled logging), `setseed` (own connection),
+  and readers such as `current_setting`, `which_secret`, `getvariable`, `current_schemas`,
+  `txid_current`; the inventory's `elevated` group is the full list of core names that read
+  catalog, session, configuration, or planner state. What that is worth depends on the host:
   credentials kept in legacy `SET s3_*` options are readable once `httpfs` is loaded, a UDF or
   extension scalar that reaches the network or runs code is callable, and with
   `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown function name
@@ -180,13 +182,15 @@ under residuals.
   `allowed = true` and `code = 'ok'`, treating every other code, an exception, or a missing
   row as a denial. Do not key on `code = 'unsupported'` alone: a lone raw `PRAGMA` reports
   `unsupported`, but a batch such as `SELECT 1; PRAGMA anything(nextval('s'))` is refused as
-  `forbidden` on statement count first, and oversized or unparseable text is refused with
-  other codes, while executing any of them still runs the pragma preprocessing. Hosts that
-  cannot interpose on the text must reject `PRAGMA` before it reaches any DuckDB parsing
-  entry point. Keep credentials in the secret manager, autoload off, and side-effecting
-  scalar UDFs or extensions off the shared instance; treat sequences the connection can see
-  as writable by it. `test/test_enforcement.py` pins the gap with a strict `xfail` so an
-  engine change is noticed.
+  `forbidden` on statement count first, and text over the validator's size limit is refused
+  as `forbidden` before it is parsed, while executing either still runs the pragma
+  preprocessing. Unparseable text is refused as `parser` and fails in the engine's parser
+  before any preprocessing, so it has no side effects, but the contract is the same: anything
+  other than `ok` is a denial. Hosts that cannot interpose on the text must reject `PRAGMA`
+  before it reaches any DuckDB parsing entry point. Keep credentials in the secret manager,
+  autoload off, and side-effecting scalar UDFs or extensions off the shared instance; treat
+  sequences the connection can see as writable by it. `test/test_enforcement.py` pins the
+  gap with a strict `xfail` so an engine change is noticed.
 - **A denial leaves the autocommit transaction open until the next query entry point.**
   DuckDB starts the transaction before it calls `QueryBegin` and does not end it when that
   hook throws (upstream: [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876)).
