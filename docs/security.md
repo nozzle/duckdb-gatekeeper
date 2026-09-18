@@ -151,21 +151,22 @@ under residuals.
   [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875)).
 
   What it reaches: **every scalar function visible to the connection**, with literal
-  arguments, once per statement (list lambdas amplify it), so the function allowlist does
-  not apply on this path. That includes core functions, extension functions, host-registered
-  UDFs, and scalar macros. What it cannot reach: table data (the binder rejects subqueries and
-  column references, including inside macros), table functions, and any statement (DDL, DML,
-  `COPY`, `ATTACH`, `LOAD`, `SET`). Among core scalars the state-touching ones are `nextval`
-  (writes), `write_log` (writes when the host enabled logging), `setseed` (own connection),
-  and `current_setting`, `which_secret`, `getvariable`, `current_schemas`, `txid_current`
-  (reads). What that is worth depends on the host: credentials kept in legacy `SET s3_*`
-  options are readable once `httpfs` is loaded, a UDF or extension scalar that reaches the
-  network or runs code is callable, and with `autoload_known_extensions` or
-  `autoinstall_known_extensions` on, an unknown function name in a pragma argument triggers
-  extension autoload through `Catalog::GetEntry`. The same preprocessor also runs
-  query-pragma functions with their constant arguments: `PRAGMA import_database('dir')`
-  reads `schema.sql` and `load.sql` before any hook, gated only by `enable_external_access`
-  and `allowed_directories`.
+  arguments, during the preprocessing of each statement and as many times as the argument
+  expression invokes it (a list lambda over `range(n)` calls it `n` times), so the function
+  allowlist does not apply on this path. That includes core functions, extension functions,
+  host-registered UDFs, and scalar macros. What it cannot reach: table data (the binder
+  rejects subqueries and column references, including inside macros), table functions, and
+  any statement (DDL, DML, `COPY`, `ATTACH`, `LOAD`, `SET`). Among core scalars the
+  state-touching ones are `nextval` (writes), `write_log` (writes when the host enabled
+  logging), `setseed` (own connection), and `current_setting`, `which_secret`, `getvariable`,
+  `current_schemas`, `txid_current` (reads). What that is worth depends on the host:
+  credentials kept in legacy `SET s3_*` options are readable once `httpfs` is loaded, a UDF or
+  extension scalar that reaches the network or runs code is callable, and with
+  `autoload_known_extensions` or `autoinstall_known_extensions` on, an unknown function name
+  in a pragma argument triggers extension autoload through `Catalog::GetEntry`. The same
+  preprocessor also runs query-pragma functions with their constant arguments: `PRAGMA
+  import_database('dir')` reads `schema.sql` and `load.sql` before any hook, gated only by
+  `enable_external_access` and `allowed_directories`.
 
   There is no interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires
   identically for `Prepare()` and carries no statement, a read-only transaction does not stop
@@ -180,15 +181,17 @@ under residuals.
   side-effecting scalar UDFs or extensions off the shared instance; treat sequences the
   connection can see as writable by it. `test/test_enforcement.py` pins the gap with a
   strict `xfail` so an engine change is noticed.
-- **A denial leaves the autocommit transaction open until the next statement.** DuckDB
-  starts the transaction before it calls `QueryBegin` and does not end it when that hook
-  throws (upstream: [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876)).
+- **A denial leaves the autocommit transaction open until the next query entry point.**
+  DuckDB starts the transaction before it calls `QueryBegin` and does not end it when that
+  hook throws (upstream: [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876)).
   An idle connection whose last statement was denied therefore holds a read snapshot until
-  its next statement; the next query cleans up. Clients that parse before they execute
-  (Python's `execute()` calls `extract_statements` first) run pragma preprocessing inside
-  that transaction, so a `PRAGMA` whose argument evaluation fails after a denial makes the
-  following `PRAGMA`s fail with `Current transaction is aborted` until a non-`PRAGMA`
-  statement runs. Both effects are confined to the connection that received the denial.
+  the next `Query`, `PendingQuery`, or `Prepare` call runs the engine's initial cleanup.
+  Parse-only calls do not clean up: `extract_statements` (which Python's `execute()` calls
+  before it executes) runs pragma preprocessing inside the leaked transaction, so a `PRAGMA`
+  whose argument evaluation fails after a denial invalidates it, and every following
+  `extract_statements` that contains a `PRAGMA` fails with `Current transaction is aborted`
+  until a query entry point runs. Both effects are confined to the connection that received
+  the denial.
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
   statement (for example when that view is blocked by table policy). Object identity is a
