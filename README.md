@@ -472,14 +472,19 @@ denies. There is no host glue to forget: the agent gets a connection, every stat
 submits is checked the way `gatekeeper_validate` would check it, and the plan the engine is
 about to execute is checked once more.
 
+Enforcement is per connection, and only ever switched on: the host runs
+`CALL gatekeeper_enforce()` on the connection it is about to hand out, and keeps its own
+connections unenforced for the setup below, the [audit log](#audit-log), and policy changes.
+There is no instance-wide switch.
+
 | Trusted setup, in order | Why |
 | --- | --- |
 | Load extensions, attach catalogs | `LOAD` and `ATTACH` are refused on an enforced connection. |
 | `CALL gatekeeper_configure(...)` | The policy every enforced connection follows. |
 | `SET enable_external_access = false`, autoload off | Where the deployment allows; `gatekeeper_enforce()` warns when these are loose. |
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
-| `SET lock_configuration = true` | Freezes the policy and the enforcement mode. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
-| Hand out connections | `CALL gatekeeper_enforce()` on each, or [enforce every connection](#enforcing-every-connection). |
+| `SET lock_configuration = true` | Freezes the policy. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
+| `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. |
 
 Enforce this connection:
 
@@ -543,7 +548,7 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 
 | Record column | Meaning |
 | --- | --- |
-| `event` | `decision`, or `policy_changed` / `enforcement_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
+| `event` | `decision`, or `policy_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
 | `mode`, `boundary` | `enforce` or `validate`; where the statement was decided (`binding`, `authorize`, `execution`, ...) |
 | `allowed`, `code`, `violations`, `objects`, `functions`, ... | Exactly `gatekeeper_validate`'s [result columns](#result) |
 | `statement` | The SQL the engine ran, capped at 64 KiB (`statement_length` is the full size) |
@@ -561,25 +566,6 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 > `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log` are on the
 > never-bind list. The one path outside that control is described with the rest of the
 > [audit log](docs/security.md#audit-log) in the security model.
-
-### Enforcing every connection
-
-Instead of one connection at a time, set the global mode:
-
-| `SET gatekeeper_enforcement = ...` | Effect |
-| --- | --- |
-| `'off'` (default) | Only connections that ran `CALL gatekeeper_enforce()` are enforced. |
-| `'new_connections'` | Every connection opened after this point is enforced. Existing connections, including the one issuing the `SET`, are not. |
-| `'all'` | Every connection open now, including this one, and every later one. |
-
-Switching the mode back never releases an enforced connection. The setting is global-only,
-rejects other values, and is frozen by `SET lock_configuration = true` like `gatekeeper_policy`.
-
-> [!NOTE]
-> Global modes also enforce connections that extensions open internally (some lakehouse
-> catalogs run their own metadata SQL that way). Use `CALL gatekeeper_enforce()` per connection
-> with such catalogs, and `storage := 'file'` or `'stdout'` for the log under `'all'`, since no
-> in-process connection can read `duckdb_logs` then.
 
 ### What enforcement covers
 

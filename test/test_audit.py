@@ -196,13 +196,13 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
 
 def test_setting_changes_are_recorded(db):
     enable(db)
-    db.execute("SET gatekeeper_enforcement = 'off'")
     db.execute("SET gatekeeper_policy = {use_default_functions: true, allowed_functions: [], blocked_functions: ['md5'],"
                " allowed_tables: [], blocked_tables: [], restrict_tables: false}")
+    db.execute("RESET gatekeeper_policy")
     found = records(db, "event LIKE '%_changed'")
-    assert [(r["event"], r["log_level"]) for r in found] == [("enforcement_changed", "INFO"), ("policy_changed", "INFO")]
-    assert found[0]["new_value"] == "off"
-    assert "md5" in found[1]["new_value"]
+    assert [(r["event"], r["log_level"]) for r in found] == [("policy_changed", "INFO"), ("policy_changed", "INFO")]
+    assert "md5" in found[0]["new_value"]
+    assert "md5" not in found[1]["new_value"]
 
 
 def test_statement_text_is_capped_and_kept_parseable(db):

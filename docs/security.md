@@ -22,8 +22,9 @@ Preferred: hand untrusted callers an enforced connection and execute their SQL o
 3. `CALL enable_logging('Gatekeeper')` so denials are [recorded](#audit-log); choose a
    storage the sandboxed connections cannot reach in-process (`storage := 'file'` or
    `'stdout'`) when no host connection will remain to read the in-memory log.
-4. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
-   `SET gatekeeper_enforcement='new_connections'` before opening them.
+4. Run `CALL gatekeeper_enforce()` on each connection you hand out. Enforcement is per
+   connection and there is no instance-wide switch; put the call where connections are
+   created so no code path can skip it.
 5. Execute the caller's SQL on that connection. A denial raises `Permission Error:
    Gatekeeper denied this statement ...` and executes nothing.
 
@@ -95,7 +96,7 @@ see [table ACL](../README.md#table-acl).
 
 The caller can submit arbitrary SQL text to an enforced connection and observe results and
 error messages. The host process, its code, the objects it created (views, macros, attached
-catalogs), and the connections it did not latch are trusted. Host-language APIs on the
+catalogs), and the connections it did not enforce are trusted. Host-language APIs on the
 connection object itself (Python's `DuckDBPyConnection` methods other than executing SQL,
 the C++ `Connection`) are out of scope: a caller holding them can open a new, unenforced
 connection. Hand out the ability to execute SQL, not the object.
@@ -223,8 +224,11 @@ under residuals.
   rewritten statements are what Gatekeeper checks and what the audit record's `statement`
   holds; that is policy-consistent, but the raw text differs from what `gatekeeper_validate`
   would report (`unsupported` for the `PRAGMA`).
-- **Global modes latch every connection**, including ones extensions open internally for
-  their own metadata SQL. Use per-connection latching with catalogs that do this.
+- **Enforcement is opt-in per connection.** A connection the host opens without running
+  `CALL gatekeeper_enforce()` on it is trusted, with the whole engine available. That is what
+  lets the host keep a connection for the audit log and policy changes, and what lets
+  extensions that open connections internally for their own metadata SQL keep working; it also
+  means the host's connection factory is part of the sandbox boundary.
 - **Errors are informative.** Engine errors keep DuckDB's wording, which can name objects and
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
   and the denied function or object, and the [audit record](#audit-log) holds the caller's
@@ -232,21 +236,20 @@ under residuals.
 - **Not a resource sandbox.** Memory, CPU time, temporary disk, extension loading, and
   network posture remain host settings. Gatekeeper reports weak posture; it never changes it.
 
-### Latch semantics
+### Enforcement semantics
 
-`CALL gatekeeper_enforce()` stores the latch in the connection's registered state at execution
-time (never at bind, so `EXPLAIN` and `PREPARE` of it do not enforce). Nothing removes it;
-`RESET` and native option writes cannot reach it because it is not a setting. On an enforced
-connection `CALL`, `SET`, and `RESET` are unsupported statements, so the latch and the policy are
-unreachable from SQL. `gatekeeper_enforce` is on the never-bind list so validated SQL cannot
-name it either.
+`CALL gatekeeper_enforce()` stores the enforced state in the connection's registered state at
+execution time (never at bind, so `EXPLAIN` and `PREPARE` of it do not enforce). Nothing removes
+it; `RESET`, `lock_configuration`, and native option writes cannot reach it because it is not a
+setting. On an enforced connection `CALL`, `SET`, and `RESET` are unsupported statements, so the
+enforced state and the policy are unreachable from SQL. `gatekeeper_enforce` is on the
+never-bind list so validated SQL cannot name it either.
 
-`SET gatekeeper_enforcement` is a global-only VARCHAR setting accepting `off`,
-`new_connections`, and `all`. `new_connections` latches every connection opened afterwards
-through DuckDB's connection-open callback; `all` additionally latches every connection open at
-that moment, including the one issuing the `SET`. Returning to `off` releases nobody. A value
-written natively without passing the SET callback is treated as `all`: an unvalidated write to a
-sandbox setting fails closed. `SET lock_configuration=true` freezes the setting.
+There is deliberately no instance-wide setting. One would have to choose between enforcing the
+host's own connections (leaving no in-process reader for the audit log and no way to change
+the policy) and depending on connection-open ordering, and a setting is one more thing a
+trusted connection can be talked into flipping. A connection is enforced because the host said
+so on that connection, at that moment.
 
 ### Audit log
 
@@ -262,7 +265,7 @@ the enforcement parity corpus. The rest of the record is:
 
 | column | meaning |
 | --- | --- |
-| `event` | `decision`, `policy_changed`, or `enforcement_changed` |
+| `event` | `decision` or `policy_changed` |
 | `mode` | `enforce` (an enforced connection) or `validate` (`gatekeeper_validate`) |
 | `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
 | `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
@@ -314,18 +317,16 @@ Properties that make the record trustworthy as evidence:
   which keeps `PRAGMA` text away from the preprocessor entirely, and can read the raw
   `duckdb_logs` rows with `TRY_CAST` if a malformed entry must be tolerated.
 - **The host's own changes are on the record.** `SET` and `RESET` of `gatekeeper_policy` and
-  `gatekeeper_enforcement`, and `CALL gatekeeper_configure`, each write a `*_changed` entry (a
-  `RESET` reports the default value). A native `DBConfig::SetOption` write bypasses the `SET`
+  `CALL gatekeeper_configure` each write a `policy_changed` entry (a `RESET` reports the
+  default value). A native `DBConfig::SetOption` write bypasses the `SET`
   callback and writes no entry, but the next decision's `policy_hash` changes, so a policy that
   was altered that way is still visible.
 - Log writes are not guarded: if the configured storage fails (an unwritable file), the
   statement fails with that error rather than executing unrecorded, and a setting change whose
   record cannot be written is not applied (the record is written before the setting is
-  published or any connection is latched).
+  published).
 
-Under `SET gatekeeper_enforcement = 'all'` no in-process connection can read `duckdb_logs`, so
-use `file` or `stdout` storage. The record names rules, objects, functions, and the caller's
-text; treat the log as sensitive.
+The record names rules, objects, functions, and the caller's text; treat the log as sensitive.
 
 ## Function enforcement and trusted expansion
 
@@ -404,7 +405,7 @@ reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
 state outside table authorization; `checkpoint.cpp` and `scalar/sequence/nextval.cpp`
 mutate or inspect storage/sequence state. `seq_scan` is the internal scan entry,
 not a caller capability (normal physical scans retain object authorization).
-`gatekeeper_configure` mutates the global policy and `gatekeeper_enforce` latches the
+`gatekeeper_configure` mutates the global policy and `gatekeeper_enforce` enforces it on the
 connection; both are always forbidden in submitted SQL, including resolved table-function
 uses inside trusted views/macros.
 `enable_logging`, `disable_logging`, and `truncate_duckdb_logs`

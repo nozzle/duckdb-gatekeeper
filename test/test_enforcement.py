@@ -3,7 +3,6 @@ import concurrent.futures
 import os
 import re
 import threading
-import time
 
 import duckdb
 import pytest
@@ -122,7 +121,6 @@ PARITY_CORPUS = [
     "CREATE SECRET s (TYPE s3)",
     "CALL gatekeeper_configure()",
     "CALL gatekeeper_enforce()",
-    "SET gatekeeper_enforcement = 'off'",
     "RESET gatekeeper_policy",
     # Engine errors, which the engine reports in its own words.
     "SELECT * FROM reporting.missing",
@@ -253,13 +251,14 @@ def test_each_statement_of_a_batch_is_checked(catalog, agent):
 
 def test_latch_is_irreversible_and_unreachable_from_sql(catalog, agent):
     for sql in ["CALL gatekeeper_enforce()", "SELECT * FROM gatekeeper_enforce()",
-                "SET gatekeeper_enforcement = 'off'", "RESET gatekeeper_enforcement",
                 "SET GLOBAL gatekeeper_policy = current_setting('gatekeeper_policy')",
                 "CALL gatekeeper_configure()"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
     assert validate(catalog, "SELECT * FROM gatekeeper_enforce()", {"allowed_functions": ["gatekeeper_enforce"]})["code"] == "forbidden"
-    catalog.execute("RESET gatekeeper_enforcement")
+    # There is no instance-wide switch for a trusted connection to flip either.
+    with pytest.raises(duckdb.CatalogException):
+        catalog.execute("SET gatekeeper_enforcement = 'off'")
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("CREATE TABLE q(x INTEGER)")
 
@@ -325,96 +324,35 @@ def test_explain_and_prepare_of_enforce_do_not_latch(db):
         db.execute("CREATE TABLE now_enforced(x INTEGER)")
 
 
-def test_new_connections_mode(db):
+def test_enforcement_is_per_connection(db):
+    # A connection is enforced because gatekeeper_enforce() ran on it, and only then: connections open
+    # before, connections opened afterwards, and the connection that created the enforced one are all
+    # unaffected. Nothing about the instance changes.
     db.execute("CREATE TABLE t(x INTEGER)")
-    db.execute("SET gatekeeper_enforcement = 'new_connections'")
-    assert db.execute("SELECT current_setting('gatekeeper_enforcement')").fetchone() == ("new_connections",)
-    with db.cursor() as fresh:
+    with db.cursor() as older, db.cursor() as enforced:
+        older.execute("SELECT 1")
+        enforce(enforced)
         with pytest.raises(duckdb.PermissionException, match=DENIED):
-            fresh.execute("CREATE TABLE u(x INTEGER)")
-        assert fresh.execute("SELECT count(*) FROM t").fetchone() == (0,)
-    # The connection that set the mode is not latched, and turning the mode off releases nobody.
-    db.execute("CREATE TABLE u(x INTEGER)")
-    with db.cursor() as latched:
-        db.execute("SET gatekeeper_enforcement = 'off'")
-        with pytest.raises(duckdb.PermissionException, match=DENIED):
-            latched.execute("CREATE TABLE v(x INTEGER)")
-    with db.cursor() as free:
-        free.execute("CREATE TABLE v(x INTEGER)")
+            enforced.execute("CREATE TABLE u(x INTEGER)")
+        assert enforced.execute("SELECT count(*) FROM t").fetchone() == (0,)
+        older.execute("CREATE TABLE u(x INTEGER)")
+        db.execute("CREATE TABLE v(x INTEGER)")
+        with db.cursor() as newer:
+            newer.execute("CREATE TABLE w(x INTEGER)")
+    assert db.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('t', 'u', 'v', 'w')").fetchone() == (4,)
 
 
-def test_all_mode_latches_every_open_connection(db):
-    db.execute("CREATE TABLE t(x INTEGER)")
-    with db.cursor() as other:
-        other.execute("SELECT 1")
+def test_enforce_is_not_a_setting(db):
+    # The setting name that once existed is unknown to the engine, and gatekeeper_enforce() is a table
+    # function, so lock_configuration neither blocks it nor is needed to keep it irreversible.
+    with pytest.raises(duckdb.CatalogException):
         db.execute("SET gatekeeper_enforcement = 'all'")
-        for connection in [db, other, db.cursor()]:
-            with pytest.raises(duckdb.PermissionException, match=DENIED):
-                connection.execute("CREATE TABLE u(x INTEGER)")
-            assert connection.execute("SELECT count(*) FROM t").fetchone() == (0,)
-
-
-@pytest.mark.parametrize("mode", ["all", "new_connections"])
-def test_mode_change_races_no_connection_open(db, mode):
-    # Connections opened while SET runs must be latched: either the connection-open callback already sees
-    # the published mode, or the 'all' sweep's snapshot includes the connection. Neither window may leak.
-    stop = threading.Event()
-    final = threading.Event()
-    opened = []
-    lock = threading.Lock()
-
-    def opener():
-        while not stop.is_set():
-            started_after_final = final.is_set()
-            cursor = db.cursor()
-            cursor.execute("SELECT 1")
-            with lock:
-                opened.append((started_after_final, cursor))
-
-    threads = [threading.Thread(target=opener) for _ in range(4)]
-    try:
-        for thread in threads:
-            thread.start()
-        if mode == "new_connections":
-            # The issuing connection stays free in this mode, so the window can be exercised repeatedly.
-            for _ in range(20):
-                db.execute("SET gatekeeper_enforcement = 'new_connections'")
-                db.execute("RESET gatekeeper_enforcement")
-        else:
-            # 'all' latches the issuing connection too, so there is exactly one SET; give the openers a
-            # head start so the sweep has a live population to race against.
-            while True:
-                with lock:
-                    if len(opened) >= 50:
-                        break
-                time.sleep(0.01)
-        db.execute(f"SET gatekeeper_enforcement = '{mode}'")
-        final.set()
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            with lock:
-                if sum(1 for after, _ in opened if after) >= 20:
-                    break
-            time.sleep(0.01)
-    finally:
-        stop.set()
-        for thread in threads:
-            thread.join()
-    leaked_after_final, leaked_any = 0, 0
-    for started_after_final, cursor in opened:
-        try:
-            cursor.execute("CREATE TABLE IF NOT EXISTS leak(x INTEGER)")
-            leaked_any += 1
-            leaked_after_final += started_after_final
-        except duckdb.PermissionException:
-            pass
-        cursor.close()
-    # A connection whose creation began after SET returned is always latched.
-    assert leaked_after_final == 0
-    # 'all' also sweeps everything that was open, including connections created while SET ran; only
-    # 'new_connections' may leave cursors from a RESET window unlatched, which is that mode's meaning.
-    if mode == "all":
-        assert leaked_any == 0, leaked_any
+    assert db.execute("SELECT count(*) FROM duckdb_settings() WHERE name = 'gatekeeper_enforcement'").fetchone() == (0,)
+    db.execute("SET lock_configuration = true")
+    with db.cursor() as cursor:
+        enforce(cursor)
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            cursor.execute("CREATE TABLE u(x INTEGER)")
 
 
 @pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
@@ -425,32 +363,6 @@ def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, age
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))")
     assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)
-
-
-@pytest.mark.parametrize("statement", [
-    "SET gatekeeper_enforcement = 'sometimes'",
-    "SET gatekeeper_enforcement = NULL",
-    "SET gatekeeper_enforcement = 1",
-    "SET SESSION gatekeeper_enforcement = 'off'",
-])
-def test_enforcement_setting_rejects_bad_values(db, statement):
-    with pytest.raises(duckdb.Error):
-        db.execute(statement)
-    assert db.execute("SELECT current_setting('gatekeeper_enforcement')").fetchone() == ("off",)
-    db.execute("CREATE TABLE still_free(x INTEGER)")
-
-
-def test_enforcement_setting_is_case_insensitive_and_locked(db):
-    db.execute("SET gatekeeper_enforcement = 'New_Connections'")
-    assert db.execute("SELECT current_setting('gatekeeper_enforcement')").fetchone() == ("new_connections",)
-    db.execute("SET lock_configuration = true")
-    with pytest.raises(duckdb.InvalidInputException, match="locked"):
-        db.execute("SET gatekeeper_enforcement = 'off'")
-    with pytest.raises(duckdb.InvalidInputException, match="locked"):
-        db.execute("RESET gatekeeper_enforcement")
-    with db.cursor() as fresh:
-        with pytest.raises(duckdb.PermissionException, match=DENIED):
-            fresh.execute("CREATE TABLE u(x INTEGER)")
 
 
 def test_posture_warnings():

@@ -1,49 +1,22 @@
 #include "enforcement.hpp"
 #include "audit.hpp"
 #include "check.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "policy_setting.hpp"
 
 namespace duckdb {
 
-static constexpr const char *ENFORCEMENT_SETTING = "gatekeeper_enforcement";
 static constexpr const char *STATE_KEY = "gatekeeper_enforcement";
-
-enum class EnforcementMode { OFF, NEW_CONNECTIONS, ALL };
-
-// Anything other than the two recognized permissive spellings enforces everything. Native option writes
-// bypass the SET callback below, so an unrecognized value means the setting was written without
-// validation; a sandbox fails closed in that case.
-static EnforcementMode ParseMode(const Value &value) {
-	if (value.IsNull())
-		return EnforcementMode::ALL;
-	auto text = StringUtil::Lower(value.ToString());
-	if (text == "off")
-		return EnforcementMode::OFF;
-	if (text == "new_connections")
-		return EnforcementMode::NEW_CONNECTIONS;
-	return EnforcementMode::ALL;
-}
-
-static EnforcementMode CurrentMode(DBConfig &config) {
-	Value value;
-	if (!config.TryGetCurrentSetting(ENFORCEMENT_SETTING, value))
-		return EnforcementMode::OFF;
-	return ParseMode(value);
-}
 
 static DecisionSite Site(Boundary boundary, optional_ptr<const gatekeeper::Policy> policy,
                          optional_ptr<const string> sql) {
@@ -65,7 +38,10 @@ static bool SnapshotPolicy(ClientContext &context, Boundary boundary, optional_p
 }
 
 // The per-connection latch. Its presence in ClientContext::registered_state is what makes a connection
-// enforced; nothing removes it. Within one query it carries the decision between the engine hooks.
+// enforced; nothing removes it. A connection is enforced only because the host ran gatekeeper_enforce() on
+// it: there is no instance-wide switch, so nothing depends on when a connection was opened, and the host's
+// own connections stay free to read the audit log and change the policy. Within one query the state
+// carries the decision between the engine hooks.
 //
 // Two entry points reach execution. Query(): QueryBegin sees the statement text, admits it, and binds it
 // privately with catalog authorization when it has no parameters; the engine then binds and PostBind
@@ -210,38 +186,6 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	Decide(context, Site(Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery()), state->result);
 }
 
-struct EnforcementCallback : ExtensionCallback {
-	void OnConnectionOpened(ClientContext &context) override {
-		if (CurrentMode(DBConfig::GetConfig(context)) != EnforcementMode::OFF)
-			Latch(context);
-	}
-};
-
-static void SetEnforcement(ClientContext &context, SetScope scope, Value &value) {
-	if (scope == SetScope::SESSION || scope == SetScope::LOCAL)
-		throw InvalidInputException("gatekeeper_enforcement is global-only");
-	auto text = value.IsNull() ? string() : StringUtil::Lower(value.ToString());
-	if (text != "off" && text != "new_connections" && text != "all")
-		throw InvalidInputException("gatekeeper_enforcement must be 'off', 'new_connections', or 'all'");
-	value = Value(text);
-	// Record first: a log sink that refuses the entry fails this statement with nothing changed, rather than
-	// leaving a published mode without its record or, for 'all', without its sweep. Nothing after the record
-	// can fail. SetPolicy and gatekeeper_configure already have this shape: they record inside the callback
-	// and the engine stores the value only after it returns.
-	LogSettingChange(context, "enforcement_changed", value);
-	// Publish the mode now rather than when PhysicalSet stores it after this callback returns: a
-	// connection that opens in between must already see the new mode in OnConnectionOpened. The later
-	// store writes the same value again.
-	DBConfig::GetConfig(context).SetOption(ENFORCEMENT_SETTING, value);
-	if (text == "all") {
-		// Every connection open now, including the one issuing this SET. A connection that opened before
-		// this snapshot is in it; one that opens after it was latched by OnConnectionOpened because the
-		// mode is already published. Returning to another mode never releases a latch.
-		for (auto &connection : DatabaseInstance::GetDatabase(context).GetConnectionManager().GetConnectionList())
-			Latch(*connection);
-	}
-}
-
 // Host settings Gatekeeper documents but deliberately never changes. Reported, not enforced.
 static vector<string> PostureWarnings(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
@@ -254,8 +198,7 @@ static vector<string> PostureWarnings(ClientContext &context) {
 		warnings.push_back("autoload_known_extensions or autoinstall_known_extensions is true: binding can load "
 		                   "extensions on demand");
 	if (!Settings::Get<LockConfigurationSetting>(config))
-		warnings.push_back("lock_configuration is false: unenforced connections can still change gatekeeper_policy "
-		                   "and gatekeeper_enforcement");
+		warnings.push_back("lock_configuration is false: unenforced connections can still change gatekeeper_policy");
 	if (!DenialsRecorded(context))
 		warnings.push_back("logging does not record Gatekeeper decisions: denials on this connection leave no "
 		                   "audit record; CALL enable_logging('Gatekeeper')");
@@ -299,13 +242,9 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 
 void RegisterEnforcement(ExtensionLoader &loader) {
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	config.AddExtensionOption(ENFORCEMENT_SETTING,
-	                          "Which connections Gatekeeper enforces its policy on: off, new_connections, or all",
-	                          LogicalType::VARCHAR, Value("off"), SetEnforcement, SetScope::GLOBAL);
 	PlannerExtension planner;
 	planner.post_bind_function = PostBind;
 	PlannerExtension::Register(config, planner);
-	ExtensionCallback::Register(config, make_shared_ptr<EnforcementCallback>());
 
 	TableFunction enforce("gatekeeper_enforce", {}, Enforce, BindEnforce, InitEnforce);
 	FunctionDescription description;
