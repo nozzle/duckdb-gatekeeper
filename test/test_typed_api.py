@@ -242,14 +242,66 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     assert validate(db, "SELECT * FROM 'data.parquet'")["allowed"]
 
 
-def test_replacement_scan_inside_view_requires_admitted_reader(db, tmp_path, monkeypatch):
+def test_replacement_scan_inside_view_is_a_trusted_expansion(db, tmp_path, monkeypatch):
+    # FROM 'file' inside a host-defined view is that view's own reader, checked like an explicit
+    # read_parquet(...) in the same body: exempt from the allowlist, subject to blocks.
     monkeypatch.chdir(tmp_path)
     db.execute("COPY (SELECT 1 AS x) TO 'data.parquet'; CREATE VIEW v AS SELECT * FROM 'data.parquet'")
     result = validate(db, "SELECT * FROM v")
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
-    configure(db, {"allowed_functions": ["parquet_scan"]})
-    result = validate(db, "SELECT * FROM v")
     assert result["allowed"] and {o["table"] for o in result["objects"]} == {"v", "data.parquet"}
+    assert {(o["table"], o["type"]) for o in result["objects"]} == {("v", "view"), ("data.parquet", "replacement")}
+    # Blocks reach it under either Parquet alias, in the global layer or the request layer.
+    for blocked in ["read_parquet", "parquet_scan"]:
+        result = validate(db, "SELECT * FROM v", {"blocked_functions": [blocked]})
+        assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
+    configure(db, {"blocked_functions": ["read_parquet"]})
+    assert validate(db, "SELECT * FROM v")["code"] == "forbidden"
+    configure(db, {})
+    # The view still needs its own permission; the reader's exemption does not grant the object.
+    assert not validate(db, "SELECT * FROM v", {"allowed_tables": []})["allowed"]
+    # Nesting keeps the trust: a view over the view, a CTE or subquery inside the body, a table macro body.
+    db.execute("CREATE VIEW outer_v AS WITH c AS (SELECT * FROM (SELECT * FROM 'data.parquet')) SELECT c.x FROM c, v")
+    assert validate(db, "SELECT * FROM outer_v")["allowed"]
+    db.execute("CREATE MACRO m() AS TABLE SELECT * FROM 'data.parquet'")
+    assert validate(db, "SELECT * FROM m()")["code"] == "forbidden"  # the macro itself is caller-written
+    configure(db, {"allowed_functions": ["m"]})
+    assert validate(db, "SELECT * FROM m()")["allowed"]
+    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["read_parquet"]})["code"] == "forbidden"
+    configure(db, {})
+
+
+def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypatch):
+    # The exemption is by provenance, not by path: every spelling the caller can give a replacement scan is
+    # the caller's reader choice and must pass the allowlist, alone or next to a trusted view of the same file.
+    monkeypatch.chdir(tmp_path)
+    db.execute("COPY (SELECT 1 AS x) TO 'data.parquet'; CREATE VIEW v AS SELECT * FROM 'data.parquet'")
+    denied = [
+        "SELECT * FROM 'data.parquet'",
+        "SELECT * FROM data.parquet",  # unquoted: schema 'data', table 'parquet', same replacement path
+        "SELECT * FROM 'DATA.PARQUET'",
+        "DESCRIBE 'data.parquet'",
+        "WITH c AS (SELECT * FROM 'data.parquet') SELECT * FROM c",
+        "SELECT (SELECT count(*) FROM 'data.parquet')",
+        "SELECT * FROM v, 'data.parquet'",  # the caller and the view name the same file: the caller's check
+        "SELECT * FROM v JOIN 'data.parquet' USING (x)",
+        "SELECT * FROM v UNION ALL SELECT * FROM 'data.parquet'",
+        "PIVOT 'data.parquet' ON x USING count(*)",
+    ]
+    for sql in denied:
+        result = validate(db, sql)
+        assert result["code"] == "forbidden", (sql, result)
+        assert result["violations"][0]["rule"] == "function", (sql, result)
+        assert result["violations"][0]["function_name"] == "read_parquet", (sql, result)
+    # A caller-written name that is a different file does not borrow the view's exemption either.
+    db.execute("COPY (SELECT 2 AS x) TO 'other.parquet'")
+    result = validate(db, "SELECT * FROM v, 'other.parquet'")
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
+    # Admitting the reader restores every spelling, and the collision case lists both objects.
+    configure(db, {"allowed_functions": ["parquet_scan"]})
+    for sql in denied:
+        assert validate(db, sql)["allowed"], sql
+    result = validate(db, "SELECT * FROM v, 'data.parquet'")
+    assert {o["table"] for o in result["objects"]} == {"v", "data.parquet"}
 
 
 def test_replacement_scan_callback_is_inert_outside_validation(db, tmp_path, monkeypatch):

@@ -64,7 +64,17 @@ struct BindingPolicy {
 	// Caller-written list_aggregate/aggregate family calls: the aggregate they select by name is caller-chosen
 	// text, so the bound implementation must pass the allowlists like any other caller-written function.
 	Names caller_dispatchers;
+	// Caller-written table references by qualified name (catalog.schema.table as written, case-folded). A
+	// replacement scan for one of them substitutes a reader the caller chose, so that reader must pass the
+	// allowlists like a caller-written table function. A replacement reached only through a trusted view or
+	// macro body is that definition's own reader and passes the deny layer, exactly as the readers such bodies
+	// name explicitly do. The replacement callback sees no origin, so a name both sides use is checked as the
+	// caller's, query-wide, like other ambiguous caller syntax.
+	Names caller_table_refs;
 };
+// The qualified name DuckDB hands its replacement-scan callbacks (ReplacementScan::GetFullPath): the non-empty
+// parts joined with dots. Case-folded here because caller_table_refs is matched by name, never by file identity.
+std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table);
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);

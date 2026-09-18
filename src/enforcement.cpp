@@ -247,6 +247,13 @@ optional_ptr<const gatekeeper::Policy> AdmittedPolicy(ClientContext &context) {
 	return &state->policy;
 }
 
+optional_ptr<const gatekeeper::BindingPolicy> AdmittedBinding(ClientContext &context) {
+	auto state = StateOf(context);
+	if (!state || !state->admitted)
+		return nullptr;
+	return &state->unit.binding;
+}
+
 // Execution boundary on every plan the engine's own planner produces, for every connection.
 static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto state = StateOf(input.context);

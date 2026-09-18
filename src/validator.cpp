@@ -22,6 +22,13 @@ std::string Lower(std::string value) {
 			c += 'a' - 'A';
 	return value;
 }
+std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table) {
+	std::string path = catalog;
+	if (!schema.empty())
+		path += (path.empty() ? "" : ".") + schema;
+	path += (path.empty() ? "" : ".") + table;
+	return Lower(path);
+}
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
 static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const std::string &schema,
                          const std::string &table, bool internal = false) {
@@ -289,6 +296,12 @@ struct Walker {
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
+		// replacement scan turns into a reader. Only the last matters, and only the replacement callback learns
+		// which names are which, so it is told every name the caller wrote and treats the rest as trusted.
+		if (kind == "BaseTableRef" && binding)
+			binding->caller_table_refs.insert(
+			    TableRefPath(Field(value, "catalog_name"), Field(value, "schema_name"), Field(value, "table_name")));
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");

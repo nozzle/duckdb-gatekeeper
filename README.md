@@ -322,10 +322,13 @@ flowchart LR
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
   `FROM read_parquet(...)`) all use the same policy, by leaf name.
 - Functions that trusted **views and macros** introduce internally are normally exempt
-  from the allowlist but always honor `blocked_functions` and the never-bind list. The
+  from the allowlist but always honor `blocked_functions` and the never-bind list. This
+  covers the reader behind a file path written inside the body (`FROM 'x.parquet'`) as
+  much as an explicit `read_parquet(...)` there. The
   exemption is not unconditional: ambiguous caller syntax such as `t.x` or `list[i]`
   triggers a query-wide implementation check that can also reach a trusted expansion
-  using the same function (for example `struct_extract`). See
+  using the same function (for example `struct_extract`), and a file path the caller
+  also writes is checked as the caller's. See
   [function enforcement and trusted expansion](docs/security.md#function-enforcement-and-trusted-expansion).
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
@@ -360,7 +363,9 @@ Admitting one permits its resource access; `allowed_tables` does not restrict fi
 
 The decision is made before the reader binds, so a denied path is never opened. Allowed
 paths appear in `objects` with type `replacement`. Host-language scans (DataFrames,
-relations in scope) are always denied.
+relations in scope) are always denied. These rules govern paths the caller writes; a
+path inside a host-defined view or macro body is that definition's own reader and is
+exempt from the allowlist like any other trusted expansion, subject to `blocked_functions`.
 
 ### Never-bind list
 

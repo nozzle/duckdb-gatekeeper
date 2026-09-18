@@ -224,6 +224,13 @@ under residuals.
   runs. Agent-written readers are still denied before execution, but the bind of a statement
   that will be denied has already happened; with external access enabled, that bind can
   perform reader I/O whose only observable effect for the caller is the denial's timing.
+  The replacement-scan gate does run during that bind, with no statement text on record, so
+  it holds every substituted reader to the allowlist there: a caller's `FROM 'file'` is
+  refused before anything opens, and so is a trusted view that names its file the same way.
+  Such a view cannot be prepared on an enforced connection unless its reader is allowed;
+  executing the statement directly (with or without parameters) binds inside the query,
+  where the text is on record, and a view written with an explicit `read_parquet(...)` call
+  is unaffected either way.
 - **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
@@ -467,9 +474,15 @@ name `read_parquet`; successful dependency lists retain observed function names.
 The callback applies explicit blocks and the non-overridable never-bind list below
 to scalar, aggregate, table, macro, table-macro and pragma-function entries, including
 trusted expansions. Authorized views backed by `read_parquet` still work unless
-that reader is blocked. The callback exposes no expression origin or reliable
-macro/view boundary: when caller syntax requires an implementation check, a trusted
-expansion using the same implementation must also pass it. This conservative
+that reader is blocked, and so do views that name the file directly (`FROM 'x.parquet'`):
+the reader DuckDB substitutes for a path inside a view or macro body is that definition's
+own reader and receives the same block-only treatment as an explicit call there. The
+replacement-scan callback sees no binder, so it learns which table names the caller wrote
+from the text walk; a name the caller wrote is the caller's reader choice and must pass the
+allowlists, and a name both the caller and a trusted body use is checked as the caller's,
+query-wide, like other ambiguous caller syntax. The callback exposes no expression origin
+or reliable macro/view boundary: when caller syntax requires an implementation check, a
+trusted expansion using the same implementation must also pass it. This conservative
 query-wide restriction can deny a mixed caller/view expression; it does not grant
 an exception to caller code. Type names, casts, and collations are trusted host
 database configuration and are not authorized separately.
@@ -622,7 +635,17 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   reference, so a denial happens before the substituted reader binds and no file is
   opened. Readers substituted by DuckDB are authorized by their resolved names
   (`parquet_scan`, `read_csv_auto`, `read_json_auto`), with `parquet_scan` sharing
-  permission with `read_parquet`. No separate replacement-scan toggle exists.
+  permission with `read_parquet`. No separate replacement-scan toggle exists. The check
+  applied depends on who wrote the name: a table name in the caller's text (quoted or not,
+  in any clause, including `DESCRIBE`, `PIVOT`, CTEs and subqueries) is the caller's reader
+  choice and must pass every allowlist layer; a name reachable only through a view or
+  macro body is that trusted definition's reader and passes the deny layer, exactly as an
+  explicit `read_parquet(...)` in that body does. The callback receives only the name, so
+  the text walk records every table name the caller wrote and the gate consults that record
+  (the private bind's, or the admitted statement's on an enforced connection); a name both
+  sides use is checked as the caller's. A `Prepare()` bind outside any statement has no text
+  on record and is pre-screened as though the caller wrote every name; `OnExecutePrepared`
+  then rebinds inside the query, where the record exists.
   Host-language scans that resolve to subqueries are always denied. When no callback
   claims a name, Gatekeeper raises the engine's missing-table error itself rather than
   returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and

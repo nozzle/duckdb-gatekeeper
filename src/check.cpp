@@ -278,12 +278,14 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 // Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
 // construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
 // first callback at LOAD and decides before that bind happens, both while Authorize is binding on
-// this thread and on every enforced connection: the resolved reader is authorized like a caller-written
-// table function in every applicable policy layer.
+// this thread and on every enforced connection. The resolved reader is authorized as the caller-written
+// table function it stands for when the caller wrote the name, and as a trusted definition's own reader,
+// against the deny layer only, when the name is reachable only through a view or macro body.
 struct ValidationScope {
 	ClientContext &context; // the connection this validation binds on
 	const gatekeeper::Policy &policy;
 	const gatekeeper::Policy &ceiling;
+	const gatekeeper::BindingPolicy &binding; // what the caller wrote, from the text walk
 	gatekeeper::Result &result;
 	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
 };
@@ -321,8 +323,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	};
 	gatekeeper::Policy prepared;
 	optional_ptr<const gatekeeper::Policy> enforced;
-	if (!scope) {
+	// The names the caller wrote, when the statement's text has been walked: under Authorize, the scope's; on an
+	// enforced connection binding an admitted statement itself, the record QueryBegin kept. A Prepare() bind
+	// outside any statement has no text on record and is pre-screened as though the caller wrote every name.
+	optional_ptr<const gatekeeper::BindingPolicy> binding;
+	if (scope) {
+		binding = &scope->binding;
+	} else {
 		enforced = AdmittedPolicy(context);
+		binding = AdmittedBinding(context);
 		if (!enforced) {
 			try {
 				prepared = GlobalPolicy(context);
@@ -336,6 +345,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			}
 		}
 	}
+	// A name the caller wrote chooses the reader, so the reader must be allowed like a caller-written table
+	// function. A name reachable only through a trusted view or macro body is that definition's reader and
+	// passes the deny layer, exactly as the readers such bodies name explicitly do. The callback cannot see
+	// which binder asked: a name the caller also wrote is the caller's, query-wide.
+	bool caller_written = !binding || binding->caller_table_refs.count(gatekeeper::TableRefPath(
+	                                      input.catalog_name, input.schema_name, input.table_name));
+	auto reader_permitted = [&](const gatekeeper::Policy &layer, const string &name) {
+		return caller_written ? gatekeeper::FunctionAllowed(layer, name) : !gatekeeper::FunctionDenied(layer, name);
+	};
 	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
@@ -372,7 +390,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		else
 			layers = {enforced.get()};
 		for (const auto *layer : layers) {
-			if (!gatekeeper::FunctionAllowed(*layer, name)) {
+			if (!reader_permitted(*layer, name)) {
 				if (deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
 				         gatekeeper::CanonicalFunction(name)))
 					return replacement;
@@ -421,7 +439,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 		AuthorizeObject(ceiling, binding, entry, result);
 		AuthorizeObject(policy, binding, entry, result);
 	});
-	ValidationScope scope{context, policy, ceiling, result, {}};
+	ValidationScope scope{context, policy, ceiling, binding, result, {}};
 	BoundStatement bound;
 	{
 		ScopeGuard guard(scope);
