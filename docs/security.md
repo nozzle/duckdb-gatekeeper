@@ -281,10 +281,14 @@ Semantics that follow from "the same decision, without the refusal":
 - Nothing from the private path surfaces. An engine error raised while Gatekeeper binds
   privately propagates on an enforcing connection (DuckDB's own message is the outcome); in
   log-only mode it is recorded as `gatekeeper_validate` reports it (`code = 'binding'`) and the
-  engine's own bind raises the error, with the query location a hook cannot attach. The caller
-  sees exactly what an unenforced connection shows; `test/test_log_only.py` asserts this over
-  the enforcement parity corpus on identical fresh instances, and asserts the record equals
-  the `gatekeeper_validate` row.
+  engine's own bind raises the error, with the query location a hook cannot attach. When
+  parameters defer the private bind and the engine's own bind fails first, the same record is
+  written from the planning-error hook and the engine's exception propagates unchanged; a
+  failure the engine raises before any plan exists (a parameter the caller did not supply) is
+  recorded at query end, without a `query_id`. The caller sees exactly what an unenforced
+  connection shows; `test/test_log_only.py` asserts
+  this over the enforcement parity corpus on identical fresh instances, and asserts the record
+  equals the `gatekeeper_validate` row.
 - A `Prepare()` outside any query is pre-screened as before and a denial there is recorded
   with `mode = 'log_only'`; each later execution is its own record.
 - **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
@@ -351,10 +355,13 @@ Properties that make the record trustworthy as evidence:
   is DuckDB's error, in DuckDB's words, and is not recorded; `gatekeeper_validate` maps the same
   outcome to `code = 'binding'` and that call is recorded, and so is a log-only statement, whose
   record is what `gatekeeper_validate` would have said (the engine then raises its own error).
-  When reading a log-only trail for what enforcement would refuse, count `forbidden`,
-  `unsupported`, and `invalid_input` (the text check's limits and multi-statement text, and a
-  policy the host left unreadable through a native write, which refuses every statement);
-  `binding` and `parser` are statements DuckDB rejects on its own.
+  When reading a log-only trail for what enforcement would refuse, every denied record except
+  `code = 'binding'` counts: `forbidden` and `unsupported` are policy decisions, `invalid_input`
+  is the text check's own rejection (its limits, multi-statement text) or a policy the host left
+  unreadable through a native write, and `parser` is Gatekeeper's own parse failing on text the
+  engine accepted, all of which strict mode refuses with a Gatekeeper denial. `binding` is the
+  engine rejecting the statement, recorded only in log-only mode so the trail is complete. Text
+  DuckDB's parser rejects fails before any hook and is recorded in neither mode.
 - **The sandboxed connection cannot read, redirect, silence, erase, or forge the log.**
   `duckdb_logs`, `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose
   `storage_path` writes a file of the caller's choosing), `disable_logging`,

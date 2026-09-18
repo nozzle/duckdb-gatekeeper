@@ -200,6 +200,49 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
         ("prepare", None), ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
 
 
+@pytest.mark.parametrize("sql, error", [
+    ("SELECT * FROM reporting.missing WHERE id = ?", duckdb.CatalogException),
+    ("SELECT no_such_column FROM reporting.orders WHERE id = ?", duckdb.BinderException),
+    ("SELECT id FROM reporting.orders WHERE id = ? AND amount > DATE '2024-01-01'", duckdb.BinderException),
+])
+def test_a_parameterized_statement_the_engine_cannot_bind_is_still_recorded(catalog, agent, sql, error):
+    # Parameters defer the private bind to PostBind, so when the engine's own bind fails nothing later runs.
+    # Enforcing, that failure is DuckDB's error and no decision. Log-only, the statement must still appear in
+    # the trail: it is recorded from the planning-error hook as gatekeeper_validate reports it, and the
+    # engine's exception propagates exactly as on an unenforced connection.
+    enable(catalog)
+    expected = validate(catalog, sql)
+    assert expected["code"] == "binding", expected
+    with pytest.raises(error):
+        agent.execute(sql, [1])
+    assert decisions(catalog, "mode <> 'validate'") == []
+    catalog.execute("SET gatekeeper_log_only = true")
+    strict, relaxed = outcome_with(agent, sql, [1]), outcome_with(catalog.cursor(), sql, [1])
+    assert strict == relaxed and strict[0] == "error" and strict[1] == error.__name__, (strict, relaxed)
+    [record] = decisions(catalog, "mode <> 'validate'")
+    assert (record["mode"], record["boundary"], record["allowed"], record["code"]) == ("log_only", "authorize", False, "binding")
+    assert record["error_type"] == expected["error_type"] and record["statement"] == sql
+    assert expected["error_message"].startswith(record["error_message"].split("\n")[0])
+
+
+def test_a_statement_the_engine_rejects_before_planning_is_still_recorded(catalog, agent):
+    # Parameters the caller did not supply fail the engine's own checks after QueryBegin admitted the text and
+    # before any plan exists: no PostBind, no planning error. The query-end hook records it, without a query id
+    # (the engine has closed the query by then), so the trail is complete in every path.
+    enable(catalog)
+    catalog.execute("SET gatekeeper_log_only = true")
+    cases = [("SELECT $1", None), ("SELECT * FROM reporting.orders WHERE id = ?", [1, 2])]
+    for sql, args in cases:
+        relaxed = outcome_with(agent, sql, args) if args else outcome(agent, sql)
+        plain = outcome_with(catalog.cursor(), sql, args) if args else outcome(catalog.cursor(), sql)
+        assert relaxed == plain and relaxed[:2] == ("error", "InvalidInputException"), (relaxed, plain)
+    found = decisions(catalog)
+    assert [(r["boundary"], r["code"], r["error_type"], r["statement"], r["query_id"]) for r in found] == [
+        ("authorize", "binding", "Invalid Input", "SELECT $1", None),
+        ("authorize", "binding", "Invalid Input", "SELECT * FROM reporting.orders WHERE id = ?", None)]
+    assert all(r["statement_length"] == len(r["statement"]) for r in found)
+
+
 def test_prepared_statements_are_recorded_when_prepared_and_when_executed(catalog, agent):
     enable(catalog, "debug")
     catalog.execute("SET gatekeeper_log_only = true")

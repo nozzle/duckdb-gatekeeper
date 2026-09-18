@@ -12,6 +12,7 @@
 #include "engine_errors.hpp"
 #include "fuzz_checks.hpp"
 #include "options.hpp"
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -170,6 +171,12 @@ static bool GatekeeperDenial(const ErrorData &error) {
 	       error.RawMessage().find("Gatekeeper denied this statement") != std::string::npos;
 }
 
+// Names the failing check in the crash log; an unsymbolized libFuzzer stack does not.
+static void Fail(const char *why) {
+	fprintf(stderr, "gatekeeper fuzz: %s\n", why);
+	std::abort();
+}
+
 // Whether the text is one PRAGMA statement, which DuckDB rewrites into a SELECT before any hook runs: the
 // enforced path then decides that SELECT, while gatekeeper_validate reports the raw text as unsupported.
 static bool IsSinglePragma(Connection &connection, const std::string &bytes) {
@@ -190,43 +197,66 @@ static bool IsSinglePragma(Connection &connection, const std::string &bytes) {
 static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const std::string &bytes, bool allowed,
                                const string &code, bool pragma_rewrite) {
 	if (connection.Query("SET gatekeeper_log_only = true")->HasError())
-		std::abort();
+		Fail("log-only: cannot set the switch");
 	Connection observed(database);
 	if (observed.Query("CALL gatekeeper_enforce()")->HasError())
-		std::abort();
+		Fail("log-only: cannot enforce the observed connection");
 	if (connection.Query("CALL truncate_duckdb_logs()")->HasError())
-		std::abort();
+		Fail("log-only: cannot truncate the log");
+	// Zero records are legitimate only when the engine rejects the text before any hook runs: its parser, the
+	// PRAGMA and PIVOT preprocessing that runs inside parsing, or the one-statement check PendingQuery applies.
+	// The host connection runs that same pipeline here; it is unenforced, so nothing it does is recorded.
+	bool before_hooks = false;
+	try {
+		before_hooks = connection.ExtractStatements(bytes).size() != 1;
+	} catch (const std::exception &error) {
+		CheckError(ErrorData(error).Type());
+		before_hooks = true;
+	}
 	auto pending = observed.PendingQuery(bytes);
+	std::string engine_error; // DuckDB's own rejection of the text, if any
 	if (pending->HasError()) {
 		CheckError(pending->GetErrorObject().Type());
 		if (GatekeeperDenial(pending->GetErrorObject()))
-			std::abort();
+			Fail("log-only: a Gatekeeper denial escaped");
+		engine_error = pending->GetErrorObject().RawMessage();
 	}
 	pending.reset();
 	// Query() without parameters materializes; the code is one of Gatekeeper's fixed identifiers.
 	std::string same = "allowed = " + std::string(allowed ? "true" : "false") + " AND code = '" + code + "'";
 	std::string from = " FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only'";
-	auto records = connection.Query("SELECT count(*), bool_and(" + same + ")" + from);
+	auto records =
+	    connection.Query("SELECT count(*), bool_and(" + same + "), any_value(code), any_value(error_message)" + from);
 	if (records->HasError())
-		std::abort();
+		Fail("log-only: cannot read the records");
 	auto count = records->GetValue(0, 0).GetValue<int64_t>();
 	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
 	// dynamic PIVOT into several statements (several records, the first being the decision on the text) or a
 	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text).
 	if (pragma_rewrite) {
 		if (connection.Query("SET gatekeeper_log_only = false")->HasError())
-			std::abort();
+			Fail("log-only: cannot reset the switch");
 		return;
 	}
-	if (count == 1 && !records->GetValue(1, 0).GetValue<bool>())
-		std::abort();
+	if (count == 0 && !before_hooks)
+		Fail("log-only: a statement that reached QueryBegin left no record");
+	if (count == 1 && !records->GetValue(1, 0).GetValue<bool>()) {
+		// The one other truthful record: the engine rejected the statement on its own (a parameter the caller
+		// did not supply, checked before planning on some entry points and after it on others), and the
+		// record says exactly that, in the engine's words. gatekeeper_validate binds without values and may
+		// have allowed the text.
+		bool engine_rejection = !engine_error.empty() && records->GetValue(2, 0).GetValue<string>() == "binding" &&
+		                        records->GetValue(3, 0).GetValue<string>() == engine_error;
+		if (!engine_rejection)
+			Fail("log-only: the record disagrees with gatekeeper_validate");
+	}
 	if (count > 1) {
 		auto first = connection.Query("SELECT " + same + from + " ORDER BY timestamp, context_id LIMIT 1");
 		if (first->HasError() || !first->GetValue(0, 0).GetValue<bool>())
-			std::abort();
+			Fail("log-only: the first record of a rewritten batch disagrees with gatekeeper_validate");
 	}
 	if (connection.Query("SET gatekeeper_log_only = false")->HasError())
-		std::abort();
+		Fail("log-only: cannot reset the switch");
 }
 
 // An enforced connection must agree with gatekeeper_validate under the same global policy. Plan the
@@ -240,10 +270,10 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	Connection enforced(database);
 	auto latch = enforced.Query("CALL gatekeeper_enforce()");
 	if (latch->HasError())
-		std::abort();
+		Fail("enforced: cannot enforce the connection");
 	auto truncated = connection.Query("CALL truncate_duckdb_logs()");
 	if (truncated->HasError())
-		std::abort();
+		Fail("enforced: cannot truncate the log");
 	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)", Value(bytes));
 	if (expected->HasError()) {
 		CheckError(expected->GetErrorObject().Type());
@@ -251,7 +281,7 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	}
 	auto chunk = expected->Fetch();
 	if (!chunk || chunk->size() != 1)
-		std::abort();
+		Fail("enforced: gatekeeper_validate returned no row");
 	auto allowed = chunk->GetValue(0, 0).GetValue<bool>();
 	auto code = chunk->GetValue(1, 0).GetValue<string>();
 	// Keep the list Value alive for as long as its children are referenced.
@@ -267,21 +297,21 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 		CheckError(pending->GetErrorObject().Type());
 	// Validate allowed it: enforcement must not deny it.
 	if (allowed && denial)
-		std::abort();
+		Fail("enforced: validate allowed the text but enforcement denied it");
 	// Validate forbade it on policy grounds: the engine must not have planned it. The statement-count
 	// limit is the one forbidden case the engine rejects itself, before any hook.
 	if (code == "forbidden" && !limit_only && !pending->HasError())
-		std::abort();
+		Fail("enforced: validate forbade the text but the engine planned it");
 	// Unsupported statement types must not plan either, except pragmas DuckDB rewrites into SELECTs
 	// before Gatekeeper sees them, which then follow the policy on that SELECT.
 	bool pragma_rewrite = code == "unsupported" && IsSinglePragma(connection, bytes);
 	if (code == "unsupported" && !pending->HasError() && !pragma_rewrite)
-		std::abort();
+		Fail("enforced: an unsupported statement was planned");
 	pending.reset();
 	// Every record written for this input, whatever the text contained, must parse back into the log type.
 	auto parsed = connection.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper')");
 	if (parsed->HasError())
-		std::abort();
+		Fail("enforced: a record does not parse back into the log type");
 	CheckLogOnlyParity(database, connection, bytes, allowed, code, pragma_rewrite);
 }
 

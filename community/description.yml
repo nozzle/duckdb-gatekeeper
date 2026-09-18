@@ -196,9 +196,9 @@ docs:
     then runs as it would on an unenforced connection. `SET gatekeeper_log_only = false` (or
     `RESET`) restores refusals at the next statement on every enforced connection. The switch
     is global, boolean, frozen by `lock_configuration`, and recorded as `log_only_changed`.
-    Records with `code IN ('forbidden', 'unsupported', 'invalid_input')` are what enforcement
-    would refuse (`invalid_input` also covers a policy left unreadable by the host); `binding`
-    and `parser` are statements DuckDB rejects on its own.
+    Every denied record except `code = 'binding'` is what enforcement would refuse
+    (`invalid_input` also covers a policy left unreadable by the host); `binding` records are
+    statements DuckDB rejects on its own, kept so the trail is complete.
 
     > Warning Log-only mode protects nothing while it is on, Gatekeeper's own settings
     > included: an agent's `SET gatekeeper_policy` or `SET gatekeeper_log_only = false` is

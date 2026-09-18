@@ -589,7 +589,7 @@ SET logging_level = 'debug';           -- allowed statements too, with what they
 SET gatekeeper_log_only = true;
 -- hand out enforced connections; run real traffic
 SELECT code, violations, statement FROM duckdb_logs_parsed('Gatekeeper')
- WHERE mode = 'log_only' AND code IN ('forbidden', 'unsupported', 'invalid_input');  -- what enforcement would refuse
+ WHERE mode = 'log_only' AND NOT allowed AND code <> 'binding';  -- what enforcement would refuse
 SELECT DISTINCT o.schema, o."table" FROM duckdb_logs_parsed('Gatekeeper'), UNNEST(objects) AS t(o)
  WHERE allowed;                                                     -- a draft allowed_tables
 SET gatekeeper_log_only = false;
@@ -601,9 +601,10 @@ SET lock_configuration = true;
 > switch is remembered when it flips back, but until then an agent's `SET gatekeeper_policy`,
 > `CALL gatekeeper_configure()`, or `SET gatekeeper_log_only = false` executes (and is recorded).
 > `SET lock_configuration = true` before handing out connections if the rollout is not
-> supervised. Enforcement would have refused `forbidden`, `unsupported`, and `invalid_input`
-> (the last also covers a policy the host left unreadable, not only bad SQL); records with
-> `code = 'binding'` or `'parser'` are statements DuckDB itself rejected.
+> supervised. Every denied record except `code = 'binding'` is a statement enforcement would
+> have refused (`invalid_input` includes a policy the host left unreadable, not only bad SQL);
+> `binding` records are statements DuckDB itself rejects, kept so the trail is complete.
+> Text DuckDB's parser rejects never reaches Gatekeeper and is not recorded in either mode.
 
 ### What enforcement covers
 

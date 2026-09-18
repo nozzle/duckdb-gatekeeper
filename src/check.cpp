@@ -323,9 +323,9 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 		throw PermissionException("unauthorized replacement scan");
 }
 
-bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
-	if (auto parser = dynamic_cast<const ParserException *>(&error)) {
-		ErrorData data(*parser);
+bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
+	switch (data.Type()) {
+	case ExceptionType::PARSER: {
 		result.code = "parser";
 		result.error_type = "parser";
 		result.error_message = data.RawMessage();
@@ -338,21 +338,15 @@ bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result
 		}
 		return true;
 	}
-	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
-		result.code = binding ? "binding" : "invalid_input";
-		result.error_message = invalid->what();
-		return true;
-	}
-	if (auto invalid = dynamic_cast<const InvalidInputException *>(&error)) {
+	case ExceptionType::INVALID_INPUT:
 		result.code = binding ? "binding" : "invalid_input";
 		if (binding)
 			result.error_type = "Invalid Input";
-		result.error_message = ErrorData(*invalid).RawMessage();
+		result.error_message = data.RawMessage();
 		return true;
+	default:
+		break;
 	}
-	if (dynamic_cast<const std::bad_alloc *>(&error))
-		return false;
-	ErrorData data(error);
 	if (gatekeeper::PropagateEngineError(data.Type()))
 		return false;
 	result.code = gatekeeper::EngineErrorCode(binding);
@@ -361,6 +355,17 @@ bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result
 	if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
 		result.error_message = "Validation cannot complete binding without parameter values or types";
 	return true;
+}
+
+bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
+	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
+		result.code = binding ? "binding" : "invalid_input";
+		result.error_message = invalid->what();
+		return true;
+	}
+	if (dynamic_cast<const std::bad_alloc *>(&error))
+		return false;
+	return DescribeError(ErrorData(error), binding, result);
 }
 
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,

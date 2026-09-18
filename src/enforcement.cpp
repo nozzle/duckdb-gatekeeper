@@ -145,16 +145,39 @@ struct EnforcementState : ClientContextState {
 		if (statement->named_param_map.empty())
 			Authorize(context, nullptr);
 	}
-	void QueryEnd(ClientContext &, optional_ptr<ErrorData>) override { Reset(); }
+	void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) override {
+		if (in_statement && log_only && !decided && error && error->HasError()) {
+			// The engine failed the statement after QueryBegin admitted it and before any hook could decide it:
+			// a parameter the caller did not supply, or one whose type never resolved, for which the planner
+			// yields no plan and no planning error. Recorded as gatekeeper_validate reports the failure; the
+			// engine has already closed the query, so the record carries no query id.
+			if (DescribeError(*error, true, result)) {
+				MarkDenied(result);
+				Record(context, Boundary::AUTHORIZE, &policy, statement ? &statement->query : nullptr);
+			}
+		}
+		Reset();
+	}
 	// The gate's Prepare() mark must not outlive the prepare attempt that set it: a bind that fails after the
 	// gate decided it runs no pre-screen to consume the mark, and nothing else separates one Prepare() from the
 	// next inside an explicit transaction. Declaring that this state can request a rebind makes the engine
 	// report how every prepare attempt ended, OnFinalizePrepare or OnPlanningError, at the cost of binding a
 	// copy of the statement; no rebind is ever requested from here.
 	bool CanRequestRebind() override { return true; }
-	RebindQueryInfo OnPlanningError(ClientContext &, SQLStatement &, ErrorData &) override {
-		if (!in_statement)
+	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &, ErrorData &error) override {
+		if (!in_statement) {
 			prepare_decided = false;
+		} else if (log_only && !decided) {
+			// The engine's own bind failed before any hook could decide the statement: parameters deferred the
+			// private bind to PostBind, which was never reached. Enforcing, the same failure is DuckDB's error
+			// and no decision. Log-only, the trail must still show the statement, so it is recorded as
+			// gatekeeper_validate reports the error, here rather than at QueryEnd so the record carries the
+			// query's identity; the engine's exception then propagates unchanged.
+			if (DescribeError(error, true, result)) {
+				MarkDenied(result);
+				Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
+			}
+		}
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	RebindQueryInfo OnFinalizePrepare(ClientContext &, PreparedStatementData &, PreparedStatementMode) override {
