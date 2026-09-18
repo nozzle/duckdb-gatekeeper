@@ -458,9 +458,12 @@ static QueryNode &PivotQuery(SQLStatement &statement) {
 // reports that in the engine's words, for either shape alike.
 static idx_t HostEnumSize(ClientContext &context, const string &name) {
 	try {
-		auto &entry = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, name);
-		if (entry.user_type.id() == LogicalTypeId::ENUM)
-			return EnumType::GetSize(entry.user_type);
+		// The untyped lookup: the typed template names TypeCatalogEntry::Name, which a loadable extension then
+		// defines a second time next to the engine's own definition on Linux.
+		auto &entry = Catalog::GetEntry(context, CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name);
+		auto &type = entry.Cast<TypeCatalogEntry>().user_type;
+		if (type.id() == LogicalTypeId::ENUM)
+			return EnumType::GetSize(type);
 	} catch (const CatalogException &) {
 	}
 	return 1;
