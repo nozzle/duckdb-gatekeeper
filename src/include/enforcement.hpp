@@ -1,6 +1,7 @@
 #pragma once
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
+#include "validator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -14,4 +15,7 @@ bool IsEnforced(ClientContext &context);
 // The text of the statement an enforced connection is executing once QueryBegin has admitted it; null on an
 // unenforced connection and outside a query (a Prepare() bind), where no statement text is available.
 optional_ptr<const string> AdmittedQuery(ClientContext &context);
+// The policy snapshot QueryBegin took for that statement, under the same conditions. Every check of one
+// statement, including the engine's own bind reaching the replacement-scan gate, must use this one snapshot.
+optional_ptr<const gatekeeper::Policy> AdmittedPolicy(ClientContext &context);
 } // namespace duckdb

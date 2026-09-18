@@ -33,10 +33,12 @@ class GatekeeperLogType : public LogType {
 		auto result_type = ResultType(); // keep the type alive while its child list is read
 		for (const auto &field : StructType::GetChildTypes(result_type))
 			fields.push_back(field);
-		fields.emplace_back("statement", LogicalType::VARCHAR);
-		fields.emplace_back("statement_length", LogicalType::BIGINT);
-		fields.emplace_back("policy_hash", LogicalType::VARCHAR);
-		fields.emplace_back("new_value", LogicalType::VARCHAR);
+		// By value: emplace_back would bind a reference to these static constexpr members, and in a C++17
+		// translation unit that emits a definition GNU ld rejects as a duplicate of DuckDB's (types.cpp).
+		fields.push_back(make_pair("statement", LogicalType(LogicalTypeId::VARCHAR)));
+		fields.push_back(make_pair("statement_length", LogicalType(LogicalTypeId::BIGINT)));
+		fields.push_back(make_pair("policy_hash", LogicalType(LogicalTypeId::VARCHAR)));
+		fields.push_back(make_pair("new_value", LogicalType(LogicalTypeId::VARCHAR)));
 		return LogicalType::STRUCT(std::move(fields));
 	}
 };
@@ -124,8 +126,8 @@ static string Serialize(const Record &record) {
 		fields.push_back(StatementText(*record.statement));
 		fields.push_back(Value::BIGINT(NumericCast<int64_t>(record.statement->size())));
 	} else {
-		fields.emplace_back(LogicalType::VARCHAR);
-		fields.emplace_back(LogicalType::BIGINT);
+		fields.push_back(Value(LogicalType(LogicalTypeId::VARCHAR)));
+		fields.push_back(Value(LogicalType(LogicalTypeId::BIGINT)));
 	}
 	fields.push_back(PolicyHash(record.policy));
 	fields.push_back(record.new_value && !record.new_value->IsNull() ? Value(record.new_value->ToString())

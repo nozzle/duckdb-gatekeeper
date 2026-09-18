@@ -160,6 +160,13 @@ optional_ptr<const string> AdmittedQuery(ClientContext &context) {
 	return &context.GetCurrentQuery();
 }
 
+optional_ptr<const gatekeeper::Policy> AdmittedPolicy(ClientContext &context) {
+	auto state = StateOf(context);
+	if (!state || !state->admitted)
+		return nullptr;
+	return &state->policy;
+}
+
 // Execution boundary on every plan the engine's own planner produces, for every connection.
 static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto state = StateOf(input.context);

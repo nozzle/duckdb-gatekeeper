@@ -186,17 +186,23 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	auto path = ReplacementScan::GetFullPath(input);
 	// An enforced connection binding outside Authorize has no request layer and no result in progress: the
 	// denial is decided and recorded here, against the statement the connection is executing when there is one.
-	gatekeeper::Policy enforced;
+	// That statement's policy snapshot is the one every check of it must use; only a Prepare() bind, which has
+	// no statement in progress, reads the global setting itself.
+	gatekeeper::Policy prepared;
+	optional_ptr<const gatekeeper::Policy> enforced;
 	if (!scope) {
-		try {
-			enforced = GlobalPolicy(context);
-		} catch (const std::invalid_argument &error) {
-			gatekeeper::Result result;
-			result.code = "invalid_input";
-			result.error_message = string("cannot read the global policy: ") + error.what();
-			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, nullptr, AdmittedQuery(context)},
-			       result);
-			throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+		enforced = AdmittedPolicy(context);
+		if (!enforced) {
+			try {
+				prepared = GlobalPolicy(context);
+				enforced = &prepared;
+			} catch (const std::invalid_argument &error) {
+				gatekeeper::Result result;
+				result.code = "invalid_input";
+				result.error_message = string("cannot read the global policy: ") + error.what();
+				Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, nullptr, nullptr}, result);
+				throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+			}
 		}
 	}
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
@@ -204,7 +210,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			gatekeeper::Result result;
 			result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name, function);
 			MarkDenied(result);
-			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, &enforced, AdmittedQuery(context)},
+			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, enforced, AdmittedQuery(context)},
 			       result);
 			throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
 		}
@@ -230,7 +236,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		if (scope)
 			layers = {&scope->ceiling, &scope->policy};
 		else
-			layers = {&enforced};
+			layers = {enforced.get()};
 		for (const auto *layer : layers) {
 			if (!gatekeeper::FunctionAllowed(*layer, name))
 				deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
