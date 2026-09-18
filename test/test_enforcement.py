@@ -27,7 +27,9 @@ CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
     CREATE VIEW reporting.totals AS SELECT tag, sum(amount) AS total FROM reporting.orders GROUP BY tag;
     CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
     CREATE MACRO reporting.twice(x) AS x * 2;
-    CREATE SEQUENCE reporting.seq"""
+    CREATE SEQUENCE reporting.seq;
+    CREATE TYPE tags AS ENUM ('a', 'b');
+    CREATE TYPE empty_tags AS ENUM (SELECT tag FROM reporting.orders WHERE false)"""
 CATALOG_POLICY = {"allowed_tables": [{"schema": "reporting", "table": "*"}],
                   "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
 
@@ -65,6 +67,15 @@ PARITY_CORPUS = [
     "SELECT * FROM reporting.orders USING SAMPLE 1",
     "SELECT * FROM (SELECT tag, amount FROM reporting.orders) PIVOT (sum(amount) FOR tag IN ('a', 'b'))",
     "PIVOT reporting.orders ON tag USING sum(amount)",
+    "PIVOT reporting.orders ON tag IN (SELECT DISTINCT tag FROM reporting.orders) USING sum(amount)",
+    "PIVOT reporting.orders ON tag, id USING sum(amount) GROUP BY amount",
+    "PIVOT reporting.orders ON tag IN tags, id USING count(*)",
+    "PIVOT reporting.orders ON tag IN empty_tags, id USING count(*) GROUP BY amount",
+    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)",
+    "WITH p AS (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) PIVOT p ON id USING count(*)",
+    "WITH c AS (SELECT * FROM reporting.orders) PIVOT c ON tag USING sum(amount)",
+    "SELECT (SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount)))",
+    "SELECT 1 UNION ALL SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount))",
     "SELECT * FROM reporting.orders PIVOT (sum(amount) FOR tag IN (SELECT tag FROM reporting.orders))",
     "SELECT DISTINCT tag FROM reporting.orders LIMIT 5 OFFSET 0",
     "SELECT * FROM reporting.orders WHERE amount > (SELECT avg(amount) FROM reporting.orders)",
@@ -97,6 +108,26 @@ PARITY_CORPUS = [
     "SELECT * FROM json_execute_serialized_sql('{}')",
     "SELECT list_aggregate([1, 2], 'md5')",
     "SELECT * FROM reporting.orders LIMIT (SELECT 1)",
+    # Dynamic PIVOT: the enum type's SELECT and the pivoting SELECT are each decided as the engine runs them.
+    "PIVOT secret.salaries ON who USING sum(amount)",
+    "PIVOT reporting.leak ON who USING sum(amount)",
+    "PIVOT reporting.orders ON md5(tag) USING sum(amount)",
+    "PIVOT reporting.orders ON tag USING sum(amount), md5(tag)",
+    "PIVOT reporting.orders ON tag IN (SELECT who FROM secret.salaries) USING sum(amount)",
+    "PIVOT reporting.orders ON tag IN (SELECT md5('x')) USING sum(amount)",
+    "PIVOT reporting.orders ON tag USING sum(amount) LIMIT (SELECT 1)",
+    "PIVOT (PIVOT reporting.leak ON who USING sum(amount) GROUP BY amount) ON amount USING count(*)",
+    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*), md5(id)",
+    # Only the parser's own rewrite of a dynamic PIVOT is a supported CREATE.
+    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT who FROM secret.salaries)",
+    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM ('a', 'b')",
+    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_notauuid\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE OR REPLACE TEMP TYPE mood AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE OR REPLACE TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE OR REPLACE TEMP TYPE temp.main.\"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
+    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS INTEGER",
     "SHOW TABLES",
     "SELECT * FROM gatekeeper_validate('SELECT 1')",
     "SELECT * FROM gatekeeper_enforce()",
@@ -131,6 +162,11 @@ PARITY_CORPUS = [
     "SELECT no_such_column FROM reporting.orders",
     "SELECT no_such_function(1)",
     "SELECT 1 + 'a'::DATE",
+    "PIVOT reporting.missing ON tag USING sum(amount)",
+    "PIVOT reporting.orders ON no_such_column USING sum(amount)",
+    "PIVOT reporting.orders ON tag USING sum(no_such_column)",
+    # Static IN lists whose product alone passes pivot_limit (2^17 > 100000): the engine refuses the pivot.
+    "PIVOT reporting.orders ON tag, " + ", ".join(f"id + {i} IN (1, 2)" for i in range(17)) + " USING count(*)",
 ]
 
 
@@ -168,6 +204,71 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
                    "PRAGMA enable_profiling"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(pragma).fetchall()
+
+
+def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(catalog, agent):
+    # DuckDB's parser turns PIVOT ... ON col (no IN list) into CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>"
+    # AS ENUM (SELECT DISTINCT col ...) followed by the SELECT that names the type, and the engine runs each as
+    # its own statement. Gatekeeper admits exactly that CREATE, by shape, so the enum is created only from a
+    # SELECT the policy allows and only in the connection's temporary catalog; gatekeeper_validate decides the
+    # same statements in the same order and creates nothing.
+    sql = "PIVOT reporting.orders ON tag USING sum(amount)"
+    static = "PIVOT reporting.orders ON tag IN ('a', 'b') USING sum(amount)"
+    assert validate(catalog, sql)["allowed"]
+    # Temporary types are connection-local, and validate ran on the catalog connection: an enum it created would
+    # be visible here and nowhere else. The agent then creates its own, in its own session.
+    assert catalog.execute("SELECT count(*) FROM duckdb_types() WHERE type_name LIKE '__pivot_enum_%'").fetchone()[0] == 0
+    assert agent.execute(sql).fetchall() == catalog.execute(static).fetchall()
+    # The pivoting SELECT is validated before the type exists, so it is bound against placeholder IN lists of
+    # both sizes DuckDB plans differently: an aggregate FILTER per value up to pivot_filter_threshold, and a LIST
+    # aggregate under a PIVOT operator above it. Blocking the LIST implementation denies the text as a whole, and
+    # denies the statement at execution when the data selects that shape; the small-data case executes with an
+    # aggregate FILTER plan that never binds it (the residual documented in docs/security.md).
+    configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
+    result = validate(catalog, sql)
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "list", result
+    assert agent.execute(sql).fetchall() == catalog.execute(static).fetchall()
+    catalog.execute("CREATE TABLE reporting.wide AS SELECT i AS id, 'k' || i AS k, i * 1.5 AS v FROM range(40) t(i)")
+    with pytest.raises(duckdb.PermissionException, match="list"):
+        agent.execute("PIVOT reporting.wide ON k USING sum(v)").fetchall()
+    catalog.execute("SET GLOBAL pivot_filter_threshold = 0")
+    with pytest.raises(duckdb.PermissionException, match="list"):
+        agent.execute(sql).fetchall()
+    configure(catalog, CATALOG_POLICY)
+    catalog.execute("RESET GLOBAL pivot_filter_threshold")
+    # The large shape is sized per PIVOT from its static IN lists and host enums, so it stays under pivot_limit
+    # wherever a legal LIST plan exists (here 11 * 2 = 22 < 30, where the threshold alone would give 21 * 2).
+    catalog.execute("SET GLOBAL pivot_limit = 30")
+    mixed = "PIVOT reporting.orders ON tag, id IN (1, 2) USING count(*)"
+    assert validate(catalog, mixed)["allowed"]
+    assert sorted(agent.execute(mixed).fetchall()) == sorted(catalog.execute(
+        "PIVOT reporting.orders ON tag IN ('a', 'b'), id IN (1, 2) USING count(*)").fetchall())
+    configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
+    assert validate(catalog, mixed)["violations"][0]["function_name"] == "list"
+    configure(catalog, CATALOG_POLICY)
+    catalog.execute("RESET GLOBAL pivot_limit")
+    # An enum type's own SELECT can pivot dynamically too (a nested dynamic PIVOT): it is bound against
+    # placeholders for the types created before it in the batch, like the final SELECT.
+    nested = "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)"
+    assert validate(catalog, nested)["allowed"]
+    with catalog.cursor() as host:
+        assert sorted(agent.execute(nested).fetchall(), key=repr) == sorted(host.execute(nested).fetchall(), key=repr)
+    # An enum whose defining SELECT the policy denies is refused before the pivoting SELECT runs; a pivoting
+    # SELECT the policy denies is refused after the engine created the enum, which is a temporary type in the
+    # agent's own session and nothing more.
+    for denied in ["PIVOT secret.salaries ON who USING sum(amount)",
+                   "PIVOT reporting.orders ON tag IN (SELECT who FROM secret.salaries) USING sum(amount)",
+                   "PIVOT reporting.orders ON tag USING sum(amount), md5(tag)"]:
+        assert validate(catalog, denied)["code"] == "forbidden", denied
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(denied).fetchall()
+    assert catalog.execute("SELECT count(*) FROM secret.salaries").fetchone()[0] == 1
+    # The statement gatekeeper_validate reports on is the first the engine fails on: an enum SELECT that
+    # cannot bind comes before a pivoting SELECT the policy would deny.
+    result = validate(catalog, "PIVOT reporting.missing ON tag USING sum(amount), md5(tag)")
+    assert result["code"] == "binding", result
+    with pytest.raises(duckdb.CatalogException):
+        agent.execute("PIVOT reporting.missing ON tag USING sum(amount), md5(tag)").fetchall()
 
 
 def test_generated_nesting_agrees_with_validate(catalog, agent):

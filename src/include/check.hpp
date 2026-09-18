@@ -24,11 +24,23 @@ struct DBConfig;
 // same composition at the engine's query hooks and then re-checks the plan the engine executes.
 
 struct TextCheck {
+	// One statement the engine runs for the text, admitted at the binding boundary.
+	struct Unit {
+		unique_ptr<SQLStatement> statement;
+		// Ambiguous syntax the walker recorded for the execution boundary to resolve against the bound plan.
+		gatekeeper::BindingPolicy binding;
+		// Enum types the statements before it in the same batch create, which this statement may name in PIVOT
+		// IN lists. Nonempty only inside a dynamic PIVOT checked as a whole, where those types do not exist yet:
+		// Authorize binds the statement against placeholder values instead (see SubstitutePivotEnums).
+		gatekeeper::Names pivot_enums;
+	};
+	// The decision on the text: allowed, or the first denial in the order the engine runs the statements.
 	gatekeeper::Result result;
-	// Ambiguous syntax the walker recorded for the execution boundary to resolve against the bound plan.
-	gatekeeper::BindingPolicy binding;
-	// Populated only when result.allowed: denied text never reaches a binder.
-	vector<unique_ptr<SQLStatement>> statements;
+	// The statements the engine runs for the text, in that order, up to the first denied one; denied text
+	// never reaches a binder. One for a caller's statement. Several for a dynamic PIVOT, which DuckDB's parser
+	// rewrites into the temporary enum types it needs followed by the SELECT that names them, each of which the
+	// engine then runs as a statement of its own.
+	vector<Unit> units;
 };
 
 // Binding boundary. Parses with the connection's parser options and walks the serialized AST against
@@ -39,8 +51,9 @@ TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, co
                     const string &sql, const gatekeeper::Limits &limits);
 
 // Execution boundary. Requires a read-only statement whose plan contains only reviewed read operators,
-// then authorizes the plan against the ceiling and the request layer. Records each violation in result
-// and throws PermissionException at the first denial.
+// then authorizes the plan against the ceiling and the request layer. The one other root it accepts is a
+// dynamic PIVOT's enum type over such a plan (PivotEnumPlan). Records each violation in result and throws
+// PermissionException at the first denial.
 void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
                const gatekeeper::BindingPolicy &binding, const StatementProperties &properties, LogicalOperator &plan,
                gatekeeper::Result &result);
@@ -50,8 +63,8 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 // when supplied, bind exactly as the engine would bind them. Records violations in result and throws
 // PermissionException at the first denial; engine exceptions propagate unchanged.
 void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               SQLStatement &statement, const gatekeeper::BindingPolicy &binding,
-               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result);
+               TextCheck::Unit &unit, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
+               gatekeeper::Result &result);
 
 // gatekeeper_validate: CheckText, then Authorize, with every outcome mapped to a structured result.
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,

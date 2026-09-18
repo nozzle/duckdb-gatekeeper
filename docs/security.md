@@ -114,7 +114,9 @@ When the statement has no parameters, it is then bound privately with the catalo
 callback and replacement-scan interception, so every retrieved table and view, including
 those a view or macro expands to, is authorized by resolved identity. Guarantee: no SQL text
 submitted for execution reaches the engine's binder unless it is a single `SELECT` whose
-grammar, caller-written functions and (parameter-free) resolved objects the policy allows.
+grammar, caller-written functions and (parameter-free) resolved objects the policy allows, or
+the one statement DuckDB's own parser derives from such a `SELECT`: the temporary enum type of
+a dynamic `PIVOT` (below), admitted by exact shape and checked as the `SELECT` that defines it.
 Consequently an agent-written `read_csv('s3://...')`, `FROM 'file'`, or `duckdb_settings()`
 never opens a file, socket, or metadata reader, and DDL/DML/`SET`/`LOAD`/`ATTACH`/`COPY`
 never reach the binder.
@@ -124,7 +126,9 @@ before it optimizes or executes). The plan the engine produced must contain only
 read-only logical operators, modify no database, return a query result, scan only base
 tables the policy allows (each `LOGICAL_GET` table entry is authorized by resolved identity),
 and pass the same resolved-function and implementation checks `gatekeeper_validate` applies
-to its own plan. If the binding boundary deferred object authorization because the statement
+to its own plan. The one other root it accepts is a dynamic `PIVOT`'s enum type
+(`LOGICAL_CREATE_TYPE` of that exact shape, in the temporary catalog, returning nothing) over
+such a plan. If the binding boundary deferred object authorization because the statement
 had parameters, it runs here with the values the engine bound them to. Guarantee: no plan
 executes on an enforced connection unless it consists of allowlisted operators over allowed
 base tables and functions. This holds for every plan the engine's planner produces, whatever
@@ -221,10 +225,57 @@ under residuals.
   that will be denied has already happened; with external access enabled, that bind can
   perform reader I/O whose only observable effect for the caller is the denial's timing.
 - **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
-  `SELECT` they stand for, and dynamic `PIVOT` into a transaction batch, before any hook. The
-  rewritten statements are what Gatekeeper checks and what the audit record's `statement`
-  holds; that is policy-consistent, but the raw text differs from what `gatekeeper_validate`
-  would report (`unsupported` for the `PRAGMA`).
+  `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
+  and what the audit record's `statement` holds; that is policy-consistent, but the raw text
+  differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
+- **Dynamic `PIVOT` runs as a batch.** DuckDB's parser rewrites `PIVOT t ON col USING agg(x)`
+  (no `IN` list) into `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" AS ENUM (SELECT
+  DISTINCT CAST(col AS VARCHAR) FROM t ...)` per dynamic column followed by the `SELECT` that
+  pivots on those types, and the engine runs each as its own statement
+  (`Transformer::CreatePivotStatement`, `StatementPreprocessor`). Gatekeeper admits exactly that
+  `CREATE`, by shape (`OR REPLACE`, `TEMP`, unqualified, that name pattern, defined by a query,
+  not by literals) in both paths, checks its `SELECT` as any other, and requires the bound plan
+  to be that `SELECT`'s under a `LOGICAL_CREATE_TYPE` root in the temporary catalog.
+  `gatekeeper_validate` decides the same statements on the same text the engine will run, in
+  the engine's order, stopping at the first denial, and creates nothing. What remains:
+  - The enum is a real temporary type in the caller's session. The engine never drops it
+    (an upstream `FIXME`), it is created before the pivoting `SELECT` is checked, and it stays
+    when that `SELECT` is denied. It holds the distinct values of a column the policy let the
+    caller read, in the caller's own temporary catalog, and nothing else can reach it.
+  - On an enforced connection the audit trail is one record per rewritten statement, each on
+    DuckDB's rewritten text rather than the caller's. Enforcement stops at the first denied
+    record; log-only mode records every statement. `gatekeeper_validate` writes its usual one
+    `validate` record, on the caller's text, carrying the decision described above.
+  - The fixed text, AST, node, and depth limits apply to each rewritten statement, as an
+    enforced connection applies them to each statement it runs. The expansion itself, one
+    copy of the source per dynamic column, is DuckDB's parser's and happens for every
+    connection before any hook; `gatekeeper_validate` then spends one check and one or two
+    binds per rewritten statement, proportional to what executing the text costs.
+  - Each rewritten statement is a statement to the engine, so each reads its own policy
+    snapshot at `QueryBegin`, exactly as the statements of `SELECT 1; SELECT 2` do. A policy
+    change that lands between the enum's `CREATE` and the pivoting `SELECT` governs the
+    `SELECT`; nothing executes under a snapshot older than its own statement, and a denial
+    then leaves only the temporary type above. `gatekeeper_validate` reads one snapshot for
+    the whole text, as it does for any statement whose execution a later policy change can
+    still refuse. There is no hook that spans the batch, so this is the boundary, not a gap
+    in it.
+  - The enum types do not exist when `gatekeeper_validate` binds the statements that name
+    them (the pivoting `SELECT`, and the `SELECT` of a later enum when a dynamic `PIVOT` is
+    nested inside another), so those are bound against placeholder `IN` lists instead, once
+    per plan shape `Binder::BindPivot` chooses between by a `PIVOT`'s total number of values:
+    filtered aggregates up to `pivot_filter_threshold` and a `list` aggregate under a `PIVOT`
+    operator above it. The large shape is sized per `PIVOT` from its static `IN` lists and
+    host enums so that it crosses the threshold and stays under `pivot_limit` wherever a legal
+    `list` plan exists. Every plan the data can select at execution has therefore passed
+    validation. The reverse does not hold: with `list` (or `concat`, for several pivot
+    columns) in `blocked_functions`, `gatekeeper_validate` denies every dynamic `PIVOT` that
+    has a legal `list` plan, while an enforced connection denies it only when the data has
+    more distinct values than the threshold. The pivot's column count is also
+    data-dependent, so text whose binding depends on it (a column alias list over the pivot,
+    a set operation with it as an operand, a value count that reaches `pivot_limit`) can bind
+    differently at execution than under the placeholders; the enforced connection binds the
+    real type and is exact. DuckDB itself refuses to `PREPARE` a dynamic `PIVOT` for the same
+    reason.
 - **Enforcement is opt-in per connection.** A connection the host opens without running
   `CALL gatekeeper_enforce()` on it is trusted, with the whole engine available. That is what
   lets the host keep a connection for the audit log and policy changes, and what lets
@@ -234,6 +285,11 @@ under residuals.
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
   and the denied function or object, and the [audit record](#audit-log) holds the caller's
   text. Treat all of them as sensitive when relaying to untrusted callers or storing the log.
+  One engine error reads differently on an enforced connection: the engine binds a copy of the
+  statement when a connection state can request a rebind, as Gatekeeper's does, and DuckDB's
+  `PivotRef::Copy` drops the query location, so a binder error raised at a `PIVOT` (a value
+  listed twice, the pivot limit) arrives without its `LINE n:` excerpt. The message is
+  otherwise the same.
 - **Not a resource sandbox.** Memory, CPU time, temporary disk, extension loading, and
   network posture remain host settings. Gatekeeper reports weak posture; it never changes it.
 
@@ -498,7 +554,8 @@ Built-in temporal casts can use ICU timezone/calendar settings; GEOMETRY CRS bin
 can consult trusted CRS providers and `ignore_unknown_crs`.
 
 - `bind_pivot.cpp` performs direct aggregate and enum lookups. Explicit aggregate
-  names pass preflight; named PIVOT enums use the host's type definitions.
+  names pass preflight; named PIVOT enums use the host's type definitions. A dynamic
+  PIVOT's own enum is created from a SELECT that passes every check first (see residuals).
 - `bind_window_expression.cpp` and `function_binder.cpp` contain direct aggregate/
   function lookup paths. Caller names pass preflight; surviving bound scalar,
   aggregate, window and table functions also pass a resolved-deny plan walk, and the

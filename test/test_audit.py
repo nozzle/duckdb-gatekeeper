@@ -1,5 +1,6 @@
 """Audit log: every decision Gatekeeper makes is a structured record of log type 'Gatekeeper'."""
 import concurrent.futures
+import json
 import threading
 
 import duckdb
@@ -60,22 +61,38 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
         # Engine errors are DuckDB's, not decisions: nothing is recorded for them on the enforced path.
         assert found == [] or all(r["allowed"] for r in found), (sql, found)
         return
-    assert len(found) == 1, (sql, found)
-    record = found[0]
+    # A dynamic PIVOT runs as the statements DuckDB rewrites it into, each leaving its own record on its own
+    # text, and enforcement stops at the first denied one; gatekeeper_validate decides the same statements in
+    # the same order, so its row is that record, or describes the whole allowed set. Every other statement
+    # leaves exactly one record, on the text as written.
+    rewritten = [r for r in found if r["statement"] != sql]
+    assert found and (len(found) == 1 or rewritten), (sql, found)
+    assert not rewritten or "PIVOT" in sql or sql.startswith("PRAGMA"), (sql, found)
+    denied = [r for r in found if not r["allowed"]]
+    assert denied in ([], found[-1:]), (sql, found)
+    record = denied[0] if denied else found[0]
     assert record["allowed"] == expected["allowed"] == (outcome == "allowed"), (sql, record)
     assert record["code"] == expected["code"], (sql, record)
     assert record["violations"] == expected["violations"], (sql, record)
-    assert record["log_level"] == ("DEBUG" if record["allowed"] else "INFO")
-    # The record holds the statement the engine ran. DuckDB's preprocessor rewrites dynamic PIVOT (and query
-    # pragmas) before any hook, so for those the text differs from what the caller wrote; see security.md.
-    assert record["statement_length"] == len(record["statement"].encode())
-    assert record["statement"] == sql or sql.startswith("PIVOT") or sql.startswith("PRAGMA"), (sql, record)
+    for entry in found:
+        assert entry["log_level"] == ("DEBUG" if entry["allowed"] else "INFO")
+        assert entry["statement_length"] == len(entry["statement"].encode())
     if record["allowed"]:
-        assert record["boundary"] == "execution"
-        assert record["objects"] == expected["objects"] and record["functions"] == expected["functions"], (sql, record)
+        assert all(entry["boundary"] == "execution" for entry in found)
+        assert union(found, "objects") == union([expected], "objects"), (sql, found)
+        # The pivoting SELECT of a dynamic PIVOT is validated in both plan shapes DuckDB can choose, so the
+        # functions gatekeeper_validate reports cover those the shape the data selected bound.
+        if rewritten:
+            assert set(union(found, "functions")) <= set(union([expected], "functions")), (sql, found)
+        else:
+            assert record["functions"] == expected["functions"], (sql, record)
     else:
         assert record["boundary"] in {"binding", "authorize", "execution", "replacement_scan"}
         assert record["objects"] == [] and record["functions"] == []
+
+
+def union(records, column):
+    return sorted({json.dumps(entry, sort_keys=True) for record in records for entry in record[column]})
 
 
 def test_binding_denial_carries_the_text_and_the_connection_recovers(catalog, agent):

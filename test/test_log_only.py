@@ -1,4 +1,5 @@
 """Log-only mode: enforced connections make and record every decision, and refuse nothing."""
+import re
 import threading
 
 import duckdb
@@ -19,11 +20,23 @@ def fresh_catalog(log_only):
     return connection
 
 
+PIVOT_ENUM = re.compile(r"__pivot_enum_[0-9a-f-]+")
+QUERY_LOCATION = re.compile(r"\n\nLINE \d+:.*", re.DOTALL)
+
+
 def outcome(connection, sql):
     try:
         rows = connection.execute(sql).fetchall()
     except duckdb.Error as error:
-        return ("error", type(error).__name__, str(error))
+        # DuckDB names a dynamic PIVOT's enum type after a fresh UUID; the engine's own error text carries it.
+        # An enforced connection also binds a copy of the statement (its state can request a rebind), and
+        # DuckDB's PivotRef::Copy drops the query location, so a binder error raised at a PIVOT loses its LINE
+        # excerpt there (see docs/security.md, "Errors are informative"); for PIVOT text only, compare the
+        # message without it. Every other error must match to the last character.
+        message = PIVOT_ENUM.sub("__pivot_enum_", str(error))
+        if "PIVOT" in sql.upper():
+            message = QUERY_LOCATION.sub("", message)
+        return ("error", type(error).__name__, message)
     if sql.startswith("EXPLAIN ANALYZE"):
         return ("ok",)  # timings differ run to run
     if "USING SAMPLE" in sql:
@@ -53,14 +66,18 @@ def test_log_only_connection_behaves_like_an_unenforced_one_and_records_what_val
             assert expected["code"] == "parser", (sql, expected)
             return
         # A dynamic PIVOT is rewritten into a batch before any hook runs; each rewritten statement then runs
-        # and leaves its own record, the first of which is the decision on the text as written.
-        assert len(found) == 1 or (sql.startswith("PIVOT") and len(found) > 1), (sql, found)
-        record = found[0]
+        # and leaves its own record. gatekeeper_validate decides the same statements in the same order, so its
+        # row is the first denied record, or every record is allowed with it.
+        rewritten = [r for r in found if r["statement"] != sql]
+        assert len(found) == 1 or (rewritten and "PIVOT" in sql), (sql, found)
+        assert not rewritten or "PIVOT" in sql or sql.startswith("PRAGMA"), (sql, found)
+        denied = [r for r in found if not r["allowed"]]
+        record = denied[0] if denied else found[0]
         assert record["allowed"] == expected["allowed"], (sql, record)
         assert record["code"] == expected["code"], (sql, record)
         assert record["violations"] == expected["violations"], (sql, record)
-        assert record["log_level"] == ("DEBUG" if record["allowed"] else "INFO")
-        assert record["statement"] == sql or sql.startswith("PIVOT") or sql.startswith("PRAGMA"), (sql, record)
+        for entry in found:
+            assert entry["log_level"] == ("DEBUG" if entry["allowed"] else "INFO")
         assert decisions(host, "mode = 'enforce'") == []
 
 
