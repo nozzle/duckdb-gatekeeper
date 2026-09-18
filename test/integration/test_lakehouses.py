@@ -176,7 +176,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
     db.execute("SET gatekeeper_log_only = true")
     orders, secret = f"SELECT sum(amount) FROM lake.{schema}.orders", f"SELECT value FROM lake.{schema}.secret"
     untrusted = "s3://warehouse/untrusted.parquet" if kind == "iceberg" else str(tmp_path / "untrusted.parquet")
-    reader = f"SELECT * FROM read_parquet('{untrusted}')"
+    reader = "SELECT * FROM read_parquet(?)"  # the path travels as a parameter, never as SQL text
     write = f"INSERT INTO lake.{schema}.secret VALUES (1000)"
     with db.cursor() as agent:
         enforce(agent)
@@ -184,7 +184,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
         assert agent.execute(secret).fetchone() == (999,)
         assert agent.execute(f"{secret} WHERE value = ?", [999]).fetchone() == (999,)
         with pytest.raises(duckdb.Error) as failure:  # the engine's own error for a reader over a missing object
-            agent.execute(reader)
+            agent.execute(reader, [untrusted])
         assert not DENIED.search(str(failure.value)), failure.value
         agent.execute(write)  # log-only protects nothing: the write reaches the lake
         assert db.execute(f"SELECT count(*) FROM lake.{schema}.secret").fetchone() == (2,)
