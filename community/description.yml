@@ -151,7 +151,8 @@ docs:
     Every decision on an enforced connection and every `gatekeeper_validate` call is a
     structured record of DuckDB log type `Gatekeeper`, with the same decision columns as
     `gatekeeper_validate` plus the statement text, the boundary that decided it, and a hash
-    of the policy in force; policy and mode changes are recorded too. Denials are `INFO`;
+    of the policy in force; policy and mode changes made through `SET` or
+    `gatekeeper_configure` are recorded too. Denials are `INFO`;
     `SET logging_level = 'debug'` also records allowed statements with the objects and
     functions they resolved to. The sandboxed connection cannot read, silence, or erase the
     log: `duckdb_logs`, `enable_logging`, `disable_logging`, and `truncate_duckdb_logs` are

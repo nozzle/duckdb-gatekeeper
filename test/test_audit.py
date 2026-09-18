@@ -346,3 +346,17 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
         # The decision is the one the snapshot dictates, and the record names that snapshot.
         assert record["allowed"] == hashes[record["policy_hash"]], record
         assert record["boundary"] == ("execution" if record["allowed"] else "replacement_scan"), record
+
+
+def test_reset_leaves_no_change_record_but_the_next_decision_shows_the_new_hash(catalog, agent):
+    # RESET and native option writes bypass the SET callback, so they are outside the recorded scope by design;
+    # the decision records still make the change visible because each names the policy it was made under.
+    enable(catalog)
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("SELECT * FROM duckdb_settings()")  # never-bind: denied under any policy
+    catalog.execute("RESET gatekeeper_policy")
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("SELECT * FROM duckdb_settings()")
+    assert records(catalog, "event = 'policy_changed'") == []
+    before, after = decisions(catalog)
+    assert before["policy_hash"] != after["policy_hash"]

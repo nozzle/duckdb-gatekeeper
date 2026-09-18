@@ -252,8 +252,9 @@ sandbox setting fails closed. `SET lock_configuration=true` freezes the setting.
 
 On an enforced connection the denial goes to the caller, not the host. What the host gets is a
 record: every decision Gatekeeper makes, on an enforced connection or in `gatekeeper_validate`,
-and every change to its global settings, is written as a structured entry of DuckDB log type
-`Gatekeeper`. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
+and every change to its global settings made through `SET` or `CALL gatekeeper_configure`, is
+written as a structured entry of DuckDB log type `Gatekeeper` (`RESET` and native option writes
+bypass the `SET` callback and leave no entry; the next decision's `policy_hash` still changes). The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
 `code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
 the enforcement parity corpus. The rest of the record is:
