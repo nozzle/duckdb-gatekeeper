@@ -174,24 +174,30 @@ under residuals.
   which is host-gated, process-wide, and answered by whichever override loaded first (a
   Gatekeeper override was prototyped and declined for those reasons; see
   [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46)). `gatekeeper_validate`
-  parses with `Parser` directly and never triggers it, and reports the raw `PRAGMA` as
-  `unsupported`: **hosts that cannot tolerate this residual should validate before they
-  execute and refuse `unsupported`**, or reject `PRAGMA` text before it reaches any DuckDB
-  parsing entry point. Keep credentials in the secret manager, autoload off, and
-  side-effecting scalar UDFs or extensions off the shared instance; treat sequences the
-  connection can see as writable by it. `test/test_enforcement.py` pins the gap with a
-  strict `xfail` so an engine change is noticed.
+  parses with `Parser` directly and never triggers it, so **hosts that cannot tolerate this
+  residual should validate first**: pass the complete original text to `gatekeeper_validate`
+  before any `execute` or `extract_statements` call, and execute only when it returns
+  `allowed = true` and `code = 'ok'`, treating every other code, an exception, or a missing
+  row as a denial. Do not key on `code = 'unsupported'` alone: a lone raw `PRAGMA` reports
+  `unsupported`, but a batch such as `SELECT 1; PRAGMA anything(nextval('s'))` is refused as
+  `forbidden` on statement count first, and oversized or unparseable text is refused with
+  other codes, while executing any of them still runs the pragma preprocessing. Hosts that
+  cannot interpose on the text must reject `PRAGMA` before it reaches any DuckDB parsing
+  entry point. Keep credentials in the secret manager, autoload off, and side-effecting
+  scalar UDFs or extensions off the shared instance; treat sequences the connection can see
+  as writable by it. `test/test_enforcement.py` pins the gap with a strict `xfail` so an
+  engine change is noticed.
 - **A denial leaves the autocommit transaction open until the next query entry point.**
   DuckDB starts the transaction before it calls `QueryBegin` and does not end it when that
   hook throws (upstream: [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876)).
   An idle connection whose last statement was denied therefore holds a read snapshot until
-  the next `Query`, `PendingQuery`, or `Prepare` call runs the engine's initial cleanup.
-  Parse-only calls do not clean up: `extract_statements` (which Python's `execute()` calls
-  before it executes) runs pragma preprocessing inside the leaked transaction, so a `PRAGMA`
-  whose argument evaluation fails after a denial invalidates it, and every following
-  `extract_statements` that contains a `PRAGMA` fails with `Current transaction is aborted`
-  until a query entry point runs. Both effects are confined to the connection that received
-  the denial.
+  the next `Query`, `PendingQuery`, or `Prepare` call runs the engine's initial cleanup, or
+  the connection is closed. Parse-only calls do not clean up: `extract_statements` (which
+  Python's `execute()` calls before it executes) runs pragma preprocessing inside the leaked
+  transaction, so a `PRAGMA` whose argument evaluation fails after a denial invalidates it,
+  and every following `extract_statements` that contains a `PRAGMA` fails with `Current
+  transaction is aborted` until a query entry point runs. Both effects are confined to the
+  connection that received the denial.
 - **Bind-time work inside trusted objects.** A view or macro the host defined over a reader
   opens files or URLs while the engine binds it, before the execution boundary can deny the
   statement (for example when that view is blocked by table policy). Object identity is a

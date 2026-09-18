@@ -540,9 +540,10 @@ What enforcement changes and does not change:
   before Gatekeeper can act: `PRAGMA x(nextval('s'))` advances `s` on an enforced connection
   even though the statement is then denied, and any scalar function the connection can see,
   host UDFs included, can run the same way. Table data and statements stay out of reach. Hosts
-  that cannot accept this should call `gatekeeper_validate` first and refuse `unsupported`;
-  see the [residuals](docs/security.md#residuals) for the full boundary and the upstream
-  issue.
+  that cannot accept this should validate first, with the complete text, and execute only on
+  `allowed = true` and `code = 'ok'` (a batch that hides a `PRAGMA` behind a `SELECT` is
+  refused as `forbidden`, not `unsupported`); see the [residuals](docs/security.md#residuals)
+  for the full boundary and the upstream issue.
 - `gatekeeper_validate` is available on an enforced connection when the policy allows it
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want a structured dry run.
 - Each statement costs up to three binds (a private authorizing bind, the engine's bind, and a
