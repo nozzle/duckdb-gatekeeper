@@ -127,6 +127,7 @@ def test_enforced_connection_reads_allowed_lake_tables_and_refuses_the_rest(lake
         for sql, parameters in [("SELECT * FROM secret", []), (f"SELECT * FROM lake.{schema}.secret", []),
                                 ("SELECT * FROM secret WHERE value = ?", [999]),
                                 ("SELECT * FROM orders WHERE EXISTS (SELECT * FROM secret)", []),
+                                ("SELECT * FROM orders o WHERE EXISTS (SELECT 1 FROM secret s WHERE s.value = o.id)", []),
                                 ("SELECT * FROM read_parquet(?)", [untrusted]),
                                 (f"DELETE FROM lake.{schema}.orders", []), ("INSERT INTO orders VALUES (3, 50)", []),
                                 (f"USE lake.{schema}", [])]:
