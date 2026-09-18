@@ -132,8 +132,13 @@ docs:
     Enforcement agrees with `gatekeeper_validate` on every statement that reaches it.
     DuckDB rewrites pragmas before any extension runs: `PRAGMA version` is checked as the
     `SELECT` it becomes, and pragma **argument expressions are evaluated during that
-    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied. See the
-    security model's residuals.
+    rewrite**, so `PRAGMA x(nextval('s'))` advances `s` before being denied; any scalar
+    function the connection can see can run that way, table data cannot. Query pragmas run
+    at the same point: `PRAGMA import_database('dir')` reads `schema.sql` and `load.sql`
+    before any hook when external access allows it. Hosts that cannot accept this should
+    validate the complete text first and execute only on `allowed = true` and
+    `code = 'ok'`, as the validate-first flow above requires. See the security model's
+    residuals.
 
     ### Functions and options
 
