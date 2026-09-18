@@ -181,13 +181,25 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	auto scope = active_scope;
 	if (scope && &context != &scope->context)
 		scope = nullptr; // A reentrant connection on this thread is not the one being validated.
-	if (!scope && !IsEnforced(context))
-		return nullptr; // Ordinary connections are unaffected.
+	auto gate = scope ? GateMode::ENFORCE : ReplacementGate(context);
+	if (gate == GateMode::OPEN)
+		return nullptr; // Ordinary connections, and log-only statements already decided, bind as the engine would.
 	auto path = ReplacementScan::GetFullPath(input);
 	// An enforced connection binding outside Authorize has no request layer and no result in progress: the
 	// denial is decided and recorded here, against the statement the connection is executing when there is one.
 	// That statement's policy snapshot is the one every check of it must use; only a Prepare() bind, which has
-	// no statement in progress, reads the global setting itself.
+	// no statement in progress, reads the global setting itself. In log-only mode the record is the whole
+	// decision: the statement is marked decided so nothing records it again, and the bind continues with the
+	// replacement the host callback already produced, so the engine resolves the reader exactly as on an
+	// unenforced connection and no callback runs a second time for it.
+	auto mode = gate == GateMode::LOG_ONLY ? DecisionMode::LOG_ONLY : DecisionMode::ENFORCE;
+	auto record = [&](gatekeeper::Result &result, optional_ptr<const gatekeeper::Policy> in_force) {
+		MarkGateDecided(context);
+		Decide(context, {mode, Boundary::REPLACEMENT_SCAN, in_force, AdmittedQuery(context)}, result);
+		if (mode == DecisionMode::LOG_ONLY)
+			return true; // let the engine bind what the callback produced
+		throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+	};
 	gatekeeper::Policy prepared;
 	optional_ptr<const gatekeeper::Policy> enforced;
 	if (!scope) {
@@ -200,19 +212,18 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 				gatekeeper::Result result;
 				result.code = "invalid_input";
 				result.error_message = string("cannot read the global policy: ") + error.what();
-				Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, nullptr, nullptr}, result);
-				throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+				if (record(result, nullptr))
+					return nullptr;
 			}
 		}
 	}
+	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
 			gatekeeper::Result result;
 			result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name, function);
 			MarkDenied(result);
-			Decide(context, {DecisionMode::ENFORCE, Boundary::REPLACEMENT_SCAN, enforced, AdmittedQuery(context)},
-			       result);
-			throw InternalException("Gatekeeper enforced denial returned"); // Decide throws in ENFORCE mode
+			return record(result, enforced);
 		}
 		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
 		                                 function);
@@ -226,11 +237,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		auto replacement = scan.function(context, input, scan.data.get());
 		if (!replacement)
 			continue;
-		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
-			deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path);
+		if (replacement->type != TableReferenceType::TABLE_FUNCTION) {
+			if (deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path))
+				return replacement;
+		}
 		auto &function = replacement->Cast<TableFunctionRef>().function;
-		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
-			deny("replacement_scan", "replacement scan has no resolvable function: " + path);
+		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION) {
+			if (deny("replacement_scan", "replacement scan has no resolvable function: " + path))
+				return replacement;
+		}
 		auto name = function->Cast<FunctionExpression>().function_name;
 		vector<const gatekeeper::Policy *> layers;
 		if (scope)
@@ -238,9 +253,11 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		else
 			layers = {enforced.get()};
 		for (const auto *layer : layers) {
-			if (!gatekeeper::FunctionAllowed(*layer, name))
-				deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
-				     gatekeeper::CanonicalFunction(name));
+			if (!gatekeeper::FunctionAllowed(*layer, name)) {
+				if (deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
+				         gatekeeper::CanonicalFunction(name)))
+					return replacement;
+			}
 		}
 		if (scope) {
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
@@ -252,7 +269,12 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// time outside this authorization, so raise the engine's own missing-table error here instead.
 	// The lookup throws for every catalog with transactional DDL. If a catalog without it finds the
 	// entry after all, returning nullptr would still resume DuckDB's callback loop rather than the
-	// later catalog lookup, so fail closed and let the caller retry.
+	// later catalog lookup, so fail closed and let the caller retry. A log-only statement has nothing
+	// to protect here and must resolve exactly as an unenforced connection would (autoload retry and
+	// FileExists probe included), so it returns to the engine's loop; the callbacks that declined above
+	// are asked a second time, which is the one place log-only departs from once-per-lookup.
+	if (mode == DecisionMode::LOG_ONLY)
+		return nullptr;
 	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
 	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
 }
@@ -304,6 +326,51 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 		throw PermissionException("unauthorized replacement scan");
 }
 
+bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
+	switch (data.Type()) {
+	case ExceptionType::PARSER: {
+		result.code = "parser";
+		result.error_type = "parser";
+		result.error_message = data.RawMessage();
+		auto position = data.ExtraInfo().find("position");
+		if (position != data.ExtraInfo().end()) {
+			try {
+				result.position = std::stoll(position->second);
+			} catch (...) {
+			}
+		}
+		return true;
+	}
+	case ExceptionType::INVALID_INPUT:
+		result.code = binding ? "binding" : "invalid_input";
+		if (binding)
+			result.error_type = "Invalid Input";
+		result.error_message = data.RawMessage();
+		return true;
+	default:
+		break;
+	}
+	if (gatekeeper::PropagateEngineError(data.Type()))
+		return false;
+	result.code = gatekeeper::EngineErrorCode(binding);
+	result.error_type = Exception::ExceptionTypeToString(data.Type());
+	result.error_message = data.RawMessage();
+	if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
+		result.error_message = "Validation cannot complete binding without parameter values or types";
+	return true;
+}
+
+bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
+	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
+		result.code = binding ? "binding" : "invalid_input";
+		result.error_message = invalid->what();
+		return true;
+	}
+	if (dynamic_cast<const std::bad_alloc *>(&error))
+		return false;
+	return DescribeError(ErrorData(error), binding, result);
+}
+
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
                          const string &sql, const gatekeeper::Limits &limits) {
 	gatekeeper::Result result;
@@ -317,44 +384,9 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 		for (auto &statement : text.statements)
 			Authorize(context, policy, ceiling, *statement, text.binding, nullptr, result);
 		return result;
-	} catch (const ParserException &error) {
-		ErrorData data(error);
-		result.code = "parser";
-		result.error_type = "parser";
-		result.error_message = data.RawMessage();
-		auto position = data.ExtraInfo().find("position");
-		if (position != data.ExtraInfo().end()) {
-			try {
-				result.position = std::stoll(position->second);
-			} catch (...) {
-			}
-		}
-	} catch (const std::invalid_argument &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		result.error_message = error.what();
-	} catch (const InvalidInputException &error) {
-		result.code = binding ? "binding" : "invalid_input";
-		if (binding)
-			result.error_type = "Invalid Input";
-		result.error_message = ErrorData(error).RawMessage();
-	} catch (const Exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
-			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
-		if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
-			result.error_message = "Validation cannot complete binding without parameter values or types";
-	} catch (const std::bad_alloc &) {
-		throw;
 	} catch (const std::exception &error) {
-		ErrorData data(error);
-		if (gatekeeper::PropagateEngineError(data.Type()))
+		if (!DescribeError(error, binding, result))
 			throw;
-		result.code = gatekeeper::EngineErrorCode(binding);
-		result.error_type = Exception::ExceptionTypeToString(data.Type());
-		result.error_message = data.RawMessage();
 	}
 	MarkDenied(result);
 	return result;

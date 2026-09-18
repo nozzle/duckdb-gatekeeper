@@ -1,0 +1,149 @@
+# name: test/sql/log_only.test
+# description: gatekeeper_log_only makes enforced connections record every decision and refuse nothing; it is global, boolean, reversible, and itself on the record.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE TABLE reporting_orders(id INTEGER, amount DOUBLE);
+
+statement ok
+INSERT INTO reporting_orders VALUES (1, 10.5), (2, 20.0);
+
+statement ok
+CREATE TABLE secret(s VARCHAR);
+
+statement ok
+INSERT INTO secret VALUES ('hidden');
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema: 'main', 'table': 'reporting_orders'}], blocked_functions := ['md5']);
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+statement ok
+SET logging_level = 'debug';
+
+# Off by default, global-only, boolean, and every change is a record.
+
+query I
+SELECT current_setting('gatekeeper_log_only');
+----
+false
+
+statement error
+SET SESSION gatekeeper_log_only = true;
+----
+global-only
+
+statement error
+SET gatekeeper_log_only = NULL;
+----
+must be true or false
+
+statement error
+SET gatekeeper_log_only = 'sometimes';
+----
+Could not convert string 'sometimes' to BOOL
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query II
+SELECT event, new_value FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'log_only_changed';
+----
+log_only_changed	true
+
+# An enforced connection under log-only: the same checks, the same records, nothing refused.
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+query I agent
+SELECT s FROM secret;
+----
+hidden
+
+statement ok agent
+CREATE TABLE u(x INTEGER);
+
+query I agent
+SELECT md5('x');
+----
+9dd4e461268c8034f5c8564e155c67a6
+
+query I agent
+SELECT sum(amount) FROM reporting_orders;
+----
+30.5
+
+query IIIII
+SELECT mode, boundary, allowed, code, statement FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' ORDER BY timestamp, context_id;
+----
+log_only	authorize	false	forbidden	SELECT s FROM secret;
+log_only	binding	false	unsupported	CREATE TABLE u(x INTEGER);
+log_only	binding	false	forbidden	SELECT md5('x');
+log_only	execution	true	ok	SELECT sum(amount) FROM reporting_orders;
+
+# The table exists: log-only refused nothing. Turning refusals back on applies at the agent's next statement,
+# and the connection is still enforced.
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 'u';
+----
+1
+
+statement ok
+SET gatekeeper_log_only = false;
+
+statement error agent
+SELECT s FROM secret;
+----
+Gatekeeper denied this statement
+
+statement error agent
+SET gatekeeper_log_only = true;
+----
+Gatekeeper denied this statement
+
+# RESET goes through the same callback and is recorded like SET.
+
+statement ok
+SET gatekeeper_log_only = true;
+
+statement ok
+RESET gatekeeper_log_only;
+
+query I
+SELECT list(new_value ORDER BY timestamp, context_id) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'log_only_changed';
+----
+[true, false, true, false]
+
+statement error agent
+SELECT s FROM secret;
+----
+Gatekeeper denied this statement
+
+# gatekeeper_enforce() warns when the switch is on, and lock_configuration freezes it like the policy.
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I con2
+SELECT warnings[1] FROM gatekeeper_enforce();
+----
+gatekeeper_log_only is true: this connection records decisions and refuses nothing
+
+statement ok
+SET lock_configuration = true;
+
+statement error
+SET gatekeeper_log_only = false;
+----
+locked
+
+statement error
+RESET gatekeeper_log_only;
+----
+locked

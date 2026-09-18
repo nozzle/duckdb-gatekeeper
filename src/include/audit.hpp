@@ -9,8 +9,9 @@ class ExtensionLoader;
 class Value;
 
 // How a decision applies to the statement it describes. An enforced statement is refused when denied; a
-// validated statement is reported to the caller of gatekeeper_validate, never refused here.
-enum class DecisionMode : uint8_t { ENFORCE, VALIDATE };
+// log-only statement (an enforced connection while gatekeeper_log_only is true) is recorded and executes
+// regardless; a validated statement is reported to the caller of gatekeeper_validate, never refused here.
+enum class DecisionMode : uint8_t { ENFORCE, LOG_ONLY, VALIDATE };
 
 // Where in the statement's lifecycle the decision was made.
 enum class Boundary : uint8_t {
@@ -31,10 +32,11 @@ struct DecisionSite {
 
 // The one place a decision becomes observable. Writes a record of log type "Gatekeeper" when logging admits
 // it (INFO for a denial, DEBUG for an allow), then refuses a denied statement in ENFORCE mode by throwing
-// PermissionException with the denial message. Allowed decisions and VALIDATE mode return.
+// PermissionException with the denial message. Allowed decisions, LOG_ONLY, and VALIDATE return.
 void Decide(ClientContext &context, const DecisionSite &site, const gatekeeper::Result &result);
 
-// Records a host change to one of Gatekeeper's global settings (event names end in _changed: policy_changed).
+// Records a host change to one of Gatekeeper's global settings (event names end in _changed: policy_changed,
+// log_only_changed).
 void LogSettingChange(ClientContext &context, const string &event, const Value &value,
                       optional_ptr<const gatekeeper::Policy> policy = nullptr);
 

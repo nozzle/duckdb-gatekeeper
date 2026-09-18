@@ -155,7 +155,8 @@ def test_function_metadata_for_generated_docs(db):
         # The enforce example latches the connection it runs on; keep the shared fixture unenforced.
         with db.cursor() as cursor:
             assert cursor.execute(examples[0]).fetchone()[0] is True, examples[0]
-    assert db.execute("SELECT description FROM duckdb_settings() WHERE name = 'gatekeeper_policy'").fetchone()[0]
+    for setting in ["gatekeeper_policy", "gatekeeper_log_only"]:
+        assert db.execute("SELECT description FROM duckdb_settings() WHERE name = ?", [setting]).fetchone()[0]
 
 
 @pytest.mark.parametrize("block", [

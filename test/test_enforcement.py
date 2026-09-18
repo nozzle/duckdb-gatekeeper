@@ -19,19 +19,23 @@ def enforce(connection):
     return row[1]
 
 
+CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
+    CREATE TABLE reporting.orders(id INTEGER, amount DOUBLE, tag VARCHAR);
+    INSERT INTO reporting.orders VALUES (1, 10.5, 'a'), (2, 20.25, 'b'), (3, 5.0, 'a');
+    CREATE TABLE secret.salaries(who VARCHAR, amount DOUBLE);
+    INSERT INTO secret.salaries VALUES ('x', 1.0);
+    CREATE VIEW reporting.totals AS SELECT tag, sum(amount) AS total FROM reporting.orders GROUP BY tag;
+    CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
+    CREATE MACRO reporting.twice(x) AS x * 2;
+    CREATE SEQUENCE reporting.seq"""
+CATALOG_POLICY = {"allowed_tables": [{"schema": "reporting", "table": "*"}],
+                  "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
+
+
 @pytest.fixture
 def catalog(db):
-    db.execute("""CREATE SCHEMA reporting; CREATE SCHEMA secret;
-        CREATE TABLE reporting.orders(id INTEGER, amount DOUBLE, tag VARCHAR);
-        INSERT INTO reporting.orders VALUES (1, 10.5, 'a'), (2, 20.25, 'b'), (3, 5.0, 'a');
-        CREATE TABLE secret.salaries(who VARCHAR, amount DOUBLE);
-        INSERT INTO secret.salaries VALUES ('x', 1.0);
-        CREATE VIEW reporting.totals AS SELECT tag, sum(amount) AS total FROM reporting.orders GROUP BY tag;
-        CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
-        CREATE MACRO reporting.twice(x) AS x * 2;
-        CREATE SEQUENCE reporting.seq""")
-    configure(db, {"allowed_tables": [{"schema": "reporting", "table": "*"}],
-                   "allowed_functions": ["twice"], "blocked_functions": ["md5"]})
+    db.execute(CATALOG_SQL)
+    configure(db, CATALOG_POLICY)
     return db
 
 
