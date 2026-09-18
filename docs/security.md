@@ -19,9 +19,12 @@ Preferred: hand untrusted callers an enforced connection and execute their SQL o
    mutate those settings; `CALL gatekeeper_enforce()` reports them in `warnings`.
 2. Install the global policy through trusted `CALL gatekeeper_configure`, then
    `SET lock_configuration=true`.
-3. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
+3. `CALL enable_logging('Gatekeeper')` so denials are [recorded](#audit-log); choose a
+   storage the sandboxed connections cannot reach in-process (`storage := 'file'` or
+   `'stdout'`) when no host connection will remain to read the in-memory log.
+4. Run `CALL gatekeeper_enforce()` on each connection you hand out, or
    `SET gatekeeper_enforcement='new_connections'` before opening them.
-4. Execute the caller's SQL on that connection. A denial raises `Permission Error:
+5. Execute the caller's SQL on that connection. A denial raises `Permission Error:
    Gatekeeper denied this statement ...` and executes nothing.
 
 Validate-first, for hosts that cannot dedicate a connection:
@@ -158,7 +161,11 @@ under residuals.
   UDFs, and scalar macros. What it cannot reach: table data (the binder rejects subqueries
   and column references, including inside macros), table functions, and any statement (DDL,
   DML, `COPY`, `ATTACH`, `LOAD`, `SET`). Core scalars that touch state include `nextval`
-  (writes), `write_log` (writes when the host enabled logging), `setseed` (own connection),
+  (writes), `write_log` (when the host enabled logging: it writes any message under any log
+  type, so `PRAGMA x(write_log('...', log_type := 'Gatekeeper'))` plants an entry in the
+  [audit log](#audit-log) that either forges a decision or cannot be cast by
+  `duckdb_logs_parsed`; a well-formed forgery is not distinguishable from a real record by
+  content, and validate-first hosts are not exposed), `setseed` (own connection),
   and readers such as `current_setting`, `which_secret`, `getvariable`, `current_schemas`,
   `txid_current`; the inventory's `elevated` group is the full list of core names that read
   catalog, session, configuration, or planner state. What that is worth depends on the host:
@@ -213,13 +220,15 @@ under residuals.
   perform reader I/O whose only observable effect for the caller is the denial's timing.
 - **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
   `SELECT` they stand for, and dynamic `PIVOT` into a transaction batch, before any hook. The
-  rewritten statements are what Gatekeeper checks; that is policy-consistent, but the raw text
-  differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
+  rewritten statements are what Gatekeeper checks and what the audit record's `statement`
+  holds; that is policy-consistent, but the raw text differs from what `gatekeeper_validate`
+  would report (`unsupported` for the `PRAGMA`).
 - **Global modes latch every connection**, including ones extensions open internally for
   their own metadata SQL. Use per-connection latching with catalogs that do this.
 - **Errors are informative.** Engine errors keep DuckDB's wording, which can name objects and
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
-  and the denied function or object. Treat both as sensitive when relaying to untrusted callers.
+  and the denied function or object, and the [audit record](#audit-log) holds the caller's
+  text. Treat all of them as sensitive when relaying to untrusted callers or storing the log.
 - **Not a resource sandbox.** Memory, CPU time, temporary disk, extension loading, and
   network posture remain host settings. Gatekeeper reports weak posture; it never changes it.
 
@@ -238,6 +247,85 @@ through DuckDB's connection-open callback; `all` additionally latches every conn
 that moment, including the one issuing the `SET`. Returning to `off` releases nobody. A value
 written natively without passing the SET callback is treated as `all`: an unvalidated write to a
 sandbox setting fails closed. `SET lock_configuration=true` freezes the setting.
+
+### Audit log
+
+On an enforced connection the denial goes to the caller, not the host. What the host gets is a
+record: every decision Gatekeeper makes, on an enforced connection or in `gatekeeper_validate`,
+and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
+gatekeeper_configure`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
+`DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
+`policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
+`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`), so the
+log and the function describe a statement the same way; `test/test_audit.py` asserts this over
+the enforcement parity corpus. The rest of the record is:
+
+| column | meaning |
+| --- | --- |
+| `event` | `decision`, `policy_changed`, or `enforcement_changed` |
+| `mode` | `enforce` (an enforced connection) or `validate` (`gatekeeper_validate`) |
+| `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
+| `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
+| `policy_hash` | sixteen hex digits over the canonical `gatekeeper_policy` value in force for the decision; the same hash appears on the `policy_changed` record that installed it, whose `new_value` is the full policy |
+| `new_value` | the new setting value on `*_changed` records |
+
+DuckDB's own log-context columns (`connection_id`, `transaction_id`, `query_id`) describe the
+connection that ran the statement, not the one reading the log.
+
+Denials and setting changes are written at `INFO`, allowed statements at `DEBUG`. The type's
+declared level is `INFO`, so `CALL enable_logging('Gatekeeper')` records denials by itself; to
+also record every allowed statement with the tables, views, and functions it resolved to, follow
+it with `SET logging_level = 'debug'` (`enable_logging`'s own `level` argument is overridden by
+the type's declared level when a type is named). Storage is DuckDB's: `memory` by default, or
+`CALL enable_logging('Gatekeeper', storage := 'file', storage_path := '...')`.
+
+```sql
+CALL enable_logging('Gatekeeper');
+SELECT timestamp, connection_id, boundary, code, violations, statement
+FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND NOT allowed;
+```
+
+Properties that make the record trustworthy as evidence:
+
+- **Exactly one record per statement**, at the boundary that denied it or as `allowed` once the
+  plan the engine will execute has passed. A `Prepare()` pre-screen that passes writes nothing.
+- **The denied text exists only here.** DuckDB writes its own `QueryLog` entry after the
+  `QueryBegin` hook, so a statement refused at the binding boundary never appears in `QueryLog`.
+- **Records are written through the database logger, not the connection's.** A connection's
+  logger is a snapshot of the log configuration, refreshed only after the `QueryBegin` hooks run
+  and at query end; on a connection opened before `enable_logging` it would drop the first
+  denial. The database logger tracks the configuration live, and the record is stamped with the
+  statement's own connection, transaction, and query identity.
+- **Engine errors are not decisions.** A missing table or a type error on an enforced connection
+  is DuckDB's error, in DuckDB's words, and is not recorded; `gatekeeper_validate` maps the same
+  outcome to `code = 'binding'` and that call is recorded.
+- **The sandboxed connection cannot read, redirect, silence, erase, or forge the log.**
+  `duckdb_logs`, `duckdb_logs_parsed`, `duckdb_log_contexts`, `enable_logging` (whose
+  `storage_path` writes a file of the caller's choosing), `disable_logging`,
+  `truncate_duckdb_logs`, and `write_log` (which writes any message under any log type,
+  `'Gatekeeper'` included) are on the never-bind list, so no policy can admit them; `SET`,
+  `RESET`, and `CALL` are unsupported statements. `CALL gatekeeper_enforce()` warns when logging
+  would not record a denial. One path is outside this control and is listed under residuals:
+  DuckDB's `PRAGMA` preprocessing evaluates argument expressions before any hook, so on an
+  enforced connection without validate-first, `PRAGMA x(write_log(...))` can plant a
+  `Gatekeeper`-typed entry before the statement is denied. A malformed one makes
+  `duckdb_logs_parsed('Gatekeeper')` fail for the reader; a well-formed one is a forgery.
+  Hosts that need the log as evidence against an adversarial caller should validate first,
+  which keeps `PRAGMA` text away from the preprocessor entirely, and can read the raw
+  `duckdb_logs` rows with `TRY_CAST` if a malformed entry must be tolerated.
+- **The host's own changes are on the record.** `SET` and `RESET` of `gatekeeper_policy` and
+  `gatekeeper_enforcement`, and `CALL gatekeeper_configure`, each write a `*_changed` entry (a
+  `RESET` reports the default value). A native `DBConfig::SetOption` write bypasses the `SET`
+  callback and writes no entry, but the next decision's `policy_hash` changes, so a policy that
+  was altered that way is still visible.
+- Log writes are not guarded: if the configured storage fails (an unwritable file), the
+  statement fails with that error rather than executing unrecorded, and a setting change whose
+  record cannot be written is not applied (the record is written before the setting is
+  published or any connection is latched).
+
+Under `SET gatekeeper_enforcement = 'all'` no in-process connection can read `duckdb_logs`, so
+use `file` or `stdout` storage. The record names rules, objects, functions, and the caller's
+text; treat the log as sensitive.
 
 ## Function enforcement and trusted expansion
 
@@ -298,6 +386,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
 query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
+enable_logging disable_logging truncate_duckdb_logs write_log
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
 duckdb_approx_database_count duckdb_columns duckdb_connection_count duckdb_constraints
@@ -318,6 +407,14 @@ not a caller capability (normal physical scans retain object authorization).
 `gatekeeper_configure` mutates the global policy and `gatekeeper_enforce` latches the
 connection; both are always forbidden in submitted SQL, including resolved table-function
 uses inside trusted views/macros.
+`enable_logging`, `disable_logging`, and `truncate_duckdb_logs`
+(`src/function/table/system/logging_utils.cpp`) reconfigure, silence, or erase the log
+that records Gatekeeper's own decisions, and `enable_logging(storage_path := ...)` writes a
+file at a caller-chosen path; `write_log` (`src/function/scalar/system/write_log.cpp`)
+writes an arbitrary message under any `log_type`, `'Gatekeeper'` included, so it could forge
+a decision record or plant one `duckdb_logs_parsed` cannot cast. The
+[audit log](#audit-log) is evidence only if the sandboxed side cannot reach any of them
+under any policy.
 JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
@@ -433,7 +530,8 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   results. DuckDB's messages can name catalog objects (`Did you mean "secrets"?`), file
   paths, and reader arguments, including objects the policy denies. Policy denials
   (`forbidden`, `unsupported`) carry no engine text. Treat `error_message` as sensitive:
-  log it for operators and return a generic error to untrusted callers. Trimming the
+  it is already in the [audit record](#audit-log) for operators, so return a generic error
+  to untrusted callers. Trimming the
   message is not a reliable confidentiality boundary, because names can appear on any line.
 
 Keep external access, extension loading, credentials, filesystem/network permissions,

@@ -1,0 +1,176 @@
+# name: test/sql/audit.test
+# description: Every Gatekeeper decision on an enforced connection, and every gatekeeper_validate call, is a structured log record; the sandboxed connection cannot read or erase it.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE TABLE reporting_orders(id INTEGER, amount DOUBLE);
+
+statement ok
+INSERT INTO reporting_orders VALUES (1, 10.5), (2, 20.0);
+
+statement ok
+CREATE TABLE secret(s VARCHAR);
+
+statement ok
+CREATE VIEW totals AS SELECT sum(amount) AS total FROM reporting_orders;
+
+# Denials are INFO; enable_logging('Gatekeeper') records them by itself.
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+# A host change to the policy is a record carrying the canonical value and its hash.
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema: 'main', 'table': 'reporting_orders'}, {schema: 'main', 'table': 'totals'}], blocked_functions := ['md5']);
+
+query III
+SELECT event, new_value IS NOT NULL, length(policy_hash) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'policy_changed';
+----
+policy_changed	true	16
+
+# The agent's connection is latched; the host's stays free to read the log.
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+statement error agent
+SELECT * FROM secret;
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT md5('x');
+----
+Gatekeeper denied this statement
+
+statement error agent
+CREATE TABLE u(x INTEGER);
+----
+Gatekeeper denied this statement
+
+statement ok agent
+SELECT sum(amount) FROM reporting_orders;
+
+# One record per denial, at INFO, with the statement text, the boundary that refused it, and the same code
+# and violations gatekeeper_validate reports. Allowed statements are not recorded at INFO.
+
+query IIIIII
+SELECT log_level, mode, boundary, code, violations[1].rule, statement
+FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' ORDER BY timestamp;
+----
+INFO	enforce	authorize	forbidden	table	SELECT * FROM secret;
+INFO	enforce	binding	forbidden	function	SELECT md5('x');
+INFO	enforce	binding	unsupported	statement	CREATE TABLE u(x INTEGER);
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND allowed;
+----
+0
+
+# The record and the function agree on the decision.
+
+query II
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM secret');
+----
+forbidden	table
+
+# The decision carries the hash of the policy that was in force.
+
+query I
+SELECT count(DISTINCT policy_hash) FROM duckdb_logs_parsed('Gatekeeper') WHERE event IN ('decision', 'policy_changed');
+----
+1
+
+# gatekeeper_validate calls are recorded too, with no boundary: the function runs the whole check at once.
+
+query III
+SELECT mode, boundary IS NULL, code FROM duckdb_logs_parsed('Gatekeeper')
+WHERE event = 'decision' AND mode = 'validate';
+----
+validate	true	forbidden
+
+# Lowering the level records allowed statements with the objects and functions they resolved to.
+
+statement ok
+SET logging_level = 'debug';
+
+statement ok agent
+SELECT total FROM totals;
+
+query IIII
+SELECT log_level, boundary, list_sort(list_transform(objects, lambda o: o."table")), functions[1].name
+FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND allowed;
+----
+DEBUG	execution	[reporting_orders, totals]	sum
+
+# The sandboxed connection can neither read the log nor switch it off, erase it, or write to it, whatever the policy says.
+
+statement error agent
+SELECT * FROM duckdb_logs;
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM duckdb_logs_parsed('Gatekeeper');
+----
+Gatekeeper denied this statement
+
+statement error agent
+CALL disable_logging();
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM disable_logging();
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM truncate_duckdb_logs();
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM enable_logging(storage := 'file', storage_path := '/tmp/gatekeeper_agent_owned.csv');
+----
+Gatekeeper denied this statement
+
+statement error agent
+SET enable_logging = false;
+----
+Gatekeeper denied this statement
+
+# Nor write under Gatekeeper's type name: write_log is never-bind too, so no policy can hand it out.
+
+statement error agent
+SELECT write_log('forged', log_type := 'Gatekeeper', level := 'info');
+----
+Gatekeeper denied this statement
+
+query I
+SELECT code FROM gatekeeper_validate('SELECT write_log(''x'', log_type := ''Gatekeeper'')', allowed_functions := ['write_log']);
+----
+forbidden
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE type = 'Gatekeeper' AND message = 'forged';
+----
+0
+
+query I
+SELECT code FROM gatekeeper_validate('SELECT * FROM disable_logging()', allowed_functions := ['disable_logging']);
+----
+forbidden
+
+# A mode change is a record naming the new value.
+
+statement ok
+SET gatekeeper_enforcement = 'off';
+
+query II
+SELECT event, new_value FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'enforcement_changed';
+----
+enforcement_changed	off

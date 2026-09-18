@@ -23,11 +23,13 @@ static void CheckError(ExceptionType type) {
 }
 
 static void Setup(Connection &connection) {
+	// Logging at DEBUG records every decision, allowed ones included, so the record path runs under the
+	// sanitizers for each input. In-memory storage is truncated per input in CheckEnforcedParity.
 	auto result = connection.Query(
 	    "SET enable_external_access=false; SET autoload_known_extensions=false; SET "
 	    "autoinstall_known_extensions=false; "
 	    "SET threads=1; CREATE TABLE t(x INTEGER); CREATE SCHEMA secret; CREATE TABLE secret.t(x INTEGER); "
-	    "CREATE VIEW v AS SELECT * FROM t");
+	    "CREATE VIEW v AS SELECT * FROM t; CALL enable_logging('Gatekeeper'); SET logging_level='debug'");
 	for (QueryResult *current = result.get(); current; current = current->next.get()) {
 		if (current->HasError())
 			std::abort();
@@ -180,6 +182,9 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	auto latch = enforced.Query("CALL gatekeeper_enforce()");
 	if (latch->HasError())
 		std::abort();
+	auto truncated = connection.Query("CALL truncate_duckdb_logs()");
+	if (truncated->HasError())
+		std::abort();
 	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)", Value(bytes));
 	if (expected->HasError()) {
 		CheckError(expected->GetErrorObject().Type());
@@ -222,16 +227,29 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 		}
 	}
 	pending.reset();
+	// Every record written for this input, whatever the text contained, must parse back into the log type.
+	auto parsed = connection.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper')");
+	if (parsed->HasError())
+		std::abort();
 }
 
 // Deterministic latch checks, once per process.
 static void CheckEnforcedLatch(DuckDB &database) {
+	Connection host(database);
 	Connection enforced(database);
 	auto latch = enforced.Query("CALL gatekeeper_enforce()");
 	if (latch->HasError())
 		std::abort();
 	auto denied = enforced.Query("CREATE TABLE fuzz_denied(x INTEGER)");
 	if (!denied->HasError() || !GatekeeperDenial(denied->GetErrorObject()))
+		std::abort();
+	// The denial is a record the host can read and the sandboxed connection cannot.
+	auto recorded = host.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND "
+	                           "NOT allowed AND statement = 'CREATE TABLE fuzz_denied(x INTEGER)'");
+	if (recorded->HasError() || recorded->GetValue(0, 0).GetValue<int64_t>() != 1)
+		std::abort();
+	auto unreadable = enforced.Query("SELECT count(*) FROM duckdb_logs");
+	if (!unreadable->HasError() || !GatekeeperDenial(unreadable->GetErrorObject()))
 		std::abort();
 	auto allowed = enforced.Query("SELECT count(*) FROM t");
 	if (allowed->HasError())

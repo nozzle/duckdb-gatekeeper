@@ -1,5 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "gatekeeper_extension.hpp"
+#include "audit.hpp"
 #include "check.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -13,11 +14,12 @@
 #include "fuzz_checks.hpp"
 #include "options.hpp"
 #include "policy_setting.hpp"
+#include "result_value.hpp"
 #include "version.hpp"
 
 namespace duckdb {
 
-static LogicalType ViolationType() {
+LogicalType ViolationType() {
 	return LogicalType::STRUCT({{"rule", LogicalType::VARCHAR},
 	                            {"message", LogicalType::VARCHAR},
 	                            {"catalog", LogicalType::VARCHAR},
@@ -27,14 +29,14 @@ static LogicalType ViolationType() {
 	                            {"position", LogicalType::BIGINT}});
 }
 
-static LogicalType IdentityType(bool object) {
+LogicalType IdentityType(bool object) {
 	return LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
 	                            {"schema", LogicalType::VARCHAR},
 	                            {object ? "table" : "name", LogicalType::VARCHAR},
 	                            {"type", LogicalType::VARCHAR}});
 }
 
-static LogicalType ResultType() {
+LogicalType ResultType() {
 	return LogicalType::STRUCT({{"allowed", LogicalType::BOOLEAN},
 	                            {"code", LogicalType::VARCHAR},
 	                            {"violations", LogicalType::LIST(ViolationType())},
@@ -47,7 +49,7 @@ static LogicalType ResultType() {
 
 static Value Position(int64_t position) { return position < 0 ? Value(LogicalType::BIGINT) : Value::BIGINT(position); }
 
-static Value ResultValue(const gatekeeper::Result &result) {
+Value ResultValue(const gatekeeper::Result &result) {
 	vector<Value> violations;
 	for (auto &v : result.violations) {
 		violations.push_back(
@@ -69,16 +71,19 @@ static Value ResultValue(const gatekeeper::Result &result) {
 	                      identities(result.objects, true), identities(result.functions, false)});
 }
 
-static void SetPolicy(ClientContext &, SetScope scope, Value &value) {
+static void SetPolicy(ClientContext &context, SetScope scope, Value &value) {
 	// DuckDB's parser currently rejects SET LOCAL; refuse it here too so a future parser cannot route a
 	// connection-scoped assignment into the instance-wide policy.
 	if (scope == SetScope::SESSION || scope == SetScope::LOCAL)
 		throw InvalidInputException("gatekeeper_policy is global-only");
+	gatekeeper::Policy policy;
 	try {
-		value = gatekeeper::PolicyValue(gatekeeper::ReadPolicy(value));
+		policy = gatekeeper::ReadPolicy(value);
 	} catch (const std::invalid_argument &error) {
 		throw InvalidInputException(error.what());
 	}
+	value = gatekeeper::PolicyValue(policy);
+	LogSettingChange(context, "policy_changed", value, &policy);
 }
 
 gatekeeper::Policy GlobalPolicy(ClientContext &context) {
@@ -175,18 +180,28 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		return;
 	auto &binding = input.bind_data->Cast<ValidateBinding>();
 	gatekeeper::Result decision;
+	string sql = binding.sql.IsNull() ? string() : binding.sql.GetValue<string>();
+	// The record names the global ceiling, not the request layer: that is the policy the host set and the one
+	// policy_changed records describe.
+	gatekeeper::Policy defaults;
+	bool have_defaults = false;
 	try {
 		// Read policy and bind the SQL at execution, never cache a decision in bind data.
-		auto defaults = GlobalPolicy(context);
+		defaults = GlobalPolicy(context);
+		have_defaults = true;
 		auto policy = defaults;
 		gatekeeper::ApplyOptions(policy, binding.options);
 		if (binding.sql.IsNull())
 			decision = {false, "invalid_input", "", "NULL SQL input", {}};
 		else
-			decision = Check(context, policy, defaults, binding.sql.GetValue<string>());
+			decision = Check(context, policy, defaults, sql);
 	} catch (const std::invalid_argument &error) {
 		decision = {false, "invalid_input", "", error.what(), {}};
 	}
+	Decide(context,
+	       {DecisionMode::VALIDATE, Boundary::NONE, have_defaults ? &defaults : nullptr,
+	        binding.sql.IsNull() ? nullptr : &sql},
+	       decision);
 	auto result = ResultValue(decision);
 	auto &fields = StructValue::GetChildren(result);
 	for (idx_t column = 0; column < fields.size(); column++)
@@ -348,6 +363,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	configure_info.descriptions.push_back(std::move(configure_description));
 	loader.RegisterFunction(std::move(validate_info));
 	loader.RegisterFunction(std::move(configure_info));
+	RegisterAudit(loader);
 	RegisterEnforcement(loader);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

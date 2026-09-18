@@ -61,4 +61,8 @@ void InstallReplacementScan(DBConfig &config);
 
 // One-line description of a denied result for exception messages.
 string DenialMessage(const gatekeeper::Result &result);
+
+// Closes a result as denied. Violations make it 'forbidden' and clear the error fields, which belong only to
+// error-class outcomes (parser, binding, invalid_input) that carry no violations.
+void MarkDenied(gatekeeper::Result &result);
 } // namespace duckdb

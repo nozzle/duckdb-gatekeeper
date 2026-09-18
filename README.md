@@ -104,8 +104,9 @@ flowchart LR
     which -- validate first --> v["gatekeeper_validate(sql, ...)"]
     v --> ok{"allowed AND<br/>code = 'ok'?"}
     ok -- yes --> run[execute the same SQL<br/>on the same connection]
-    ok -- no --> deny[deny, log violations]
+    ok -- no --> deny[deny]
     v -. exception / no row .-> deny
+    run2 & v -.-> log[("audit log<br/>duckdb_logs_parsed('Gatekeeper')")]
 ```
 
 ## Functions
@@ -113,7 +114,7 @@ flowchart LR
 ```text
 SELECT * FROM gatekeeper_validate(sql VARCHAR, option := value, ...) -- one result row
 CALL gatekeeper_configure(option := value, ...)          -- replaces the global policy
-CALL gatekeeper_enforce()                                -- latches this connection to the global policy
+CALL gatekeeper_enforce()                                -- enforces the global policy on this connection
 ```
 
 `gatekeeper_validate` and `gatekeeper_configure` take the same named options and accept
@@ -467,13 +468,23 @@ non-internal objects. `blocked_tables` applies regardless of `restrict_tables`.
 ## Enforced connections
 
 An enforced connection is one where DuckDB itself refuses to run anything the global policy
-denies. There is no host glue to forget: the agent gets a connection, and every statement it
-submits is checked the way `gatekeeper_validate` would check it, then the plan the engine is
-about to execute is checked again.
+denies. There is no host glue to forget: the agent gets a connection, every statement it
+submits is checked the way `gatekeeper_validate` would check it, and the plan the engine is
+about to execute is checked once more.
 
-Latch a single connection:
+| Trusted setup, in order | Why |
+| --- | --- |
+| Load extensions, attach catalogs | `LOAD` and `ATTACH` are refused on an enforced connection. |
+| `CALL gatekeeper_configure(...)` | The policy every enforced connection follows. |
+| `SET enable_external_access = false`, autoload off | Where the deployment allows; `gatekeeper_enforce()` warns when these are loose. |
+| `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
+| `SET lock_configuration = true` | Freezes the policy and the enforcement mode. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
+| Hand out connections | `CALL gatekeeper_enforce()` on each, or [enforce every connection](#enforcing-every-connection). |
+
+Enforce this connection:
 
 ```sql
+CALL enable_logging('Gatekeeper');
 SELECT enforced FROM gatekeeper_enforce();
 ```
 
@@ -481,9 +492,10 @@ SELECT enforced FROM gatekeeper_enforce();
 | --- |
 | true |
 
-The full `CALL gatekeeper_enforce()` row also carries a `warnings` list naming host settings
-that weaken the sandbox (`enable_external_access`, `autoload_known_extensions`,
-`lock_configuration`). Gatekeeper reports them; it never changes them.
+> [!NOTE]
+> The full row also carries `warnings`, naming host settings that weaken the sandbox
+> (`enable_external_access`, autoload, `lock_configuration`, and logging that would not record
+> a denial). Gatekeeper reports them; it never changes them.
 
 From then on, on that connection only, allowed reads work as before:
 
@@ -495,7 +507,7 @@ SELECT sum(amount) FROM reporting.orders;
 | --- |
 | 65.0 |
 
-and everything else fails before it can execute:
+and everything else is refused before it can execute:
 
 ```text
 D CREATE TABLE scratch AS SELECT * FROM reporting.orders;
@@ -506,11 +518,53 @@ D SELECT * FROM secret.salaries;
 Permission Error: Gatekeeper denied this statement: table: object is not allowed
 ```
 
-The latch is **irreversible for the life of the connection** and lives in the connection's own
-state, not in a setting, so neither `RESET` nor a native configuration write releases it. Denied
-statements are ordinary errors: the transaction survives, and the agent can try again.
+> [!IMPORTANT]
+> Enforcement is **permanent for the life of the connection**. It lives in the connection's
+> own state, not in a setting, so neither `RESET` nor a native configuration write undoes it,
+> and `SET`, `RESET`, and `CALL` are themselves refused on the connection. Denied statements
+> are ordinary errors: the transaction survives, and the agent can try again.
 
-To latch connections wholesale instead of one at a time, set the global mode:
+### Audit log
+
+Those errors went to the agent. The host reads the same decisions, with the text that caused
+them, from any connection that is not enforced:
+
+```text
+D SELECT boundary, code, violations[1].rule AS rule, statement
+  FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND NOT allowed;
+┌───────────┬─────────────┬──────────┬─────────────────────────────────────────────────────┐
+│ boundary  │    code     │   rule   │                      statement                      │
+├───────────┼─────────────┼──────────┼─────────────────────────────────────────────────────┤
+│ binding   │ unsupported │ statement│ CREATE TABLE scratch AS SELECT * FROM reporting.ord…│
+│ binding   │ forbidden   │ function │ SELECT * FROM read_csv('/etc/passwd');              │
+│ authorize │ forbidden   │ table    │ SELECT * FROM secret.salaries;                      │
+└───────────┴─────────────┴──────────┴─────────────────────────────────────────────────────┘
+```
+
+| Record column | Meaning |
+| --- | --- |
+| `event` | `decision`, or `policy_changed` / `enforcement_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
+| `mode`, `boundary` | `enforce` or `validate`; where the statement was decided (`binding`, `authorize`, `execution`, ...) |
+| `allowed`, `code`, `violations`, `objects`, `functions`, ... | Exactly `gatekeeper_validate`'s [result columns](#result) |
+| `statement` | The SQL the engine ran, capped at 64 KiB (`statement_length` is the full size) |
+| `policy_hash` | The policy in force, matching the `policy_changed` record that installed it |
+| `connection_id`, `query_id` | DuckDB's own log-context columns, for the statement's connection |
+
+> [!TIP]
+> Denials and setting changes are `INFO`. `SET logging_level = 'debug'` also records every
+> allowed statement with the tables, views, and functions it resolved to: the raw material for an
+> allowlist. For a durable log, `CALL enable_logging('Gatekeeper', storage := 'file',
+> storage_path := '...')`.
+
+> [!NOTE]
+> The enforced connection cannot read, silence, redirect, or write to the log: `duckdb_logs`,
+> `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log` are on the
+> never-bind list. The one path outside that control is described with the rest of the
+> [audit log](docs/security.md#audit-log) in the security model.
+
+### Enforcing every connection
+
+Instead of one connection at a time, set the global mode:
 
 | `SET gatekeeper_enforcement = ...` | Effect |
 | --- | --- |
@@ -518,41 +572,42 @@ To latch connections wholesale instead of one at a time, set the global mode:
 | `'new_connections'` | Every connection opened after this point is enforced. Existing connections, including the one issuing the `SET`, are not. |
 | `'all'` | Every connection open now, including this one, and every later one. |
 
-Switching the mode back never releases a latched connection. The setting is global-only,
+Switching the mode back never releases an enforced connection. The setting is global-only,
 rejects other values, and is frozen by `SET lock_configuration = true` like `gatekeeper_policy`.
-Global modes also latch connections that extensions open internally (some lakehouse
-catalogs run their own metadata SQL that way); prefer per-connection latching with such catalogs.
 
-Recommended host sequence: load extensions and attach catalogs, `CALL gatekeeper_configure(...)`,
-tighten `enable_external_access` and autoload where the deployment allows, `SET lock_configuration = true`,
-then hand out enforced connections.
+> [!NOTE]
+> Global modes also enforce connections that extensions open internally (some lakehouse
+> catalogs run their own metadata SQL that way). Use `CALL gatekeeper_enforce()` per connection
+> with such catalogs, and `storage := 'file'` or `'stdout'` for the log under `'all'`, since no
+> in-process connection can read `duckdb_logs` then.
 
-What enforcement changes and does not change:
+### What enforcement covers
 
-- Parameters are supported (`execute(sql, [values])`): the statement is authorized with the
-  values it is bound with, and every execution, including cached prepared statements, is rebound
-  and re-checked under the policy current at that moment.
-- DuckDB's relation API is covered: the relation's SQL rendering passes the text check and the
-  plan passes the execution check.
-- `PRAGMA version` and other pragmas that DuckDB rewrites into `SELECT`s before any extension
-  runs are checked as that `SELECT`; `gatekeeper_validate` reports the raw `PRAGMA` text as
-  `unsupported`. DuckDB also **evaluates `PRAGMA` argument expressions** during that rewrite,
-  before Gatekeeper can act: `PRAGMA x(nextval('s'))` advances `s` on an enforced connection
-  even though the statement is then denied, and any scalar function the connection can see,
-  host UDFs included, can run the same way. Table data and statements stay out of reach. Hosts
-  that cannot accept this should validate first, with the complete text, and execute only on
-  `allowed = true` and `code = 'ok'` (a batch that hides a `PRAGMA` behind a `SELECT` is
-  refused as `forbidden`, not `unsupported`); see the [residuals](docs/security.md#residuals)
-  for the full boundary and the upstream issue.
-- `gatekeeper_validate` is available on an enforced connection when the policy allows it
+- **Parameters** (`execute(sql, [values])`): the statement is authorized with the values it is
+  bound with, and every execution, including cached prepared statements, is rebound and
+  re-checked under the policy current at that moment.
+- **DuckDB's relation API**: the relation's SQL rendering passes the text check and the plan
+  passes the execution check.
+- **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
+  are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
+- **`gatekeeper_validate` on the enforced connection**, when the policy allows it
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want a structured dry run.
-- Each statement costs up to three binds (a private authorizing bind, the engine's bind, and a
-  rebind for prepared executions). This is negligible next to model latency but measurable on
-  hot paths; keep enforced connections for untrusted callers.
+- **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
+  a rebind for prepared executions). Negligible next to model latency, measurable on hot paths;
+  keep enforced connections for untrusted callers.
 
-Enforcement is a statement-level sandbox: it decides what a statement may reference and
-execute. Memory, time, filesystem and network posture remain host responsibilities; see the
-[security model](docs/security.md#enforced-connections).
+> [!CAUTION]
+> DuckDB **evaluates `PRAGMA` argument expressions while parsing**, before any extension runs.
+> On an enforced connection `PRAGMA x(nextval('s'))` advances `s` even though the statement is
+> then refused, and any scalar function the connection can see, host UDFs and `write_log`
+> included, can run the same way. Table data and statements stay out of reach. Hosts that cannot
+> accept this should validate first with the complete text and execute only on `allowed = true`
+> and `code = 'ok'`; see the [residuals](docs/security.md#residuals) for the full boundary and
+> the upstream issue.
+
+Enforcement decides what a statement may reference and execute. Memory, time, filesystem, and
+network posture remain host settings; see
+[enforced connections in the security model](docs/security.md#enforced-connections).
 
 ## How it works
 
@@ -608,9 +663,10 @@ db.execute("LOAD gatekeeper")
 db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 
-# Trusted setup: install the ceiling, then lock it.
+# Trusted setup: install the ceiling, turn on the audit log, then lock it.
 tables = [{"catalog": "memory", "schema": "reporting", "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
+db.execute("CALL enable_logging('Gatekeeper')")
 db.execute("SET lock_configuration = true")
 
 # Enforced connection: hand this cursor to the agent. Denials raise duckdb.PermissionException.
@@ -649,7 +705,8 @@ it **executes**. It does not:
 - prevent binding from performing I/O through trusted views and macros before a denial,
   or before a denial of a prepared statement, which DuckDB binds before any extension hook runs;
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
-  parsing, before any extension hook, which can run any scalar function the connection can see;
+  parsing, before any extension hook, which can run any scalar function the connection can see,
+  `write_log` into the audit log included;
 - stop that same preprocessor from running query pragmas such as `import_database`, which reads
   `schema.sql` and `load.sql` before any hook when external access allows it;
 - prove that every overload of a default function is harmless (defaults are a

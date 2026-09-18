@@ -101,8 +101,8 @@ The suite has two layers with different reach:
   (`make test_release`) and the engine-rebuild workflow run on every platform, including
   Windows, musl, and engines other than the pinned one. They cover statement rejection,
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
-  replacement scans, trusted expansions, nested bound implementations, and enforced
-  connections. Add a case here whenever a behavior must hold everywhere the extension is
+  replacement scans, trusted expansions, nested bound implementations, enforced
+  connections, and the audit log. Add a case here whenever a behavior must hold everywhere the extension is
   distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
   tests that run against the loadable artifact on Linux and macOS. Set
@@ -195,6 +195,11 @@ source notes and baselines remain independent of build-engine versions. Follow t
   (`ClientContextState`), the `QueryBegin`/`OnExecutePrepared`/post-bind hooks that run the
   same decision inside the engine, the `gatekeeper_enforcement` setting and its
   connection-open callback, `CALL gatekeeper_enforce()`, and posture warnings.
+- `src/audit.cpp`: the audit log. `Decide` is the one place a decision becomes observable:
+  it writes the `Gatekeeper` log record (the `gatekeeper_validate` columns plus mode,
+  boundary, statement, and policy hash) and throws the denial on an enforced connection.
+  Every denial site in `enforcement.cpp`, `check.cpp`, and the validate function goes
+  through it; setting callbacks record their changes through `LogSettingChange`.
 - `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
