@@ -497,20 +497,36 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 			    return;
 		    auto &pivots = ref.Cast<PivotRef>().pivots;
 		    vector<reference<PivotColumn>> dynamic;
-		    idx_t fixed = 1; // the PIVOT's values before the dynamic columns contribute
+		    // The PIVOT's values before the dynamic columns contribute. Saturates at the limit: past it no LIST
+		    // plan is legal whatever the dynamic columns add, and the engine rejects the small shape too. Zero
+		    // (an empty host enum) stays zero: the PIVOT has no values at all and no large shape.
+		    idx_t fixed = 1;
+		    auto multiply = [&](idx_t values) {
+			    if (fixed == 0 || values == 0)
+				    fixed = 0;
+			    else if (values > limit / fixed)
+				    fixed = limit;
+			    else
+				    fixed *= values;
+		    };
 		    for (auto &column : pivots) {
 			    if (!column.pivot_enum.empty() && enums.count(column.pivot_enum))
 				    dynamic.emplace_back(column);
 			    else if (!column.entries.empty())
-				    fixed *= column.entries.size();
+				    multiply(column.entries.size());
 			    else if (!column.pivot_enum.empty())
-				    fixed *= HostEnumSize(context, column.pivot_enum);
+				    multiply(HostEnumSize(context, column.pivot_enum));
 		    }
 		    if (dynamic.empty())
 			    return;
 		    idx_t count = 1;
-		    if (large && fixed <= threshold && fixed * (threshold / fixed + 1) < limit)
-			    count = threshold / fixed + 1;
+		    if (large && fixed > 0 && fixed <= threshold && limit > 0) {
+			    // The fewest values that carry fixed * candidate past the threshold, taken only when that total
+			    // also stays under the limit; both comparisons are arranged so neither product can overflow.
+			    auto candidate = threshold / fixed + 1;
+			    if (candidate > 0 && candidate <= (limit - 1) / fixed)
+				    count = candidate;
+		    }
 		    distinct |= count > 1;
 		    for (auto &column : dynamic) {
 			    column.get().pivot_enum.clear();

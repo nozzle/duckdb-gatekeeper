@@ -21,6 +21,7 @@ def fresh_catalog(log_only):
 
 
 PIVOT_ENUM = re.compile(r"__pivot_enum_[0-9a-f-]+")
+QUERY_LOCATION = re.compile(r"\n\nLINE \d+:.*", re.DOTALL)
 
 
 def outcome(connection, sql):
@@ -28,7 +29,11 @@ def outcome(connection, sql):
         rows = connection.execute(sql).fetchall()
     except duckdb.Error as error:
         # DuckDB names a dynamic PIVOT's enum type after a fresh UUID; the engine's own error text carries it.
-        return ("error", type(error).__name__, PIVOT_ENUM.sub("__pivot_enum_", str(error)))
+        # An enforced connection also binds a copy of the statement (its state can request a rebind), and
+        # DuckDB's PivotRef::Copy drops the query location, so a binder error raised at a PIVOT loses its LINE
+        # excerpt there (see docs/security.md, "Errors are informative"); compare the message without it.
+        message = QUERY_LOCATION.sub("", PIVOT_ENUM.sub("__pivot_enum_", str(error)))
+        return ("error", type(error).__name__, message)
     if sql.startswith("EXPLAIN ANALYZE"):
         return ("ok",)  # timings differ run to run
     if "USING SAMPLE" in sql:

@@ -279,6 +279,11 @@ under residuals.
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
   and the denied function or object, and the [audit record](#audit-log) holds the caller's
   text. Treat all of them as sensitive when relaying to untrusted callers or storing the log.
+  One engine error reads differently on an enforced connection: the engine binds a copy of the
+  statement when a connection state can request a rebind, as Gatekeeper's does, and DuckDB's
+  `PivotRef::Copy` drops the query location, so a binder error raised at a `PIVOT` (a value
+  listed twice, the pivot limit) arrives without its `LINE n:` excerpt. The message is
+  otherwise the same.
 - **Not a resource sandbox.** Memory, CPU time, temporary disk, extension loading, and
   network posture remain host settings. Gatekeeper reports weak posture; it never changes it.
 

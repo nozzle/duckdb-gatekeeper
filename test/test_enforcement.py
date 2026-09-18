@@ -28,7 +28,8 @@ CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
     CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
     CREATE MACRO reporting.twice(x) AS x * 2;
     CREATE SEQUENCE reporting.seq;
-    CREATE TYPE tags AS ENUM ('a', 'b')"""
+    CREATE TYPE tags AS ENUM ('a', 'b');
+    CREATE TYPE empty_tags AS ENUM (SELECT tag FROM reporting.orders WHERE false)"""
 CATALOG_POLICY = {"allowed_tables": [{"schema": "reporting", "table": "*"}],
                   "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
 
@@ -69,6 +70,7 @@ PARITY_CORPUS = [
     "PIVOT reporting.orders ON tag IN (SELECT DISTINCT tag FROM reporting.orders) USING sum(amount)",
     "PIVOT reporting.orders ON tag, id USING sum(amount) GROUP BY amount",
     "PIVOT reporting.orders ON tag IN tags, id USING count(*)",
+    "PIVOT reporting.orders ON tag IN empty_tags, id USING count(*) GROUP BY amount",
     "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)",
     "WITH p AS (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) PIVOT p ON id USING count(*)",
     "WITH c AS (SELECT * FROM reporting.orders) PIVOT c ON tag USING sum(amount)",
@@ -163,6 +165,8 @@ PARITY_CORPUS = [
     "PIVOT reporting.missing ON tag USING sum(amount)",
     "PIVOT reporting.orders ON no_such_column USING sum(amount)",
     "PIVOT reporting.orders ON tag USING sum(no_such_column)",
+    # Static IN lists whose product alone passes pivot_limit (2^17 > 100000): the engine refuses the pivot.
+    "PIVOT reporting.orders ON tag, " + ", ".join(f"id + {i} IN (1, 2)" for i in range(17)) + " USING count(*)",
 ]
 
 
