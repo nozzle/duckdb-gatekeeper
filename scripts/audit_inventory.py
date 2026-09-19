@@ -10,12 +10,12 @@ from versions import BASELINE_FILENAME
 def capture(extension_paths=()):
     # Imported here: the comparison path (--candidate) needs neither duckdb nor the artifact module.
     import duckdb
-    from artifact import load
+    from artifact import load as load_extension
 
     with duckdb.connect() as db:
         before = db.execute("SELECT extension_name, extension_version FROM duckdb_extensions() WHERE loaded ORDER BY 1").fetchall()
         for path in extension_paths:
-            load(db, path)
+            load_extension(db, path)
         rows = db.execute("""SELECT function_name, function_type, parameter_types,
             return_type, varargs, has_side_effects, macro_definition
             , parameters

@@ -45,8 +45,12 @@ def test_distribution_engine_pins():
         assert "run: python3 scripts/versions.py | tee -a \"$GITHUB_OUTPUT\"" in workflow, name
         for expected in wiring:
             assert expected in workflow, (name, expected)
-        # No engine pin of its own: the only release-shaped literals left are the action version comments.
-        assert re.findall(r"^(?!.*# v\d)(?=.*\bv\d+\.\d+\.\d+\b).*$", workflow, re.M) == [], name
+        # No engine pin of its own: the only release-shaped literals left are the version comments on pinned
+        # `uses:` lines, which are excluded by that shape alone, so `# v1.5.5` on any other line still fails.
+        pinned_action = re.compile(r"^\s*(?:- )?uses: \S+@[0-9a-f]{40} # v\d+\.\d+\.\d+\s*$")
+        literals = [line for line in workflow.splitlines()
+                    if re.search(r"\bv\d+\.\d+\.\d+\b", line) and not pinned_action.match(line)]
+        assert literals == [], (name, literals)
     # The Makefile supplies the release pin only for the pinned engine revision and reads both values from
     # versions.cmake; an unconditional default would label every community rebuild as the pinned release.
     makefile = (ROOT / "Makefile").read_text()
