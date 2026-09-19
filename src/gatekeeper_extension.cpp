@@ -15,84 +15,10 @@
 #include "options.hpp"
 #include "policy_setting.hpp"
 #include "result_value.hpp"
+#include "single_row.hpp"
 #include "version.hpp"
 
 namespace duckdb {
-
-LogicalType ViolationType() {
-	return LogicalType::STRUCT({{"rule", LogicalType::VARCHAR},
-	                            {"message", LogicalType::VARCHAR},
-	                            {"catalog", LogicalType::VARCHAR},
-	                            {"schema", LogicalType::VARCHAR},
-	                            {"table", LogicalType::VARCHAR},
-	                            {"function_name", LogicalType::VARCHAR},
-	                            {"position", LogicalType::BIGINT}});
-}
-
-LogicalType IdentityType(bool object) {
-	return LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
-	                            {"schema", LogicalType::VARCHAR},
-	                            {object ? "table" : "name", LogicalType::VARCHAR},
-	                            {"type", LogicalType::VARCHAR}});
-}
-
-LogicalType ResultType() {
-	return LogicalType::STRUCT({{"allowed", LogicalType::BOOLEAN},
-	                            {"code", LogicalType::VARCHAR},
-	                            {"violations", LogicalType::LIST(ViolationType())},
-	                            {"error_type", LogicalType::VARCHAR},
-	                            {"error_message", LogicalType::VARCHAR},
-	                            {"position", LogicalType::BIGINT},
-	                            {"objects", LogicalType::LIST(IdentityType(true))},
-	                            {"functions", LogicalType::LIST(IdentityType(false))}});
-}
-
-static Value Position(int64_t position) { return position < 0 ? Value(LogicalType::BIGINT) : Value::BIGINT(position); }
-
-Value ResultValue(const gatekeeper::Result &result) {
-	vector<Value> violations;
-	for (auto &v : result.violations) {
-		violations.push_back(
-		    Value::STRUCT(ViolationType(), {Value(v.rule), Value(v.message), Value(v.catalog), Value(v.schema),
-			                                Value(v.table), Value(v.function_name), Position(v.position)}));
-	}
-	auto identities = [&](const std::set<gatekeeper::Identity> &entries, bool object) {
-		vector<Value> values;
-		if (result.allowed) {
-			for (const auto &entry : entries)
-				values.push_back(Value::STRUCT(IdentityType(object), {Value(entry.catalog), Value(entry.schema),
-				                                                      Value(entry.name), Value(entry.type)}));
-		}
-		return Value::LIST(IdentityType(object), values);
-	};
-	return Value::STRUCT(ResultType(),
-	                     {Value::BOOLEAN(result.allowed), Value(result.code), Value::LIST(ViolationType(), violations),
-	                      Value(result.error_type), Value(result.error_message), Position(result.position),
-	                      identities(result.objects, true), identities(result.functions, false)});
-}
-
-static void SetPolicy(ClientContext &context, SetScope scope, Value &value) {
-	// DuckDB's parser currently rejects SET LOCAL; refuse it here too so a future parser cannot route a
-	// connection-scoped assignment into the instance-wide policy.
-	if (scope == SetScope::SESSION || scope == SetScope::LOCAL)
-		throw InvalidInputException("gatekeeper_policy is global-only");
-	gatekeeper::Policy policy;
-	try {
-		policy = gatekeeper::ReadPolicy(value);
-	} catch (const std::invalid_argument &error) {
-		throw InvalidInputException(error.what());
-	}
-	value = gatekeeper::PolicyValue(policy);
-	LogSettingChange(context, "policy_changed", value, &policy);
-}
-
-gatekeeper::Policy GlobalPolicy(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	Value value;
-	if (!config.TryGetCurrentSetting(POLICY_SETTING, value))
-		throw std::invalid_argument("gatekeeper_policy is unavailable");
-	return gatekeeper::ReadPolicy(value);
-}
 
 struct ValidateBinding : FunctionData {
 	Value sql;
@@ -155,14 +81,6 @@ static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindI
 	return std::move(result);
 }
 
-struct SingleRowState : GlobalTableFunctionState {
-	bool finished = false;
-};
-
-static unique_ptr<GlobalTableFunctionState> InitSingleRow(ClientContext &, TableFunctionInitInput &) {
-	return make_uniq<SingleRowState>();
-}
-
 #ifdef GATEKEEPER_FUZZ
 Value GatekeeperCheckForFuzz(ClientContext &context, const string &sql, const gatekeeper::Limits &limits) {
 	Value result;
@@ -192,11 +110,11 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		auto policy = defaults;
 		gatekeeper::ApplyOptions(policy, binding.options);
 		if (binding.sql.IsNull())
-			decision = {false, "invalid_input", "", "NULL SQL input", {}};
+			decision = gatekeeper::InvalidInput("NULL SQL input");
 		else
 			decision = Check(context, policy, defaults, sql);
 	} catch (const std::invalid_argument &error) {
-		decision = {false, "invalid_input", "", error.what(), {}};
+		decision = gatekeeper::InvalidInput(error.what());
 	}
 	Decide(context,
 	       {DecisionMode::VALIDATE, Boundary::NONE, have_defaults ? &defaults : nullptr,
@@ -208,47 +126,6 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		output.SetValue(column, 0, fields[column]);
 	output.SetCardinality(1);
 	state.finished = true;
-}
-
-struct ConfigureBinding : FunctionData {
-	Value policy;
-	explicit ConfigureBinding(Value policy) : policy(std::move(policy)) {}
-	unique_ptr<FunctionData> Copy() const override { return make_uniq<ConfigureBinding>(policy); }
-	bool Equals(const FunctionData &other) const override { return policy == other.Cast<ConfigureBinding>().policy; }
-};
-
-static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
-                                              vector<LogicalType> &types, vector<string> &names) {
-	try {
-		// DuckDB overwrites duplicate named parameters in its map before calling bind.
-		if (input.ref.function &&
-		    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
-			throw std::invalid_argument("duplicate Gatekeeper configuration option");
-		gatekeeper::Policy policy;
-		std::vector<std::pair<std::string, Value>> options;
-		for (const auto &option : input.named_parameters)
-			options.emplace_back(option.first, option.second);
-		gatekeeper::ApplyOptions(policy, options);
-		types.push_back(LogicalType::BOOLEAN);
-		names.push_back("Success");
-		return make_uniq<ConfigureBinding>(gatekeeper::PolicyValue(policy));
-	} catch (const std::invalid_argument &error) {
-		throw InvalidInputException(error.what());
-	}
-}
-
-static void Configure(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-	auto &state = input.global_state->Cast<SingleRowState>();
-	if (state.finished)
-		return;
-	auto &config = DBConfig::GetConfig(context);
-	config.CheckLock(POLICY_SETTING);
-	auto value = input.bind_data->Cast<ConfigureBinding>().policy;
-	SetPolicy(context, SetScope::GLOBAL, value);
-	config.SetOption(POLICY_SETTING, std::move(value));
-	state.finished = true;
-	output.SetCardinality(1);
-	output.SetValue(0, 0, Value::BOOLEAN(true));
 }
 
 // The grammar and serializer compiled into this artifact belong to exactly the engine it was built from.
@@ -320,49 +197,32 @@ static void LoadInternal(ExtensionLoader &loader) {
 	CheckBuildEngine(loader.GetDatabaseInstance());
 #endif
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	auto default_policy = gatekeeper::PolicyValue(gatekeeper::Policy());
-	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
-	                          default_policy, SetPolicy, SetScope::GLOBAL);
+	RegisterPolicySetting(loader);
 	// First position: decide replacement scans before any other callback's reader can bind.
 	InstallReplacementScan(config);
 	TableFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, GatekeeperValidate, BindValidate,
 	                       InitSingleRow);
-	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
-	for (const auto &name : gatekeeper::OptionNames()) {
+	for (const auto &name : gatekeeper::OptionNames())
 		validate.named_parameters[name] = LogicalType::ANY;
-		configure.named_parameters[name] = LogicalType::ANY;
-	}
 	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
 	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.
 	// The generator keeps only the first line of each description and shows it in one table cell, so keep
 	// these to a single short sentence and do not add newlines. Parameter names are paired positionally
 	// with named_parameters, an unordered map, so they are listed in OptionNames() order; this is only
 	// safe because every named option is ANY (pinned by test_documentation.py).
-	FunctionDescription validate_description;
-	validate_description.parameter_types = {LogicalType::VARCHAR};
-	validate_description.parameter_names = {"sql"};
-	validate_description.description = "Validates one untrusted read-only SQL statement against the global policy "
-	                                   "and the request options without executing it.";
-	validate_description.examples = {
-	    "SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM "
-	    "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
-	FunctionDescription configure_description;
-	configure_description.description =
-	    "Replaces the global Gatekeeper policy atomically; omitted options revert to the built-in defaults.";
-	configure_description.examples = {"CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': "
-	                                  "'*'}], blocked_functions := ['md5'])"};
-	for (const auto &name : gatekeeper::OptionNames()) {
-		validate_description.parameter_names.push_back(name);
-		configure_description.parameter_names.push_back(name);
-	}
-	CreateTableFunctionInfo validate_info(std::move(validate));
-	validate_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-	validate_info.descriptions.push_back(std::move(validate_description));
-	CreateTableFunctionInfo configure_info(std::move(configure));
-	configure_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-	configure_info.descriptions.push_back(std::move(configure_description));
-	loader.RegisterFunction(std::move(validate_info));
-	loader.RegisterFunction(std::move(configure_info));
+	FunctionDescription description;
+	description.parameter_types = {LogicalType::VARCHAR};
+	description.parameter_names = {"sql"};
+	description.description = "Validates one untrusted read-only SQL statement against the global policy "
+	                          "and the request options without executing it.";
+	description.examples = {"SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM "
+	                        "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
+	for (const auto &name : gatekeeper::OptionNames())
+		description.parameter_names.push_back(name);
+	CreateTableFunctionInfo info(std::move(validate));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	info.descriptions.push_back(std::move(description));
+	loader.RegisterFunction(std::move(info));
 	RegisterAudit(loader);
 	RegisterEnforcement(loader);
 }

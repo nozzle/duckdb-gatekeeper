@@ -36,6 +36,27 @@
 
 namespace duckdb {
 using namespace duckdb_yyjson;
+using Doc = unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)>;
+
+// A SELECT as the binding boundary reads it: DuckDB's own JSON serialization at the latest compatibility, in the
+// shape json_serialize_sql produces, copied into the immutable form the grammar walk reads.
+static Doc SerializeStatement(const SelectStatement &select) {
+	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+	if (!doc)
+		throw std::bad_alloc();
+	auto root = yyjson_mut_obj(doc.get());
+	yyjson_mut_doc_set_root(doc.get(), root);
+	yyjson_mut_obj_add_false(doc.get(), root, "error");
+	auto statements = yyjson_mut_arr(doc.get());
+	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+	yyjson_mut_arr_append(statements, JsonSerializer::Serialize(select, doc.get(), true, true, true, options));
+	Doc ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr), yyjson_doc_free);
+	if (!ast)
+		throw std::bad_alloc();
+	return ast;
+}
 
 // A dynamic PIVOT (one whose IN list is left to the data) is the one read-only text DuckDB's parser rewrites
 // into more than a SELECT (Transformer::CreatePivotStatement): for each such column it emits
@@ -101,7 +122,7 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 	TextCheck check;
 	auto &statements = batch.statements;
 	auto unsupported = [&] {
-		check.result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+		check.result = gatekeeper::UnsupportedStatement();
 		check.units.clear();
 		return std::move(check);
 	};
@@ -124,7 +145,7 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 		if (statement->type == StatementType::CREATE_STATEMENT)
 			enums.insert(statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().name);
 	}
-	check.result = {true, "ok"};
+	check.result = {true, gatekeeper::codes::OK};
 	return check;
 }
 
@@ -135,7 +156,7 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 	if (sql.find('\0') != string::npos)
 		throw InvalidInputException("SQL contains a NUL byte");
 	if (sql.size() > limits.bytes) {
-		check.result = {false, "forbidden", "", "", {{"limit", "SQL exceeds fixed input size limit"}}};
+		check.result = gatekeeper::FixedLimitExceeded("SQL exceeds fixed input size limit");
 		return check;
 	}
 	Parser parser(context.GetParserOptions());
@@ -143,7 +164,7 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 	if (parser.statements.empty())
 		throw InvalidInputException("SQL contains no statements");
 	if (parser.statements.size() > gatekeeper::MAX_STATEMENTS) {
-		check.result = {false, "forbidden", "", "", {{"limit", "statement count exceeds fixed limit"}}};
+		check.result = gatekeeper::FixedLimitExceeded("statement count exceeds fixed limit");
 		return check;
 	}
 	auto &statement = parser.statements[0]; // MAX_STATEMENTS is 1
@@ -156,31 +177,16 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 	else if (PivotEnumStatement(*statement))
 		select = &statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().query->Cast<SelectStatement>();
 	if (!select) {
-		check.result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+		check.result = gatekeeper::UnsupportedStatement();
 		return check;
 	}
-	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-	if (!doc)
-		throw std::bad_alloc();
-	auto root = yyjson_mut_obj(doc.get());
-	yyjson_mut_doc_set_root(doc.get(), root);
-	yyjson_mut_obj_add_false(doc.get(), root, "error");
-	auto statements = yyjson_mut_arr(doc.get());
-	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
-	SerializationOptions serialization_options;
-	serialization_options.serialization_compatibility = SerializationCompatibility::Latest();
-	yyjson_mut_arr_append(statements,
-	                      JsonSerializer::Serialize(*select, doc.get(), true, true, true, serialization_options));
-	unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
-	                                                       yyjson_doc_free);
-	if (!ast)
-		throw std::bad_alloc();
+	auto ast = SerializeStatement(*select);
 	size_t bytes = 0;
 	unique_ptr<char, decltype(&free)> serialized(yyjson_write(ast.get(), 0, &bytes), free);
 	if (!serialized)
 		throw std::bad_alloc();
 	if (bytes > limits.bytes) {
-		check.result = {false, "forbidden", "", "", {{"limit", "serialized AST exceeds fixed size limit"}}};
+		check.result = gatekeeper::FixedLimitExceeded("serialized AST exceeds fixed size limit");
 		return check;
 	}
 	TextCheck::Unit unit;
@@ -244,8 +250,8 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
                const gatekeeper::BindingPolicy &binding, const gatekeeper::Provenance &provenance,
                const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result) {
 	auto deny = [&](const string &message) {
-		result.violations.emplace("statement", message);
-		throw PermissionException("only supported read statements are permitted");
+		result.violations.emplace(gatekeeper::rules::STATEMENT, message);
+		throw PermissionException(gatekeeper::UNSUPPORTED_STATEMENT);
 	};
 	// A dynamic PIVOT's enum type: the engine reports it as a statement that creates a temporary object and
 	// returns nothing, over the plan of the SELECT that defines it. Its temporary catalog is not a modified
@@ -337,16 +343,11 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		enforced = AdmittedPolicy(context);
 		binding = AdmittedBinding(context);
 		if (!enforced) {
-			try {
-				prepared = GlobalPolicy(context);
+			gatekeeper::Result result;
+			if (TryGlobalPolicy(context, prepared, result))
 				enforced = &prepared;
-			} catch (const std::invalid_argument &error) {
-				gatekeeper::Result result;
-				result.code = "invalid_input";
-				result.error_message = string("cannot read the global policy: ") + error.what();
-				if (record(result, nullptr))
-					return nullptr;
-			}
+			else if (record(result, nullptr))
+				return nullptr;
 		}
 	}
 	// A name the caller wrote chooses the reader, so the reader must be allowed like a caller-written table
@@ -379,12 +380,13 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		if (!replacement)
 			continue;
 		if (replacement->type != TableReferenceType::TABLE_FUNCTION) {
-			if (deny("replacement_scan", "host-language replacement scan cannot be authorized: " + path))
+			if (deny(gatekeeper::rules::REPLACEMENT_SCAN,
+			         "host-language replacement scan cannot be authorized: " + path))
 				return replacement;
 		}
 		auto &function = replacement->Cast<TableFunctionRef>().function;
 		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION) {
-			if (deny("replacement_scan", "replacement scan has no resolvable function: " + path))
+			if (deny(gatekeeper::rules::REPLACEMENT_SCAN, "replacement scan has no resolvable function: " + path))
 				return replacement;
 		}
 		auto name = function->Cast<FunctionExpression>().function_name;
@@ -395,7 +397,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			layers = {enforced.get()};
 		for (const auto *layer : layers) {
 			if (!reader_permitted(*layer, name)) {
-				if (deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
+				if (deny(gatekeeper::rules::FUNCTION,
+				         "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
 				         gatekeeper::CanonicalFunction(name)))
 					return replacement;
 			}
@@ -427,20 +430,6 @@ void InstallReplacementScan(DBConfig &config) {
 	config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
 }
 
-static bool FunctionEntry(CatalogType type) {
-	switch (type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY:
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
-	case CatalogType::TABLE_FUNCTION_ENTRY:
-	case CatalogType::MACRO_ENTRY:
-	case CatalogType::TABLE_MACRO_ENTRY:
-	case CatalogType::PRAGMA_FUNCTION_ENTRY:
-		return true;
-	default:
-		return false;
-	}
-}
-
 // The function names a scalar macro's definition introduces, read the way the binding boundary reads the
 // caller's text: each overload's expression and default arguments are serialized as the select list of an
 // empty SELECT and walked by the same grammar walker, so syntax-implied names (list_value for [..],
@@ -456,21 +445,7 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 	node->from_table = make_uniq<EmptyTableRef>();
 	SelectStatement select;
 	select.node = std::move(node);
-	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-	if (!doc)
-		throw std::bad_alloc();
-	auto root = yyjson_mut_obj(doc.get());
-	yyjson_mut_doc_set_root(doc.get(), root);
-	yyjson_mut_obj_add_false(doc.get(), root, "error");
-	auto statements = yyjson_mut_arr(doc.get());
-	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-	yyjson_mut_arr_append(statements, JsonSerializer::Serialize(select, doc.get(), true, true, true, options));
-	unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
-	                                                       yyjson_doc_free);
-	if (!ast)
-		throw std::bad_alloc();
+	auto ast = SerializeStatement(select);
 	gatekeeper::BindingPolicy body;
 	gatekeeper::Validate(yyjson_doc_get_root(ast.get()), gatekeeper::Policy(), &body);
 	for (const auto *set : {&body.caller_functions, &body.synthesized_functions, &body.literal_constructors})
@@ -505,7 +480,7 @@ struct LookupCallback {
 	LookupCallback &operator=(const LookupCallback &) = delete;
 	void operator()(CatalogEntry &entry) {
 		auto &s = *shared;
-		bool function = FunctionEntry(entry.type);
+		bool function = FunctionKind(entry.type) != nullptr;
 		auto canonical = gatekeeper::CanonicalFunction(entry.name);
 		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
 		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
@@ -571,8 +546,8 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 	for (auto &entry : binder->GetReplacementScans())
 		if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
-			result.violations.emplace("replacement_scan", "replacement scan was not authorized: " + entry.first, "", "",
-			                          entry.first);
+			result.violations.emplace(gatekeeper::rules::REPLACEMENT_SCAN,
+			                          "replacement scan was not authorized: " + entry.first, "", "", entry.first);
 	if (!result.violations.empty())
 		throw PermissionException("unauthorized replacement scan");
 }
@@ -698,7 +673,7 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
 bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
 	switch (data.Type()) {
 	case ExceptionType::PARSER: {
-		result.code = "parser";
+		result.code = gatekeeper::codes::PARSER;
 		result.error_type = "parser";
 		result.error_message = data.RawMessage();
 		auto position = data.ExtraInfo().find("position");
@@ -711,7 +686,7 @@ bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &resu
 		return true;
 	}
 	case ExceptionType::INVALID_INPUT:
-		result.code = binding ? "binding" : "invalid_input";
+		result.code = gatekeeper::EngineErrorCode(binding);
 		if (binding)
 			result.error_type = "Invalid Input";
 		result.error_message = data.RawMessage();
@@ -731,7 +706,7 @@ bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &resu
 
 bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
 	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
-		result.code = binding ? "binding" : "invalid_input";
+		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_message = invalid->what();
 		return true;
 	}
@@ -755,7 +730,7 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 		if (!text.result.allowed)
 			return text.result;
 		result.allowed = true;
-		result.code = "ok";
+		result.code = gatekeeper::codes::OK;
 		return result;
 	} catch (const std::exception &error) {
 		if (!DescribeError(error, binding, result))
@@ -768,7 +743,7 @@ gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &polic
 void MarkDenied(gatekeeper::Result &result) {
 	result.allowed = false;
 	if (!result.violations.empty()) {
-		result.code = "forbidden";
+		result.code = gatekeeper::codes::FORBIDDEN;
 		result.error_type.clear();
 		result.error_message.clear();
 	}
@@ -776,7 +751,7 @@ void MarkDenied(gatekeeper::Result &result) {
 
 string DenialMessage(const gatekeeper::Result &result) {
 	string message = "Gatekeeper denied this statement";
-	if (!result.code.empty() && result.code != "forbidden")
+	if (!result.code.empty() && result.code != gatekeeper::codes::FORBIDDEN)
 		message += " (" + result.code + ")";
 	string details;
 	for (const auto &violation : result.violations) {

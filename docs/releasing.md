@@ -56,7 +56,8 @@ under the site's own "Installing and Loading" section (so it must not repeat
 `INSTALL`/`LOAD`), and `extended_description` as markdown under "About gatekeeper",
 followed by "Added Functions" and "Added Settings" tables generated from
 `duckdb_functions()` and `duckdb_settings()`. Function descriptions and examples are
-registered in `src/gatekeeper_extension.cpp` and tested alongside the descriptor.
+registered where each function is (`src/gatekeeper_extension.cpp`, `src/policy_setting.cpp`,
+`src/enforcement.cpp`) and tested alongside the descriptor.
 
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers

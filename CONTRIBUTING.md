@@ -196,8 +196,12 @@ source notes and baselines remain independent of build-engine versions. Follow t
 
 ## Implementation structure
 
-- `src/gatekeeper_extension.cpp`: SQL API (`gatekeeper_validate`, `gatekeeper_configure`),
-  the `gatekeeper_policy` setting, result rendering, and the build-engine load guard.
+- `src/gatekeeper_extension.cpp`: `gatekeeper_validate`, extension load order, and the
+  build-engine load guard.
+- `src/policy_setting.cpp`: the `gatekeeper_policy` setting (its SET callback and every read of
+  it, `GlobalPolicy`) and `CALL gatekeeper_configure()`, the two ways a host writes the ceiling.
+- `src/result_value.cpp`: the structured shape of a decision, `ResultType`/`ResultValue`: the
+  columns of `gatekeeper_validate` and the body of every audit record.
 - `src/check.cpp`: the decision. `CheckText` is the binding boundary (parse, serialize,
   grammar walk; never binds), `Authorize` is the private bind with the catalog-lookup
   callback and replacement-scan interception, `CheckPlan` is the execution boundary
@@ -218,6 +222,15 @@ source notes and baselines remain independent of build-engine versions. Follow t
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
 - `src/options.cpp`: shared option specifications, typed decoding, and canonical global settings.
 - `versions.cmake`: canonical extension/engine metadata; generation emits `version.hpp`.
+
+Two namespaces: `gatekeeper::` is the policy model (`Policy`, `Result`, the result codes and
+violation rules, the grammar walk, option decoding), `duckdb::` is everything that touches the
+engine (binders, catalog entries, hooks, the SQL surface). The namespace is a naming convention,
+not a dependency boundary: `options.cpp` is `gatekeeper::` and uses `duckdb::Value`, and
+`engine_errors.hpp` is `gatekeeper::` and names DuckDB's exception types. The one real boundary is
+`validator.cpp`, which must compile with nothing but the standard library and yyjson; the native
+fuzz build (`scripts/fuzz_native.py`) and `test_validator_structure.py` compile it that way and
+are what enforce it.
 
 DuckDB's ordinary expression iterator does not enumerate executable function bind data.
 When reviewing a new engine, inspect those representations explicitly; a successful

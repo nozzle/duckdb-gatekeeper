@@ -16,6 +16,11 @@ std::string Text(Json *value) {
 	return yyjson_is_str(value) ? std::string(yyjson_get_str(value), yyjson_get_len(value)) : std::string();
 }
 std::string Field(Json *value, const char *key) { return Text(yyjson_obj_get(value, key)); }
+// The node's offset in the caller's text, or -1 when the serializer recorded none.
+static int64_t Position(Json *node) {
+	auto location = yyjson_obj_get(node, "query_location");
+	return yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1;
+}
 std::string Lower(std::string value) {
 	for (auto &c : value)
 		if (c >= 'A' && c <= 'Z')
@@ -160,7 +165,7 @@ bool Provenance::Attributable(const BindingPolicy &binding, const std::string &n
 }
 struct Stop {
 	std::string message;
-	std::string rule = "unsupported_structure";
+	std::string rule = rules::UNSUPPORTED_STRUCTURE;
 };
 struct Walker {
 	const Inventory &inventory;
@@ -259,7 +264,7 @@ struct Walker {
 	}
 	void BindTime(Json *expr, const std::string &context, bool containers = false, bool pivot_names = false) {
 		if (expr && !BindLiteral(expr, containers, pivot_names))
-			Reject("bind_time_expression", context + " requires a literal or bindable parameter", expr);
+			Reject(rules::BIND_TIME_EXPRESSION, context + " requires a literal or bindable parameter", expr);
 	}
 	void Implied(const Names &names) {
 		if (binding)
@@ -305,10 +310,8 @@ struct Walker {
 	}
 	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
 	            const std::string &function = {}) {
-		auto location = yyjson_obj_get(node, "query_location");
 		violations.emplace(rule, message, Field(node, "catalog_name"), Field(node, "schema_name"),
-		                   Field(node, "table_name"), function,
-		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
+		                   Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
@@ -335,7 +338,7 @@ struct Walker {
 			auto sample = yyjson_obj_get(value, "sample_size");
 			if (sample &&
 			    (!yyjson_is_obj(sample) || !yyjson_obj_get(sample, "type") || yyjson_obj_get(sample, "class")))
-				Reject("bind_time_expression", "sample size requires a literal", value);
+				Reject(rules::BIND_TIME_EXPRESSION, "sample size requires a literal", value);
 		}
 		if (kind == "TypeExpression") {
 			auto children = yyjson_obj_get(value, "children");
@@ -393,8 +396,9 @@ struct Walker {
 			size_t i, n;
 			Json *child;
 			if (edge == "function") {
+				static const Names runtime_capable = {"unnest", "range", "generate_series"};
 				bool runtime = false;
-				if (Names{"unnest", "range", "generate_series"}.count(name)) {
+				if (runtime_capable.count(name)) {
 					yyjson_arr_foreach(children, i, n, child) {
 						auto argument = child;
 						if (Field(child, "type") == "COMPARE_EQUAL" &&
@@ -419,8 +423,9 @@ struct Walker {
 			if (name == "unnest") {
 				yyjson_arr_foreach(children, i, n, child) if (i > 0) BindTime(child, "UNNEST option");
 			}
-			if (Names{"quantile", "quantile_cont", "quantile_disc", "approx_quantile", "reservoir_quantile"}.count(
-			        name)) {
+			static const Names quantiles = {"quantile", "quantile_cont", "quantile_disc", "approx_quantile",
+			                                "reservoir_quantile"};
+			if (quantiles.count(name)) {
 				auto orders = yyjson_obj_get(yyjson_obj_get(value, "order_bys"), "orders");
 				size_t fraction = yyjson_arr_size(children) == 1 && yyjson_arr_size(orders) ? 0 : 1;
 				yyjson_arr_foreach(children, i, n, child) if (i >= fraction)
@@ -431,28 +436,24 @@ struct Walker {
 			// binding resolves; remember that the caller wrote the dispatcher so the bound target is allowlisted.
 			if (binding && DispatchingAggregators().count(name))
 				binding->caller_dispatchers.insert(name);
-			auto location = yyjson_obj_get(value, "query_location");
-			if (yyjson_is_uint(location)) {
-				auto position = int64_t(yyjson_get_uint(location));
-				auto found = function_positions.find(name);
-				if (position >= 0 && (found == function_positions.end() || position < found->second))
-					function_positions[name] = position;
-			}
+			auto position = Position(value);
+			auto found = function_positions.find(name);
+			if (position >= 0 && (found == function_positions.end() || position < found->second))
+				function_positions[name] = position;
 			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this
 			// validation. They are on the never-bind list; this is the earlier, more specific diagnostic.
 			if ((edge == "function" &&
 			     (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
 			    name == "json_serialize_plan")
-				violations.emplace("dynamic_sql", "dynamic SQL is never allowed: " + name, Field(value, "catalog"),
-				                   Field(value, "schema"), "", name,
-				                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
+				violations.emplace(rules::DYNAMIC_SQL, "dynamic SQL is never allowed: " + name, Field(value, "catalog"),
+				                   Field(value, "schema"), "", name, position);
 		}
 		if (kind != "ShowRef")
 			return;
 		if (yyjson_obj_get(value, "query"))
 			return;
 		if (!Both([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
-			Reject("table", "schema-wide SHOW is disabled by table policy", value);
+			Reject(rules::TABLE, "schema-wide SHOW is disabled by table policy", value);
 	}
 	void Check(Json *value, std::string expected, size_t depth = 0, std::string edge = {}) {
 		pending.push_back({value, std::move(expected), depth, std::move(edge)});
@@ -465,7 +466,7 @@ struct Walker {
 	void CheckNode(Json *value, std::string expected, size_t depth, std::string edge) {
 		++nodes;
 		if (nodes > limits.nodes || depth > limits.depth)
-			throw Stop{"AST size or depth limit exceeded", "limit"};
+			throw Stop{"AST size or depth limit exceeded", rules::LIMIT};
 		if (expected == "logical_type") {
 			Type(value, depth);
 			return;
@@ -511,11 +512,11 @@ struct Walker {
 		if (found == inventory.rules.end())
 			throw Stop{"unknown grammar rule"};
 		auto &rule = found->second;
-		if (expected == "ShowRef" &&
-		    !Names{"SHOW_FROM", "SHOW_UNQUALIFIED", "DESCRIBE", "SUMMARY"}.count(Field(value, "show_type")))
+		static const Names show_kinds = {"SHOW_FROM", "SHOW_UNQUALIFIED", "DESCRIBE", "SUMMARY"};
+		static const Names set_operations = {"UNION", "EXCEPT", "INTERSECT", "UNION_BY_NAME"};
+		if (expected == "ShowRef" && !show_kinds.count(Field(value, "show_type")))
 			throw Stop{"unsupported SHOW kind"};
-		if (expected == "SetOperationNode" &&
-		    !Names{"UNION", "EXCEPT", "INTERSECT", "UNION_BY_NAME"}.count(Field(value, "setop_type")))
+		if (expected == "SetOperationNode" && !set_operations.count(Field(value, "setop_type")))
 			throw Stop{"unsupported set operation"};
 		if (expected == "SetOperationNode") {
 			auto children = yyjson_obj_get(value, "children");
@@ -571,7 +572,11 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {
-		return {false, error.rule == "limit" ? "forbidden" : "unsupported", "", "", {{error.rule, error.message}}};
+		return {false,
+		        error.rule == rules::LIMIT ? codes::FORBIDDEN : codes::UNSUPPORTED,
+		        "",
+		        "",
+		        {{error.rule, error.message}}};
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
@@ -583,10 +588,11 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 			if (entry.second > 1)
 				message += " (" + std::to_string(entry.second) + " occurrences)";
 			auto found = walker.function_positions.find(name);
-			walker.violations.emplace("function", message, "", "", "", canonical,
+			walker.violations.emplace(rules::FUNCTION, message, "", "", "", canonical,
 			                          found == walker.function_positions.end() ? -1 : found->second);
 		}
 	}
-	return {walker.violations.empty(), walker.violations.empty() ? "ok" : "forbidden", "", "", walker.violations};
+	return {walker.violations.empty(), walker.violations.empty() ? codes::OK : codes::FORBIDDEN, "", "",
+	        walker.violations};
 }
 } // namespace gatekeeper
