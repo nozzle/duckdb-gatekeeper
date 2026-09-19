@@ -549,12 +549,14 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 └───────────┴─────────────┴──────────┴─────────────────────────────────────────────────────┘
 ```
 
-A record is one decision: `event` (`decision`, or `policy_changed` / `log_only_changed` for
-the host's own setting changes), `mode` (`enforce`, `log_only`, `validate`), the `boundary`
-that decided it, exactly `gatekeeper_validate`'s [result columns](#result), the `statement`
-the engine ran, and the `policy_hash` of the policy in force, under DuckDB's own
-`connection_id` and `query_id`. Column by column, with what makes the record usable as
-evidence and the one path outside its control: [audit log](docs/security.md#audit-log).
+A decision record (`event = 'decision'`) carries the `mode` (`enforce`, `log_only`,
+`validate`), the `boundary` that decided it, exactly `gatekeeper_validate`'s
+[result columns](#result), the `statement` the engine ran, and the `policy_hash` of the
+policy in force, under DuckDB's own `connection_id` and `query_id`. The host's own setting
+changes are records too: `policy_changed` and `log_only_changed`, with the new setting in
+`new_value` and, for a policy, the `policy_hash` its later decisions will carry. Column by
+column, with what makes the record usable as evidence and the one path outside its control:
+[audit log](docs/security.md#audit-log).
 
 > [!TIP]
 > Denials and setting changes are `INFO`. `SET logging_level = 'debug'` also records every
