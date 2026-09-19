@@ -543,15 +543,17 @@ static std::string Code(Connection &connection, const std::string &sql) {
 	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
 }
 
-// The rule and message of the first violation gatekeeper_validate reports.
-static std::pair<std::string, std::string> FirstViolation(Connection &connection, const std::string &sql) {
+// The rule and message of the one violation gatekeeper_validate reports; any other count fails.
+static std::pair<std::string, std::string> OnlyViolation(Connection &connection, const std::string &sql) {
 	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
 	if (result->HasError())
 		std::abort();
 	auto decision = Decision(*result); // keep the value alive while its children are read
 	auto &violations = ListValue::GetChildren(StructValue::GetChildren(decision)[2]);
-	if (violations.empty())
-		Fail("expected a violation");
+	if (violations.size() != 1) {
+		fprintf(stderr, "%zu violations for %s\n", violations.size(), sql.c_str());
+		Fail("expected exactly one violation");
+	}
 	auto &fields = StructValue::GetChildren(violations[0]);
 	return {fields[0].GetValue<string>(), fields[1].GetValue<string>()};
 }
@@ -614,7 +616,7 @@ static void CheckReplacementCallbacks() {
 	                                            "host-language replacement scan cannot be authorized: unsupported_ref"},
 	      {"unsupported_function", "replacement scan has no resolvable function: unsupported_function"}}) {
 		probe.calls = 0;
-		auto violation = FirstViolation(connection, std::string("SELECT * FROM ") + shape.first);
+		auto violation = OnlyViolation(connection, std::string("SELECT * FROM ") + shape.first);
 		if (violation.first != "replacement_scan" || violation.second != shape.second || probe.calls != 1) {
 			fprintf(stderr, "%s: %s (%d calls)\n", violation.first.c_str(), violation.second.c_str(), probe.calls);
 			Fail("unsupported shape: not one replacement_scan violation after one call");
