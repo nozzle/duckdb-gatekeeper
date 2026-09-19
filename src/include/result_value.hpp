@@ -5,7 +5,7 @@
 
 namespace duckdb {
 // The structured shape of a Gatekeeper decision: the columns of gatekeeper_validate and the body of every
-// audit record. Defined in gatekeeper_extension.cpp next to the SQL surface that renders it.
+// audit record.
 LogicalType ViolationType();
 LogicalType IdentityType(bool object);
 LogicalType ResultType();

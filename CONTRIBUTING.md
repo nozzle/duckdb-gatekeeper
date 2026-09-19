@@ -196,8 +196,12 @@ source notes and baselines remain independent of build-engine versions. Follow t
 
 ## Implementation structure
 
-- `src/gatekeeper_extension.cpp`: SQL API (`gatekeeper_validate`, `gatekeeper_configure`),
-  the `gatekeeper_policy` setting, result rendering, and the build-engine load guard.
+- `src/gatekeeper_extension.cpp`: `gatekeeper_validate`, extension load order, and the
+  build-engine load guard.
+- `src/policy_setting.cpp`: the `gatekeeper_policy` setting (its SET callback and every read of
+  it, `GlobalPolicy`) and `CALL gatekeeper_configure()`, the two ways a host writes the ceiling.
+- `src/result_value.cpp`: the structured shape of a decision, `ResultType`/`ResultValue`: the
+  columns of `gatekeeper_validate` and the body of every audit record.
 - `src/check.cpp`: the decision. `CheckText` is the binding boundary (parse, serialize,
   grammar walk; never binds), `Authorize` is the private bind with the catalog-lookup
   callback and replacement-scan interception, `CheckPlan` is the execution boundary
