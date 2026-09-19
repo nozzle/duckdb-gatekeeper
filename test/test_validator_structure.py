@@ -87,12 +87,7 @@ def expression(db, sql):
                                  [sql]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
 
 
-FIRST_ENCOUNTERED = pytest.mark.xfail(
-    strict=True, reason="Walker::Function keeps the first occurrence the walk encounters (nozzle/duckdb-gatekeeper#60)")
-
-
-@pytest.mark.parametrize("order", ["explicit first", pytest.param("implied first", marks=FIRST_ENCOUNTERED),
-                                   pytest.param("implied twice", marks=FIRST_ENCOUNTERED)])
+@pytest.mark.parametrize("order", ["explicit first", "implied first", "implied twice"])
 def test_function_position_is_the_earliest_location_however_the_name_was_reached(db, native_validator, order):
     """One rule for a denied function's position: the smallest query_location among every occurrence, whether
     the name was written (list_value(1)) or implied by syntax (ARRAY[1] is list_value too).

@@ -120,15 +120,18 @@ struct EnforcementState : ClientContextState {
 			Record(context, Boundary::BINDING, nullptr, &sql);
 			return;
 		}
+		// The two errors the binding boundary raises for text it cannot read (see CheckText), described exactly
+		// as gatekeeper_validate describes them, parser position included. Nothing wider is caught: any other
+		// exception here is the engine's own and propagates.
 		TextCheck text;
 		try {
 			text = CheckText(context, policy, policy, sql, gatekeeper::Limits());
 		} catch (const ParserException &error) {
-			result = {false, gatekeeper::codes::PARSER, "parser", ErrorData(error).RawMessage()};
+			DescribeError(ErrorData(error), false, result);
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		} catch (const InvalidInputException &error) {
-			result = gatekeeper::InvalidInput(ErrorData(error).RawMessage());
+			DescribeError(ErrorData(error), false, result);
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
