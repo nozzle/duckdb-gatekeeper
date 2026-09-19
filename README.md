@@ -745,11 +745,11 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 63 µs | 3.7 ms | 4.1 ms |
-| enforced connection | 94 µs (+32 µs) | 3.9 ms (+214 µs) | 7.5 ms (+3.4 ms) |
-| enforced, audit log at debug | 97 µs (+34 µs) | 3.9 ms (+203 µs) | 7.5 ms (+3.4 ms) |
-| validate, then execute | 221 µs (+158 µs) | 4.1 ms (+491 µs) | 7.7 ms (+3.6 ms) |
-| denied on an enforced connection | 212 µs | 376 µs | 2.6 ms |
+| plain connection | 58 µs | 3.3 ms | 3.8 ms |
+| enforced connection | 94 µs (+36 µs) | 3.4 ms (+96 µs) | 7.1 ms (+3.3 ms) |
+| enforced, audit log at debug | 136 µs (+78 µs) | 3.5 ms (+224 µs) | 7.2 ms (+3.4 ms) |
+| validate, then execute | 209 µs (+151 µs) | 3.7 ms (+351 µs) | 7.3 ms (+3.4 ms) |
+| denied on an enforced connection | 206 µs | 298 µs | 2.4 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python
 client on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper
@@ -759,10 +759,11 @@ each mode adds to it.
 The check is a second parse and bind of the statement plus the AST walk, so its cost follows
 the statement's size, not the data's: tens of microseconds for a short statement, about the
 engine's own bind again for a long one. After a scan large enough to flush the caches it runs
-cold, a few hundred microseconds against milliseconds of query. `gatekeeper_validate` runs
-that same check; the rest of its row is the second client round trip, which carries a
-parameter. A refusal never reaches the engine; what it costs is the check and the error
-itself, a C++ exception surfacing through the client. Regenerate the table on a
+cold, a few hundred microseconds against milliseconds of query. Writing a decision record at
+debug costs about as much again as the check. `gatekeeper_validate` runs that same check; the
+rest of its row is the second client round trip, which carries a parameter. A refusal never
+reaches the engine; what it costs is the check and the error itself, a C++ exception surfacing
+through the client. Regenerate the table on a
 [source build](CONTRIBUTING.md#building) with `.venv/bin/python scripts/benchmark.py --markdown`.
 
 ## License

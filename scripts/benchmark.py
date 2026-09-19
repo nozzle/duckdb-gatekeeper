@@ -63,8 +63,10 @@ def enforced(db):
 
 
 def enforced_with_audit_log(db):
-    # Allowed decisions are DEBUG records; the default INFO level writes nothing on allowed traffic.
-    db.execute("CALL enable_logging('Gatekeeper', level := 'debug')")
+    # Allowed decisions are DEBUG records; the default INFO level writes nothing on allowed traffic, and
+    # enable_logging's own level argument is overridden by the type's declared level, so the level is set apart.
+    db.execute("CALL enable_logging('Gatekeeper')")
+    db.execute("SET logging_level = 'debug'")
     return enforced(db)
 
 
@@ -129,6 +131,9 @@ def measure(extension, iterations):
                         samples[mode].append((time.perf_counter_ns() - start) / 1_000)
             for mode in MODES:
                 results[mode][workload] = statistics.median(samples[mode])
+            # The logging mode measures a log that is being written: one allowed decision per run.
+            written = logged.execute("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE allowed").fetchone()[0]
+            assert written == WARMUP + iterations, (written, WARMUP + iterations)
             logged.execute("CALL truncate_duckdb_logs()")
     return results
 
