@@ -285,27 +285,18 @@ SELECT allowed FROM gatekeeper_validate(
 | Nothing | `allowed_tables := []` |
 
 Multiple entries pair specific catalogs and schemas without granting their cross-product.
-Blocks apply to views and their underlying tables, including references introduced by
-macros; they match resolved objects, not CTE names, file paths, or reader arguments.
+Blocks apply to views and the tables they expand to, macros included.
 
 > [!IMPORTANT]
 > Only a whole-component `'*'` is a wildcard. `sales_*`, `?`, and `%` are literal names.
 > Wildcards also match objects created or attached **later**, and `catalog: '*'` matches
 > temporary shadow tables. Prefer explicit catalog names when that scope is not intended.
 
-> [!NOTE]
-> **Internal objects** (`duckdb_*`, `information_schema.*`) need a rule with exact schema
-> and table names in each policy layer; schema/table wildcards never grant them, though
-> the catalog may be `'*'` or omitted. Block wildcards do match them. Metadata *readers*
-> stay on the never-bind list for the caller's own text regardless; a host view over one
-> is the host's decision. Schema-wide `SHOW` is denied whenever any table
-> restriction is configured; `DESCRIBE table` checks the resolved table normally.
-
-Table rules govern tables and views only. Types, casts, and collations are trusted as
-part of the host-configured database and need no Gatekeeper permission by name.
-Function policy still applies to the implementations they bind: `'a' COLLATE nocase = 'A'`
-is denied under `blocked_functions := ['lower']` because the comparison binds `lower`.
-See [callback bypasses](docs/security.md#callback-bypasses).
+Internal objects (`duckdb_*`, `information_schema.*`) need exact schema and table names, and
+schema-wide `SHOW` is denied under any table restriction. The complete matching rules, layer
+by layer, are in [table ACL matching](docs/security.md#table-acl-matching). Table rules govern
+tables and views only; types and collations are the host's, though function policy still
+applies to what they bind ([callback bypasses](docs/security.md#callback-bypasses)).
 
 ## Function ACL
 
@@ -374,19 +365,15 @@ outside function policy like any other trusted expansion.
 ### Never-bind list
 
 Denied regardless of options, in every layer, wherever the caller's text reaches them:
-
-- Dynamic SQL: `query`, `query_table`, `json_execute_serialized_sql`, `json_serialize_plan`
-- Metadata readers: `duckdb_tables`, `information_schema.*`, `SHOW TABLES`
-- Sequence and storage functions
-
-A host view or macro that uses one of these is the host's decision to expose it, and is
-admitted when the view is (trusted definitions are opaque to function policy). The one
-exception is Gatekeeper's own control plane, `gatekeeper_configure`, `gatekeeper_enforce`,
-`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log`, which is
-refused on every route, views and macros included: a definition over one of these would
-let a `SELECT` rewrite the policy or erase the audit trail.
-
-The full list is in [docs/security.md](docs/security.md#never-bind-functions).
+dynamic SQL (`query`, `query_table`, ...), metadata readers (`duckdb_tables`,
+`information_schema.*`, `SHOW TABLES`), and sequence and storage functions. A host view or
+macro that uses one of these is the host's decision to expose it and is admitted when the view
+is. The one exception is Gatekeeper's own control plane, `gatekeeper_configure`,
+`gatekeeper_enforce`, `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and
+`write_log`, which is refused on every route, views and macros included: a definition over one
+of these would let a `SELECT` rewrite the policy or erase the audit trail. The full list, with
+the source review behind each entry, is in
+[never-bind functions](docs/security.md#never-bind-functions).
 
 ## Global policy
 
@@ -562,26 +549,21 @@ D SELECT boundary, code, violations[1].rule AS rule, statement
 └───────────┴─────────────┴──────────┴─────────────────────────────────────────────────────┘
 ```
 
-| Record column | Meaning |
-| --- | --- |
-| `event` | `decision`, or `policy_changed` / `log_only_changed` for the host's own `SET`, `RESET`, and `gatekeeper_configure` calls |
-| `mode`, `boundary` | `enforce`, `log_only`, or `validate`; where the statement was decided (`binding`, `authorize`, `execution`, ...) |
-| `allowed`, `code`, `violations`, `objects`, `functions`, ... | Exactly `gatekeeper_validate`'s [result columns](#result) |
-| `statement` | The SQL the engine ran, capped at 64 KiB (`statement_length` is the full size) |
-| `policy_hash` | The policy in force, matching the `policy_changed` record that installed it |
-| `connection_id`, `query_id` | DuckDB's own log-context columns, for the statement's connection |
+A decision record (`event = 'decision'`) carries the `mode` (`enforce`, `log_only`,
+`validate`), the `boundary` that decided it, exactly `gatekeeper_validate`'s
+[result columns](#result), the `statement` the engine ran, and the `policy_hash` of the
+policy in force, under DuckDB's own `connection_id` and `query_id`. The host's own setting
+changes are records too: `policy_changed` and `log_only_changed`, with the new setting in
+`new_value` and, for a policy, the `policy_hash` its later decisions will carry. Column by
+column, with what makes the record usable as evidence and the one path outside its control:
+[audit log](docs/security.md#audit-log).
 
 > [!TIP]
 > Denials and setting changes are `INFO`. `SET logging_level = 'debug'` also records every
 > allowed statement with the tables, views, and functions it resolved to: the raw material for an
 > allowlist. For a durable log, `CALL enable_logging('Gatekeeper', storage := 'file',
-> storage_path := '...')`.
-
-> [!NOTE]
-> The enforced connection cannot read, silence, redirect, or write to the log: `duckdb_logs`,
-> `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log` are on the
-> never-bind list. The one path outside that control is described with the rest of the
-> [audit log](docs/security.md#audit-log) in the security model.
+> storage_path := '...')`. The enforced connection itself cannot read, silence, redirect, or
+> write to the log.
 
 ### Log-only mode
 
@@ -593,10 +575,12 @@ D SET gatekeeper_log_only = true;
 ```
 
 Enforced connections keep making and recording every decision exactly as before; a denial is
-written to the log and the statement then runs as it would on an unenforced connection. Set it
-back to `false` (or `RESET` it) and the next statement on every enforced connection is refused
-again. The switch is global, boolean, frozen by `lock_configuration`, and on the record as
-`log_only_changed`. The rollout, end to end:
+written to the log with `mode = 'log_only'` and the statement then runs as it would on an
+unenforced connection. Set it back to `false` (or `RESET` it) and the next statement on every
+enforced connection is refused again. The switch is global, frozen by `lock_configuration`, and
+on the record as `log_only_changed`; the full semantics (one record per statement, what the
+caller sees, which records count) are in [log-only mode](docs/security.md#log-only-mode). The
+rollout, end to end:
 
 ```text
 CALL enable_logging('Gatekeeper', storage := 'file', storage_path := 'gatekeeper.csv');
@@ -612,14 +596,11 @@ SET lock_configuration = true;
 ```
 
 > [!WARNING]
-> Log-only mode protects nothing while it is on. The connections are still enforced, so the
-> switch is remembered when it flips back, but until then an agent's `SET gatekeeper_policy`,
-> `CALL gatekeeper_configure()`, or `SET gatekeeper_log_only = false` executes (and is recorded).
-> `SET lock_configuration = true` before handing out connections if the rollout is not
-> supervised. Every denied record except `code = 'binding'` is a statement enforcement would
-> have refused (`invalid_input` includes a policy the host left unreadable, not only bad SQL);
-> `binding` records are statements DuckDB itself rejects, kept so the trail is complete.
-> Text DuckDB's parser rejects never reaches Gatekeeper and is not recorded in either mode.
+> Log-only mode protects nothing while it is on, Gatekeeper's own settings included: an agent's
+> `CALL gatekeeper_configure()` or `SET gatekeeper_log_only = false` is recorded and then
+> executes. `SET lock_configuration = true` before handing out connections if the rollout is
+> not supervised. When reading the trail, every denied record except `code = 'binding'` is a
+> statement enforcement would have refused.
 
 ### What enforcement covers
 

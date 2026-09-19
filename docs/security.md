@@ -11,27 +11,22 @@ operating-system, memory, or network sandbox.
 ## Integrating
 
 Preferred: hand untrusted callers an enforced connection and execute their SQL on it directly.
+The ordered setup (extensions and catalogs first, then the policy, the posture settings, the
+log, `lock_configuration`, and `CALL gatekeeper_enforce()` on every connection handed out) is
+the [trusted setup table](../README.md#enforced-connections) in the README; what each step
+protects is in [enforcement semantics](#enforcement-semantics), [log-only mode](#log-only-mode),
+and the [audit log](#audit-log) below. Two points are easy to get wrong:
 
-1. Load a trusted extension build and keep the execution catalog/search path trusted.
-   Provision required extensions and attach catalogs first, then set
-   `autoload_known_extensions=false` and `autoinstall_known_extensions=false`, and
-   `enable_external_access=false` where the deployment allows. Gatekeeper does not
-   mutate those settings; `CALL gatekeeper_enforce()` reports them in `warnings`.
-2. Install the global policy through trusted `CALL gatekeeper_configure`. To observe a policy
-   against real traffic before it refuses anything, `SET gatekeeper_log_only=true` ([log-only
-   mode](#log-only-mode)). Then `SET lock_configuration=true`, which freezes both.
-3. `CALL enable_logging('Gatekeeper')` so denials are [recorded](#audit-log); choose a
-   storage the sandboxed connections cannot reach in-process (`storage := 'file'` or
-   `'stdout'`) when no host connection will remain to read the in-memory log.
-4. Run `CALL gatekeeper_enforce()` on each connection you hand out. Enforcement is per
-   connection and there is no instance-wide switch; put the call where connections are
-   created so no code path can skip it.
-5. Execute the caller's SQL on that connection. A denial raises `Permission Error:
-   Gatekeeper denied this statement ...` and executes nothing.
+- Gatekeeper never changes host settings. `autoload_known_extensions`,
+  `autoinstall_known_extensions`, `enable_external_access`, and `lock_configuration` are the
+  host's; `CALL gatekeeper_enforce()` reports the ones that weaken the sandbox in `warnings`.
+- Choose a log storage the sandboxed connections cannot reach in-process (`storage := 'file'`
+  or `'stdout'`) when no host connection will remain to read the in-memory log.
 
 Validate-first, for hosts that cannot dedicate a connection:
 
-1. Steps 1 and 2 above. Construct any further request restrictions from authenticated context.
+1. The same setup through the policy and `lock_configuration`. Construct any further request
+   restrictions from authenticated context.
 2. Run `SELECT * FROM gatekeeper_validate(?)` with the exact SQL to execute.
 3. Require an explicit successful result; reject missing results, NULLs, and exceptions.
 4. Execute the same SQL on the same connection under controlled database/process settings.
@@ -71,25 +66,36 @@ at execution). Lists with non-NULL members require the documented element types.
 Nested identity fields are preserved
 and checked, including the field names of typed empty STRUCT lists.
 
-Tables and views are unrestricted until a layer configures `allowed_tables`; only
-internal objects (`duckdb_*`, `information_schema.*`) need an explicit rule from the
-start. Set `allowed_tables` in the global policy during trusted setup when tenants must
-not see every table; `[]` denies all tables and views.
-`allowed_tables` is a union of catalog/schema/table rules within each layer, with
-an intersection between layers. A whole-component `*` matches any identifier;
-other text is exact and ASCII case-folded. Matching uses resolved identities, not
-caller spellings or CTE names. Wildcards cover future objects as well as existing
-ones. `blocked_tables` uses the same matching rules, defaults to no blocks, and
-works independently of the allowlist. A matching block in either layer always wins,
-including on underlying tables/views introduced by trusted views and macros.
-Blocks match resolved objects, not CTE names or reader paths/arguments.
-Internal objects require exact schema/table names in a matching allow rule; a
-wildcard catalog is permitted. Block wildcards also match internal objects, even
-when an exact allow rule exists. Metadata readers remain independently forbidden,
-and schema-wide `SHOW` is denied under any configured table restriction.
-Table rules do not restrict or authorize function/type namespaces. Functions use
-leaf-name policies; types are supplied by the host without separate authorization;
-see [table ACL](../README.md#table-acl).
+### Table ACL matching
+
+Tables and views are unrestricted until a layer configures `allowed_tables`; only internal
+objects (`duckdb_*`, `information_schema.*`) need an explicit rule from the start. Set
+`allowed_tables` in the global policy during trusted setup when tenants must not see every
+table; `[]` denies all tables and views. The rules, which the README's
+[table ACL](../README.md#table-acl) section illustrates:
+
+- A rule names a `catalog`, `schema`, and `table`; all three are matched against the
+  **resolved** identity of a table or view, never the caller's spelling, a CTE name, a file
+  path, or a reader argument. Text is exact and ASCII case-folded.
+- Only a whole-component `*` is a wildcard (`sales_*`, `?`, and `%` are literal names). A
+  wildcard also matches objects created or attached later, and `catalog: '*'` matches
+  temporary shadow tables. An omitted `catalog` is `*`.
+- Within a layer `allowed_tables` is a union: any matching rule grants. Between layers it is an
+  intersection: both the ceiling and the request layer must grant. Multiple entries pair
+  specific catalogs and schemas without granting their cross-product.
+- `blocked_tables` uses the same matching, defaults to none, and works independently of the
+  allowlist. A matching block in either layer always wins, including on the underlying tables
+  and views a trusted view or macro expands to.
+- Internal objects need an allow rule with exact schema and table names in each layer;
+  schema/table wildcards never grant them, though the catalog may be `*` or omitted. Block
+  wildcards do match them, even when an exact allow rule exists. Metadata *readers* stay on
+  the [never-bind list](#never-bind-functions) for the caller's own text regardless.
+- Schema-wide `SHOW` is denied whenever either layer configures any table restriction;
+  `DESCRIBE table` checks the resolved table normally.
+- Table rules govern tables and views only. Types, casts, and collations are trusted as part of
+  the host-configured database and need no permission by name; function policy still applies
+  to the implementations they bind (`'a' COLLATE nocase = 'A'` binds `lower`), see
+  [callback bypasses](#callback-bypasses).
 
 ## Enforced connections
 
