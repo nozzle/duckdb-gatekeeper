@@ -80,7 +80,7 @@ struct Result {
 	int64_t position = -1;
 	std::set<Identity> objects, functions;
 };
-// The denials more than one boundary spells the same way.
+// Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";
 inline Result UnsupportedStatement() {
 	return {false, codes::UNSUPPORTED, "", "", {{rules::STATEMENT, UNSUPPORTED_STATEMENT}}};
