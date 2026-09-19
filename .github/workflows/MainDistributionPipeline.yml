@@ -61,10 +61,13 @@ jobs:
       - uses: ./.github/actions/wasm-browser-test
 
   loadable-test:
-    # The reusable pipeline tests a statically linked unittest binary. These jobs load the actual
-    # distributed artifacts into the pinned DuckDB Python package, so the host/loadable ABI boundary
-    # (bind-data inspection, replacement-scan callbacks, the policy setting) is exercised on every
-    # desktop platform, including the ones where pytest otherwise never runs.
+    # The reusable pipeline tests a statically linked unittest binary, and skips even that for
+    # linux_arm64 and the cross-compiled osx_amd64. These jobs load the actual distributed artifacts
+    # into the pinned DuckDB Python package, so the host/loadable ABI boundary (bind-data inspection,
+    # replacement-scan callbacks, the policy setting, the query hooks enforcement lives in, the log
+    # manager) is exercised on every desktop platform. The full Python suite runs where it can;
+    # Windows gets the smoke script, whose enforcement leg is the only execution of enforced
+    # connections, log-only mode, and the audit log against that platform's binary.
     name: Distributed loadable (${{ matrix.arch }})
     needs: [metadata, build]
     runs-on: ${{ matrix.os }}
@@ -76,7 +79,7 @@ jobs:
           - { os: ubuntu-latest, arch: linux_amd64, pytest: true }
           - { os: ubuntu-24.04-arm, arch: linux_arm64, pytest: true }
           - { os: macos-latest, arch: osx_arm64, pytest: true }
-          - { os: macos-15-intel, arch: osx_amd64, pytest: false }
+          - { os: macos-15-intel, arch: osx_amd64, pytest: true }
           - { os: windows-latest, arch: windows_amd64, pytest: false }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

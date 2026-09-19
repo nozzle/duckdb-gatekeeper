@@ -3,8 +3,11 @@ whose correctness depends on the host/loadable ABI boundary rather than on SQL s
 
 The sqllogictests run against a statically linked unittest binary, where the extension and the engine are one
 image. A distributed loadable instead inspects bind data created by the host's copy of DuckDB (list lambda
-bodies, list-aggregate serialization callbacks, replacement-scan callbacks). This script fails if any of
-those paths silently degrade.
+bodies, list-aggregate serialization callbacks, replacement-scan callbacks), hooks the host's query lifecycle
+(QueryBegin, the planner's post-bind callback, the client-context state an enforced connection lives in), and
+writes to the host's log manager. This script fails if any of those paths silently degrade. On the platforms
+where the Python suite does not run against the artifact, this is the only execution of enforcement, log-only
+mode, and the audit log against the shipped binary.
 
     python scripts/smoke_loadable.py path/to/gatekeeper.duckdb_extension
 """
@@ -107,7 +110,69 @@ def main(argv):
         expect("locked" in str(error).lower(), f"unexpected lock error: {error}")
     else:
         raise SystemExit("::error::gatekeeper_configure ignored lock_configuration")
+
+    enforcement(artifact)
     print(artifact.name + ": loadable smoke checks passed")
+
+
+def enforcement(artifact):
+    """Enforced connections, log-only mode, and the audit log through the host's query hooks and log manager."""
+    db = connect(artifact, autoload_known_extensions=False, autoinstall_known_extensions=False)
+    db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
+    db.execute("CREATE TABLE secret AS SELECT 'x' AS token")
+    db.execute("CALL gatekeeper_configure(allowed_tables := [{'schema': 'reporting', 'table': '*'}])")
+    db.execute("CALL enable_logging('Gatekeeper')")
+    db.execute("SET logging_level = 'debug'")
+    agent = db.cursor()
+    enforced, warnings = agent.execute("SELECT enforced, warnings FROM gatekeeper_enforce()").fetchone()
+    expect(enforced is True and isinstance(warnings, list), f"gatekeeper_enforce row: {(enforced, warnings)}")
+
+    # The engine executes what the policy allows and refuses the rest before it runs, through the host's hooks.
+    expect(agent.execute("SELECT sum(amount) FROM reporting.orders").fetchone() == (20.0,), "allowed read failed")
+    for sql in ["SELECT * FROM secret", "CREATE TABLE u(x INTEGER)", "SET threads = 1", "CALL disable_logging()"]:
+        try:
+            agent.execute(sql).fetchall()
+        except duckdb.PermissionException as error:
+            expect("Gatekeeper denied" in str(error), f"{sql}: refused with the wrong error: {error}")
+        else:
+            raise SystemExit(f"::error::enforced connection executed: {sql}")
+    expect(agent.execute("SELECT amount FROM reporting.orders WHERE amount > ?", [10]).fetchall() == [(20.0,)],
+           "parameterized allowed read failed on the enforced connection")
+    try:
+        agent.execute("SELECT * FROM secret WHERE token = ?", ["x"]).fetchall()
+    except duckdb.PermissionException:
+        pass
+    else:
+        raise SystemExit("::error::parameterized denied read executed on the enforced connection")
+    expect(db.execute("SELECT count(*) FROM secret").fetchone() == (1,), "host connection was enforced too")
+
+    # Every decision is a record the host reads back; the allowed ones are DEBUG, so the level above is needed.
+    rows = db.execute("""SELECT mode, allowed, code FROM duckdb_logs_parsed('Gatekeeper')
+                         WHERE event = 'decision' ORDER BY allowed, code""").fetchall()
+    expect(any(r == ("enforce", True, "ok") for r in rows) and any(r == ("enforce", False, "forbidden") for r in rows)
+           and any(r == ("enforce", False, "unsupported") for r in rows), f"audit records: {rows}")
+    denied = db.execute("""SELECT statement, violations[1].rule FROM duckdb_logs_parsed('Gatekeeper')
+                           WHERE NOT allowed AND statement = 'SELECT * FROM secret'""").fetchone()
+    expect(denied == ("SELECT * FROM secret", "table"), f"denied record: {denied}")
+
+    # Log-only: the same decisions are recorded and nothing is refused; back to enforcing at the next statement.
+    db.execute("CALL truncate_duckdb_logs()")
+    db.execute("SET gatekeeper_log_only = true")
+    expect(agent.execute("SELECT count(*) FROM secret").fetchone() == (1,), "log-only connection refused a read")
+    record = db.execute("""SELECT mode, allowed, code FROM duckdb_logs_parsed('Gatekeeper')
+                           WHERE statement = 'SELECT count(*) FROM secret'""").fetchone()
+    expect(record == ("log_only", False, "forbidden"), f"log-only record: {record}")
+    db.execute("SET gatekeeper_log_only = false")
+    try:
+        agent.execute("SELECT count(*) FROM secret").fetchall()
+    except duckdb.PermissionException:
+        pass
+    else:
+        raise SystemExit("::error::refusals did not resume after log-only was turned off")
+    changes = db.execute("""SELECT event, new_value FROM duckdb_logs_parsed('Gatekeeper')
+                            WHERE event = 'log_only_changed' ORDER BY timestamp""").fetchall()
+    expect(changes == [("log_only_changed", "true"), ("log_only_changed", "false")], f"setting records: {changes}")
+    db.close()
 
 
 if __name__ == "__main__":
