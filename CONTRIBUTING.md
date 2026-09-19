@@ -113,6 +113,12 @@ The suite has two layers with different reach:
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
 
+The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
+appears in both is checked on the static build on every platform *and* on the loadable
+artifact through the Python API. Remove a duplicate only after mapping which execution path
+each side covers (static vs loadable, `unittest` vs the Python package, the platforms each
+runs on) and confirming the survivor covers both.
+
 `pytest.ini` puts `scripts/` and `test/` on the import path. Fixtures (`db`, `catalog`,
 `agent`) live in `test/conftest.py`; functions and constants live in `test/support/` and
 are imported explicitly (`from support.typed_helpers import validate`), never from a test
@@ -194,10 +200,8 @@ uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt
 ```
 
 Dependabot handles GitHub Actions, Docker, pip, and the `test/wasm` npm lock monthly.
-DuckDB and DuckDB-Wasm are excluded and bumped manually together with the submodule,
-release metadata, fuzz image, and Wasm runtime pin; historical inventory baselines are
-maintained independently. See
-[AGENTS.md](AGENTS.md).
+DuckDB and DuckDB-Wasm are excluded: the engine is repinned by hand, following the
+procedure in [inventories/README.md](inventories/README.md#repinning-the-engine).
 
 ## Function inventories
 

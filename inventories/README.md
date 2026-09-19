@@ -141,9 +141,15 @@ or minor release. To change our release build defaults, update together:
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
   `v1.5-variegata` rather than tagging patch releases);
-- the `duckdb` pin in `requirements-dev.in`, the regenerated hashed lock files, the fuzz
-   image, and the coordinated Wasm runtime/toolchain pins. Historical inventory
-   source references and baselines need not change with the build pin.
+- the `duckdb` pin in `requirements-dev.in` and the regenerated hashed lock files
+  (`uv pip compile`, see [CONTRIBUTING.md](../CONTRIBUTING.md#dependencies));
+- the fuzz image (`test/fuzz/Dockerfile`), whose venv installs the same lock file;
+- the DuckDB-Wasm runtime and npm lock in `test/wasm` and the Emscripten pin in
+  `scripts/build_wasm.py`. The npm package version differs from the engine it embeds; the EH
+  browser test asserts the embedded engine against the pin in `versions.cmake`, so a runtime
+  that embeds another engine fails there.
+
+Historical inventory source references and baselines need not change with the build pin.
 
 The CI inventory report runs on every push/PR. A manually dispatched candidate-version
 job captures and uploads a report against the historical baseline. Neither promotes
