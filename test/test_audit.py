@@ -49,6 +49,9 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
     assert record["allowed"] == expected["allowed"] == (seen.kind == "rows"), (sql, record)
     assert record["code"] == expected["code"], (sql, record)
     assert record["violations"] == expected["violations"], (sql, record)
+    # The decision columns are gatekeeper_validate's, the error description included.
+    for column in ["error_type", "error_message", "position"]:
+        assert record[column] == expected[column], (sql, column, record)
     for entry in found:
         assert entry["log_level"] == ("DEBUG" if entry["allowed"] else "INFO")
         assert entry["statement_length"] == len(entry["statement"].encode())
@@ -68,6 +71,48 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
 
 def union(records, column):
     return sorted({json.dumps(entry, sort_keys=True) for record in records for entry in record[column]})
+
+
+ERROR_COLUMNS = ["code", "error_type", "error_message", "position"]
+
+
+@pytest.mark.parametrize("log_only", [False, True])
+def test_text_the_engine_parsed_but_the_binding_boundary_cannot_read(catalog, agent, log_only):
+    # The engine's scanner ends a line comment at a NUL byte and parses what precedes it; the statement's own
+    # text still carries the byte, which the binding boundary refuses before parsing. This is the one input
+    # that reaches QueryBegin's InvalidInputException path, and the record must describe it as
+    # gatekeeper_validate does.
+    enable(catalog)
+    catalog.execute(f"SET gatekeeper_log_only = {log_only}")
+    sql = "SELECT 1 -- a\0b"
+    expected = validate(catalog, sql)
+    assert (expected["code"], expected["error_message"]) == ("invalid_input", "SQL contains a NUL byte")
+    seen = attempt(agent, sql)
+    assert seen.kind == ("rows" if log_only else "denied"), seen
+    [record] = decisions(catalog, "mode <> 'validate'")
+    assert record["boundary"] == "binding" and record["mode"] == ("log_only" if log_only else "enforce")
+    assert [record[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], record
+
+
+def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(catalog, agent):
+    # The engine parses a batch with the settings in force when it arrives; a statement in it that lowers
+    # max_expression_depth changes what the binding boundary can parse for the statements after it. Enforcing,
+    # the SET is refused first; log-only, it runs, and the next statement's text reaches QueryBegin's
+    # ParserException path. The record must describe it as gatekeeper_validate does on a connection with the
+    # same setting.
+    enable(catalog)
+    catalog.execute("SET gatekeeper_log_only = true")
+    nested = "SELECT " + "abs(" * 12 + "1" + ")" * 12
+    seen = attempt(agent, f"SET max_expression_depth = 8; {nested}")
+    assert seen.kind == "engine" and "Max expression depth" in str(seen.error), seen
+    with catalog.cursor() as same_settings:
+        same_settings.execute("SET max_expression_depth = 8")
+        expected = validate(same_settings, nested)
+    assert expected["code"] == "parser" and "Max expression depth" in expected["error_message"], expected
+    unsupported, parser = decisions(catalog, "mode = 'log_only'")
+    assert unsupported["code"] == "unsupported" and unsupported["statement"] == "SET max_expression_depth = 8"
+    assert parser["boundary"] == "binding" and parser["statement"].strip() == nested
+    assert [parser[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], parser
 
 
 def test_binding_denial_carries_the_text_and_the_connection_recovers(catalog, agent):

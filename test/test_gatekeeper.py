@@ -105,6 +105,25 @@ def test_occurrences(db):
     assert "2 occurrences" in result["violations"][0]["message"]
 
 
+@pytest.mark.parametrize("sql,position", [
+    # A written name repeated: the first occurrence in the text, whatever order the walk visits them in.
+    ("SELECT md5('x'), md5('y')", 7),
+    ("SELECT x FROM (SELECT md5('a') x) WHERE md5('b') = x", 22),
+    ("SELECT list_value(1), list_value(2)", 7),
+    # A name written and implied by syntax (ARRAY[..] is list_value), in either order: the engine stamps no
+    # location on the operator node, so the written occurrence's position is the earliest one on record.
+    ("SELECT list_value(1), ARRAY[2]", 7),
+    ("SELECT ARRAY[1], list_value(2)", 17),
+    # Only implied: no occurrence has a location, and the violation says so rather than inventing one.
+    ("SELECT ARRAY[1], ARRAY[2]", None),
+])
+def test_function_position_is_the_earliest_occurrence(db, sql, position):
+    name = "md5" if "md5" in sql else "list_value"
+    [violation] = validate(db, sql, {"blocked_functions": [name]})["violations"]
+    assert violation["function_name"] == name and "2 occurrences" in violation["message"], violation
+    assert violation["position"] == position
+
+
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM db.s.t", {"allowed_tables": []}, False),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "*", "table": "*"}]}, True),
