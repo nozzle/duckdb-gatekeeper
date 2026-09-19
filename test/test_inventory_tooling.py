@@ -238,6 +238,23 @@ def test_audit_reports_drift_without_requiring_reclassification(monkeypatch, tmp
         audit_inventory.main()
 
 
+def test_audit_capture_loads_the_named_extension_signed_or_not(monkeypatch, tmp_path):
+    """--load-extension takes a local file the maintainer chose; our own unsigned artifact is the case a signed-only
+    connection refused (#76). Without paths, nothing is loaded and the setting is not touched."""
+    import audit_inventory
+    from support.artifact import EXTENSION
+    monkeypatch.setattr(sys, "argv", ["audit_inventory.py", "--capture", str(tmp_path / "candidate.json"),
+                                      "--load-extension", str(EXTENSION)])
+    audit_inventory.main()
+    snapshot = json.loads((tmp_path / "candidate.json").read_text())
+    loaded = dict(map(tuple, snapshot["loaded_extensions"]))
+    assert "gatekeeper" in loaded and "gatekeeper" not in dict(map(tuple, snapshot["initial_extensions"]))
+    assert {"gatekeeper_validate", "gatekeeper_enforce", "gatekeeper_configure"} <= {f["name"] for f in snapshot["functions"]}
+    plain = audit_inventory.capture()
+    assert plain["loaded_extensions"] == plain["initial_extensions"]
+    assert not any(f["name"].startswith("gatekeeper") for f in plain["functions"])
+
+
 def test_inventory_uses_supplied_schema(tmp_path):
     shutil.copytree(ROOT / "inventories", tmp_path / "inventories")
     path = tmp_path / "inventories/schema.json"

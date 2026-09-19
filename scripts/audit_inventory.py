@@ -12,7 +12,10 @@ def capture(extension_paths=()):
     import duckdb
     from artifact import load as load_extension
 
-    with duckdb.connect() as db:
+    # Naming a local file is the trust decision; the engine's signature check guards repository downloads,
+    # which this tool never performs. Without paths the setting is left alone and nothing is loaded.
+    config = {"allow_unsigned_extensions": "true"} if extension_paths else {}
+    with duckdb.connect(config=config) as db:
         before = db.execute("SELECT extension_name, extension_version FROM duckdb_extensions() WHERE loaded ORDER BY 1").fetchall()
         for path in extension_paths:
             load_extension(db, path)
@@ -66,7 +69,7 @@ def main():
     parser.add_argument("--capture", type=Path, help="write a candidate snapshot, without approving it")
     parser.add_argument("--candidate", type=Path, help="compare a previously captured snapshot")
     parser.add_argument("--baseline", type=Path, default=ROOT / "inventories/baselines" / BASELINE_FILENAME)
-    parser.add_argument("--load-extension", type=Path, action="append", default=[], help="explicit trusted local signed extension to load during capture")
+    parser.add_argument("--load-extension", type=Path, action="append", default=[], help="local extension file to LOAD during capture, signed or not (repeatable)")
     parser.add_argument("--check-sources", action="store_true",
                         help="verify provenance against a checkout of the historical review engine")
     parser.add_argument("--source-checkout", type=Path,
