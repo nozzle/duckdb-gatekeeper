@@ -7,3 +7,9 @@ __pycache__/
 node_modules/
 /duckdb_unittest_tempdir/
 /data/
+# libFuzzer writes crash-/timeout-/leak- artifacts to the working directory when run without the
+# -artifact_prefix the fuzz scripts pass (build/...); a hand-run target must not leave them in the tree.
+/crash-*
+/timeout-*
+/leak-*
+/oom-*

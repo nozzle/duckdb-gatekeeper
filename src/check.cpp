@@ -317,6 +317,49 @@ struct ScopeGuard {
 };
 
 static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
+                                                      optional_ptr<ReplacementScanData>);
+
+// What the host's callbacks made of a name the catalog did not have. Not a pure lookup: each callback receives the
+// connection, can throw, and can re-enter validation on another connection (the ScopeGuard in AuthorizeStatement
+// restores this bind's scope afterwards). The callbacks are asked in the engine's order, after Gatekeeper's own,
+// and the first to answer ends the loop, so each runs at most once per lookup here.
+struct Resolution {
+	enum class Kind {
+		UNCLAIMED,  // no callback claimed the name
+		FUNCTION,   // a callback produced the table function `name`; `ref` is what it produced
+		UNSUPPORTED // a callback produced something no policy can authorize; `reason` says what
+	};
+	Kind kind = Kind::UNCLAIMED;
+	unique_ptr<TableRef> ref;
+	string name, reason;
+};
+
+static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScanInput &input) {
+	// The name as asked, taken before any callback runs. (input's names are const references, so a callback
+	// cannot change them; this keeps the message independent of that guarantee.)
+	auto path = ReplacementScan::GetFullPath(input);
+	auto &config = DBConfig::GetConfig(context);
+	for (auto &scan : config.replacement_scans) {
+		if (scan.function == GatekeeperReplacementScan)
+			continue;
+		// Callbacks construct a TableRef without binding it; nothing is opened here.
+		auto replacement = scan.function(context, input, scan.data.get());
+		if (!replacement)
+			continue;
+		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
+			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
+			        "host-language replacement scan cannot be authorized: " + path};
+		auto &function = replacement->Cast<TableFunctionRef>().function;
+		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
+			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
+			        "replacement scan has no resolvable function: " + path};
+		auto name = function->Cast<FunctionExpression>().function_name;
+		return {Resolution::Kind::FUNCTION, std::move(replacement), std::move(name), ""};
+	}
+	return {};
+}
+
+static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
                                                       optional_ptr<ReplacementScanData>) {
 	auto scope = active_scope;
 	if (scope && &context != &scope->context)
@@ -365,9 +408,6 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// which binder asked: a name the caller also wrote is the caller's, query-wide.
 	bool caller_written = !binding || binding->caller_table_refs.count(gatekeeper::TableRefPath(
 	                                      input.catalog_name, input.schema_name, input.table_name));
-	auto reader_permitted = [&](const gatekeeper::Policy &layer, const string &name) {
-		return !caller_written || gatekeeper::FunctionAllowed(layer, name);
-	};
 	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
@@ -380,43 +420,35 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		                                      function);
 		throw PermissionException("replacement scan is not allowed");
 	};
-	auto &config = DBConfig::GetConfig(context);
-	for (auto &scan : config.replacement_scans) {
-		if (scan.function == GatekeeperReplacementScan)
-			continue;
-		// Other callbacks construct a TableRef without binding it; nothing is opened here.
-		auto replacement = scan.function(context, input, scan.data.get());
-		if (!replacement)
-			continue;
-		if (replacement->type != TableReferenceType::TABLE_FUNCTION) {
-			if (deny(gatekeeper::rules::REPLACEMENT_SCAN,
-			         "host-language replacement scan cannot be authorized: " + path))
-				return replacement;
-		}
-		auto &function = replacement->Cast<TableFunctionRef>().function;
-		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION) {
-			if (deny(gatekeeper::rules::REPLACEMENT_SCAN, "replacement scan has no resolvable function: " + path))
-				return replacement;
-		}
-		auto name = function->Cast<FunctionExpression>().function_name;
+	auto resolution = ResolveHostReplacement(context, input);
+	switch (resolution.kind) {
+	case Resolution::Kind::UNSUPPORTED:
+		if (deny(gatekeeper::rules::REPLACEMENT_SCAN, resolution.reason))
+			return std::move(resolution.ref);
+		throw InternalException("Gatekeeper refused replacement returned");
+	case Resolution::Kind::FUNCTION: {
+		// The layers the reader is held to: under Authorize both, on an enforced connection the snapshot alone.
 		vector<const gatekeeper::Policy *> layers;
 		if (scope)
 			layers = {&scope->bind.layers.ceiling, &scope->bind.layers.policy};
 		else
 			layers = {enforced.get()};
+		auto canonical = gatekeeper::CanonicalFunction(resolution.name);
 		for (const auto *layer : layers) {
-			if (!reader_permitted(*layer, name)) {
-				if (deny(gatekeeper::rules::FUNCTION,
-				         "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
-				         gatekeeper::CanonicalFunction(name)))
-					return replacement;
+			if (caller_written && !gatekeeper::FunctionAllowed(*layer, resolution.name)) {
+				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + canonical,
+				         canonical))
+					return std::move(resolution.ref);
 			}
 		}
 		if (scope) {
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
 			scope->bind.result.objects.insert({"", "", path, "replacement"});
 		}
-		return replacement;
+		return std::move(resolution.ref);
+	}
+	case Resolution::Kind::UNCLAIMED:
+		break;
 	}
 	// No callback claimed the name. Returning nullptr would let DuckDB run every callback a second
 	// time outside this authorization, so raise the engine's own missing-table error here instead.
