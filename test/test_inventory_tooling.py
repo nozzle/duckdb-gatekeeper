@@ -260,6 +260,8 @@ def test_generation_needs_only_the_standard_library(tmp_path):
 def test_generation_path_imports_without_development_dependencies(module):
     # The modules CMake runs at configure time, and the engine selection the build scripts share, import with
     # duckdb and pytest made unimportable; scripts/artifact.py, which imports duckdb, must not be reachable.
+    # None in sys.modules makes any import of that name raise ModuleNotFoundError ("import of X halted; None in
+    # sys.modules"), for both `import X` and `from X import y`; it never binds X to None.
     code = ("import sys; sys.modules['duckdb'] = None; sys.modules['pytest'] = None; sys.modules['artifact'] = None; "
             f"import {module}")
     result = subprocess.run([sys.executable, "-S", "-c", code], cwd=ROOT / "scripts", capture_output=True, text=True)
