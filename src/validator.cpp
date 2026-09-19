@@ -169,13 +169,9 @@ struct Stop {
 };
 struct Walker {
 	const Inventory &inventory;
-	const Policy &policy;
+	Layers layers;
 	BindingPolicy *binding;
-	const Policy *ceiling;
 	const Limits &limits;
-	template <class Predicate> bool Both(Predicate predicate) const {
-		return predicate(policy) && (!ceiling || predicate(*ceiling));
-	}
 	std::set<Violation> violations;
 	std::map<std::string, size_t> functions;
 	std::map<std::string, int64_t> function_positions;
@@ -452,7 +448,7 @@ struct Walker {
 			return;
 		if (yyjson_obj_get(value, "query"))
 			return;
-		if (!Both([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
+		if (!layers.All([](const Policy &p) { return !p.tables && p.blocked_tables.empty(); }))
 			Reject(rules::TABLE, "schema-wide SHOW is disabled by table policy", value);
 	}
 	void Check(Json *value, std::string expected, size_t depth = 0, std::string edge = {}) {
@@ -568,7 +564,8 @@ struct Walker {
 
 Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const Policy *ceiling, const Limits &limits) {
 	auto &inventory = GetInventory();
-	Walker walker{inventory, policy, binding, ceiling, limits};
+	// Without a ceiling the one policy stands in both positions, as on an enforced connection.
+	Walker walker{inventory, Layers{ceiling ? *ceiling : policy, policy}, binding, limits};
 	try {
 		walker.Check(root, "root");
 	} catch (const Stop &error) {
@@ -582,7 +579,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 		auto &name = entry.first;
 		if (binding)
 			binding->caller_functions.insert(CanonicalFunction(name));
-		if (!walker.Both([&](const Policy &p) { return FunctionAllowed(p, name); })) {
+		if (!walker.layers.All([&](const Policy &p) { return FunctionAllowed(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;
 			if (entry.second > 1)
