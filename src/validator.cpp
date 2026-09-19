@@ -270,11 +270,15 @@ struct Walker {
 		if (binding)
 			binding->synthesized_functions.insert(names.begin(), names.end());
 	}
-	void Function(const std::string &name, Json *value) {
-		functions[Lower(name)]++;
-		auto location = yyjson_obj_get(value, "query_location");
-		if (yyjson_is_uint(location))
-			function_positions.emplace(Lower(name), int64_t(yyjson_get_uint(location)));
+	// One occurrence of a function name, written or implied by syntax. The position reported for a denied name
+	// is the earliest query_location among all of its occurrences; nodes without one contribute nothing.
+	void Function(const std::string &written, Json *value) {
+		auto name = Lower(written);
+		functions[name]++;
+		auto position = Position(value);
+		auto found = function_positions.find(name);
+		if (position >= 0 && (found == function_positions.end() || position < found->second))
+			function_positions[name] = position;
 	}
 	void Type(Json *value, size_t depth) {
 		auto id = Field(value, "id");
@@ -431,22 +435,18 @@ struct Walker {
 				yyjson_arr_foreach(children, i, n, child) if (i >= fraction)
 				    BindTime(child, "quantile fraction/options", true);
 			}
-			functions[name]++;
+			Function(name, value);
 			// The aggregate these dispatch to is selected by a caller-supplied (foldable) expression that only
 			// binding resolves; remember that the caller wrote the dispatcher so the bound target is allowlisted.
 			if (binding && DispatchingAggregators().count(name))
 				binding->caller_dispatchers.insert(name);
-			auto position = Position(value);
-			auto found = function_positions.find(name);
-			if (position >= 0 && (found == function_positions.end() || position < found->second))
-				function_positions[name] = position;
 			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this
 			// validation. They are on the never-bind list; this is the earlier, more specific diagnostic.
 			if ((edge == "function" &&
 			     (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
 			    name == "json_serialize_plan")
 				violations.emplace(rules::DYNAMIC_SQL, "dynamic SQL is never allowed: " + name, Field(value, "catalog"),
-				                   Field(value, "schema"), "", name, position);
+				                   Field(value, "schema"), "", name, Position(value));
 		}
 		if (kind != "ShowRef")
 			return;
