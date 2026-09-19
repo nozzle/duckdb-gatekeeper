@@ -178,9 +178,34 @@ def test_installation_drift_rejected_before_execution(db, block):
         runnable_blocks(db, [block])
 
 
+def prose(path):
+    """The Markdown outside fenced code blocks: a `# comment` in a shell block is not a heading."""
+    return re.sub(r"(?ms)^ {0,3}(```|~~~).*?^ {0,3}\1[^\n]*$", "", path.read_text())
+
+
+def heading_anchors(path):
+    """The fragment identifiers GitHub gives ``path``'s ATX headings: lowercase, keep letters, digits, spaces,
+    hyphens and underscores, spaces to hyphens, and a repeated title gets -1, -2, ... in order."""
+    anchors, seen = set(), {}
+    for title in re.findall(r"(?m)^ {0,3}#{1,6} +(.+?) *$", prose(path)):
+        slug = re.sub(r"[^\w\- ]", "", title.lower()).replace(" ", "-")
+        anchors.add(slug if slug not in seen else f"{slug}-{seen[slug]}")
+        seen[slug] = seen.get(slug, 0) + 1
+    return anchors
+
+
 def test_documentation_links():
-    for path in [ROOT / "README.md", ROOT / "CONTRIBUTING.md", *sorted((ROOT / "docs").glob("*.md"))]:
-        for target in re.findall(r"\]\(([^)]+)\)", path.read_text()):
-            if target.startswith(("http://", "https://", "#")):
+    """Every relative link in the project's Markdown names a file that exists and, when it carries a fragment,
+    a heading in that file. Symlinked duplicates (CLAUDE.md) are checked through their target."""
+    pages = [path for directory in [ROOT, ROOT / "docs", ROOT / "inventories", ROOT / "test/wasm"]
+             for path in sorted(directory.glob("*.md")) if not path.is_symlink()]
+    assert {page.name for page in pages} >= {"README.md", "CONTRIBUTING.md", "AGENTS.md", "SECURITY.md", "security.md"}
+    for path in pages:
+        for target in re.findall(r"\]\(([^)]+)\)", prose(path)):
+            if target.startswith(("http://", "https://")):
                 continue
-            assert (path.parent / target.split("#", 1)[0]).exists(), (path, target)
+            file, _, fragment = target.partition("#")
+            page = (path.parent / file) if file else path
+            assert page.exists(), (path, target)
+            if fragment:
+                assert page.suffix == ".md" and fragment in heading_anchors(page), (path, target)
