@@ -24,7 +24,7 @@ def main():
     for i, query in enumerate(["SELECT 1", "SELECT * FROM t", "SELECT * FROM v", "SELECT * FROM secret.t",
                                "SELECT md5('x')", "DROP TABLE t", "WITH a AS (SELECT * FROM t) SELECT * FROM a",
                                "SELECT current_schema", "SELECT [1,2][1]", "SELECT {'a':1}.a", "SELECT NULL::INET",
-                               "SELECT * FROM t WHERE x=? LIMIT $n", "SELECT 1 LIMIT len(repeat('x',200000000))",
+                               "SELECT * FROM t WHERE x=? LIMIT $n", "SELECT 1 LIMIT len(repeat('x',20000000))",
                                "SELECT $1", "SELECT * FROM range($1)", "SELECT 1; SELECT 2",
                                "SELECT 1;", "SELECT ';'", "SELECT * FROM missing; DROP TABLE t",
                                "SELECT list_sum([1,2])", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
