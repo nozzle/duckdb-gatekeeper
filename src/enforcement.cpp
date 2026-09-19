@@ -51,6 +51,17 @@ static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG
 // the same places and write the same record, and a denial refuses nothing: the engine goes on to bind and
 // execute the statement as it would on an unenforced connection. The record already stands, so the hooks the
 // engine then reaches for that statement do not decide it again.
+//
+// The flags are four separate dimensions, not one phase, and hold these invariants between the hooks:
+//   - authorized ⇒ admitted ⇒ in_statement: each is set only by the step after the one before it, and Reset
+//     clears all of them together at QueryBegin and QueryEnd. policy, log_only and unit are meaningful only
+//     while in_statement; unit.statement is set only while admitted.
+//   - decided is orthogonal to admission: a statement is decided at whichever boundary first writes its
+//     record, admitted or not, and never twice. Only log-only mode reads it: enforcing, a denial throws out
+//     of the hook that recorded it and the engine ends the query.
+//   - prepare_decided is meaningful only outside a statement (!in_statement): it marks a Prepare() bind the
+//     replacement gate already recorded, is consumed by the pre-screen or cleared when the prepare attempt
+//     ends (OnFinalizePrepare, OnPlanningError), and is never set inside a statement.
 struct EnforcementState : ClientContextState {
 	gatekeeper::Policy policy;    // one snapshot for the whole statement
 	gatekeeper::Result result;    // the decision in progress

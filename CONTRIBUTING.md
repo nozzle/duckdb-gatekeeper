@@ -223,6 +223,15 @@ source notes and baselines remain independent of build-engine versions. Follow t
 - `src/options.cpp`: shared option specifications, typed decoding, and canonical global settings.
 - `versions.cmake`: canonical extension/engine metadata; generation emits `version.hpp`.
 
+Two namespaces: `gatekeeper::` is the policy model (`Policy`, `Result`, the result codes and
+violation rules, the grammar walk, option decoding), `duckdb::` is everything that touches the
+engine (binders, catalog entries, hooks, the SQL surface). The namespace is a naming convention,
+not a dependency boundary: `options.cpp` is `gatekeeper::` and uses `duckdb::Value`, and
+`engine_errors.hpp` is `gatekeeper::` and names DuckDB's exception types. The one real boundary is
+`validator.cpp`, which must compile with nothing but the standard library and yyjson; the native
+fuzz build (`scripts/fuzz_native.py`) and `test_validator_structure.py` compile it that way and
+are what enforce it.
+
 DuckDB's ordinary expression iterator does not enumerate executable function bind data.
 When reviewing a new engine, inspect those representations explicitly; a successful
 catalog callback alone does not establish complete function coverage.
