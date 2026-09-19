@@ -1,6 +1,7 @@
 """Log-only mode: enforced connections make and record every decision, and refuse nothing."""
 import re
 import threading
+import time
 
 import duckdb
 import pytest
@@ -349,18 +350,27 @@ def test_concurrent_flips_never_leave_a_statement_unrecorded_or_half_decided(cat
                     with lock:
                         counts["other"].append(str(error))
 
+    def seen_both():
+        with lock:
+            return counts["rows"] > 0 and counts["denied"] > 0
+
     threads = [threading.Thread(target=worker) for _ in range(4)]
     for thread in threads:
         thread.start()
     try:
-        for i in range(40):
+        # Flip until every outcome has been observed under both states, so the assertions below cannot depend
+        # on thread scheduling; 40 flips is the floor, 30 s the bound a stuck worker would hit.
+        deadline = time.monotonic() + 30
+        i = 0
+        while i < 40 or (not seen_both() and time.monotonic() < deadline):
             catalog.execute(f"SET gatekeeper_log_only = {'true' if i % 2 == 0 else 'false'}")
+            i += 1
     finally:
         stop.set()
         for thread in threads:
             thread.join()
     assert counts["other"] == []
-    assert counts["rows"] > 0 and counts["denied"] > 0
+    assert seen_both(), counts
     enforced = decisions(catalog, "mode = 'enforce' AND NOT allowed")
     logged = decisions(catalog, "mode = 'log_only' AND NOT allowed")
     assert len(enforced) == counts["denied"] and len(logged) == counts["rows"]
