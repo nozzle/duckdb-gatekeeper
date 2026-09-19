@@ -5,16 +5,17 @@ import time
 
 import duckdb
 
+from artifact import DEFAULT_EXTENSION, connect
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--extension", default=str(Path(__file__).resolve().parents[1] / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
+    parser.add_argument("--extension", type=Path, default=DEFAULT_EXTENSION)
     parser.add_argument("--iterations", type=int, default=1000)
     args = parser.parse_args()
     if args.iterations < 1:
         parser.error("--iterations must be positive")
-    with duckdb.connect(config={"allow_unsigned_extensions": "true"}) as db:
-        db.execute("LOAD '" + str(Path(args.extension).resolve()).replace("'", "''") + "'")
+    with connect(args.extension) as db:
         db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.orders(id INT, value DOUBLE)")
         print("DuckDB", duckdb.__version__)
         queries = {

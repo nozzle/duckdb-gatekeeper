@@ -145,11 +145,11 @@ def test_binary_only_review_cannot_grant_defaults(tmp_path):
 def test_generation_bakes_build_engine_identity(tmp_path):
     output = tmp_path / "generated"
     subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
-                    "--duckdb-version", "v1.5.6-dev150", "--duckdb-source-id", "a3cd0deed1"], check=True)
+                    "--engine-version-label", "v1.5.6-dev150", "--engine-source-id", "a3cd0deed1"], check=True)
     text = (output / "version.hpp").read_text()
     assert re.search(r'BUILD_ENGINE_STAMP\[\d+\] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"', text)
-    for flag, value in [("--duckdb-version", "v0.0.1; system(\"x\")"), ("--duckdb-source-id", "not-hex"),
-                        ("--duckdb-source-id", "a"), ("--duckdb-source-id", "")]:
+    for flag, value in [("--engine-version-label", "v0.0.1; system(\"x\")"), ("--engine-source-id", "not-hex"),
+                        ("--engine-source-id", "a"), ("--engine-source-id", "")]:
         result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
                                  flag, value], capture_output=True, text=True)
         assert result.returncode != 0 and "Refusing to bake" in result.stderr
@@ -254,6 +254,16 @@ def test_generation_needs_only_the_standard_library(tmp_path):
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "inventory.hpp").exists() and (tmp_path / "grammar.hpp").exists()
+
+
+@pytest.mark.parametrize("module", ["versions", "schema_check", "inventory", "generate", "engine"])
+def test_generation_path_imports_without_development_dependencies(module):
+    # The modules CMake runs at configure time, and the engine selection the build scripts share, import with
+    # duckdb and pytest made unimportable; scripts/artifact.py, which imports duckdb, must not be reachable.
+    code = ("import sys; sys.modules['duckdb'] = None; sys.modules['pytest'] = None; sys.modules['artifact'] = None; "
+            f"import {module}")
+    result = subprocess.run([sys.executable, "-S", "-c", code], cwd=ROOT / "scripts", capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("key,value", [("unexpected", True), ("source", "not a URL"), ("notes", [])])

@@ -1,25 +1,18 @@
-"""The repository, the loadable artifact under test, and connections with it loaded."""
+"""The repository, the loadable artifact under test, and connections with it loaded.
+
+The default location and the load idiom are scripts/artifact.py's; this module adds the GATEKEEPER_EXTENSION
+override the distribution workflow uses to point the suite at a downloaded platform artifact.
+"""
 import os
 from pathlib import Path
 
-import duckdb
+import artifact as loadable
+from artifact import literal  # noqa: F401  (re-exported: tests build SQL with it)
 
-ROOT = Path(__file__).resolve().parents[2]
-EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION",
-                           ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
-
-
-def literal(text):
-    """``text`` as a SQL string literal."""
-    return "'" + str(text).replace("'", "''") + "'"
+ROOT = loadable.ROOT
+EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION", loadable.DEFAULT_EXTENSION))
 
 
 def connect(extension=EXTENSION, **config):
-    """A fresh in-memory database with the artifact loaded; closed again if the load fails."""
-    connection = duckdb.connect(config={"allow_unsigned_extensions": "true", **config})
-    try:
-        connection.execute("LOAD " + literal(extension))
-    except Exception:
-        connection.close()
-        raise
-    return connection
+    """A fresh in-memory database with the artifact under test loaded; closed again if the load fails."""
+    return loadable.connect(extension, **config)

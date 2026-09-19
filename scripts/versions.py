@@ -1,4 +1,9 @@
-"""Read canonical release metadata without importing development dependencies."""
+"""Read canonical release metadata without importing development dependencies.
+
+Run as a script it prints the metadata as ``key=value`` lines in the form GitHub Actions job outputs take
+(``duckdb_version``, ``duckdb_revision``, ``extension_version``), so workflows read versions.cmake instead of
+repeating the pin.
+"""
 import json
 from pathlib import Path
 import re
@@ -42,3 +47,9 @@ SUPPORTED_DUCKDB_REVISION = VERSIONS["GATEKEEPER_DUCKDB_REVISION"]
 # Historical inventory provenance is independent of the release build engine.
 REVIEWED_DUCKDB = reviewed_duckdb()
 BASELINE_FILENAME = f"duckdb-{REVIEWED_DUCKDB}.json"
+
+
+if __name__ == "__main__":
+    print(f"duckdb_version={SUPPORTED_DUCKDB}")
+    print(f"duckdb_revision={SUPPORTED_DUCKDB_REVISION}")
+    print(f"extension_version={EXTENSION_VERSION}")

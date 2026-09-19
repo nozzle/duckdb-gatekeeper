@@ -22,8 +22,8 @@ set(GATEKEEPER_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate.py
                         --output "${GATEKEEPER_GENERATED_DIR}"
                         --duckdb-source "${DuckDB_SOURCE_DIR}"
-                        --duckdb-version "${DUCKDB_VERSION}"
-                        --duckdb-source-id "${GIT_COMMIT_HASH}"
+                        --engine-version-label "${DUCKDB_VERSION}"
+                        --engine-source-id "${GIT_COMMIT_HASH}"
                 RESULT_VARIABLE GENERATE_RESULT)
 if(NOT GENERATE_RESULT EQUAL 0)
   message(FATAL_ERROR "Gatekeeper inventory generation failed")

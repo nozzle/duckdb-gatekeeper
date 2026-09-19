@@ -4,6 +4,7 @@ import re
 import duckdb
 import pytest
 
+from descriptor import block_scalar
 from inventory import load
 from support.artifact import ROOT
 from support.headers import control_plane_names, never_bind_names
@@ -71,16 +72,11 @@ def hello_world_examples(db):
 
     Comments before a statement explain it; `-- ` lines directly after a statement's
     terminating semicolon are its expected response, header row first, cells separated
-    by `|`, ended by a blank line. The descriptor uses canonical two-space YAML like
-    scripts/package_release.py expects, so the block scalar is extracted without a YAML
-    dependency.
+    by `|`, ended by a blank line. scripts/descriptor.py reads the block scalar the same
+    way scripts/package_release.py reads the pins, without a YAML dependency.
     """
-    descriptor = (ROOT / "community/description.yml").read_text()
-    block = re.search(r"(?m)^  hello_world: \|\n((?:    [^\n]*\n|\n)*)", descriptor)
-    assert block, "community/description.yml docs.hello_world must be a two-space indented block scalar"
     examples, statement, response = [], [], None
-    for line in block.group(1).splitlines():
-        line = line[4:] if line.startswith("    ") else line.strip()
+    for line in block_scalar("docs", "hello_world"):
         if not line:
             response = None
         elif line.startswith("--"):

@@ -31,9 +31,13 @@ the submodule:
 ```
 
 `scripts/build.py`, `scripts/test_sanitized.py`, `scripts/fuzz_sql.py`, and
-`scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options
+`scripts/build_wasm.py` share these `--duckdb-source`/`--duckdb-version` options and the
+CMake invocation behind them (`scripts/engine.py`); what differs between them (build type,
+sanitizer and fuzzer options, targets, the Emscripten container) stays in each script
 (`test_sanitized.py` runs its suite inside the pinned `duckdb` Python package, so it only
-accepts an engine identifying as that release). A checkout at exactly the pinned engine
+accepts an engine identifying as that release). `--duckdb-version` tells the engine build how
+to label itself; the identity CMake then computes is what `scripts/generate.py` bakes into the
+load-time guard, through its own `--engine-version-label`/`--engine-source-id`. A checkout at exactly the pinned engine
 revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because a shallow
 clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy `v0.0.1`
 that no real engine loads. Every other checkout, including another revision inside `duckdb/`,
@@ -118,6 +122,16 @@ own assertions. `support.headers` is the one reader of the name lists in
 `src/include/function_policy.hpp`; `test_documentation.py` checks the never-bind list in
 `docs/security.md` against it, and `test_resolved_functions.py` keeps a written-out sample
 of names that must stay denied whatever the header says.
+
+The scripts are grouped by responsibility: `scripts/engine.py` (engine selection and the
+shared CMake invocation), `scripts/artifact.py` (the default loadable path and the
+connect-plus-`LOAD` idiom; it imports `duckdb`, which nothing on the generation path may do),
+`scripts/sanitize.py` (sanitizer options and the libFuzzer run), `scripts/descriptor.py`
+(the community descriptor's pins and `hello_world` block), and `scripts/versions.py` (the
+canonical metadata; run as a script it prints the job outputs the workflows read). The
+modules CMake runs at configure time (`versions`, `inventory`, `schema_check`, `generate`)
+need only the standard library, which `test_inventory_tooling.py` checks by importing each
+with `duckdb` and `pytest` blocked.
 
 `scripts/smoke_loadable.py <artifact>` loads a distributed artifact into the pinned DuckDB
 Python package and exercises the checks that cross the host/loadable ABI boundary
