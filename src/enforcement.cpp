@@ -73,6 +73,9 @@ struct EnforcementState : ClientContextState {
 	bool authorized = false;      // private bind with catalog authorization passed
 	TextCheck::Unit unit;         // the admitted statement, awaiting parameter values when it has any
 
+	// An enforced connection has no request layer: the statement's snapshot stands in both positions, and every
+	// check runs as gatekeeper_validate runs it with no options.
+	gatekeeper::Layers Snapshot() const { return {policy, policy}; }
 	void Reset() {
 		policy = gatekeeper::Policy();
 		result = gatekeeper::Result();
@@ -97,7 +100,7 @@ struct EnforcementState : ClientContextState {
 	// location a hook cannot attach, or runs the statement if it binds after all.
 	void Authorize(ClientContext &context, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters) {
 		try {
-			duckdb::Authorize(context, policy, policy, unit, parameters, result);
+			duckdb::Authorize(context, Snapshot(), unit, parameters, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
 			Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
@@ -125,7 +128,7 @@ struct EnforcementState : ClientContextState {
 		// exception here is the engine's own and propagates.
 		TextCheck text;
 		try {
-			text = CheckText(context, policy, policy, sql, gatekeeper::Limits());
+			text = CheckText(context, Snapshot(), sql, gatekeeper::Limits());
 		} catch (const ParserException &error) {
 			DescribeError(ErrorData(error), false, result);
 			Record(context, Boundary::BINDING, &policy, &sql);
@@ -280,12 +283,7 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		}
 		result.allowed = true;
 		try {
-			// No text and no private bind on record: nothing in this plan can be attributed to the caller, so
-			// blocks are deferred to execution, which rebinds inside the query. Table policy and the never-bind
-			// list still hold here.
-			gatekeeper::Provenance unattributed;
-			unattributed.unattributed = true;
-			CheckPlan(policy, policy, gatekeeper::BindingPolicy(), unattributed, input.binder.GetStatementProperties(),
+			CheckPlan({policy, policy}, TextCheck::Unit::Unattributed(), input.binder.GetStatementProperties(),
 			          *statement.plan, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
@@ -316,8 +314,8 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 			return;
 	}
 	try {
-		CheckPlan(state->policy, state->policy, state->unit.binding, state->unit.provenance,
-		          input.binder.GetStatementProperties(), *statement.plan, state->result);
+		CheckPlan(state->Snapshot(), state->unit, input.binder.GetStatementProperties(), *statement.plan,
+		          state->result);
 	} catch (const PermissionException &) {
 		MarkDenied(state->result);
 	}

@@ -672,8 +672,9 @@ static void CheckForeignAggregateProvenance() {
 				    LogicalType::INTEGER, std::move(function), std::move(children), make_uniq<ProbeBindData>()));
 				LogicalProjection plan(0, std::move(expressions));
 				gatekeeper::Result result;
+				gatekeeper::Policy policy;
 				try {
-					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
+					AuthorizePlan({policy, policy}, gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
 					              result);
 					std::abort();
 				} catch (const BinderException &error) {

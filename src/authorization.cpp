@@ -54,8 +54,8 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	}
 }
 
-void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,
-                     gatekeeper::Result &result, bool attributable) {
+static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                                   CatalogEntry &entry, gatekeeper::Result &result, bool attributable) {
 	if (auto kind = FunctionKind(entry.type)) {
 		AuthorizeFunction(policy, binding, entry.name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();
@@ -95,6 +95,12 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
 	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
+}
+
+void AuthorizeObject(const gatekeeper::Layers &layers, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,
+                     gatekeeper::Result &result, bool attributable) {
+	layers.Each(
+	    [&](const gatekeeper::Policy &layer) { AuthorizeObjectAgainst(layer, binding, entry, result, attributable); });
 }
 
 // ListAggregatesBindData is private to core_functions. Its reviewed serialization callback exposes
@@ -141,8 +147,9 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 	return string(yyjson_mut_get_str(name), yyjson_mut_get_len(name));
 }
 
-void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
-                   const gatekeeper::Provenance &provenance, LogicalOperator &root, gatekeeper::Result &result) {
+static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                                 const gatekeeper::Provenance &provenance, LogicalOperator &root,
+                                 gatekeeper::Result &result) {
 	auto attributable = [&](const string &name) { return provenance.Attributable(binding, name); };
 	auto function = [&](const string &name, const string &type, bool callers) {
 		AuthorizeFunction(policy, binding, name, callers, result);
@@ -237,5 +244,11 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 			}
 		}
 	}
+}
+
+void AuthorizePlan(const gatekeeper::Layers &layers, const gatekeeper::BindingPolicy &binding,
+                   const gatekeeper::Provenance &provenance, LogicalOperator &root, gatekeeper::Result &result) {
+	layers.Each(
+	    [&](const gatekeeper::Policy &layer) { AuthorizePlanAgainst(layer, binding, provenance, root, result); });
 }
 } // namespace duckdb

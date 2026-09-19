@@ -36,6 +36,10 @@ struct TextCheck {
 		// IN lists. Nonempty only inside a dynamic PIVOT checked as a whole, where those types do not exist yet:
 		// Authorize binds the statement against placeholder values instead (see SubstitutePivotEnums).
 		gatekeeper::Names pivot_enums;
+		// The unit to check a plan against when no text and no private bind are on record (a Prepare()
+		// pre-screen): nothing in the plan can be attributed to the caller, so blocks are deferred to execution,
+		// which rebinds inside the query. Table policy and the never-bind list still hold.
+		static Unit Unattributed();
 	};
 	// The decision on the text: allowed, or the first denial in the order the engine runs the statements.
 	gatekeeper::Result result;
@@ -50,28 +54,28 @@ struct TextCheck {
 // the compiled grammar and both policy layers. Never binds and never reads the catalog. Fixed limits
 // and unsupported statements produce a denied result; malformed input throws the engine's
 // ParserException or InvalidInputException for the caller to map.
-TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-                    const string &sql, const gatekeeper::Limits &limits);
+TextCheck CheckText(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
+                    const gatekeeper::Limits &limits);
 
 // Execution boundary. Requires a read-only statement whose plan contains only reviewed read operators,
-// then authorizes the plan against the ceiling and the request layer. The one other root it accepts is a
-// dynamic PIVOT's enum type over such a plan (PivotEnumPlan). Records each violation in result and throws
-// PermissionException at the first denial.
-void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               const gatekeeper::BindingPolicy &binding, const gatekeeper::Provenance &provenance,
-               const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result);
+// then authorizes the plan against both layers, ceiling first: the tables it scans in one pass, the
+// functions it binds in another (AuthorizePlan). The unit supplies what the plan is attributed against:
+// the caller's text as the walk recorded it and what the private bind learned about origin. The one other
+// root accepted is a dynamic PIVOT's enum type over such a plan (PivotEnumPlan). Records each violation in
+// result and throws PermissionException at the first denial.
+void CheckPlan(const gatekeeper::Layers &layers, const TextCheck::Unit &unit, const StatementProperties &properties,
+               LogicalOperator &plan, gatekeeper::Result &result);
 
 // Private bind of one admitted statement on the caller's connection with the catalog-lookup callback
 // and replacement interception, followed by the execution boundary on that plan. Parameter values,
-// when supplied, bind exactly as the engine would bind them. Records violations in result and throws
-// PermissionException at the first denial; engine exceptions propagate unchanged.
-void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               TextCheck::Unit &unit, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
-               gatekeeper::Result &result);
+// when supplied, bind exactly as the engine would bind them. Fills unit.provenance. Records violations in
+// result and throws PermissionException at the first denial; engine exceptions propagate unchanged.
+void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
+               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result);
 
 // gatekeeper_validate: CheckText, then Authorize, with every outcome mapped to a structured result.
-gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-                         const string &sql, const gatekeeper::Limits &limits = gatekeeper::Limits());
+gatekeeper::Result Check(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
+                         const gatekeeper::Limits &limits = gatekeeper::Limits());
 
 // Installs Gatekeeper's replacement-scan callback in first position, once per database.
 void InstallReplacementScan(DBConfig &config);

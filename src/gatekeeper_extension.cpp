@@ -86,7 +86,7 @@ Value GatekeeperCheckForFuzz(ClientContext &context, const string &sql, const ga
 	Value result;
 	context.RunFunctionInTransaction([&]() {
 		auto policy = GlobalPolicy(context);
-		result = ResultValue(Check(context, policy, policy, sql, limits));
+		result = ResultValue(Check(context, {policy, policy}, sql, limits));
 	});
 	return result;
 }
@@ -112,7 +112,7 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		if (binding.sql.IsNull())
 			decision = gatekeeper::InvalidInput("NULL SQL input");
 		else
-			decision = Check(context, policy, defaults, sql);
+			decision = Check(context, {defaults, policy}, sql);
 	} catch (const std::invalid_argument &error) {
 		decision = gatekeeper::InvalidInput(error.what());
 	}

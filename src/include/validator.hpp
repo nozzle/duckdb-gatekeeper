@@ -29,6 +29,19 @@ struct Policy {
 	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
 };
+// The two layers every authorization consults: the global ceiling the host set, and the request layer, which is
+// the ceiling with a gatekeeper_validate caller's options applied. An enforced connection has no request layer
+// and puts its policy snapshot in both positions. Wherever both are checked, the ceiling is checked first; a
+// statement both layers deny is described by the ceiling's rule.
+struct Layers {
+	const Policy &ceiling;
+	const Policy &policy;
+	template <class Fn> void Each(Fn &&fn) const {
+		fn(ceiling);
+		fn(policy);
+	}
+	template <class Predicate> bool All(Predicate &&predicate) const { return predicate(ceiling) && predicate(policy); }
+};
 // The codes a Result carries. ok, or the kind of refusal: forbidden and unsupported are decisions with violations,
 // the other three describe an error in the caller's input or in the bind. Documented in docs/security.md and
 // carried by every audit record.

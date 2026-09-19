@@ -106,8 +106,13 @@ static bool PivotEnumPlan(const LogicalOperator &plan) {
 	return info && PivotEnumInfo(*info) && info->catalog == TEMP_CATALOG && !info->Cast<CreateTypeInfo>().query;
 }
 
-static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Policy &policy,
-                                    const gatekeeper::Policy &ceiling, const string &sql,
+TextCheck::Unit TextCheck::Unit::Unattributed() {
+	Unit unit;
+	unit.provenance.unattributed = true;
+	return unit;
+}
+
+static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
                                     const gatekeeper::Limits &limits, bool nested);
 
 // gatekeeper_validate on a dynamic PIVOT decides the statements the engine will run for it, each on the text
@@ -116,8 +121,7 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 // produces a batch, and only in this shape: enum types followed by the SELECT that names them. A nested
 // dynamic PIVOT puts an earlier enum type in a later enum type's own SELECT, so every statement learns the
 // types created before it.
-static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy &policy,
-                                const gatekeeper::Policy &ceiling, const MultiStatement &batch,
+static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Layers &layers, const MultiStatement &batch,
                                 const gatekeeper::Limits &limits) {
 	TextCheck check;
 	auto &statements = batch.statements;
@@ -133,7 +137,7 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 			return unsupported();
 	gatekeeper::Names enums;
 	for (auto &statement : statements) {
-		auto part = CheckStatementText(context, policy, ceiling, statement->query, limits, true);
+		auto part = CheckStatementText(context, layers, statement->query, limits, true);
 		if (!part.result.allowed) {
 			check.result = std::move(part.result);
 			return check;
@@ -149,8 +153,7 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Policy
 	return check;
 }
 
-static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Policy &policy,
-                                    const gatekeeper::Policy &ceiling, const string &sql,
+static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
                                     const gatekeeper::Limits &limits, bool nested) {
 	TextCheck check;
 	if (sql.find('\0') != string::npos)
@@ -169,7 +172,7 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 	}
 	auto &statement = parser.statements[0]; // MAX_STATEMENTS is 1
 	if (statement->type == StatementType::MULTI_STATEMENT && !nested)
-		return CheckBatchText(context, policy, ceiling, statement->Cast<MultiStatement>(), limits);
+		return CheckBatchText(context, layers, statement->Cast<MultiStatement>(), limits);
 	// The SELECT the statement stands for: itself, or the one that defines a dynamic PIVOT's enum type.
 	optional_ptr<const SelectStatement> select;
 	if (statement->type == StatementType::SELECT_STATEMENT)
@@ -190,7 +193,8 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 		return check;
 	}
 	TextCheck::Unit unit;
-	check.result = gatekeeper::Validate(yyjson_doc_get_root(ast.get()), policy, &unit.binding, &ceiling, limits);
+	check.result =
+	    gatekeeper::Validate(yyjson_doc_get_root(ast.get()), layers.policy, &unit.binding, &layers.ceiling, limits);
 	if (check.result.allowed) {
 		unit.statement = std::move(statement);
 		check.units.push_back(std::move(unit));
@@ -198,9 +202,9 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::Po
 	return check;
 }
 
-TextCheck CheckText(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-                    const string &sql, const gatekeeper::Limits &limits) {
-	return CheckStatementText(context, policy, ceiling, sql, limits, false);
+TextCheck CheckText(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
+                    const gatekeeper::Limits &limits) {
+	return CheckStatementText(context, layers, sql, limits, false);
 }
 
 // Plan operators a bound SELECT can contain before the optimizer runs, reviewed against
@@ -246,9 +250,8 @@ static bool ReadOperator(LogicalOperatorType type) {
 	}
 }
 
-void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               const gatekeeper::BindingPolicy &binding, const gatekeeper::Provenance &provenance,
-               const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result) {
+void CheckPlan(const gatekeeper::Layers &layers, const TextCheck::Unit &unit, const StatementProperties &properties,
+               LogicalOperator &plan, gatekeeper::Result &result) {
 	auto deny = [&](const string &message) {
 		result.violations.emplace(gatekeeper::rules::STATEMENT, message);
 		throw PermissionException(gatekeeper::UNSUPPORTED_STATEMENT);
@@ -273,17 +276,26 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 		// inlined by now and remain the callback's responsibility.
 		if (op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto table = op->Cast<LogicalGet>().GetTable();
-			if (table) {
-				AuthorizeObject(ceiling, binding, *table, result);
-				AuthorizeObject(policy, binding, *table, result);
-			}
+			if (table)
+				AuthorizeObject(layers, unit.binding, *table, result);
 		}
 		for (auto &child : op->children)
 			operators.push_back(child.get());
 	}
-	AuthorizePlan(ceiling, binding, provenance, plan, result);
-	AuthorizePlan(policy, binding, provenance, plan, result);
+	AuthorizePlan(layers, unit.binding, unit.provenance, plan, result);
 }
+
+// What one private bind checks against: the layers, the caller's text as the walk recorded it, the origin the
+// bind learns as it goes, and the result it fills. Shared by every binder the bind creates (the catalog-lookup
+// callback is copied into each) and read by the replacement gate while the bind runs. No context spans the
+// text, bind and plan phases: they have different inputs, and only the bind writes provenance. (The engine's
+// own duckdb::BindContext is the binder's table of bindings, hence the name.)
+struct PrivateBind {
+	const gatekeeper::Layers &layers;
+	const gatekeeper::BindingPolicy &binding;
+	gatekeeper::Provenance &provenance;
+	gatekeeper::Result &result;
+};
 
 // Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
 // construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
@@ -292,11 +304,8 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 // table function it stands for when the caller wrote the name, and as a trusted definition's own reader,
 // against the deny layer only, when the name is reachable only through a view or macro body.
 struct ValidationScope {
-	ClientContext &context; // the connection this validation binds on
-	const gatekeeper::Policy &policy;
-	const gatekeeper::Policy &ceiling;
-	const gatekeeper::BindingPolicy &binding; // what the caller wrote, from the text walk
-	gatekeeper::Result &result;
+	ClientContext &context;       // the connection this validation binds on
+	const PrivateBind &bind;      // what it checks against
 	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
 };
 static thread_local ValidationScope *active_scope = nullptr;
@@ -338,7 +347,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// outside any statement has no text on record and is pre-screened as though the caller wrote every name.
 	optional_ptr<const gatekeeper::BindingPolicy> binding;
 	if (scope) {
-		binding = &scope->binding;
+		binding = &scope->bind.binding;
 	} else {
 		enforced = AdmittedPolicy(context);
 		binding = AdmittedBinding(context);
@@ -367,8 +376,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			MarkDenied(result);
 			return record(result, enforced);
 		}
-		scope->result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
-		                                 function);
+		scope->bind.result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
+		                                      function);
 		throw PermissionException("replacement scan is not allowed");
 	};
 	auto &config = DBConfig::GetConfig(context);
@@ -392,7 +401,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		auto name = function->Cast<FunctionExpression>().function_name;
 		vector<const gatekeeper::Policy *> layers;
 		if (scope)
-			layers = {&scope->ceiling, &scope->policy};
+			layers = {&scope->bind.layers.ceiling, &scope->bind.layers.policy};
 		else
 			layers = {enforced.get()};
 		for (const auto *layer : layers) {
@@ -405,7 +414,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		}
 		if (scope) {
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
-			scope->result.objects.insert({"", "", path, "replacement"});
+			scope->bind.result.objects.insert({"", "", path, "replacement"});
 		}
 		return replacement;
 	}
@@ -463,23 +472,16 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 // table policy and the never-bind list still apply, blocks do not, and nothing is attributed to the caller.
 // A scalar macro body binds in the caller's own binder, so its names are learned from its definition instead.
 struct LookupCallback {
-	struct Shared {
-		const gatekeeper::Policy &policy;
-		const gatekeeper::Policy &ceiling;
-		const gatekeeper::BindingPolicy &binding;
-		gatekeeper::Provenance &provenance;
-		gatekeeper::Result &result;
-	};
-	shared_ptr<Shared> shared;
+	shared_ptr<PrivateBind> bind;
 	bool trusted = false;
 	mutable bool armed = false;
-	explicit LookupCallback(shared_ptr<Shared> shared_p) : shared(std::move(shared_p)) {}
-	LookupCallback(const LookupCallback &other) : shared(other.shared), trusted(other.trusted || other.armed) {
+	explicit LookupCallback(shared_ptr<PrivateBind> bind_p) : bind(std::move(bind_p)) {}
+	LookupCallback(const LookupCallback &other) : bind(other.bind), trusted(other.trusted || other.armed) {
 		other.armed = false;
 	}
 	LookupCallback &operator=(const LookupCallback &) = delete;
 	void operator()(CatalogEntry &entry) {
-		auto &s = *shared;
+		auto &s = *bind;
 		bool function = FunctionKind(entry.type) != nullptr;
 		auto canonical = gatekeeper::CanonicalFunction(entry.name);
 		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
@@ -487,8 +489,7 @@ struct LookupCallback {
 		// bind in the same binder.
 		bool attributable = !trusted && !(function && s.provenance.trusted_names.count(canonical) &&
 		                                  !s.provenance.CallerCanName(s.binding, canonical));
-		AuthorizeObject(s.ceiling, s.binding, entry, s.result, attributable);
-		AuthorizeObject(s.policy, s.binding, entry, s.result, attributable);
+		AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		if (!function) {
 			if (!trusted && !entry.internal && entry.type == CatalogType::VIEW_ENTRY)
 				armed = true;
@@ -512,9 +513,9 @@ struct LookupCallback {
 	}
 };
 
-static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy &policy,
-                               const gatekeeper::Policy &ceiling, SQLStatement &statement,
-                               const gatekeeper::BindingPolicy &binding, gatekeeper::Provenance &provenance,
+// Binds statement, the unit's own or a copy of it, against the unit's text record; fills the unit's provenance.
+static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers &layers, SQLStatement &statement,
+                               TextCheck::Unit &unit,
                                optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
                                gatekeeper::Result &result) {
 	case_insensitive_map_t<BoundParameterData> parameter_data;
@@ -524,9 +525,9 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 	auto binder = Binder::CreateBinder(context);
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-	binder->SetCatalogLookupCallback(LookupCallback(
-	    make_shared_ptr<LookupCallback::Shared>(LookupCallback::Shared{policy, ceiling, binding, provenance, result})));
-	ValidationScope scope{context, policy, ceiling, binding, result, {}};
+	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{layers, unit.binding, unit.provenance, result});
+	binder->SetCatalogLookupCallback(LookupCallback(bind));
+	ValidationScope scope{context, *bind, {}};
 	BoundStatement bound;
 	{
 		ScopeGuard guard(scope);
@@ -542,7 +543,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 	for (const auto &entry : bound_parameters.GetParameters())
 		if (!entry.second->return_type.IsValid())
 			throw BinderException("Validation requires a complete bound plan; parameter values or types may be needed");
-	CheckPlan(policy, ceiling, binding, provenance, binder->GetStatementProperties(), *bound.plan, result);
+	CheckPlan(layers, unit, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 	for (auto &entry : binder->GetReplacementScans())
 		if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
@@ -651,22 +652,20 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 	return distinct;
 }
 
-void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               TextCheck::Unit &unit, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
-               gatekeeper::Result &result) {
+void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
+               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result) {
 	if (unit.pivot_enums.empty()) {
 		if (unit.statement->type == StatementType::SELECT_STATEMENT)
-			return AuthorizeStatement(context, policy, ceiling, *unit.statement, unit.binding, unit.provenance,
-			                          parameters, result);
+			return AuthorizeStatement(context, layers, *unit.statement, unit, parameters, result);
 		// Binder::Bind moves a CreateStatement's definition into the plan; keep the admitted statement intact.
 		auto copy = unit.statement->Copy();
-		return AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, unit.provenance, parameters, result);
+		return AuthorizeStatement(context, layers, *copy, unit, parameters, result);
 	}
 	for (bool large : {false, true}) {
 		auto copy = unit.statement->Copy();
 		if (!SubstitutePivotEnums(context, PivotQuery(*copy), unit.pivot_enums, large) && large)
 			break;
-		AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, unit.provenance, parameters, result);
+		AuthorizeStatement(context, layers, *copy, unit, parameters, result);
 	}
 }
 
@@ -715,18 +714,18 @@ bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result
 	return DescribeError(ErrorData(error), binding, result);
 }
 
-gatekeeper::Result Check(ClientContext &context, const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-                         const string &sql, const gatekeeper::Limits &limits) {
+gatekeeper::Result Check(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
+                         const gatekeeper::Limits &limits) {
 	gatekeeper::Result result;
 	bool binding = false;
 	try {
-		auto text = CheckText(context, policy, ceiling, sql, limits);
+		auto text = CheckText(context, layers, sql, limits);
 		binding = true;
 		// The engine runs a batch in order and stops at the first statement that fails, so the statements
 		// admitted before a denied one bind first: a bind that fails among them is the decision, as it would
 		// be the engine's error, and only if they all pass is the later text denial reported.
 		for (auto &unit : text.units)
-			Authorize(context, policy, ceiling, unit, nullptr, result);
+			Authorize(context, layers, unit, nullptr, result);
 		if (!text.result.allowed)
 			return text.result;
 		result.allowed = true;
