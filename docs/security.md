@@ -1,7 +1,7 @@
 # Security model
 
 Gatekeeper decides whether one SQL statement conforms to the selected syntax, caller-function
-and resolved-deny/object policies on the pinned parser/binder. It offers that decision two ways:
+and resolved-deny/object policies on the build engine's parser and binder. It offers that decision two ways:
 `gatekeeper_validate` returns it to the host before the host executes, and an
 [enforced connection](#enforced-connections) makes DuckDB refuse to execute anything the
 decision denies. Neither means the SQL is cheap, returns nonsensitive data, or cannot have side
@@ -19,9 +19,12 @@ and the [audit log](#audit-log) below. Two points are easy to get wrong:
 
 - Gatekeeper never changes host settings. `autoload_known_extensions`,
   `autoinstall_known_extensions`, `enable_external_access`, and `lock_configuration` are the
-  host's; `CALL gatekeeper_enforce()` reports the ones that weaken the sandbox in `warnings`.
-- Choose a log storage the sandboxed connections cannot reach in-process (`storage := 'file'`
-  or `'stdout'`) when no host connection will remain to read the in-memory log.
+  host's; `CALL gatekeeper_enforce()` reports the ones that weaken the sandbox in `warnings`,
+  along with [log-only mode](#log-only-mode) being on and logging that would not
+  [record a denial](#audit-log).
+- Enforced connections cannot read the in-memory log (`duckdb_logs` is never-bind); the host's own
+  unenforced connections can, or `storage := 'file'` or `'stdout'` puts the trail outside the
+  process altogether.
 
 Validate-first, for hosts that cannot dedicate a connection:
 
@@ -318,7 +321,7 @@ setting. On an enforced connection `CALL`, `SET`, and `RESET` are unsupported st
 enforced state and the policy are unreachable from SQL. `gatekeeper_enforce` is on the
 never-bind list so validated SQL cannot name it either.
 
-There is deliberately no instance-wide setting. One would have to choose between enforcing the
+There is deliberately no instance-wide enforcement setting. One would have to choose between enforcing the
 host's own connections (leaving no in-process reader for the audit log and no way to change
 the policy) and depending on connection-open ordering, and a setting is one more thing a
 trusted connection can be talked into flipping. A connection is enforced because the host said
@@ -806,10 +809,10 @@ node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decodi
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
 The local tests and randomized-input checks are not a complete security audit.
-DuckDB builds and signs binaries distributed through its community repository;
-Gatekeeper's community publication is pending. Local builds, CI artifacts, and this
-project's GitHub Release binaries are unsigned. Distribution signatures authenticate
-the distributed binary, not its policy semantics or suitability for hostile workloads.
+DuckDB builds and signs the binaries it distributes through its community repository.
+Local builds, CI artifacts, and this project's GitHub Release binaries are unsigned. Distribution
+signatures authenticate the distributed binary, not its policy semantics or suitability for
+hostile workloads.
 Platform CI, browser tests, and fuzzing provide regression coverage; production use
 against hostile callers still requires review of the application and its trust boundary.
 Suspected authorization bypasses should be reported privately as described in

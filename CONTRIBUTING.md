@@ -106,7 +106,7 @@ The suite has two layers with different reach:
   Windows, musl, and engines other than the pinned one. They cover statement rejection,
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
   replacement scans, trusted expansions, nested bound implementations, enforced
-  connections, and the audit log. Add a case here whenever a behavior must hold everywhere the extension is
+  connections, log-only mode, and the audit log. Add a case here whenever a behavior must hold everywhere the extension is
   distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
   tests that run against the loadable artifact on Linux and macOS. Set

@@ -1,6 +1,6 @@
 # Dependency maintenance
 
-Dependabot checks routine GitHub Actions and Python dependency updates monthly. Our reproducible DuckDB build pins are updated manually; they are not a source compatibility allowlist.
+Dependabot checks routine GitHub Actions, Python, npm (`test/wasm`), and Docker (`test/fuzz`) dependency updates monthly. Our reproducible DuckDB build pins are updated manually; they are not a source compatibility allowlist.
 
 Whenever bumping the supported DuckDB version:
 
