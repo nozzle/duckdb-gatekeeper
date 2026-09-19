@@ -335,6 +335,9 @@ struct Resolution {
 };
 
 static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScanInput &input) {
+	// The name as asked, taken before any callback runs. (input's names are const references, so a callback
+	// cannot change them; this keeps the message independent of that guarantee.)
+	auto path = ReplacementScan::GetFullPath(input);
 	auto &config = DBConfig::GetConfig(context);
 	for (auto &scan : config.replacement_scans) {
 		if (scan.function == GatekeeperReplacementScan)
@@ -343,7 +346,6 @@ static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScan
 		auto replacement = scan.function(context, input, scan.data.get());
 		if (!replacement)
 			continue;
-		auto path = ReplacementScan::GetFullPath(input);
 		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
 			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
 			        "host-language replacement scan cannot be authorized: " + path};
