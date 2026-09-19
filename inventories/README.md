@@ -114,10 +114,14 @@ To investigate coverage on another runtime:
 3. Review names you choose to add or reclassify, including their overloads. Record why
    non-obvious entries are default or elevated and preserve the reviewed source revision.
    Existing names need no repeat implementation review merely because the engine changed.
-4. Capture separate baselines for optional extensions using explicit trusted local
-   signed builds (`--load-extension /path/to/extension.duckdb_extension`). The tool
-   never installs or auto-loads an extension on the user's behalf. Compare each
-   extension against the corresponding baseline with `--baseline`.
+4. Optionally, capture a separate baseline for an optional extension from a local file
+   you already have (`--load-extension /path/to/extension.duckdb_extension`, repeatable),
+   whether a signed binary DuckDB installed or an unsigned build of your own; naming the
+   file is the trust decision, and the tool never installs, downloads, or auto-loads an
+   extension on the user's behalf. Compare it against its baseline with `--baseline`.
+   No extension baseline is checked in today: a name an extension adds is unknown until
+   reviewed and so already excluded, and a signature baseline cannot see a change behind
+   an existing name, so these baselines aid an investigation rather than gate anything.
 5. Run generation, the runtime report, full tests, and a build after classification
    changes. Update a historical baseline only intentionally, preserving its provenance.
 
