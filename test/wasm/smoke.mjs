@@ -11,10 +11,13 @@ const root = resolve(here, '../..');
 const dist = resolve(here, 'node_modules/@duckdb/duckdb-wasm/dist');
 const artifact = resolve(process.env.GATEKEEPER_WASM_EXTENSION ||
   resolve(root, 'build/wasm_eh/extension/gatekeeper/gatekeeper.duckdb_extension.wasm'));
-// The release build pin. The npm runtime's own version says nothing about the engine it embeds; the worker is
-// asked, below, and must answer with this.
-const pinnedEngine = 'v' + readFileSync(resolve(root, 'versions.cmake'), 'utf8')
-  .match(/^set\(GATEKEEPER_DUCKDB_VERSION "([^"]+)"\)/m)[1];
+// The release build pin, read the way scripts/versions.py reads it (leading whitespace and trailing comments
+// allowed). The npm runtime's own version says nothing about the engine it embeds; the worker is asked, below,
+// and must answer with this.
+const pinMatch = readFileSync(resolve(root, 'versions.cmake'), 'utf8')
+  .match(/^[ \t]*set\(GATEKEEPER_DUCKDB_VERSION "([^"]+)"\)[ \t]*(?:#.*)?$/m);
+if (!pinMatch) throw Error('versions.cmake does not define GATEKEEPER_DUCKDB_VERSION');
+const pinnedEngine = 'v' + pinMatch[1];
 const bundle = await build({entryPoints: [resolve(dist, 'duckdb-browser.mjs')], bundle: true,
   format: 'esm', write: false});
 // An explicit route map keeps the development server from exposing the checkout.
