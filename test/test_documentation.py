@@ -4,10 +4,12 @@ import re
 import duckdb
 import pytest
 
+import benchmark
 from descriptor import block_scalar
 from inventory import load
-from support.artifact import ROOT
+from support.artifact import EXTENSION, ROOT
 from support.headers import control_plane_names, never_bind_names
+from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB
 
 RESPONSE_TYPES = {duckdb.StatementType.SELECT, duckdb.StatementType.CALL}
 
@@ -136,6 +138,48 @@ def test_default_function_count_in_prose():
     for path in [ROOT / "README.md", ROOT / "community/description.yml"]:
         counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text())
         assert counts and set(counts) == {str(len(defaults))}, (path, counts, len(defaults))
+
+
+def benchmark_table(text, heading):
+    """The table under ``heading`` as rows of cells, separator row dropped, and the whitespace-normalized
+    paragraph after it: the shape scripts/benchmark.py prints, however the document wraps it."""
+    section = re.split(r"(?m)^#", text.split(heading, 1)[1], maxsplit=1)[0]
+    match = re.search(r"(?ms)^((?:\|[^\n]*\n)+)\n(.+?)\n\n", section)
+    assert match, heading
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")] for line in match[1].splitlines()]
+    assert all(re.fullmatch(r":?-+:?", cell) for cell in rows[1]), rows[1]
+    del rows[1]
+    return rows, " ".join(match[2].split())
+
+
+def test_benchmark_table_is_the_script_output():
+    """The README and the descriptor carry one benchmark table: the same cells and footnote in both, the rows
+    and columns scripts/benchmark.py measures, and the engine and extension the numbers were taken on named in
+    the footnote so a stale table is visible. The values themselves are the machine's; see the repinning
+    procedure for when they are regenerated."""
+    readme = benchmark_table(prose(ROOT / "README.md"), "\n## Benchmarks\n")
+    descriptor = benchmark_table("\n".join(block_scalar("docs", "extended_description")), "\n### Benchmarks\n")
+    assert readme == descriptor
+    rows, footnote = readme
+    assert rows[0] == ["", *benchmark.WORKLOADS]
+    assert [row[0] for row in rows[1:]] == list(benchmark.MODES)
+    assert all(len(row) == len(rows[0]) for row in rows)
+    assert f"after {benchmark.WARMUP} warm-ups" in footnote
+    assert f"DuckDB {SUPPORTED_DUCKDB}, Gatekeeper {EXTENSION_VERSION}." in footnote
+
+
+def test_benchmark_script_prints_that_table():
+    """One iteration end to end: every mode runs every workload, the denied copies are refused as forbidden,
+    and the Markdown parses into the shape the documents carry."""
+    iterations = 1
+    rows, footnote = benchmark_table("\n" + benchmark.markdown(benchmark.measure(EXTENSION, iterations), iterations)
+                                     + "\n", "\n")
+    assert rows[0] == ["", *benchmark.WORKLOADS]
+    assert [row[0] for row in rows[1:]] == list(benchmark.MODES)
+    for row in rows[1:]:
+        for label, value in zip(rows[0][1:], row[1:]):
+            assert re.fullmatch(r"\d+(\.\d)? (µs|ms)( \([+−]\d+(\.\d)? (µs|ms)\))?", value), (row[0], label, value)
+    assert f"Median of {iterations} runs" in footnote and duckdb.__version__ in footnote
 
 
 def test_function_metadata_for_generated_docs(db):

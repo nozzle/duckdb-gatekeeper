@@ -96,7 +96,7 @@ make an unsigned extension a DuckDB-signed community build. See the
 .venv/bin/python scripts/audit_inventory.py
 .venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
-.venv/bin/python scripts/benchmark.py --iterations 1000
+.venv/bin/python scripts/benchmark.py --markdown  # the README's Benchmarks table; about a minute
 ```
 
 The suite has two layers with different reach:

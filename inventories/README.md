@@ -151,7 +151,10 @@ or minor release. To change our release build defaults, update together:
 - the DuckDB-Wasm runtime and npm lock in `test/wasm` and the Emscripten pin in
   `scripts/build_wasm.py`. The npm package version differs from the engine it embeds; the EH
   browser test asserts the embedded engine against the pin in `versions.cmake`, so a runtime
-  that embeds another engine fails there.
+  that embeds another engine fails there;
+- the benchmark table in the README and the community descriptor, regenerated with
+  `scripts/benchmark.py --markdown` on the new engine. Its footnote names the engine and
+  extension version it was taken on, and `test_documentation.py` checks that against the pin.
 
 Historical inventory source references and baselines need not change with the build pin.
 
