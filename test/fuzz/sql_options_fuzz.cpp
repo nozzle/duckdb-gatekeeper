@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -524,6 +525,14 @@ static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput 
 	// A reader that binds without external access, so a view over this name can be created and read.
 	if (input.table_name == "trusted_probe")
 		return Reader("range", Value::BIGINT(1));
+	// Answers no policy can authorize: a reference that is not a table function, and one with no function.
+	if (input.table_name == "unsupported_ref") {
+		auto ref = make_uniq<BaseTableRef>();
+		ref->table_name = "t";
+		return std::move(ref);
+	}
+	if (input.table_name == "unsupported_function")
+		return make_uniq<TableFunctionRef>();
 	return nullptr;
 }
 
@@ -532,6 +541,28 @@ static std::string Code(Connection &connection, const std::string &sql) {
 	if (result->HasError())
 		std::abort();
 	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
+}
+
+// The rule and message of the first violation gatekeeper_validate reports.
+static std::pair<std::string, std::string> FirstViolation(Connection &connection, const std::string &sql) {
+	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
+	if (result->HasError())
+		std::abort();
+	auto decision = Decision(*result); // keep the value alive while its children are read
+	auto &violations = ListValue::GetChildren(StructValue::GetChildren(decision)[2]);
+	if (violations.empty())
+		Fail("expected a violation");
+	auto &fields = StructValue::GetChildren(violations[0]);
+	return {fields[0].GetValue<string>(), fields[1].GetValue<string>()};
+}
+
+// Decision records on enforced connections at the replacement gate since the log was last truncated.
+static int64_t GateRecords(Connection &connection) {
+	auto result = connection.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' "
+	                               "AND mode <> 'validate' AND boundary = 'replacement_scan'");
+	if (result->HasError())
+		std::abort();
+	return result->GetValue(0, 0).GetValue<int64_t>();
 }
 
 // The same decision under a request layer that admits no reader: defaults off and the inherited global
@@ -575,6 +606,63 @@ static void CheckReplacementCallbacks() {
 	// A genuinely missing table keeps the engine's error and invokes the callback exactly once.
 	probe.calls = 0;
 	if (Code(connection, "SELECT * FROM missing_table") != "binding" || probe.calls != 1)
+		std::abort();
+	// An answer no policy can authorize is refused as a replacement_scan violation naming the shape, after
+	// exactly one call.
+	for (const auto &shape :
+	     {std::pair<const char *, const char *>{"unsupported_ref",
+	                                            "host-language replacement scan cannot be authorized: unsupported_ref"},
+	      {"unsupported_function", "replacement scan has no resolvable function: unsupported_function"}}) {
+		probe.calls = 0;
+		auto violation = FirstViolation(connection, std::string("SELECT * FROM ") + shape.first);
+		if (violation.first != "replacement_scan" || violation.second != shape.second || probe.calls != 1) {
+			fprintf(stderr, "%s: %s (%d calls)\n", violation.first.c_str(), violation.second.c_str(), probe.calls);
+			Fail("unsupported shape: not one replacement_scan violation after one call");
+		}
+	}
+	// On an enforced connection the gate decides the engine's own bind of a parameterized statement (no private
+	// bind precedes it). A name no callback claims is never a decision: enforcing, the gate raises the engine's
+	// missing-table error itself so the callbacks are not asked a second time outside authorization; log-only,
+	// it returns to the engine's loop, which asks them again, the one place log-only departs from
+	// once-per-lookup. An unsupported answer is a decision: refused enforcing, and log-only recorded and then
+	// bound by the engine exactly as the callback produced it (here a base table that exists, so rows come back).
+	Connection enforced(database);
+	if (enforced.Query("CALL gatekeeper_enforce()")->HasError())
+		std::abort();
+	vector<Value> one{Value::INTEGER(1)};
+	for (bool log_only : {false, true}) {
+		if (connection.Query(log_only ? "SET gatekeeper_log_only = true" : "SET gatekeeper_log_only = false")
+		        ->HasError())
+			std::abort();
+		if (connection.Query("CALL truncate_duckdb_logs()")->HasError())
+			std::abort();
+		probe.calls = 0;
+		auto missing = enforced.PendingQuery("SELECT * FROM missing_table WHERE 1 = $1", one);
+		if (!missing->HasError() || GatekeeperDenial(missing->GetErrorObject()))
+			Fail("no-match: expected the engine's own missing-table error");
+		if (probe.calls != (log_only ? 2 : 1)) {
+			fprintf(stderr, "log_only=%d probe calls: %d\n", log_only, probe.calls);
+			Fail("no-match: unexpected callback count");
+		}
+		missing.reset();
+		if (GateRecords(connection) != 0)
+			Fail("no-match: the gate recorded a decision");
+		probe.calls = 0;
+		auto shape = enforced.PendingQuery("SELECT count(*) FROM unsupported_ref WHERE 1 = $1", one);
+		if (log_only) {
+			if (shape->HasError() || shape->Execute()->HasError())
+				Fail("log-only unsupported shape: the engine did not bind the callback's replacement as produced");
+		} else if (!shape->HasError() || !GatekeeperDenial(shape->GetErrorObject())) {
+			Fail("unsupported shape: expected a Gatekeeper refusal");
+		}
+		shape.reset();
+		if (probe.calls != 1 || GateRecords(connection) != 1) {
+			fprintf(stderr, "log_only=%d probe calls: %d\n", log_only, probe.calls);
+			Fail("unsupported shape: expected one call and one replacement_scan record");
+		}
+	}
+	if (connection.Query("SET gatekeeper_log_only = false")->HasError() ||
+	    connection.Query("CALL truncate_duckdb_logs()")->HasError())
 		std::abort();
 	// A replacement reached only through a trusted view body is that view's reader, outside function policy;
 	// the same name in the caller's text is the caller's reader choice and must pass the allowlist, also when
