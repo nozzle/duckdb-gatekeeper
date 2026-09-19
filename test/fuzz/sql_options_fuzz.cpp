@@ -521,11 +521,25 @@ static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput 
 	}
 	if (input.table_name == "denied_probe")
 		return Reader("read_csv_auto", Value("/gatekeeper/missing/denied.csv"));
+	// A reader that binds without external access, so a view over this name can be created and read.
+	if (input.table_name == "trusted_probe")
+		return Reader("range", Value::BIGINT(1));
 	return nullptr;
 }
 
 static std::string Code(Connection &connection, const std::string &sql) {
 	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
+	if (result->HasError())
+		std::abort();
+	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
+}
+
+// The same decision under a request layer that admits no reader: defaults off and the inherited global
+// allowed_functions (range, above) overridden, so only the deny layer can pass a replacement.
+static std::string StrictCode(Connection &connection, const std::string &sql, const char *blocked = nullptr) {
+	auto options = std::string(", use_default_functions := false, allowed_functions := ['count']") +
+	               (blocked ? std::string(", blocked_functions := ['") + blocked + "']" : "");
+	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1" + options + ")", Value(sql));
 	if (result->HasError())
 		std::abort();
 	return StructValue::GetChildren(Decision(*result))[1].GetValue<string>();
@@ -561,6 +575,33 @@ static void CheckReplacementCallbacks() {
 	// A genuinely missing table keeps the engine's error and invokes the callback exactly once.
 	probe.calls = 0;
 	if (Code(connection, "SELECT * FROM missing_table") != "binding" || probe.calls != 1)
+		std::abort();
+	// A replacement reached only through a trusted view body is that view's reader, outside function policy;
+	// the same name in the caller's text is the caller's reader choice and must pass the allowlist, also when
+	// it stands next to the view. A block on the reader reaches the caller's, not the view's. The view binds on
+	// the unenforced connection, where the gate is open.
+	if (connection.Query("CREATE VIEW probe_view AS SELECT * FROM trusted_probe")->HasError())
+		std::abort();
+	if (StrictCode(connection, "SELECT * FROM probe_view") != "ok")
+		Fail("trusted probe: the view's replacement reader was held to the allowlist");
+	if (StrictCode(connection, "SELECT * FROM trusted_probe") != "forbidden")
+		Fail("trusted probe: the caller's replacement reader escaped the allowlist");
+	if (StrictCode(connection, "SELECT * FROM probe_view, trusted_probe") != "forbidden")
+		Fail("trusted probe: a caller-written name borrowed the view's exemption");
+	if (StrictCode(connection, "SELECT * FROM probe_view", "range") != "ok")
+		Fail("trusted probe: a block reached the view's replacement reader");
+	if (Code(connection, "SELECT * FROM probe_view, trusted_probe") != "ok")
+		Fail("trusted probe: the admitted caller reader next to the view was refused");
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'], blocked_functions := ['range'])")
+	        ->HasError())
+		std::abort();
+	if (Code(connection, "SELECT * FROM probe_view") != "ok")
+		Fail("trusted probe: a global block reached the view's replacement reader");
+	if (Code(connection, "SELECT * FROM trusted_probe") != "forbidden")
+		Fail("trusted probe: a global block did not reach the caller's replacement reader");
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'])")->HasError())
+		std::abort();
+	if (connection.Query("DROP VIEW probe_view")->HasError())
 		std::abort();
 	// Log-only, a parameterized statement reaches the gate on the engine's bind before any private
 	// authorization. The gate records the denied reader and hands back the replacement the callback already
@@ -632,7 +673,8 @@ static void CheckForeignAggregateProvenance() {
 				LogicalProjection plan(0, std::move(expressions));
 				gatekeeper::Result result;
 				try {
-					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), plan, result);
+					AuthorizePlan(gatekeeper::Policy(), gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
+					              result);
 					std::abort();
 				} catch (const BinderException &error) {
 					if (ErrorData(error).RawMessage().find("not the pinned builtin") == string::npos)

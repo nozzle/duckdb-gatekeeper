@@ -15,10 +15,14 @@
 namespace duckdb {
 using namespace duckdb_yyjson;
 
+// Function policy, the never-bind list included, holds for names attributable to the caller; a trusted
+// definition's own functions are outside it, with one exception: Gatekeeper's own control plane is refused on
+// every route. The query-wide allowlist check for ambiguous caller syntax holds for the implementation DuckDB
+// selects wherever it selects it, as documented.
 static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
-                              const string &name, gatekeeper::Result &result) {
+                              const string &name, bool attributable, gatekeeper::Result &result) {
 	auto canonical = gatekeeper::CanonicalFunction(name);
-	if (gatekeeper::FunctionDenied(policy, name) ||
+	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
 	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
 		result.violations.emplace("function", "resolved function is not allowed: " + canonical, "", "", "", canonical);
 		throw PermissionException("resolved function is not allowed");
@@ -26,7 +30,7 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 }
 
 void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,
-                     gatekeeper::Result &result) {
+                     gatekeeper::Result &result, bool attributable) {
 	switch (entry.type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
@@ -34,7 +38,7 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
 	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
-		AuthorizeFunction(policy, binding, entry.name, result);
+		AuthorizeFunction(policy, binding, entry.name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
 		    binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
@@ -126,10 +130,11 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 	return string(yyjson_mut_get_str(name), yyjson_mut_get_len(name));
 }
 
-void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding, LogicalOperator &root,
-                   gatekeeper::Result &result) {
-	auto function = [&](const string &name, const string &type) {
-		AuthorizeFunction(policy, binding, name, result);
+void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
+                   const gatekeeper::Provenance &provenance, LogicalOperator &root, gatekeeper::Result &result) {
+	auto attributable = [&](const string &name) { return provenance.Attributable(binding, name); };
+	auto function = [&](const string &name, const string &type, bool callers) {
+		AuthorizeFunction(policy, binding, name, callers, result);
 		for (const auto &entry : result.functions)
 			if (entry.name == name && entry.type == type)
 				return;
@@ -143,8 +148,13 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 		operators.pop_back();
 		for (auto &child : op->children)
 			operators.push_back(child.get());
-		if (op->type == LogicalOperatorType::LOGICAL_GET && op->Cast<LogicalGet>().function.name != "seq_scan")
-			function(op->Cast<LogicalGet>().function.name, "table");
+		if (op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op->Cast<LogicalGet>();
+			// A scan with a table entry is an attached catalog reading a table the policy allowed: the reader it
+			// uses internally (iceberg_scan, ducklake_scan) is that catalog's, never the caller's.
+			if (get.function.name != "seq_scan")
+				function(get.function.name, "table", !get.GetTable() && attributable(get.function.name));
+		}
 		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
 			if (*expr)
 				expressions.push_back(expr->get());
@@ -155,10 +165,10 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 		expressions.pop_back();
 		ExpressionIterator::EnumerateChildren(child, [&](Expression &nested) { expressions.push_back(&nested); });
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_UNNEST)
-			function("unnest", "scalar");
+			function("unnest", "scalar", attributable("unnest"));
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &bound = child.Cast<BoundFunctionExpression>();
-			function(bound.function.name, "scalar");
+			function(bound.function.name, "scalar", attributable(bound.function.name));
 			auto lambda = dynamic_cast<ListLambdaBindData *>(bound.bind_info.get());
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
@@ -182,15 +192,18 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 					                          "", canonical);
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
-				function(aggregate, "aggregate");
+				// The dispatched aggregate is the dispatcher's: the caller's when the dispatcher is.
+				function(aggregate, "aggregate", attributable(bound.function.name) || attributable(aggregate));
 			}
 		}
-		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
-			function(child.Cast<BoundAggregateExpression>().function.name, "aggregate");
+		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+			auto &name = child.Cast<BoundAggregateExpression>().function.name;
+			function(name, "aggregate", attributable(name));
+		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = child.Cast<BoundWindowExpression>();
 			if (window.aggregate)
-				function(window.aggregate->name, "aggregate");
+				function(window.aggregate->name, "aggregate", attributable(window.aggregate->name));
 			else {
 				static const std::map<ExpressionType, string> windows = {
 				    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
@@ -208,7 +221,7 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 				auto found = windows.find(window.GetExpressionType());
 				if (found == windows.end())
 					throw BinderException("Unsupported bound window implementation");
-				function(found->second, "window");
+				function(found->second, "window", attributable(found->second));
 			}
 		}
 	}

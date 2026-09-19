@@ -91,6 +91,94 @@ forbidden	function	read_csv_auto
 statement ok
 RESET gatekeeper_policy;
 
+# A path inside a host-defined view or macro body is that definition's own reader, outside function policy
+# like an explicit read_parquet(...) there: neither the allowlist nor a block reaches it. The view still needs
+# table policy, and the caller's own spelling of the same path next to the view is still the caller's.
+statement ok
+CREATE VIEW by_path AS SELECT * FROM '__TEST_DIR__/data.parquet';
+
+statement ok
+CREATE VIEW by_call AS SELECT * FROM read_parquet('__TEST_DIR__/data.parquet');
+
+query TT
+SELECT code, list_sort(list_transform(objects, o -> o.type)) FROM gatekeeper_validate('SELECT * FROM by_path');
+----
+ok	[replacement, view]
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_call');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', blocked_functions := ['parquet_scan']);
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_call', blocked_functions := ['parquet_scan']);
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', allowed_tables := []);
+----
+forbidden
+
+# The caller's own spelling of the same path is the caller's reader choice, alone or next to the view.
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
+----
+forbidden	function	read_parquet
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_path, ''__TEST_DIR__/data.parquet''');
+----
+forbidden	function	read_parquet
+
+statement ok
+CREATE MACRO by_macro() AS TABLE SELECT * FROM '__TEST_DIR__/data.parquet';
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()');
+----
+forbidden	function	by_macro
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', allowed_functions := ['by_macro']);
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := ['by_macro']);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['read_parquet']);
+----
+ok
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['by_macro']);
+----
+forbidden	function	by_macro
+
+statement ok
+RESET gatekeeper_policy;
+
+statement ok
+DROP VIEW by_path;
+
+statement ok
+DROP VIEW by_call;
+
+statement ok
+DROP MACRO TABLE by_macro;
+
 # Unclaimed names are binding errors; a file-shaped name that resolves to a catalog object uses table policy.
 query TT
 SELECT code, error_type FROM gatekeeper_validate('SELECT * FROM ''nothing.xyz''');

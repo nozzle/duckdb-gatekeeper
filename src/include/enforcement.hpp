@@ -27,4 +27,8 @@ optional_ptr<const string> AdmittedQuery(ClientContext &context);
 // The policy snapshot QueryBegin took for that statement, under the same conditions. Every check of one
 // statement, including the engine's own bind reaching the replacement-scan gate, must use this one snapshot.
 optional_ptr<const gatekeeper::Policy> AdmittedPolicy(ClientContext &context);
+// What the text walk recorded about that statement (caller-written table names, ambiguous syntax), under the
+// same conditions, so the gate distinguishes a reader the caller chose from one a trusted view or macro body
+// introduces exactly as the private bind does.
+optional_ptr<const gatekeeper::BindingPolicy> AdmittedBinding(ClientContext &context);
 } // namespace duckdb

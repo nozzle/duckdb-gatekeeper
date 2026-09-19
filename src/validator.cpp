@@ -22,6 +22,13 @@ std::string Lower(std::string value) {
 			c += 'a' - 'A';
 	return value;
 }
+std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table) {
+	std::string path = catalog;
+	if (!schema.empty())
+		path += (path.empty() ? "" : ".") + schema;
+	path += (path.empty() ? "" : ".") + table;
+	return Lower(path);
+}
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
 static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const std::string &schema,
                          const std::string &table, bool internal = false) {
@@ -135,6 +142,21 @@ bool FunctionAllowed(const Policy &policy, const std::string &name) {
 	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
 	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
 	        (policy.defaults && inventory.defaults.count(Lower(name))));
+}
+
+bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
+	auto canonical = CanonicalFunction(name);
+	return binding.caller_functions.count(canonical) || binding.synthesized_functions.count(canonical) ||
+	       binding.literal_constructors.count(canonical) || caller_expansions.count(canonical) ||
+	       (binding.caller_collates && CollationFunction(canonical));
+}
+
+bool Provenance::Attributable(const BindingPolicy &binding, const std::string &name) const {
+	if (unattributed)
+		return false;
+	// A name the caller can produce, or that the caller's own binders retrieved, is the caller's. A name only a
+	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
+	return CallerCanName(binding, name) || caller_lookups.count(CanonicalFunction(name));
 }
 struct Stop {
 	std::string message;
@@ -289,6 +311,15 @@ struct Walker {
 		                   yyjson_is_uint(location) ? int64_t(yyjson_get_uint(location)) : -1);
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
+		// replacement scan turns into a reader. Only the last matters, and only the replacement callback learns
+		// which names are which, so it is told every name the caller wrote and treats the rest as trusted.
+		if (kind == "BaseTableRef" && binding)
+			binding->caller_table_refs.insert(
+			    TableRefPath(Field(value, "catalog_name"), Field(value, "schema_name"), Field(value, "table_name")));
+		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
+		if (kind == "CollateExpression" && binding)
+			binding->caller_collates = true;
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
@@ -544,6 +575,8 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 	}
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
+		if (binding)
+			binding->caller_functions.insert(CanonicalFunction(name));
 		if (!walker.Both([&](const Policy &p) { return FunctionAllowed(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;

@@ -146,7 +146,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
-| `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
+| `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
 segments, so `SELECT 1;`, `SELECT 1;;`, and `;SELECT 1` are accepted. Empty,
@@ -297,7 +297,8 @@ macros; they match resolved objects, not CTE names, file paths, or reader argume
 > **Internal objects** (`duckdb_*`, `information_schema.*`) need a rule with exact schema
 > and table names in each policy layer; schema/table wildcards never grant them, though
 > the catalog may be `'*'` or omitted. Block wildcards do match them. Metadata *readers*
-> stay on the never-bind list regardless. Schema-wide `SHOW` is denied whenever any table
+> stay on the never-bind list for the caller's own text regardless; a host view over one
+> is the host's decision. Schema-wide `SHOW` is denied whenever any table
 > restriction is configured; `DESCRIBE table` checks the resolved table normally.
 
 Table rules govern tables and views only. Types, casts, and collations are trusted as
@@ -321,18 +322,24 @@ flowchart LR
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
   `FROM read_parquet(...)`) all use the same policy, by leaf name.
-- Functions that trusted **views and macros** introduce internally are normally exempt
-  from the allowlist but always honor `blocked_functions` and the never-bind list. The
-  exemption is not unconditional: ambiguous caller syntax such as `t.x` or `list[i]`
-  triggers a query-wide implementation check that can also reach a trusted expansion
-  using the same function (for example `struct_extract`). See
+- Trusted **views, macros, and attached tables** are opaque to function policy. What
+  their definitions introduce is theirs, not the caller's: exempt from the allowlist,
+  from `blocked_functions`, and from the never-bind list alike, whether an explicit
+  `read_parquet(...)`, a file path (`FROM 'x.parquet'`), `duckdb_tables()`, or the scan
+  an attached catalog uses. Only Gatekeeper's own control plane (below) is refused
+  inside a body. Table policy still governs the view or table itself, and a macro must
+  itself be allowed. The exemption is by origin, not by name: the same function written
+  by the caller next to the view is the caller's, and ambiguous caller syntax such as
+  `t.x` or `list[i]` triggers a query-wide implementation check that can also reach a
+  trusted expansion using the same function (for example `struct_extract`). See
   [function enforcement and trusted expansion](docs/security.md#function-enforcement-and-trusted-expansion).
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
 
-Blocks also cover bound implementations: `unnest` inside a view, `lower` introduced
-by `nocase` comparisons inside list lambdas, and `sum` dispatched by `list_sum`.
-These implementations are included in successful function dependency lists.
+Blocks also cover the implementations DuckDB binds for the caller's own expressions:
+`lower` introduced by a `COLLATE nocase` the caller wrote, `sum` dispatched by a
+caller-written `list_sum`, `list_aggr` behind it. These implementations are included in
+successful function dependency lists, as are the ones trusted definitions introduce.
 When the caller writes a name-selected dispatcher (`list_aggregate`, `list_aggr`,
 `aggregate`, `array_aggregate`, `array_aggr`), the aggregate it names is caller-chosen
 text and must also be allowed in both layers, not merely unblocked.
@@ -360,16 +367,24 @@ Admitting one permits its resource access; `allowed_tables` does not restrict fi
 
 The decision is made before the reader binds, so a denied path is never opened. Allowed
 paths appear in `objects` with type `replacement`. Host-language scans (DataFrames,
-relations in scope) are always denied.
+relations in scope) are always denied. These rules govern paths the caller writes; a
+path inside a host-defined view or macro body is that definition's own reader and is
+outside function policy like any other trusted expansion.
 
 ### Never-bind list
 
-Denied regardless of options, in every layer:
+Denied regardless of options, in every layer, wherever the caller's text reaches them:
 
 - Dynamic SQL: `query`, `query_table`, `json_execute_serialized_sql`, `json_serialize_plan`
 - Metadata readers: `duckdb_tables`, `information_schema.*`, `SHOW TABLES`
 - Sequence and storage functions
-- `gatekeeper_configure` itself, including through views or macros
+
+A host view or macro that uses one of these is the host's decision to expose it, and is
+admitted when the view is (trusted definitions are opaque to function policy). The one
+exception is Gatekeeper's own control plane, `gatekeeper_configure`, `gatekeeper_enforce`,
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log`, which is
+refused on every route, views and macros included: a definition over one of these would
+let a `SELECT` rewrite the policy or erase the audit trail.
 
 The full list is in [docs/security.md](docs/security.md#never-bind-functions).
 

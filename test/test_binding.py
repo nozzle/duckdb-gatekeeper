@@ -48,8 +48,11 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
     db.execute(f"CREATE VIEW lake.main.file_view AS SELECT * FROM read_parquet('{path}')")
     options = {"allowed_tables": [{"catalog": "lake", "schema": "*", "table": "*"}]}
     assert validate(db,"SELECT * FROM lake.main.file_view",options)["allowed"]
-    assert not validate(db,"SELECT * FROM lake.main.file_view",{**options,"blocked_functions":["read_parquet"]})["allowed"]
+    # The view's reader is the view's: a block on it does not reach into the body, but it still governs the
+    # caller's own call, alone or next to the view.
+    assert validate(db,"SELECT * FROM lake.main.file_view",{**options,"blocked_functions":["read_parquet"]})["allowed"]
     assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]
+    assert not validate(db,f"SELECT * FROM lake.main.file_view, read_parquet('{path}')",{**options,"allowed_functions":["read_parquet"],"blocked_functions":["read_parquet"]})["allowed"]
 
 
 def test_ceiling_shared_and_replacement_is_global(db):

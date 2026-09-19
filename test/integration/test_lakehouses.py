@@ -82,10 +82,15 @@ def test_allowed_and_denied_tables(lake):
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
     assert db.execute(sql).fetchone() == (50.0,)
+    # The scan function an attached catalog resolves an allowed table to is the catalog's, not the caller's: a
+    # block on it does not reach the read, and it is still reported in the dependency list. The caller's own
+    # call of the same function is another matter, and the never-bind list holds everywhere.
+    blocked = validate(db, sql, {**policy, "blocked_functions": [SCAN[kind]]})
+    assert blocked["allowed"] and SCAN[kind] in {f["name"] for f in blocked["functions"]}, (kind, blocked)
     if kind == "iceberg":
-        blocked = validate(db, sql, {**policy, "blocked_functions": ["iceberg_scan"]})
-        assert blocked["code"] == "forbidden"
-        assert any(v["function_name"] == "iceberg_scan" for v in blocked["violations"])
+        direct = validate(db, "SELECT * FROM iceberg_scan('s3://warehouse/untrusted')",
+                          {**policy, "allowed_functions": ["iceberg_scan"], "blocked_functions": ["iceberg_scan"]})
+        assert direct["code"] == "forbidden" and direct["violations"][0]["function_name"] == "iceberg_scan", direct
     for changes in [{"allowed_tables": [{"catalog": "other", "schema": "*", "table": "*"}]},
                     {"allowed_tables": [{"catalog": "*", "schema": "other", "table": "*"}]}, {"allowed_tables": []}]:
         denied = validate(db, sql, {**policy, **changes})
@@ -151,10 +156,11 @@ def test_host_policy_changes_apply_to_enforced_connections_at_their_next_stateme
         enforce(agent)
         assert agent.execute(sql).fetchone() == (50.0,)
         assert agent.execute("SELECT count(*) FROM main.allowed_view").fetchone() == (2,)
-        # Blocking the scan function the lake resolves to refuses the read even though the table is allowed.
+        # Blocking the scan function the lake resolves to does not reach an allowed table's read: the scan is
+        # the attached catalog's, not the caller's. Table policy is what governs the lake.
         configure(db, {**policy, "blocked_functions": [SCAN[kind]]})
-        with pytest.raises(duckdb.PermissionException, match=SCAN[kind]):
-            agent.execute(sql)
+        assert agent.execute(sql).fetchone() == (50.0,)
+        assert agent.execute(f"SELECT amount FROM lake.{schema}.orders WHERE id = ?", [2]).fetchone() == (30.0,)
         # A trusted view is still authorized against the tables it reads.
         configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "*"}]})
         with pytest.raises(duckdb.PermissionException, match=DENIED):

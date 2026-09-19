@@ -129,8 +129,9 @@ forbidden
 statement ok
 RESET gatekeeper_policy;
 
-# Trusted views and macros: functions they introduce are exempt from the allowlist but honor blocks
-# and the never-bind list.
+# Trusted views and macros: what they introduce is theirs, outside function policy altogether; only
+# Gatekeeper's own control plane is refused inside a body. The caller's own use of the same function next to
+# the definition is the caller's and stays subject to the allowlist and blocks.
 statement ok
 CREATE VIEW hashed AS SELECT md5(s) AS h FROM t;
 
@@ -142,8 +143,13 @@ SELECT allowed FROM gatekeeper_validate('SELECT h FROM hashed', use_default_func
 ----
 true
 
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT h FROM hashed', blocked_functions := ['md5']);
+----
+true
+
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT h FROM hashed', blocked_functions := ['md5']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(h) FROM hashed', blocked_functions := ['md5']);
 ----
 forbidden	function	md5
 
@@ -155,15 +161,20 @@ SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_
 ----
 true
 
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := ['doubled'], blocked_functions := ['*']);
+----
+true
+
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := ['doubled'], blocked_functions := ['*']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) * 2 FROM t', use_default_functions := false, allowed_functions := ['doubled'], blocked_functions := ['*']);
 ----
 forbidden	function	*
 
 statement ok
 RESET gatekeeper_policy;
 
-# A trusted definition may use a non-default (but not never-bind) function; a block still reaches it.
+# A trusted definition may use a non-default (but not never-bind) function; a block does not reach it there.
 statement ok
 CREATE VIEW inspecting AS SELECT current_setting('threads') AS v;
 
@@ -172,21 +183,36 @@ SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting');
 ----
 true
 
-query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT v FROM inspecting', blocked_functions := ['current_setting']);
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting', blocked_functions := ['current_setting']);
 ----
-forbidden	function	current_setting
+true
 
+# The trusted boundary is absolute: a view over a never-bind function is the host's decision to expose it,
+# allowed when the view is. Only Gatekeeper's own control plane stays refused on every route.
 statement ok
 CREATE VIEW enumerating AS SELECT * FROM duckdb_tables();
 
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM enumerating');
+----
+true
+
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM enumerating');
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM enumerating, duckdb_tables()');
 ----
 forbidden	function	duckdb_tables
 
-# A host macro that shadows a default name is a trusted definition: it is admitted by the leaf name
-# and its body is checked against blocks and the never-bind list only. Hosts must control the catalog.
+statement ok
+CREATE VIEW erasing AS SELECT * FROM truncate_duckdb_logs();
+
+query TTT
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM erasing');
+----
+forbidden	function	truncate_duckdb_logs
+
+# A host macro that shadows a default name is a trusted definition: it is admitted by the leaf name and its
+# body is checked against the never-bind list only. Hosts must control the catalog.
 statement ok
 CREATE MACRO ltrim(v) AS md5(v);
 
@@ -195,20 +221,26 @@ SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t');
 ----
 true
 
-query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT ltrim(s) FROM t', blocked_functions := ['md5']);
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t', blocked_functions := ['md5']);
 ----
-forbidden	function	md5
+true
 
 statement ok
 DROP MACRO ltrim;
 
-# Bound implementations are blockable: unnest in a view, lower behind nocase in a lambda, sum behind list_sum.
+# Bound implementations of the caller's own expressions are blockable: lower behind nocase in a lambda, sum
+# behind list_sum. The same implementations inside a view are the view's.
 statement ok
 CREATE VIEW unnested AS SELECT unnest([1, 2]) AS u;
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT u FROM unnested', blocked_functions := ['unnest']);
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT unnest([3]) FROM unnested', blocked_functions := ['unnest']);
 ----
 forbidden
 

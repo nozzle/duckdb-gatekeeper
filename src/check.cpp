@@ -2,10 +2,12 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
@@ -14,9 +16,11 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -237,8 +241,8 @@ static bool ReadOperator(LogicalOperatorType type) {
 }
 
 void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceiling,
-               const gatekeeper::BindingPolicy &binding, const StatementProperties &properties, LogicalOperator &plan,
-               gatekeeper::Result &result) {
+               const gatekeeper::BindingPolicy &binding, const gatekeeper::Provenance &provenance,
+               const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result) {
 	auto deny = [&](const string &message) {
 		result.violations.emplace("statement", message);
 		throw PermissionException("only supported read statements are permitted");
@@ -271,19 +275,21 @@ void CheckPlan(const gatekeeper::Policy &policy, const gatekeeper::Policy &ceili
 		for (auto &child : op->children)
 			operators.push_back(child.get());
 	}
-	AuthorizePlan(ceiling, binding, plan, result);
-	AuthorizePlan(policy, binding, plan, result);
+	AuthorizePlan(ceiling, binding, provenance, plan, result);
+	AuthorizePlan(policy, binding, provenance, plan, result);
 }
 
 // Replacement scans run when a table name resolves to no catalog object. DuckDB's callbacks only
 // construct a TableRef; the reader binds (and may open files) afterwards. Gatekeeper installs the
 // first callback at LOAD and decides before that bind happens, both while Authorize is binding on
-// this thread and on every enforced connection: the resolved reader is authorized like a caller-written
-// table function in every applicable policy layer.
+// this thread and on every enforced connection. The resolved reader is authorized as the caller-written
+// table function it stands for when the caller wrote the name, and as a trusted definition's own reader,
+// against the deny layer only, when the name is reachable only through a view or macro body.
 struct ValidationScope {
 	ClientContext &context; // the connection this validation binds on
 	const gatekeeper::Policy &policy;
 	const gatekeeper::Policy &ceiling;
+	const gatekeeper::BindingPolicy &binding; // what the caller wrote, from the text walk
 	gatekeeper::Result &result;
 	gatekeeper::Names authorized; // table names admitted through replacement, case-folded
 };
@@ -321,8 +327,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	};
 	gatekeeper::Policy prepared;
 	optional_ptr<const gatekeeper::Policy> enforced;
-	if (!scope) {
+	// The names the caller wrote, when the statement's text has been walked: under Authorize, the scope's; on an
+	// enforced connection binding an admitted statement itself, the record QueryBegin kept. A Prepare() bind
+	// outside any statement has no text on record and is pre-screened as though the caller wrote every name.
+	optional_ptr<const gatekeeper::BindingPolicy> binding;
+	if (scope) {
+		binding = &scope->binding;
+	} else {
 		enforced = AdmittedPolicy(context);
+		binding = AdmittedBinding(context);
 		if (!enforced) {
 			try {
 				prepared = GlobalPolicy(context);
@@ -336,6 +349,15 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			}
 		}
 	}
+	// A name the caller wrote chooses the reader, so the reader must be allowed like a caller-written table
+	// function. A name reachable only through a trusted view or macro body is that definition's reader and is
+	// outside function policy, exactly as the readers such bodies name explicitly are. The callback cannot see
+	// which binder asked: a name the caller also wrote is the caller's, query-wide.
+	bool caller_written = !binding || binding->caller_table_refs.count(gatekeeper::TableRefPath(
+	                                      input.catalog_name, input.schema_name, input.table_name));
+	auto reader_permitted = [&](const gatekeeper::Policy &layer, const string &name) {
+		return !caller_written || gatekeeper::FunctionAllowed(layer, name);
+	};
 	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
@@ -372,7 +394,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		else
 			layers = {enforced.get()};
 		for (const auto *layer : layers) {
-			if (!gatekeeper::FunctionAllowed(*layer, name)) {
+			if (!reader_permitted(*layer, name)) {
 				if (deny("function", "replacement scan function is not allowed: " + gatekeeper::CanonicalFunction(name),
 				         gatekeeper::CanonicalFunction(name)))
 					return replacement;
@@ -405,9 +427,119 @@ void InstallReplacementScan(DBConfig &config) {
 	config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
 }
 
+static bool FunctionEntry(CatalogType type) {
+	switch (type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+// The function names a scalar macro's definition introduces, read the way the binding boundary reads the
+// caller's text: each overload's expression and default arguments are serialized as the select list of an
+// empty SELECT and walked by the same grammar walker, so syntax-implied names (list_value for [..],
+// struct_extract for x.y) are learned the same way. The walk's verdict is irrelevant here and discarded; only
+// the names it records are kept.
+static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names) {
+	auto node = make_uniq<SelectNode>();
+	for (auto &overload : macro.macros) {
+		node->select_list.push_back(overload->Cast<ScalarMacroFunction>().expression->Copy());
+		for (auto &parameter : overload->default_parameters)
+			node->select_list.push_back(parameter.second->Copy());
+	}
+	node->from_table = make_uniq<EmptyTableRef>();
+	SelectStatement select;
+	select.node = std::move(node);
+	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+	if (!doc)
+		throw std::bad_alloc();
+	auto root = yyjson_mut_obj(doc.get());
+	yyjson_mut_doc_set_root(doc.get(), root);
+	yyjson_mut_obj_add_false(doc.get(), root, "error");
+	auto statements = yyjson_mut_arr(doc.get());
+	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+	yyjson_mut_arr_append(statements, JsonSerializer::Serialize(select, doc.get(), true, true, true, options));
+	unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr),
+	                                                       yyjson_doc_free);
+	if (!ast)
+		throw std::bad_alloc();
+	gatekeeper::BindingPolicy body;
+	gatekeeper::Validate(yyjson_doc_get_root(ast.get()), gatekeeper::Policy(), &body);
+	for (const auto *set : {&body.caller_functions, &body.synthesized_functions, &body.literal_constructors})
+		names.insert(set->begin(), set->end());
+	// A COLLATE in the body binds its collation's function (lower, icu_collate_de, ...) directly, never through
+	// the catalog callback, so there is no lookup to recognize here: the plan walk attributes a collation
+	// function to the caller only when the caller wrote COLLATE (BindingPolicy::caller_collates).
+}
+
+// The catalog-lookup callback of one binder. The binder gives no other signal of scope, so the callback carries
+// it: DuckDB copies a binder's callback into every child binder it creates (CatalogEntryRetriever::Inherit),
+// and creates the binder for a view or table macro body right after retrieving that entry. Retrieving a host
+// view or table macro arms the copy that made the lookup; the next copy made from it, the body's binder, starts
+// trusted, and trusted copies beget trusted copies. Lookups a trusted copy makes are that definition's own:
+// table policy and the never-bind list still apply, blocks do not, and nothing is attributed to the caller.
+// A scalar macro body binds in the caller's own binder, so its names are learned from its definition instead.
+struct LookupCallback {
+	struct Shared {
+		const gatekeeper::Policy &policy;
+		const gatekeeper::Policy &ceiling;
+		const gatekeeper::BindingPolicy &binding;
+		gatekeeper::Provenance &provenance;
+		gatekeeper::Result &result;
+	};
+	shared_ptr<Shared> shared;
+	bool trusted = false;
+	mutable bool armed = false;
+	explicit LookupCallback(shared_ptr<Shared> shared_p) : shared(std::move(shared_p)) {}
+	LookupCallback(const LookupCallback &other) : shared(other.shared), trusted(other.trusted || other.armed) {
+		other.armed = false;
+	}
+	LookupCallback &operator=(const LookupCallback &) = delete;
+	void operator()(CatalogEntry &entry) {
+		auto &s = *shared;
+		bool function = FunctionEntry(entry.type);
+		auto canonical = gatekeeper::CanonicalFunction(entry.name);
+		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
+		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
+		// bind in the same binder.
+		bool attributable = !trusted && !(function && s.provenance.trusted_names.count(canonical) &&
+		                                  !s.provenance.CallerCanName(s.binding, canonical));
+		AuthorizeObject(s.ceiling, s.binding, entry, s.result, attributable);
+		AuthorizeObject(s.policy, s.binding, entry, s.result, attributable);
+		if (!function) {
+			if (!trusted && !entry.internal && entry.type == CatalogType::VIEW_ENTRY)
+				armed = true;
+			return;
+		}
+		if (attributable)
+			s.provenance.caller_lookups.insert(canonical);
+		if (trusted)
+			return;
+		if (entry.type == CatalogType::TABLE_MACRO_ENTRY && !entry.internal)
+			armed = true;
+		if (entry.type != CatalogType::MACRO_ENTRY)
+			return;
+		auto &macro = entry.Cast<ScalarMacroCatalogEntry>();
+		// A host scalar macro's body, and the default macros such a body expands to, are trusted names. A default
+		// macro the caller reached is the caller's, and so is everything its body names.
+		if (!entry.internal || !attributable)
+			MacroBodyNames(macro, s.provenance.trusted_names);
+		else
+			MacroBodyNames(macro, s.provenance.caller_expansions);
+	}
+};
+
 static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy &policy,
                                const gatekeeper::Policy &ceiling, SQLStatement &statement,
-                               const gatekeeper::BindingPolicy &binding,
+                               const gatekeeper::BindingPolicy &binding, gatekeeper::Provenance &provenance,
                                optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
                                gatekeeper::Result &result) {
 	case_insensitive_map_t<BoundParameterData> parameter_data;
@@ -417,11 +549,9 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 	auto binder = Binder::CreateBinder(context);
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-	binder->SetCatalogLookupCallback([&](CatalogEntry &entry) {
-		AuthorizeObject(ceiling, binding, entry, result);
-		AuthorizeObject(policy, binding, entry, result);
-	});
-	ValidationScope scope{context, policy, ceiling, result, {}};
+	binder->SetCatalogLookupCallback(LookupCallback(
+	    make_shared_ptr<LookupCallback::Shared>(LookupCallback::Shared{policy, ceiling, binding, provenance, result})));
+	ValidationScope scope{context, policy, ceiling, binding, result, {}};
 	BoundStatement bound;
 	{
 		ScopeGuard guard(scope);
@@ -437,7 +567,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Policy 
 	for (const auto &entry : bound_parameters.GetParameters())
 		if (!entry.second->return_type.IsValid())
 			throw BinderException("Validation requires a complete bound plan; parameter values or types may be needed");
-	CheckPlan(policy, ceiling, binding, binder->GetStatementProperties(), *bound.plan, result);
+	CheckPlan(policy, ceiling, binding, provenance, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 	for (auto &entry : binder->GetReplacementScans())
 		if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
@@ -551,16 +681,17 @@ void Authorize(ClientContext &context, const gatekeeper::Policy &policy, const g
                gatekeeper::Result &result) {
 	if (unit.pivot_enums.empty()) {
 		if (unit.statement->type == StatementType::SELECT_STATEMENT)
-			return AuthorizeStatement(context, policy, ceiling, *unit.statement, unit.binding, parameters, result);
+			return AuthorizeStatement(context, policy, ceiling, *unit.statement, unit.binding, unit.provenance,
+			                          parameters, result);
 		// Binder::Bind moves a CreateStatement's definition into the plan; keep the admitted statement intact.
 		auto copy = unit.statement->Copy();
-		return AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
+		return AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, unit.provenance, parameters, result);
 	}
 	for (bool large : {false, true}) {
 		auto copy = unit.statement->Copy();
 		if (!SubstitutePivotEnums(context, PivotQuery(*copy), unit.pivot_enums, large) && large)
 			break;
-		AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, parameters, result);
+		AuthorizeStatement(context, policy, ceiling, *copy, unit.binding, unit.provenance, parameters, result);
 	}
 }
 
