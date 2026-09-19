@@ -29,10 +29,34 @@ struct Policy {
 	Names allowed_functions, blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
 };
+// The codes a Result carries. ok, or the kind of refusal: forbidden and unsupported are decisions with violations,
+// the other three describe an error in the caller's input or in the bind. Documented in docs/security.md and
+// carried by every audit record.
+namespace codes {
+inline constexpr const char *OK = "ok";
+inline constexpr const char *FORBIDDEN = "forbidden";
+inline constexpr const char *UNSUPPORTED = "unsupported";
+inline constexpr const char *INVALID_INPUT = "invalid_input";
+inline constexpr const char *PARSER = "parser";
+inline constexpr const char *BINDING = "binding";
+} // namespace codes
+// The rules a Violation names: which check refused. Unrelated to the identity type "table" and to the struct
+// field "table", which are spelled out where they are used.
+namespace rules {
+inline constexpr const char *STATEMENT = "statement";
+inline constexpr const char *LIMIT = "limit";
+inline constexpr const char *FUNCTION = "function";
+inline constexpr const char *TABLE = "table";
+inline constexpr const char *INTERNAL_OBJECT = "internal_object";
+inline constexpr const char *BIND_TIME_EXPRESSION = "bind_time_expression";
+inline constexpr const char *DYNAMIC_SQL = "dynamic_sql";
+inline constexpr const char *REPLACEMENT_SCAN = "replacement_scan";
+inline constexpr const char *UNSUPPORTED_STRUCTURE = "unsupported_structure";
+} // namespace rules
 struct Violation {
 	std::string rule, message, catalog, schema, table, function_name;
 	int64_t position = -1;
-	Violation(std::string message) : rule("unsupported_structure"), message(std::move(message)) {}
+	Violation(std::string message) : rule(rules::UNSUPPORTED_STRUCTURE), message(std::move(message)) {}
 	Violation(std::string rule, std::string message, std::string catalog = {}, std::string schema = {},
 	          std::string table = {}, std::string function_name = {}, int64_t position = -1)
 	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)), schema(std::move(schema)),
@@ -56,6 +80,18 @@ struct Result {
 	int64_t position = -1;
 	std::set<Identity> objects, functions;
 };
+// The denials more than one boundary spells the same way.
+inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";
+inline Result UnsupportedStatement() {
+	return {false, codes::UNSUPPORTED, "", "", {{rules::STATEMENT, UNSUPPORTED_STATEMENT}}};
+}
+inline Result NotAdmitted() {
+	return {false, codes::FORBIDDEN, "", "", {{rules::STATEMENT, "not admitted at the binding boundary"}}};
+}
+inline Result FixedLimitExceeded(std::string message) {
+	return {false, codes::FORBIDDEN, "", "", {{rules::LIMIT, std::move(message)}}};
+}
+inline Result InvalidInput(std::string message) { return {false, codes::INVALID_INPUT, "", std::move(message)}; }
 struct BindingPolicy {
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;

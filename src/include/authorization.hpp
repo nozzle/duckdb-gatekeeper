@@ -4,6 +4,10 @@
 namespace duckdb {
 class CatalogEntry;
 class LogicalOperator;
+enum class CatalogType : uint8_t;
+// The kind a function entry is reported as in Result::functions (scalar, aggregate, table, macro, table_macro,
+// pragma), or null for every catalog entry that is not a function.
+const char *FunctionKind(CatalogType type);
 // Authorizes one catalog entry the binder retrieved: tables and views by identity against table policy, function
 // entries against the never-bind list and, when the name is attributable to the caller, the policy's blocks.
 // A lookup made while binding a trusted definition's body is not attributable; see gatekeeper::Provenance.

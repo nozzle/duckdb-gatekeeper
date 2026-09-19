@@ -13,6 +13,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "policy_setting.hpp"
+#include "single_row.hpp"
 
 namespace duckdb {
 
@@ -29,18 +30,6 @@ static bool LogOnlySetting(ClientContext &context) {
 }
 
 static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG_ONLY : DecisionMode::ENFORCE; }
-
-// Reads the global policy. An unreadable setting is decided as invalid_input: the fail-closed outcome for a
-// sandbox whose policy was written without validation.
-static bool ReadPolicy(ClientContext &context, gatekeeper::Policy &policy, gatekeeper::Result &result) {
-	try {
-		policy = GlobalPolicy(context);
-		return true;
-	} catch (const std::invalid_argument &error) {
-		result = {false, "invalid_input", "", string("cannot read the global policy: ") + error.what()};
-		return false;
-	}
-}
 
 // The per-connection latch. Its presence in ClientContext::registered_state is what makes a connection
 // enforced; nothing removes it. A connection is enforced only because the host ran gatekeeper_enforce() on
@@ -116,7 +105,7 @@ struct EnforcementState : ClientContextState {
 		in_statement = true;
 		log_only = LogOnlySetting(context);
 		const auto &sql = context.GetCurrentQuery();
-		if (!ReadPolicy(context, policy, result)) {
+		if (!TryGlobalPolicy(context, policy, result)) {
 			Record(context, Boundary::BINDING, nullptr, &sql);
 			return;
 		}
@@ -124,11 +113,11 @@ struct EnforcementState : ClientContextState {
 		try {
 			text = CheckText(context, policy, policy, sql, gatekeeper::Limits());
 		} catch (const ParserException &error) {
-			result = {false, "parser", "parser", ErrorData(error).RawMessage()};
+			result = {false, gatekeeper::codes::PARSER, "parser", ErrorData(error).RawMessage()};
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		} catch (const InvalidInputException &error) {
-			result = {false, "invalid_input", "", ErrorData(error).RawMessage()};
+			result = gatekeeper::InvalidInput(ErrorData(error).RawMessage());
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
@@ -140,7 +129,7 @@ struct EnforcementState : ClientContextState {
 		// The engine presents one statement at a time here: a dynamic PIVOT arrives as the statements its
 		// preprocessor rewrote it into, each with its own text, never as the batch. Fail closed on anything else.
 		if (text.units.size() != 1 || !text.units[0].pivot_enums.empty()) {
-			result = {false, "unsupported", "", "", {{"statement", "only supported read statements are permitted"}}};
+			result = gatekeeper::UnsupportedStatement();
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
@@ -192,7 +181,7 @@ struct EnforcementState : ClientContextState {
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
 	                                  RebindQueryInfo) override {
 		if (!admitted && !decided) {
-			result = {false, "forbidden", "", "", {{"statement", "not admitted at the binding boundary"}}};
+			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
 		// The prepared plan was built before this query began. Rebinding inside the query means the plan
@@ -271,7 +260,7 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		auto mode = ModeFor(LogOnlySetting(context));
 		gatekeeper::Policy policy;
 		gatekeeper::Result result;
-		if (!ReadPolicy(context, policy, result)) {
+		if (!TryGlobalPolicy(context, policy, result)) {
 			Decide(context, {mode, Boundary::PREPARE, nullptr, nullptr}, result);
 			return;
 		}
@@ -298,7 +287,7 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	if (!state->admitted) {
 		// In ENFORCE mode the binding-boundary denial refused the statement before the engine could plan it;
 		// should a plan arrive regardless, fail closed rather than authorize what was never admitted.
-		state->result = {false, "forbidden", "", "", {{"statement", "not admitted at the binding boundary"}}};
+		state->result = gatekeeper::NotAdmitted();
 		state->Record(context, Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery());
 		return;
 	}
@@ -359,10 +348,6 @@ struct EnforceBinding : FunctionData {
 	bool Equals(const FunctionData &) const override { return true; }
 };
 
-struct EnforceGlobalState : GlobalTableFunctionState {
-	bool finished = false;
-};
-
 static unique_ptr<FunctionData> BindEnforce(ClientContext &, TableFunctionBindInput &, vector<LogicalType> &types,
                                             vector<string> &names) {
 	types = {LogicalType::BOOLEAN, LogicalType::LIST(LogicalType::VARCHAR)};
@@ -370,12 +355,8 @@ static unique_ptr<FunctionData> BindEnforce(ClientContext &, TableFunctionBindIn
 	return make_uniq<EnforceBinding>();
 }
 
-static unique_ptr<GlobalTableFunctionState> InitEnforce(ClientContext &, TableFunctionInitInput &) {
-	return make_uniq<EnforceGlobalState>();
-}
-
 static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-	auto &state = input.global_state->Cast<EnforceGlobalState>();
+	auto &state = input.global_state->Cast<SingleRowState>();
 	if (state.finished)
 		return;
 	// Latch at execution, never at bind: EXPLAIN and PREPARE must not enforce.
@@ -399,7 +380,7 @@ void RegisterEnforcement(ExtensionLoader &loader) {
 	planner.post_bind_function = PostBind;
 	PlannerExtension::Register(config, planner);
 
-	TableFunction enforce("gatekeeper_enforce", {}, Enforce, BindEnforce, InitEnforce);
+	TableFunction enforce("gatekeeper_enforce", {}, Enforce, BindEnforce, InitSingleRow);
 	FunctionDescription description;
 	description.description = "Irreversibly makes this connection execute only statements the global Gatekeeper "
 	                          "policy allows and reports host settings that weaken the sandbox.";

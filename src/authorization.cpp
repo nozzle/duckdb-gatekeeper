@@ -15,6 +15,30 @@
 namespace duckdb {
 using namespace duckdb_yyjson;
 
+const char *FunctionKind(CatalogType type) {
+	switch (type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+		return "scalar";
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+		return "aggregate";
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+		return "table";
+	case CatalogType::MACRO_ENTRY:
+		return "macro";
+	case CatalogType::TABLE_MACRO_ENTRY:
+		return "table_macro";
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return "pragma";
+	default:
+		return nullptr;
+	}
+}
+
+// The engine's own builtins live in system.main; an entry anywhere else is a host's or an extension's.
+static bool SystemBuiltin(const string &catalog, const string &schema) {
+	return catalog == "system" && schema == "main";
+}
+
 // Function policy, the never-bind list included, holds for names attributable to the caller; a trusted
 // definition's own functions are outside it, with one exception: Gatekeeper's own control plane is refused on
 // every route. The query-wide allowlist check for ambiguous caller syntax holds for the implementation DuckDB
@@ -24,49 +48,36 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	auto canonical = gatekeeper::CanonicalFunction(name);
 	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
 	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
-		result.violations.emplace("function", "resolved function is not allowed: " + canonical, "", "", "", canonical);
+		result.violations.emplace(gatekeeper::rules::FUNCTION, "resolved function is not allowed: " + canonical, "", "",
+		                          "", canonical);
 		throw PermissionException("resolved function is not allowed");
 	}
 }
 
 void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,
                      gatekeeper::Result &result, bool attributable) {
-	switch (entry.type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY:
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
-	case CatalogType::TABLE_FUNCTION_ENTRY:
-	case CatalogType::MACRO_ENTRY:
-	case CatalogType::TABLE_MACRO_ENTRY:
-	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
+	if (auto kind = FunctionKind(entry.type)) {
 		AuthorizeFunction(policy, binding, entry.name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();
+		auto catalog = function.schema.catalog.GetName(), schema = function.schema.name;
+		bool builtin = SystemBuiltin(catalog, schema);
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
 		    binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
-		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
-		     function.schema.name != "main")) {
-			result.violations.emplace("bind_time_expression",
-			                          "runtime arguments require a system table-in-out function",
-			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
+		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || !builtin)) {
+			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
+			                          "runtime arguments require a system table-in-out function", catalog, schema, "",
+			                          entry.name);
 			throw PermissionException("untrusted table-in-out function");
 		}
 		if (binding.literal_constructors.count(gatekeeper::Lower(entry.name)) &&
-		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || function.schema.catalog.GetName() != "system" ||
-		     function.schema.name != "main")) {
-			result.violations.emplace("bind_time_expression", "literal constructor must resolve to a system builtin",
-			                          function.schema.catalog.GetName(), function.schema.name, "", entry.name);
+		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || !builtin)) {
+			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
+			                          "literal constructor must resolve to a system builtin", catalog, schema, "",
+			                          entry.name);
 			throw PermissionException("untrusted bind-time constructor");
 		}
-		string type = entry.type == CatalogType::SCALAR_FUNCTION_ENTRY      ? "scalar"
-		              : entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY ? "aggregate"
-		              : entry.type == CatalogType::TABLE_FUNCTION_ENTRY     ? "table"
-		              : entry.type == CatalogType::MACRO_ENTRY              ? "macro"
-		              : entry.type == CatalogType::TABLE_MACRO_ENTRY        ? "table_macro"
-		                                                                    : "pragma";
-		result.functions.insert({function.schema.catalog.GetName(), function.schema.name, entry.name, type});
+		result.functions.insert({catalog, schema, entry.name, kind});
 		return;
-	}
-	default:
-		break;
 	}
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
 		return;
@@ -74,12 +85,12 @@ void AuthorizeObject(const gatekeeper::Policy &policy, const gatekeeper::Binding
 	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
 	if (!gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
 		if (gatekeeper::TableBlocked(policy, catalog, schema, name))
-			result.violations.emplace("table", "object is blocked", catalog, schema, name);
+			result.violations.emplace(gatekeeper::rules::TABLE, "object is blocked", catalog, schema, name);
 		else if (entry.internal)
-			result.violations.emplace("internal_object", "internal object requires exact schema/table permission",
-			                          catalog, schema, name);
+			result.violations.emplace(gatekeeper::rules::INTERNAL_OBJECT,
+			                          "internal object requires exact schema/table permission", catalog, schema, name);
 		else
-			result.violations.emplace("table", "object is not allowed", catalog, schema, name);
+			result.violations.emplace(gatekeeper::rules::TABLE, "object is not allowed", catalog, schema, name);
 	}
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
@@ -96,7 +107,7 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 		return {};
 	// Catalog construction stamps this provenance onto each overload and binding preserves it.
 	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
-	if (expression.function.catalog_name != "system" || expression.function.schema_name != "main")
+	if (!SystemBuiltin(expression.function.catalog_name, expression.function.schema_name))
 		throw BinderException("List aggregate implementation is not the pinned builtin");
 	auto null_input =
 	    !expression.children.empty() && expression.children[0]->return_type.id() == LogicalTypeId::SQLNULL;
@@ -174,7 +185,7 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
 			// host/extension boundary; if it ever fails there, refuse rather than silently skip the body.
 			if (!lambda && gatekeeper::ListLambdaFunctions().count(bound.function.name) &&
-			    bound.function.catalog_name == "system" && bound.function.schema_name == "main")
+			    SystemBuiltin(bound.function.catalog_name, bound.function.schema_name))
 				throw BinderException("Cannot inspect list lambda implementation");
 			if (lambda && lambda->lambda_expr)
 				expressions.push_back(lambda->lambda_expr.get());
@@ -188,8 +199,9 @@ void AuthorizePlan(const gatekeeper::Policy &policy, const gatekeeper::BindingPo
 				    gatekeeper::DispatchingAggregators().count(bound.function.name) &&
 				    !gatekeeper::FunctionAllowed(policy, aggregate)) {
 					auto canonical = gatekeeper::CanonicalFunction(aggregate);
-					result.violations.emplace("function", "dispatched aggregate is not allowed: " + canonical, "", "",
-					                          "", canonical);
+					result.violations.emplace(gatekeeper::rules::FUNCTION,
+					                          "dispatched aggregate is not allowed: " + canonical, "", "", "",
+					                          canonical);
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
 				// The dispatched aggregate is the dispatcher's: the caller's when the dispatcher is.

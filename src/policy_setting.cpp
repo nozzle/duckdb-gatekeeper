@@ -35,6 +35,16 @@ gatekeeper::Policy GlobalPolicy(ClientContext &context) {
 	return gatekeeper::ReadPolicy(value);
 }
 
+bool TryGlobalPolicy(ClientContext &context, gatekeeper::Policy &policy, gatekeeper::Result &result) {
+	try {
+		policy = GlobalPolicy(context);
+		return true;
+	} catch (const std::invalid_argument &error) {
+		result = gatekeeper::InvalidInput(string("cannot read the global policy: ") + error.what());
+		return false;
+	}
+}
+
 struct ConfigureBinding : FunctionData {
 	Value policy;
 	explicit ConfigureBinding(Value policy) : policy(std::move(policy)) {}

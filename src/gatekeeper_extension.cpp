@@ -110,11 +110,11 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		auto policy = defaults;
 		gatekeeper::ApplyOptions(policy, binding.options);
 		if (binding.sql.IsNull())
-			decision = {false, "invalid_input", "", "NULL SQL input", {}};
+			decision = gatekeeper::InvalidInput("NULL SQL input");
 		else
 			decision = Check(context, policy, defaults, sql);
 	} catch (const std::invalid_argument &error) {
-		decision = {false, "invalid_input", "", error.what(), {}};
+		decision = gatekeeper::InvalidInput(error.what());
 	}
 	Decide(context,
 	       {DecisionMode::VALIDATE, Boundary::NONE, have_defaults ? &defaults : nullptr,
