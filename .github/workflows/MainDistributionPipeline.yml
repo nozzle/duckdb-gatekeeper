@@ -17,12 +17,28 @@ concurrency:
   group: distribution-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  metadata:
+    # The engine pin the reusable pipeline builds against and names its artifacts with, read from
+    # versions.cmake so it cannot drift from the submodule, the Python package, and the Makefile.
+    name: Release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      duckdb_version: ${{ steps.versions.outputs.duckdb_version }}
+      duckdb_revision: ${{ steps.versions.outputs.duckdb_revision }}
+      extension_version: ${{ steps.versions.outputs.extension_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: versions
+        run: python3 scripts/versions.py | tee -a "$GITHUB_OUTPUT"
+
   build:
     name: Build extension binaries
+    needs: metadata
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@72e76e99cd7fee45a99739cd118ec2db64e034ec # v1.5-variegata
     with:
       extension_name: gatekeeper
-      duckdb_version: v1.5.5
+      duckdb_version: v${{ needs.metadata.outputs.duckdb_version }}
       ci_tools_version: 72e76e99cd7fee45a99739cd118ec2db64e034ec
       # scripts/generate.py runs at configure time; the musl images only ship Python on request.
       extra_toolchains: python3
@@ -33,26 +49,16 @@ jobs:
 
   browser-test:
     name: Distribution Wasm EH Chromium
-    needs: build
+    needs: [metadata, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: test/wasm/package-lock.json
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: gatekeeper-v1.5.5-extension-wasm_eh
+          name: gatekeeper-v${{ needs.metadata.outputs.duckdb_version }}-extension-wasm_eh
           path: build/wasm_eh/extension/gatekeeper
-      - run: npm ci --ignore-scripts
-        working-directory: test/wasm
-      - run: npx playwright install --with-deps chromium
-        working-directory: test/wasm
-      - run: npm test
-        working-directory: test/wasm
+      - uses: ./.github/actions/wasm-browser-test
 
   loadable-test:
     # The reusable pipeline tests a statically linked unittest binary. These jobs load the actual
@@ -60,7 +66,7 @@ jobs:
     # (bind-data inspection, replacement-scan callbacks, the policy setting) is exercised on every
     # desktop platform, including the ones where pytest otherwise never runs.
     name: Distributed loadable (${{ matrix.arch }})
-    needs: build
+    needs: [metadata, build]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -74,16 +80,13 @@ jobs:
           - { os: windows-latest, arch: windows_amd64, pytest: false }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.13'
+      - uses: ./.github/actions/setup
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: gatekeeper-v1.5.5-extension-${{ matrix.arch }}
+          name: gatekeeper-v${{ needs.metadata.outputs.duckdb_version }}-extension-${{ matrix.arch }}
           path: build/distributed
-      - run: python -m pip install --require-hashes -r requirements-dev.txt
       - name: Stamped engine identity matches the pinned engine
-        run: python scripts/check_engine_stamp.py --extension build/distributed/gatekeeper.duckdb_extension --expect-version v1.5.5
+        run: python scripts/check_engine_stamp.py --extension build/distributed/gatekeeper.duckdb_extension --expect-version v${{ needs.metadata.outputs.duckdb_version }}
       - name: ABI-sensitive smoke checks against the distributed artifact
         run: python scripts/smoke_loadable.py build/distributed/gatekeeper.duckdb_extension
       - name: Full pytest suite against the distributed artifact

@@ -4,6 +4,7 @@ import os
 import platform
 import re
 import subprocess
+import sys
 
 import duckdb
 import pytest
@@ -24,10 +25,28 @@ def test_loaded_extension_version_matches_metadata(db):
     assert db.execute("SELECT extension_version FROM duckdb_extensions() WHERE extension_name='gatekeeper'").fetchone() == (EXTENSION_VERSION,)
 
 
+def test_metadata_prints_job_outputs():
+    output = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/versions.py")], capture_output=True, text=True,
+                            check=True).stdout
+    assert output.splitlines() == [f"duckdb_version={SUPPORTED_DUCKDB}", f"duckdb_revision={SUPPORTED_DUCKDB_REVISION}",
+                                   f"extension_version={EXTENSION_VERSION}"]
+
+
 def test_distribution_engine_pins():
-    workflow = (ROOT / ".github/workflows/MainDistributionPipeline.yml").read_text()
-    assert re.search(r"duckdb_version: v" + re.escape(SUPPORTED_DUCKDB) + r"\s", workflow)
-    assert "OVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB in (ROOT / ".github/workflows/test.yml").read_text()
+    # The workflows read the engine pin from versions.cmake through a metadata job (scripts/versions.py) and
+    # carry no release-shaped literal of their own: the reusable pipeline's input, its artifact names, the
+    # OVERRIDE_GIT_DESCRIBE label, and the stamp checks all consume that job's output.
+    for name, wiring in [("MainDistributionPipeline.yml", ["duckdb_version: v${{ needs.metadata.outputs.duckdb_version }}",
+                                                           "name: gatekeeper-v${{ needs.metadata.outputs.duckdb_version }}-extension-",
+                                                           "--expect-version v${{ needs.metadata.outputs.duckdb_version }}"]),
+                         ("test.yml", ["-DOVERRIDE_GIT_DESCRIBE=v${{ needs.metadata.outputs.duckdb_version }}",
+                                       "--expect-version v${{ needs.metadata.outputs.duckdb_version }}"])]:
+        workflow = (ROOT / ".github/workflows" / name).read_text()
+        assert "run: python3 scripts/versions.py | tee -a \"$GITHUB_OUTPUT\"" in workflow, name
+        for expected in wiring:
+            assert expected in workflow, (name, expected)
+        # No engine pin of its own: the only release-shaped literals left are the action version comments.
+        assert re.findall(r"^(?!.*# v\d)(?=.*\bv\d+\.\d+\.\d+\b).*$", workflow, re.M) == [], name
     # The Makefile supplies the release pin only for the pinned engine revision and reads both values from
     # versions.cmake; an unconditional default would label every community rebuild as the pinned release.
     makefile = (ROOT / "Makefile").read_text()

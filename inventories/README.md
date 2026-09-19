@@ -131,11 +131,13 @@ still fail closed. No inventory re-review is required just to rebuild against a 
 or minor release. To change our release build defaults, update together:
 
 - the `duckdb` submodule and engine version/revision in `versions.cmake`
-   (release build metadata; not an engine allowlist);
-- `OVERRIDE_GIT_DESCRIBE` in `.github/workflows/test.yml` (the `Makefile` and
-  `scripts/engine.py` read the pin from `versions.cmake` and apply it only when the engine
-  checkout is at exactly the pinned revision);
-- `duckdb_version`, `ci_tools_version`, and the reusable workflow ref in
+   (release build metadata; not an engine allowlist). The workflows read the pin from
+   there through a metadata job (`scripts/versions.py`): the `OVERRIDE_GIT_DESCRIBE` label
+   in `test.yml`, the reusable pipeline's `duckdb_version` and artifact names in
+   `MainDistributionPipeline.yml`, and the stamp checks follow it without an edit. The
+   `Makefile` and `scripts/engine.py` read it too and apply it only when the engine checkout
+   is at exactly the pinned revision;
+- `ci_tools_version` and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
   `v1.5-variegata` rather than tagging patch releases);

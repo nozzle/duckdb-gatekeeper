@@ -14,8 +14,21 @@ env:
   CMAKE_C_COMPILER_LAUNCHER: ccache
   CMAKE_CXX_COMPILER_LAUNCHER: ccache
 jobs:
+  metadata:
+    # The engine pin every job below labels or checks builds against, read from versions.cmake.
+    name: Release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      duckdb_version: ${{ steps.versions.outputs.duckdb_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: versions
+        run: python3 scripts/versions.py | tee -a "$GITHUB_OUTPUT"
+
   test:
     name: Test (${{ matrix.os }})
+    needs: metadata
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -26,15 +39,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: '3.13'
-      - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
-        with:
-          key: release-${{ matrix.os }}
-          max-size: 600M
-      - run: python -m pip install --require-hashes -r requirements-dev.txt
-      - run: cmake -G Ninja -S duckdb -B build/release -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v1.5.5 -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
+          ccache-key: release-${{ matrix.os }}
+      - run: cmake -G Ninja -S duckdb -B build/release -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v${{ needs.metadata.outputs.duckdb_version }} -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
       - run: cmake --build build/release --target gatekeeper_loadable_extension --parallel
       - run: python -m pytest test -q
       - run: python scripts/audit_inventory.py
@@ -60,14 +68,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: '3.13'
-      - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
-        with:
-          key: sanitized-ubuntu-latest
-          max-size: 600M
-      - run: python -m pip install --require-hashes -r requirements-dev.txt
+          ccache-key: sanitized-ubuntu-latest
       - run: sudo apt-get update -qq && sudo apt-get install -y clang libclang-rt-dev
       # The script selects and requires Clang; see its module docstring.
       - run: python scripts/test_sanitized.py
@@ -76,26 +79,23 @@ jobs:
     # The community build path: extension-ci-tools Makefile, static linking into the shell and
     # unittest binary, and the sqllogictests in test/sql.
     name: Makefile build and sqllogictests
+    needs: metadata
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: '3.13'
-      - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
-        with:
-          key: makefile-ubuntu-latest
-          max-size: 1G
-      - run: python -m pip install --require-hashes -r requirements-dev.txt
+          ccache-key: makefile-ubuntu-latest
+          ccache-max-size: 1G
       - run: make release
         env:
           GEN: ninja
       - run: make test_release
       - name: Stamped engine identity matches the pinned submodule
-        run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb --expect-version v1.5.5
+        run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb --expect-version v${{ needs.metadata.outputs.duckdb_version }}
       - name: Loadable carries the release engine metadata
         # Static linking hides a mis-stamped engine; the pinned Python package is the real release
         # engine and refuses a loadable whose footer disagrees with it.
@@ -116,8 +116,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: '3.13'
-      - run: python -m pip install --require-hashes -r requirements-dev.txt -r test/integration/requirements.txt
+          requirements: requirements-dev.txt test/integration/requirements.txt
       - run: python -c "import colorama, duckdb, pytest, jsonschema, boto3; print(duckdb.__version__)"
