@@ -1,190 +1,33 @@
 """Enforced connections: the engine refuses what gatekeeper_validate would deny, without host glue."""
 import concurrent.futures
 import os
-import re
 import threading
 
 import duckdb
 import pytest
 
-from test_gatekeeper import EXTENSION, connect, db
-from typed_helpers import configure, validate
-
-DENIED = re.compile(r"Gatekeeper denied this statement")
-
-
-def enforce(connection):
-    row = connection.execute("CALL gatekeeper_enforce()").fetchone()
-    assert row[0] is True
-    return row[1]
-
-
-CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
-    CREATE TABLE reporting.orders(id INTEGER, amount DOUBLE, tag VARCHAR);
-    INSERT INTO reporting.orders VALUES (1, 10.5, 'a'), (2, 20.25, 'b'), (3, 5.0, 'a');
-    CREATE TABLE secret.salaries(who VARCHAR, amount DOUBLE);
-    INSERT INTO secret.salaries VALUES ('x', 1.0);
-    CREATE VIEW reporting.totals AS SELECT tag, sum(amount) AS total FROM reporting.orders GROUP BY tag;
-    CREATE VIEW reporting.leak AS SELECT * FROM secret.salaries;
-    CREATE MACRO reporting.twice(x) AS x * 2;
-    CREATE SEQUENCE reporting.seq;
-    CREATE TYPE tags AS ENUM ('a', 'b');
-    CREATE TYPE empty_tags AS ENUM (SELECT tag FROM reporting.orders WHERE false)"""
-CATALOG_POLICY = {"allowed_tables": [{"schema": "reporting", "table": "*"}],
-                  "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
-
-
-@pytest.fixture
-def catalog(db):
-    db.execute(CATALOG_SQL)
-    configure(db, CATALOG_POLICY)
-    return db
-
-
-@pytest.fixture
-def agent(catalog):
-    with catalog.cursor() as cursor:
-        enforce(cursor)
-        yield cursor
-
-
-# Statement text paired with what gatekeeper_validate says about it; the oracle below asserts the engine
-# agrees on an enforced connection. Rows read only reporting.* under the fixture policy.
-PARITY_CORPUS = [
-    "SELECT 1",
-    "SELECT sum(amount), tag FROM reporting.orders GROUP BY tag ORDER BY 2",
-    "SELECT * FROM reporting.totals",
-    "SELECT twice(amount) FROM reporting.orders",
-    "WITH t AS (SELECT id FROM reporting.orders) SELECT count(*) FROM t",
-    "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 5) SELECT sum(n) FROM r",
-    "SELECT o.id, t.total FROM reporting.orders o JOIN reporting.totals t USING (tag)",
-    "SELECT id, row_number() OVER (PARTITION BY tag ORDER BY amount) FROM reporting.orders",
-    "SELECT id FROM reporting.orders UNION SELECT id + 10 FROM reporting.orders",
-    "SELECT id FROM reporting.orders EXCEPT SELECT 1",
-    "SELECT unnest([1, 2, 3])",
-    "SELECT list_transform([1, 2], x -> x + 1)",
-    "SELECT [1, 2, 3][2], {'a': 1}.a, 'x' || 'y'",
-    "SELECT * FROM reporting.orders USING SAMPLE 1",
-    "SELECT * FROM (SELECT tag, amount FROM reporting.orders) PIVOT (sum(amount) FOR tag IN ('a', 'b'))",
-    "PIVOT reporting.orders ON tag USING sum(amount)",
-    "PIVOT reporting.orders ON tag IN (SELECT DISTINCT tag FROM reporting.orders) USING sum(amount)",
-    "PIVOT reporting.orders ON tag, id USING sum(amount) GROUP BY amount",
-    "PIVOT reporting.orders ON tag IN tags, id USING count(*)",
-    "PIVOT reporting.orders ON tag IN empty_tags, id USING count(*) GROUP BY amount",
-    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*)",
-    "WITH p AS (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) PIVOT p ON id USING count(*)",
-    "WITH c AS (SELECT * FROM reporting.orders) PIVOT c ON tag USING sum(amount)",
-    "SELECT (SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount)))",
-    "SELECT 1 UNION ALL SELECT count(*) FROM (PIVOT reporting.orders ON tag USING sum(amount))",
-    "SELECT * FROM reporting.orders PIVOT (sum(amount) FOR tag IN (SELECT tag FROM reporting.orders))",
-    "SELECT DISTINCT tag FROM reporting.orders LIMIT 5 OFFSET 0",
-    "SELECT * FROM reporting.orders WHERE amount > (SELECT avg(amount) FROM reporting.orders)",
-    "SELECT * FROM reporting.orders o WHERE EXISTS (SELECT 1 FROM reporting.orders i WHERE i.id = o.id + 1)",
-    "SELECT list_aggregate([1, 2], 'sum')",
-    "DESCRIBE reporting.orders",
-    "SHOW reporting.orders",
-    "VALUES (1), (2)",
-    "FROM reporting.orders SELECT id",
-    "SELECT * FROM range(3)",
-    "SELECT * FROM generate_series(1, 3)",
-    "SELECT lower('A'), upper('b'), strftime(DATE '2024-01-01', '%Y')",
-    # Denied by policy.
-    "SELECT md5('x')",
-    "SELECT * FROM secret.salaries",
-    "SELECT * FROM reporting.leak",
-    "SELECT who FROM reporting.leak",
-    "SELECT * FROM reporting.orders, secret.salaries",
-    "WITH s AS (SELECT * FROM secret.salaries) SELECT * FROM s",
-    "SELECT (SELECT amount FROM secret.salaries LIMIT 1)",
-    "SELECT nextval('reporting.seq')",
-    "SELECT * FROM duckdb_tables()",
-    "SELECT * FROM duckdb_settings()",
-    "SELECT current_setting('threads')",
-    "SELECT * FROM read_csv('/nonexistent/x.csv')",
-    "SELECT * FROM read_parquet('/nonexistent/x.parquet')",
-    "FROM '/nonexistent/x.parquet'",
-    "SELECT * FROM query('SELECT 1')",
-    "SELECT * FROM query_table('reporting.orders')",
-    "SELECT * FROM json_execute_serialized_sql('{}')",
-    "SELECT list_aggregate([1, 2], 'md5')",
-    "SELECT * FROM reporting.orders LIMIT (SELECT 1)",
-    # Dynamic PIVOT: the enum type's SELECT and the pivoting SELECT are each decided as the engine runs them.
-    "PIVOT secret.salaries ON who USING sum(amount)",
-    "PIVOT reporting.leak ON who USING sum(amount)",
-    "PIVOT reporting.orders ON md5(tag) USING sum(amount)",
-    "PIVOT reporting.orders ON tag USING sum(amount), md5(tag)",
-    "PIVOT reporting.orders ON tag IN (SELECT who FROM secret.salaries) USING sum(amount)",
-    "PIVOT reporting.orders ON tag IN (SELECT md5('x')) USING sum(amount)",
-    "PIVOT reporting.orders ON tag USING sum(amount) LIMIT (SELECT 1)",
-    "PIVOT (PIVOT reporting.leak ON who USING sum(amount) GROUP BY amount) ON amount USING count(*)",
-    "PIVOT (PIVOT reporting.orders ON tag USING sum(amount) GROUP BY id) ON id USING count(*), md5(id)",
-    # Only the parser's own rewrite of a dynamic PIVOT is a supported CREATE.
-    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT who FROM secret.salaries)",
-    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM ('a', 'b')",
-    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_notauuid\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE OR REPLACE TEMP TYPE mood AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE OR REPLACE TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE OR REPLACE TEMP TYPE temp.main.\"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS ENUM (SELECT DISTINCT tag FROM reporting.orders)",
-    "CREATE OR REPLACE TEMP TYPE \"__pivot_enum_0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0\" AS INTEGER",
-    "SHOW TABLES",
-    "SELECT * FROM gatekeeper_validate('SELECT 1')",
-    "SELECT * FROM gatekeeper_enforce()",
-    # Unsupported statement types.
-    "CREATE TABLE u(x INTEGER)",
-    "CREATE OR REPLACE VIEW reporting.v2 AS SELECT 1",
-    "INSERT INTO reporting.orders VALUES (9, 1.0, 'z')",
-    "UPDATE reporting.orders SET amount = 0",
-    "DELETE FROM reporting.orders",
-    "DROP TABLE reporting.orders",
-    "ALTER TABLE reporting.orders ADD COLUMN y INTEGER",
-    "COPY reporting.orders TO '/tmp/gatekeeper_enforcement_test.csv'",
-    "EXPORT DATABASE '/tmp/gatekeeper_enforcement_export'",
-    "ATTACH ':memory:' AS other",
-    "SET threads = 1",
-    "RESET threads",
-    "CALL pragma_version()",
-    "LOAD json",
-    "INSTALL json",
-    "EXPLAIN SELECT 1",
-    "EXPLAIN ANALYZE SELECT 1",
-    "PREPARE p AS SELECT 1",
-    "BEGIN TRANSACTION",
-    "CHECKPOINT",
-    "VACUUM",
-    "CREATE SECRET s (TYPE s3)",
-    "CALL gatekeeper_configure()",
-    "CALL gatekeeper_enforce()",
-    "RESET gatekeeper_policy",
-    # Engine errors, which the engine reports in its own words.
-    "SELECT * FROM reporting.missing",
-    "SELECT no_such_column FROM reporting.orders",
-    "SELECT no_such_function(1)",
-    "SELECT 1 + 'a'::DATE",
-    "PIVOT reporting.missing ON tag USING sum(amount)",
-    "PIVOT reporting.orders ON no_such_column USING sum(amount)",
-    "PIVOT reporting.orders ON tag USING sum(no_such_column)",
-    # Static IN lists whose product alone passes pivot_limit (2^17 > 100000): the engine refuses the pivot.
-    "PIVOT reporting.orders ON tag, " + ", ".join(f"id + {i} IN (1, 2)" for i in range(17)) + " USING count(*)",
-]
+from support.artifact import connect
+from support.corpus import CATALOG_POLICY, PARITY_CORPUS
+from support.enforcement import DENIED, attempt, enforce
+from support.typed_helpers import configure, validate
 
 
 @pytest.mark.parametrize("sql", PARITY_CORPUS)
 def test_enforcement_agrees_with_validate(catalog, agent, sql):
+    # First leg of the parity oracle: what gatekeeper_validate denies, the enforced connection refuses as a
+    # Gatekeeper denial; what the engine cannot bind fails in the engine's own words on both.
     expected = validate(catalog, sql)
-    try:
-        agent.execute(sql).fetchall()
-    except duckdb.Error as error:
-        # Validation binds but never executes, so an allowed statement may still fail at runtime
-        # (a bad cast, for instance). What it must never do is trip a Gatekeeper denial.
-        assert not expected["allowed"] or not DENIED.search(str(error)), (sql, error)
-        if expected["code"] in {"forbidden", "unsupported"}:
-            assert isinstance(error, duckdb.PermissionException) and DENIED.search(str(error)), (sql, error)
-        elif not expected["allowed"]:
-            assert expected["code"] in {"binding", "parser"} and not DENIED.search(str(error)), (sql, expected, error)
+    seen = attempt(agent, sql)
+    if seen.kind == "rows":
+        assert expected["allowed"], (sql, expected)
         return
-    assert expected["allowed"], (sql, expected)
+    # Validation binds but never executes, so an allowed statement may still fail at runtime
+    # (a bad cast, for instance). What it must never do is trip a Gatekeeper denial.
+    assert not expected["allowed"] or seen.kind == "engine", (sql, seen.error)
+    if expected["code"] in {"forbidden", "unsupported"}:
+        assert seen.kind == "denied" and isinstance(seen.error, duckdb.PermissionException), (sql, seen.error)
+    elif not expected["allowed"]:
+        assert expected["code"] in {"binding", "parser"} and seen.kind == "engine", (sql, expected, seen.error)
 
 
 def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog, agent):
@@ -533,11 +376,12 @@ def test_enforce_is_not_a_setting(db):
             cursor.execute("CREATE TABLE u(x INTEGER)")
 
 
-@pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
-                   "preprocessor before any extension hook runs; see docs/security.md#residuals and issue #46")
+@pytest.mark.xfail(strict=True, reason="the engine evaluates PRAGMA argument expressions in the statement "
+                   "preprocessor before any extension hook runs (nozzle/duckdb-gatekeeper#46)")
 def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, agent):
-    # Pins a known engine-side gap. When this starts passing (an engine change or a new hook), remove the
-    # xfail and the matching residual in the security model.
+    # Pins a known engine-side gap; strict, so an engine repin that closes it fails here. When this starts
+    # passing (an engine change or a new hook), remove the xfail and the matching residual in
+    # docs/security.md#residuals.
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))")
     assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)

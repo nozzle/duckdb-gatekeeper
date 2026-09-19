@@ -1,9 +1,7 @@
 """Deterministic generated combinations with independently specified outcomes."""
 import random
 
-from test_binding import validate
-from test_gatekeeper import db
-from typed_helpers import configure
+from support.typed_helpers import configure, validate
 
 
 def test_generated_nested_reference_positions(db):

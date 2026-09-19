@@ -7,12 +7,11 @@ import sys
 
 import pytest
 
-from test_gatekeeper import ROOT
-
-sys.path.insert(0, str(ROOT / "scripts"))
-from generate import header, grammar
+from generate import grammar, header
+from inventory import check_sources, load
 import schema_check
-from inventory import load, check_sources
+from support.artifact import ROOT
+from support.toolchain import compile_cpp, git, repository
 
 
 @pytest.mark.parametrize("key,value", [
@@ -51,8 +50,7 @@ def test_generation_chunks_roundtrip_and_compile(tmp_path):
     assert json.loads("".join(chunks)) == data
     source = tmp_path / "literal.cpp"
     source.write_text('#include <cstdio>\n' + content + '\nint main() { std::fputs(fixture_json, stdout); }\n')
-    binary = tmp_path / "literal"
-    subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", str(source), "-o", str(binary)], check=True)
+    binary = compile_cpp([source], tmp_path / "literal")
     assert json.loads(subprocess.check_output([str(binary)])) == data
 
 
@@ -190,18 +188,12 @@ def test_engine_selection_follows_the_revision_not_the_path(tmp_path):
     from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
     parser = argparse.ArgumentParser()
     add_engine_arguments(parser)
-    git = shutil.which("git")
-    if not git:
+    if not shutil.which("git"):
         pytest.skip("git not installed")
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@t"}
     for name, revision in (("pinned", SUPPORTED_DUCKDB_REVISION), ("other", "0" * 40)):
+        # HEAD at the wanted commit id without needing that object: a detached ref is enough for rev-parse.
         repo = tmp_path / name
-        repo.mkdir()
-        subprocess.run([git, "init", "-q", str(repo)], check=True)
-        subprocess.run([git, "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "engine"], check=True, env=env)
-        # Point HEAD at the wanted commit id without needing that object: a detached ref is enough for rev-parse.
-        (repo / ".git/HEAD").write_text(revision + "\n")
+        repository(repo, head=revision)
         assert engine_version(parser.parse_args(["--duckdb-source", str(repo)])) == (
             "v" + SUPPORTED_DUCKDB if name == "pinned" else None)
     assert engine_version(parser.parse_args(["--duckdb-source", str(tmp_path / "other"), "--duckdb-version", "v1.5.6"])) == "v1.5.6"
@@ -358,16 +350,12 @@ def test_sanitized_runner_rejects_engines_the_pinned_package_cannot_load(tmp_pat
 def test_wasm_container_mounts_engine_git_metadata(tmp_path):
     """An engine linked as a worktree under root still needs its external Git common directory mounted."""
     from build_wasm import container_mounts
-    git = lambda *args, cwd: subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
-    for name in ("project", "engine"):
-        repo = tmp_path / name
-        repo.mkdir()
-        git("init", "-q", cwd=repo)
-        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init", cwd=repo)
     root, engine = tmp_path / "project", tmp_path / "engine"
+    repository(root)
+    repository(engine)
     candidate = root / "build/candidate-source"
     candidate.parent.mkdir(parents=True)
-    git("worktree", "add", "-q", str(candidate), cwd=engine)
+    git(engine, "worktree", "add", "-q", str(candidate))
     root, engine, candidate = root.resolve(), engine.resolve(), candidate.resolve()
     volumes = lambda mounts: [mounts[i + 1] for i in range(0, len(mounts), 2)]
     # Under-root linked worktree: the source is already covered by root, but its metadata is not.

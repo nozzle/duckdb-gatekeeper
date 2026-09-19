@@ -89,9 +89,9 @@ against a user who controls their browser.
 
 ## Maintenance
 
-When repinning DuckDB, coordinate the npm runtime pin and lockfile, the embedded
-version assertion in `smoke.mjs`, this documentation, and Emscripten compatibility
-with `extension-ci-tools`. DuckDB-Wasm is excluded from routine Dependabot updates.
+When repinning DuckDB, coordinate the npm runtime pin and lockfile, this documentation,
+and Emscripten compatibility with `extension-ci-tools`. `smoke.mjs` reads the engine pin
+from `versions.cmake` and fails when the runtime embeds a different engine. DuckDB-Wasm is excluded from routine Dependabot updates.
 Other npm test dependencies receive monthly updates. Browser CI builds and tests
 EH on every PR; the distribution workflow also builds the standard `wasm_eh`
 artifact through the community tooling, downloads that exact artifact, and runs

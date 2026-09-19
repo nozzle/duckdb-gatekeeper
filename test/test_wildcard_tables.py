@@ -4,12 +4,7 @@ import itertools
 import duckdb
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import configure, validate
-
-
-def rule(catalog="*", schema="*", table="*"):
-    return {"catalog": catalog, "schema": schema, "table": table}
+from support.typed_helpers import configure, policy, rule, validate
 
 
 @pytest.mark.parametrize("catalog,schema,table", list(itertools.product(["memory", "*"], ["reporting", "*"], ["orders", "*"])))
@@ -50,9 +45,9 @@ def test_wildcard_layers_intersect_at_the_resolved_object(db):
 def test_wildcards_round_trip_and_cover_future_objects(db):
     configure(db, {"allowed_tables": [rule("MeMoRy", "RePoRtInG"), rule("MeMoRy", "RePoRtInG")]})
     db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
-    policy = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
-    assert policy["allowed_tables"] == [rule("memory", "reporting")]
-    assert policy["restrict_tables"]
+    canonical = policy(db)
+    assert canonical["allowed_tables"] == [rule("memory", "reporting")]
+    assert canonical["restrict_tables"]
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.future(x INT)")
     assert validate(db, "SELECT * FROM reporting.future")["allowed"]
     db.execute("CREATE TABLE main.future(x INT); SET schema='main'")
@@ -104,12 +99,12 @@ def test_show_is_not_authorized_by_a_broad_wildcard(db, sql):
 @pytest.mark.parametrize("name", ["allowed_tabels", "blocked_tabels"])
 def test_misspelled_options_are_rejected_by_both_apis(db, name):
     configure(db, {"allowed_tables": []})
-    before = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
+    before = policy(db)
     for sql in [f"CALL gatekeeper_configure({name} := ['memory'])",
                 f"SELECT * FROM gatekeeper_validate('SELECT 1', {name} := ['memory'])"]:
         with pytest.raises(duckdb.Error, match="unknown option|Invalid named parameter"):
             db.execute(sql)
-    assert db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0] == before
+    assert policy(db) == before
 
 
 def test_table_wildcards_are_independent_of_functions_and_types(db):

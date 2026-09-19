@@ -5,10 +5,11 @@ import threading
 import duckdb
 import pytest
 
-from test_audit import decisions, enable, records
-from test_enforcement import CATALOG_POLICY, CATALOG_SQL, DENIED, PARITY_CORPUS, agent, catalog, enforce  # noqa: F401
-from test_gatekeeper import connect, db  # noqa: F401 (fixture)
-from typed_helpers import configure, validate
+from support.artifact import connect, literal
+from support.audit import decisions, enable, records
+from support.corpus import CATALOG_POLICY, CATALOG_SQL, PARITY_CORPUS
+from support.enforcement import DENIED, attempt, enforce
+from support.typed_helpers import configure, validate
 
 
 def fresh_catalog(log_only):
@@ -25,34 +26,35 @@ QUERY_LOCATION = re.compile(r"\n\nLINE \d+:.*", re.DOTALL)
 
 
 def outcome(connection, sql):
-    try:
-        rows = connection.execute(sql).fetchall()
-    except duckdb.Error as error:
+    """What the caller sees, in a form two connections' results can be compared in."""
+    seen = attempt(connection, sql)
+    if seen.kind != "rows":
         # DuckDB names a dynamic PIVOT's enum type after a fresh UUID; the engine's own error text carries it.
         # An enforced connection also binds a copy of the statement (its state can request a rebind), and
         # DuckDB's PivotRef::Copy drops the query location, so a binder error raised at a PIVOT loses its LINE
         # excerpt there (see docs/security.md, "Errors are informative"); for PIVOT text only, compare the
         # message without it. Every other error must match to the last character.
-        message = PIVOT_ENUM.sub("__pivot_enum_", str(error))
+        message = PIVOT_ENUM.sub("__pivot_enum_", str(seen.error))
         if "PIVOT" in sql.upper():
             message = QUERY_LOCATION.sub("", message)
-        return ("error", type(error).__name__, message)
+        return ("error", type(seen.error).__name__, message)
     if sql.startswith("EXPLAIN ANALYZE"):
         return ("ok",)  # timings differ run to run
     if "USING SAMPLE" in sql:
-        return ("ok", len(rows))
-    return ("ok", sorted(rows, key=repr))  # unordered statements may return rows in any order
+        return ("ok", len(seen.rows))
+    return ("ok", sorted(seen.rows, key=repr))  # unordered statements may return rows in any order
 
 
-def quoted(sql):
-    return "'" + sql.replace("'", "''") + "'"
+def outcome_with(connection, sql, parameters):
+    seen = attempt(connection, sql, parameters)
+    return ("ok", seen.rows) if seen.kind == "rows" else ("error", type(seen.error).__name__, str(seen.error))
 
 
 @pytest.mark.parametrize("sql", PARITY_CORPUS)
 def test_log_only_connection_behaves_like_an_unenforced_one_and_records_what_validate_says(sql):
-    # Two-sided parity on identical fresh instances: the caller sees exactly what an unenforced connection
-    # shows (rows, or DuckDB's own error, never a Gatekeeper denial), and the one record the statement leaves
-    # is the gatekeeper_validate row for it.
+    # Third leg of the parity oracle, two-sided on identical fresh instances: the caller sees exactly what an
+    # unenforced connection shows (rows, or DuckDB's own error, never a Gatekeeper denial), and the one record
+    # the statement leaves is the gatekeeper_validate row for it.
     with fresh_catalog(True) as plain_host, fresh_catalog(True) as host:
         expected = validate(host, sql)
         with host.cursor() as observed:
@@ -90,8 +92,8 @@ def test_log_only_records_are_what_enforcement_would_have_refused(catalog, agent
         strict = outcome(agent, sql) if "?" not in sql else outcome_with(agent, sql, [1])
         catalog.execute("SET gatekeeper_log_only = true")
         relaxed = outcome(agent, sql) if "?" not in sql else outcome_with(agent, sql, [1])
-        [enforced] = decisions(catalog, f"mode = 'enforce' AND statement = {quoted(sql)}")
-        [logged] = decisions(catalog, f"mode = 'log_only' AND statement = {quoted(sql)}")
+        [enforced] = decisions(catalog, f"mode = 'enforce' AND statement = {literal(sql)}")
+        [logged] = decisions(catalog, f"mode = 'log_only' AND statement = {literal(sql)}")
         for column in ["boundary", "allowed", "code", "violations", "objects", "functions", "policy_hash"]:
             assert enforced[column] == logged[column], (sql, column)
         if enforced["allowed"]:
@@ -100,13 +102,6 @@ def test_log_only_records_are_what_enforcement_would_have_refused(catalog, agent
             assert strict[0] == "error" and DENIED.search(strict[2]), (sql, strict)
             assert relaxed[0] == "ok", (sql, relaxed)
     assert catalog.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'u'").fetchone() == (1,)
-
-
-def outcome_with(connection, sql, parameters):
-    try:
-        return ("ok", connection.execute(sql, parameters).fetchall())
-    except duckdb.Error as error:
-        return ("error", type(error).__name__, str(error))
 
 
 def test_flip_applies_at_the_next_statement_in_both_directions(catalog, agent):
@@ -144,7 +139,7 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     ]
     for sql, boundary, code in cases:
         agent.execute(sql).fetchall()
-        found = decisions(catalog, f"statement = {quoted(sql)}")
+        found = decisions(catalog, f"statement = {literal(sql)}")
         assert [(r["boundary"], r["code"]) for r in found] == [(boundary, code)], (sql, found)
     # A batch is one statement at a time, each with its own text and record, and none of them stops the batch.
     assert agent.execute("SELECT 1; CREATE TABLE v(x INTEGER); SELECT 2").fetchall() == [(2,)]

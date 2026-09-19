@@ -1,8 +1,7 @@
 """Only the explicitly reviewed Parquet reader pair shares a permission."""
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import configure, validate
+from support.typed_helpers import configure, validate
 
 
 @pytest.mark.parametrize("global_name", ["read_parquet", "PARQUET_SCAN"])

@@ -1,52 +1,28 @@
+"""Enforced, log-only, and validated reads against real Iceberg and DuckLake catalogs (opt-in, see
+scripts/test_lakehouses.py)."""
 import os
-from pathlib import Path
-import re
 import uuid
 
 import duckdb
 import pytest
 
+from support.artifact import connect, literal
+from support.audit import decisions, enable
+from support.enforcement import DENIED, enforce
+from support.typed_helpers import configure, validate
+
 pytestmark = pytest.mark.skipif(os.getenv("GATEKEEPER_LAKEHOUSE_TESTS") != "1", reason="opt-in local lakehouse tests")
-ROOT = Path(__file__).resolve().parents[2]
-DENIED = re.compile(r"Gatekeeper denied this statement")
 SCAN = {"iceberg": "iceberg_scan", "ducklake": "ducklake_scan"}
-
-
-def validate(db, sql, policy):
-    args = ["?"] + [name + " := ?" for name in policy]
-    result = db.execute("SELECT * FROM gatekeeper_validate(" + ",".join(args) + ")", [sql, *policy.values()])
-    return dict(zip((column[0] for column in result.description), result.fetchone()))
-
-
-def configure(db, policy):
-    db.execute("CALL gatekeeper_configure(" + ",".join(name + " := ?" for name in policy) + ")", list(policy.values()))
-
-
-def enforce(connection):
-    row = connection.execute("CALL gatekeeper_enforce()").fetchone()
-    assert row[0] is True
-    return row[1]
-
-
-def decisions(db, where="true"):
-    columns = ["mode", "boundary", "allowed", "code", "violations", "objects", "functions", "statement", "log_level"]
-    result = db.execute(f"SELECT {', '.join(columns)} FROM duckdb_logs_parsed('Gatekeeper') "
-                        f"WHERE event = 'decision' AND ({where}) ORDER BY timestamp, context_id")
-    return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
 @pytest.fixture(params=["iceberg", "ducklake"])
 def lake(request, tmp_path):
-    db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-    try:
+    # connect() closes the connection if the artifact fails to load; the context manager closes it after that.
+    with connect() as db:
         yield from initialize_lake(db, request.param, tmp_path)
-    finally:
-        db.close()
 
 
 def initialize_lake(db, kind, tmp_path):
-    extension = Path(os.getenv("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
-    db.execute("LOAD '" + str(extension).replace("'", "''") + "'")
     if kind == "iceberg":
         import boto3
         s3 = boto3.client("s3", endpoint_url="http://127.0.0.1:19000", aws_access_key_id="gatekeeper-test", aws_secret_access_key="gatekeeper-local-only", region_name="us-east-1")
@@ -58,9 +34,8 @@ def initialize_lake(db, kind, tmp_path):
         db.execute("ATTACH 'warehouse' AS lake (TYPE iceberg, ENDPOINT 'http://127.0.0.1:18181', AUTHORIZATION_TYPE 'none')")
     else:
         db.execute("LOAD ducklake")
-        metadata = str(tmp_path / "metadata.ducklake").replace("'", "''")
-        data = str(tmp_path / "data").replace("'", "''")
-        db.execute(f"ATTACH 'ducklake:{metadata}' AS lake (DATA_PATH '{data}', DATA_INLINING_ROW_LIMIT 0)")
+        db.execute(f"ATTACH {literal('ducklake:' + str(tmp_path / 'metadata.ducklake'))} AS lake "
+                   f"(DATA_PATH {literal(tmp_path / 'data')}, DATA_INLINING_ROW_LIMIT 0)")
     schema = "test_" + uuid.uuid4().hex[:12]
     db.execute(f"CREATE SCHEMA lake.{schema}")
     db.execute(f"CREATE TABLE lake.{schema}.orders(id BIGINT, amount DOUBLE)")
@@ -78,7 +53,7 @@ def test_allowed_and_denied_tables(lake):
     db, schema, kind = lake
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
     policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
-    db.execute("CALL gatekeeper_configure(" + ",".join(name + " := ?" for name in policy) + ")", list(policy.values()))
+    configure(db, policy)
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
     assert db.execute(sql).fetchone() == (50.0,)
@@ -178,8 +153,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
     db, schema, kind = lake
     policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
     configure(db, policy)
-    db.execute("CALL enable_logging('Gatekeeper')")
-    db.execute("SET logging_level = 'debug'")
+    enable(db, "debug")
     db.execute("SET gatekeeper_log_only = true")
     orders, secret = f"SELECT sum(amount) FROM lake.{schema}.orders", f"SELECT value FROM lake.{schema}.secret"
     untrusted = "s3://warehouse/untrusted.parquet" if kind == "iceberg" else str(tmp_path / "untrusted.parquet")
@@ -213,5 +187,5 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
         db.execute("SET gatekeeper_log_only = false")
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(secret)
-        modes = [r["mode"] for r in decisions(db, f"statement = '{secret}' AND mode <> 'validate'")]
+        modes = [r["mode"] for r in decisions(db, f"statement = {literal(secret)} AND mode <> 'validate'")]
         assert modes == ["log_only", "enforce"], modes

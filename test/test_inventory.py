@@ -1,15 +1,14 @@
 import json
-import sys
 import shutil
+
 import pytest
 
-from test_gatekeeper import ROOT, check, db
-
-sys.path.insert(0, str(ROOT / "scripts"))
-from inventory import load
 from audit_inventory import compare, coverage
+from inventory import load
+from support.artifact import ROOT
+from support.headers import never_bind_names
+from support.typed_helpers import validate
 from versions import BASELINE_FILENAME
-from typed_helpers import never_bind_names
 
 
 def test_never_bind_inventory_excluded_from_defaults():
@@ -25,9 +24,9 @@ def test_complete_default_inventory(db):
     assert len(names) == 953
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
-        result = check(db, f"SELECT {quoted}(1)")
+        result = validate(db, f"SELECT {quoted}(1)")
         assert result["code"] in {"ok", "binding"}, (name, result)
-        assert not check(db, f"SELECT {quoted}(1)", {"blocked_functions": [name]})["allowed"]
+        assert not validate(db, f"SELECT {quoted}(1)", {"blocked_functions": [name]})["allowed"]
 
 
 def test_nondefault_inventory(db):
@@ -36,7 +35,7 @@ def test_nondefault_inventory(db):
         for name in entry["elevated"] + entry.get("unreviewed", []):
             assert name not in defaults
             sql = 'SELECT "' + name.replace('"', '""') + '"(1)'
-            assert not check(db, sql)["allowed"], name
+            assert not validate(db, sql)["allowed"], name
 
 
 def test_core_baseline_fully_reviewed():
@@ -83,9 +82,9 @@ def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
     """Each default is blockable and disappears with use_default_functions=false."""
     db.execute("CREATE TABLE t AS SELECT 1 x")
     db.execute(sql).fetchall()
-    assert check(db, sql)["allowed"], (name, check(db, sql))
+    assert validate(db, sql)["allowed"], (name, validate(db, sql))
     for options in [{"blocked_functions": [name]}, {"use_default_functions": False}]:
-        result = check(db, sql, options)
+        result = validate(db, sql, options)
         assert result["code"] == "forbidden", (name, options, result)
         assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"]), result
 
@@ -106,7 +105,7 @@ def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
 def test_inspection_and_internal_names_are_excluded(db, sql, name):
     """Reviewed and excluded from defaults; the reason for each is recorded in core.json notes."""
     db.execute("CREATE TABLE t AS SELECT 1 x")
-    result = check(db, sql)
+    result = validate(db, sql)
     assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
     assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"]), result
 
@@ -154,7 +153,7 @@ def test_rejected_validation_does_not_touch_the_rng(db):
     """switch evaluates its MAP argument at bind time without a foldability check; a caller-authored
     switch is rejected before binding, so the setseed inside it never runs during validation."""
     db.execute("SELECT setseed(0.1)")
-    result = check(db, "SELECT switch(1, MAP {1: setseed(0.5)})")
+    result = validate(db, "SELECT switch(1, MAP {1: setseed(0.5)})")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "switch", result
     draws = [db.execute("SELECT random()").fetchone()[0] for _ in range(3)]
     db.execute("SELECT setseed(0.1)")
@@ -183,6 +182,6 @@ def test_reviewed_macro_and_dispatch_names(db, sql, name):
         return set()
     assert name in names(serialized)
     db.execute(sql).fetchall()
-    result = check(db, sql)
+    result = validate(db, sql)
     assert result["code"] == "forbidden" and result["error_message"] == ""
     assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"])

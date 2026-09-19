@@ -2,12 +2,13 @@
 they are that definition's own, outside function policy altogether."""
 import duckdb
 import json
-import re
 
 import pytest
 
-from test_gatekeeper import ROOT, db
-from typed_helpers import configure, validate
+from support.artifact import ROOT
+from support.enforcement import DENIED, enforce
+from support.headers import header_names
+from support.typed_helpers import configure, validate
 
 
 CASES = [
@@ -74,7 +75,6 @@ def test_trusted_macro_body_does_not_launder_caller_expansions(db, order):
     caller's text can reach the same implementation without naming it, through a default macro it expands to
     (list_count names list_aggr); that expansion is the caller's, in either order, and the aggregate it
     dispatches stays subject to the caller's blocks. The host macro's own dispatch stays its own."""
-    from test_enforcement import DENIED, enforce
     db.execute("CREATE MACRO m() AS list_sum([1,2])")
     configure(db, {"allowed_functions": ["m"], "blocked_functions": ["count"]})
     mixed = "SELECT m(), list_count([3])" if order == "macro_first" else "SELECT list_count([3]), m()"
@@ -207,12 +207,6 @@ LAMBDA_CALLS = {
 }
 
 
-def _header_names(function):
-    header = (ROOT / "src/include/function_policy.hpp").read_text()
-    body = header.split(f"inline const Names &{function}()", 1)[1].split("return names;", 1)[0]
-    return set(re.findall(r'"([a-z_]+)"', body))
-
-
 def test_list_lambda_function_names_match_the_engine():
     """The fail-closed lambda inspection covers exactly DuckDB's list-lambda builtins and their aliases, so a
     renamed or added alias in the engine cannot leave a lambda body uninspected without failing this test."""
@@ -225,13 +219,13 @@ def test_list_lambda_function_names_match_the_engine():
         if entry["name"] in ("list_transform", "list_filter", "list_reduce"):
             engine.add(entry["name"])
             engine.update(entry.get("aliases", []))
-    assert _header_names("ListLambdaFunctions") == engine == set(LAMBDA_CALLS)
+    assert header_names("ListLambdaFunctions") == engine == set(LAMBDA_CALLS)
     dispatchers = set()
     for entry in functions:
         if entry["name"] in ("list_aggregate",):
             dispatchers.add(entry["name"])
             dispatchers.update(entry.get("aliases", []))
-    assert _header_names("DispatchingAggregators") == dispatchers
+    assert header_names("DispatchingAggregators") == dispatchers
 
 
 @pytest.mark.parametrize("function", sorted(LAMBDA_CALLS))

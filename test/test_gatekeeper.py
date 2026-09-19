@@ -1,38 +1,24 @@
+"""Decisions of gatekeeper_validate: statement kinds, functions, objects, CTEs, paths, limits, concurrency."""
 import concurrent.futures
-import os
-from pathlib import Path
 
 import duckdb
 import pytest
-from typed_helpers import validate as check, configure
 
-ROOT = Path(__file__).resolve().parents[1]
-EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
-
-
-def connect():
-    db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-    db.execute("LOAD '" + str(EXTENSION).replace("'", "''") + "'")
-    return db
-
-
-@pytest.fixture
-def db():
-    with connect() as connection:
-        yield connection
+from support.artifact import connect
+from support.typed_helpers import configure, validate
 
 
 @pytest.fixture
 def populated(db):
-        db.execute("""CREATE TABLE t(x VARCHAR, y INTEGER, z INTEGER, a INTEGER, b INTEGER);
-            CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t AS SELECT * FROM main.t;
-            CREATE TABLE tenant_a.orders(id INTEGER, value DOUBLE);
-            CREATE SCHEMA s; CREATE TABLE s.t AS SELECT * FROM main.t;
-            CREATE TABLE s."*"(x INT);
-            ATTACH ':memory:' AS db; CREATE SCHEMA db.s; CREATE TABLE db.s.t(x INT);
-            CREATE MACRO custom(x) AS x;
-            CREATE MACRO db.main.md5(x) AS system.main.md5(x)""")
-        return db
+    db.execute("""CREATE TABLE t(x VARCHAR, y INTEGER, z INTEGER, a INTEGER, b INTEGER);
+        CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t AS SELECT * FROM main.t;
+        CREATE TABLE tenant_a.orders(id INTEGER, value DOUBLE);
+        CREATE SCHEMA s; CREATE TABLE s.t AS SELECT * FROM main.t;
+        CREATE TABLE s."*"(x INT);
+        ATTACH ':memory:' AS db; CREATE SCHEMA db.s; CREATE TABLE db.s.t(x INT);
+        CREATE MACRO custom(x) AS x;
+        CREATE MACRO db.main.md5(x) AS system.main.md5(x)""")
+    return db
 
 
 @pytest.mark.parametrize("sql", [
@@ -52,7 +38,7 @@ def populated(db):
     "SELECT 'DROP TABLE t; --'", "SELECT * FROM range(3) WITH ORDINALITY",
 ])
 def test_reads(populated, sql):
-    result = check(populated, sql)
+    result = validate(populated, sql)
     assert result["allowed"], result
     assert result["code"] == "ok"
     assert result["violations"] == []
@@ -68,19 +54,19 @@ def test_reads(populated, sql):
     "MERGE INTO t USING s ON t.id=s.id WHEN MATCHED THEN DELETE",
 ])
 def test_writes(db, sql):
-    result = check(db, sql)
+    result = validate(db, sql)
     assert not result["allowed"]
     assert result["code"] == "unsupported"
 
 
 def test_validation_binds_without_executing(db, tmp_path):
     db.execute("CREATE TABLE existing AS SELECT 42 AS x")
-    assert not check(db, "DROP TABLE existing")["allowed"]
+    assert not validate(db, "DROP TABLE existing")["allowed"]
     assert db.execute("SELECT * FROM existing").fetchone() == (42,)
-    assert check(db, "SELECT * FROM nonexistent")["code"] == "binding"
+    assert validate(db, "SELECT * FROM nonexistent")["code"] == "binding"
     missing = str(tmp_path / "missing.parquet")
     configure(db, {"allowed_functions": ["read_parquet"]})
-    assert check(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["code"] == "binding"
+    assert validate(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["code"] == "binding"
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
@@ -109,12 +95,12 @@ def test_validation_binds_without_executing(db, tmp_path):
     ("SELECT * FROM query('SELECT 1')", {}, False),
 ])
 def test_functions(populated, sql, opts, allowed):
-    result = check(populated, sql, opts)
+    result = validate(populated, sql, opts)
     assert result["allowed"] == allowed, result
 
 
 def test_occurrences(db):
-    result = check(db, "SELECT md5('x'), md5('y')", {"blocked_functions": ["md5"]})
+    result = validate(db, "SELECT md5('x'), md5('y')", {"blocked_functions": ["md5"]})
     assert len(result["violations"]) == 1
     assert "2 occurrences" in result["violations"][0]["message"]
 
@@ -139,7 +125,7 @@ def test_occurrences(db):
     ("DESCRIBE s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
 ])
 def test_objects(populated, sql, opts, allowed):
-    result = check(populated, sql, opts)
+    result = validate(populated, sql, opts)
     assert result["allowed"] == allowed, result
 
 
@@ -156,16 +142,16 @@ def test_objects(populated, sql, opts, allowed):
     ('WITH "mine.parquet" AS (SELECT 1) SELECT * FROM "mine.parquet"', True),
 ])
 def test_ctes(db, sql, allowed):
-    result = check(db, sql, {"allowed_tables": []})
+    result = validate(db, sql, {"allowed_tables": []})
     assert result["allowed"] == allowed, result
 
 
 def test_recursive_cte_obeys_function_and_table_policy(db):
     sql = "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t WHERE n<3) SELECT * FROM t"
-    assert check(db, sql, {"allowed_tables": []})["allowed"]
-    assert not check(db, sql, {"blocked_functions": ["+"]})["allowed"]
+    assert validate(db, sql, {"allowed_tables": []})["allowed"]
+    assert not validate(db, sql, {"blocked_functions": ["+"]})["allowed"]
     db.execute("CREATE TABLE secret(n INT)")
-    assert not check(db, sql.replace("SELECT 1 AS n", "SELECT n FROM secret"), {"allowed_tables": []})["allowed"]
+    assert not validate(db, sql.replace("SELECT 1 AS n", "SELECT n FROM secret"), {"allowed_tables": []})["allowed"]
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
@@ -177,7 +163,7 @@ def test_recursive_cte_obeys_function_and_table_policy(db):
     ("SELECT 'https://example.com'", {}, True),
 ])
 def test_paths(db, sql, opts, allowed):
-    result = check(db, sql, opts)
+    result = validate(db, sql, opts)
     assert result["allowed"] == allowed, result
 
 
@@ -185,7 +171,7 @@ def test_paths(db, sql, opts, allowed):
                                   "SELECT 1;;", "SELECT 1; ;", ";SELECT 1",
                                   "SELECT ';'", "SELECT 1 /* ; SELECT 2 */"])
 def test_single_statement_boundary(db, sql):
-    assert check(db, sql)["allowed"]
+    assert validate(db, sql)["allowed"]
 
 
 @pytest.mark.parametrize("sql", ["SELECT 1; SELECT 2", "SELECT 1; -- comment\n SELECT 2",
@@ -193,7 +179,7 @@ def test_single_statement_boundary(db, sql):
                                   "SELECT * FROM missing; SELECT 2"])
 def test_fixed_statement_limit_precedes_binding(db, sql):
     configure(db, {"use_default_functions": False})
-    result = check(db, sql, {"use_default_functions": True})
+    result = validate(db, sql, {"use_default_functions": True})
     assert not result["allowed"] and result["code"] == "forbidden"
     assert result["violations"][0]["rule"] == "limit"
     assert result["objects"] == result["functions"] == []
@@ -206,7 +192,7 @@ def test_options_must_be_named(db):
 
 
 def test_parser_and_null_inputs(db):
-    result = check(db, "SELECT * FROM")
+    result = validate(db, "SELECT * FROM")
     assert result["code"] == "parser" and result["error_message"]
     assert db.execute("SELECT code FROM gatekeeper_validate(NULL)").fetchall() == [("invalid_input",)]
     assert db.execute("SELECT code FROM gatekeeper_validate('SELECT 1',blocked_functions := NULL)").fetchall() == [("invalid_input",)]
@@ -220,7 +206,7 @@ def test_concurrent_policies():
             with db.cursor() as conn:
                 for j in range(30):
                     policy = {"allowed_tables": [{"catalog": "*", "schema": f"tenant_{i}" if j%2 == 0 else "other", "table": "*"}]}
-                    result = check(conn, f"SELECT sum(x) FROM tenant_{i}.t", policy)
+                    result = validate(conn, f"SELECT sum(x) FROM tenant_{i}.t", policy)
                     assert result["allowed"] == (j%2 == 0), result
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             list(pool.map(worker, range(8)))
@@ -251,11 +237,11 @@ def test_configure_interleaved_with_validate():
                     # Policy 0: a allowed, b denied, sum blocked. Policy 1 is the mirror image. Queries denied
                     # under both policies must never come back ok, whichever snapshot a call happened to take;
                     # a torn read (tables from one policy, functions from the other) would let one through.
-                    assert check(conn, "SELECT sum(x) FROM a")["code"] == "forbidden"
-                    assert check(conn, "SELECT count(x) FROM b")["code"] == "forbidden"
-                    assert check(conn, "SELECT sum(x) FROM a, b")["code"] == "forbidden"
-                    assert check(conn, "SELECT count(x) FROM a")["code"] in ("ok", "forbidden")
-                    assert check(conn, "SELECT sum(x) FROM b")["code"] in ("ok", "forbidden")
+                    assert validate(conn, "SELECT sum(x) FROM a")["code"] == "forbidden"
+                    assert validate(conn, "SELECT count(x) FROM b")["code"] == "forbidden"
+                    assert validate(conn, "SELECT sum(x) FROM a, b")["code"] == "forbidden"
+                    assert validate(conn, "SELECT count(x) FROM a")["code"] in ("ok", "forbidden")
+                    assert validate(conn, "SELECT sum(x) FROM b")["code"] in ("ok", "forbidden")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
             background = pool.submit(configurer)

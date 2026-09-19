@@ -1,8 +1,7 @@
 """Bind-time expression restrictions and complete-binding dependency evidence."""
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import validate, configure
+from support.typed_helpers import configure, validate
 
 
 @pytest.mark.parametrize("sql", [
