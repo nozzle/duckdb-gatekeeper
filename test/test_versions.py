@@ -4,14 +4,12 @@ import os
 import platform
 import re
 import subprocess
-import sys
 
 import duckdb
 import pytest
 
-from test_gatekeeper import EXTENSION, ROOT, db
-
-sys.path.insert(0, str(ROOT / "scripts"))
+from support.artifact import EXTENSION, ROOT, literal
+from support.toolchain import repository
 from versions import (BASELINE_FILENAME, EXTENSION_VERSION, REVIEWED_DUCKDB, SUPPORTED_DUCKDB,
                       SUPPORTED_DUCKDB_REVISION, load_versions, reviewed_duckdb)
 
@@ -37,7 +35,10 @@ def test_distribution_engine_pins():
     assert not re.search(r"^OVERRIDE_GIT_DESCRIBE \?=", makefile, re.M)
     assert "v" + SUPPORTED_DUCKDB not in makefile
     assert f"duckdb=={SUPPORTED_DUCKDB}" in (ROOT / "requirements-dev.in").read_text().splitlines()
-    assert f"version === 'v{SUPPORTED_DUCKDB}'" in (ROOT / "test/wasm/smoke.mjs").read_text()
+    # The browser smoke test asserts the runtime's embedded engine against the pin it reads from versions.cmake,
+    # so the npm runtime pin is the only Wasm surface a repin edits by hand.
+    smoke = (ROOT / "test/wasm/smoke.mjs").read_text()
+    assert "versions.cmake" in smoke and "GATEKEEPER_DUCKDB_VERSION" in smoke
     lock = json.loads((ROOT / "test/wasm/package-lock.json").read_text())
     package = json.loads((ROOT / "test/wasm/package.json").read_text())
     assert lock["packages"][""]["devDependencies"]["@duckdb/duckdb-wasm"] == package["devDependencies"]["@duckdb/duckdb-wasm"]
@@ -126,7 +127,7 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
     config = {"allow_unsigned_extensions": "true", "allow_extensions_metadata_mismatch": str(metadata_mismatch).lower()}
     db = duckdb.connect(config=config)
     with pytest.raises(duckdb.InvalidInputException, match=expected):
-        db.execute("LOAD '" + str(tampered).replace("'", "''") + "'")
+        db.execute("LOAD " + literal(tampered))
     with pytest.raises(duckdb.Error):
         db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')")
     # A dev stamp of the same source commit (or a release stamp on a dev host) is a different footer identity
@@ -136,11 +137,11 @@ def test_engine_guard_refuses_a_different_engine(tmp_path, metadata_mismatch):
     kind = _tampered_artifact(tmp_path / "kind", other_kind, source_id)
     # Without the mismatch setting DuckDB's own footer check may refuse first; with it, the guard must.
     with pytest.raises(duckdb.Error, match="was built for DuckDB" if metadata_mismatch else None):
-        duckdb.connect(config=config).execute("LOAD '" + str(kind).replace("'", "''") + "'")
+        duckdb.connect(config=config).execute("LOAD " + literal(kind))
     # The same copy/re-sign flow with the stamp left intact loads, so the refusals above are the guard.
     (tmp_path / "intact").mkdir()
     intact = _tampered_artifact(tmp_path / "intact", version, source_id)
-    duckdb.connect(config=config).execute("LOAD '" + str(intact).replace("'", "''") + "'")
+    duckdb.connect(config=config).execute("LOAD " + literal(intact))
 
 
 def test_check_engine_stamp_script():
@@ -171,24 +172,11 @@ def _synthetic_artifact(path, version, source_id, footer):
     return path
 
 
-def _engine_repo(path, tag, commits_after_tag):
-    """A throwaway engine checkout: a tag, then ``commits_after_tag`` commits, like a post-release snapshot."""
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@t"}
-    subprocess.run(["git", "init", "-q", str(path)], check=True)
-    git = lambda *a: subprocess.run(["git", "-C", str(path), *a], check=True, env=env, capture_output=True, text=True)
-    git("commit", "-q", "--allow-empty", "-m", "release")
-    git("tag", "-a", tag, "-m", tag)
-    for i in range(commits_after_tag):
-        git("commit", "-q", "--allow-empty", "-m", f"dev {i}")
-    return git("rev-parse", "HEAD").stdout.strip()
-
-
 def test_check_engine_stamp_release_and_dev_footers(tmp_path):
     """Release footers carry the tag and dev footers the source id; both must match the stamp and the checkout."""
     import check_engine_stamp
-    release_commit = _engine_repo(tmp_path / "release", "v1.5.5", 0)
-    dev_commit = _engine_repo(tmp_path / "dev", "v1.5.5", 150)
+    release_commit = repository(tmp_path / "release", tag="v1.5.5")
+    dev_commit = repository(tmp_path / "dev", tag="v1.5.5", commits_after_tag=150)
     release = _synthetic_artifact(tmp_path / "release.duckdb_extension", "v1.5.5", release_commit[:10], "v1.5.5")
     dev = _synthetic_artifact(tmp_path / "dev.duckdb_extension", "v1.5.6-dev150", dev_commit[:10], dev_commit[:10])
     assert check_engine_stamp.check(release, tmp_path / "release", "v1.5.5") == []
@@ -210,14 +198,8 @@ def test_check_engine_stamp_accepts_the_pinned_shallow_checkout(tmp_path):
     """CI initializes the submodule shallow and tagless; the pinned revision is still identified by its commit,
     and only that revision. Any other undescribable checkout is refused rather than trusted."""
     import check_engine_stamp
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@t"}
     for name, revision in (("pinned", SUPPORTED_DUCKDB_REVISION), ("other", "f" * 40)):
-        repo = tmp_path / name
-        repo.mkdir()
-        subprocess.run(["git", "init", "-q", str(repo)], check=True)
-        subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "shallow"], check=True, env=env)
-        (repo / ".git/HEAD").write_text(revision + "\n")  # detached at the wanted id; no tags, no history
+        repository(tmp_path / name, head=revision)  # detached at the wanted id; no tags, no history
     pinned = _synthetic_artifact(tmp_path / "pinned.duckdb_extension", "v" + SUPPORTED_DUCKDB,
                                  SUPPORTED_DUCKDB_REVISION[:10], "v" + SUPPORTED_DUCKDB)
     assert check_engine_stamp.check(pinned, tmp_path / "pinned", "v" + SUPPORTED_DUCKDB) == []
@@ -236,5 +218,5 @@ def test_engine_guard_reads_the_builtin_engine_identity():
     db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
     db.execute("CREATE MACRO pragma_version() AS TABLE SELECT 'v0.0.0' AS library_version, 'shadow' AS source_id")
     assert db.execute("SELECT library_version FROM pragma_version()").fetchone() == ("v0.0.0",)
-    db.execute("LOAD '" + str(EXTENSION).replace("'", "''") + "'")
+    db.execute("LOAD " + literal(EXTENSION))
     assert db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')").fetchone() == (True,)

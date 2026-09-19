@@ -1,8 +1,7 @@
 import duckdb
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import validate, configure
+from support.typed_helpers import configure, validate
 
 
 def test_named_prepared_options_and_result_columns(db):

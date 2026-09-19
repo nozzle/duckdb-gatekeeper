@@ -3,8 +3,8 @@ import concurrent.futures
 import pytest
 import duckdb
 
-from test_gatekeeper import connect, db
-from typed_helpers import validate, configure
+from support.artifact import connect
+from support.typed_helpers import configure, policy, validate
 
 
 def test_resolves_unqualified_objects(db):
@@ -92,8 +92,7 @@ def test_configuration_race(db):
                 return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(attempt,range(8)))==8
-    policy = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
-    assert policy["allowed_functions"] in [[f"custom_{i}"] for i in range(8)]
+    assert policy(db)["allowed_functions"] in [[f"custom_{i}"] for i in range(8)]
 
 
 def test_binding_preserves_temp_and_transaction_context(db):

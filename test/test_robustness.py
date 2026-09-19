@@ -1,19 +1,20 @@
 import json
 import random
+
+import duckdb
 import pytest
 
-from test_gatekeeper import check, db
-import duckdb
+from support.typed_helpers import validate
 
 
 def test_depth_and_width(db):
     db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t(x INT)")
     for depth in [1, 20, 100]:
         sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
-        assert check(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
-        assert not check(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+        assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
+        assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
-    assert check(db, sql)["allowed"]
+    assert validate(db, sql)["allowed"]
 
 
 @pytest.mark.parametrize("sql,message", [
@@ -28,16 +29,16 @@ def test_depth_and_width(db):
 def test_fixed_ast_guardrails_and_recovery(db, sql, message):
     if message == "serialized AST exceeds fixed size limit":
         assert len(sql.encode()) == 8388608
-    result = check(db, sql)
+    result = validate(db, sql)
     assert result["code"] == "forbidden" and not result["allowed"], result
     assert result["violations"][0]["rule"] == "limit"
     assert result["violations"][0]["message"] == message
     assert result["objects"] == result["functions"] == []
-    assert check(db, "SELECT 1")["allowed"]
+    assert validate(db, "SELECT 1")["allowed"]
 
 
 def test_nul(db):
-    assert check(db, "SELECT 1\0; DROP TABLE t")["code"] == "invalid_input"
+    assert validate(db, "SELECT 1\0; DROP TABLE t")["code"] == "invalid_input"
 
 
 def test_random_invalid_sql(db):
@@ -45,7 +46,7 @@ def test_random_invalid_sql(db):
     alphabet = "abcXYZ012 ()[]'\";+-/\\\n\t"
     for _ in range(500):
         sql = "".join(rng.choice(alphabet) for _ in range(rng.randrange(1, 200)))
-        result = check(db, sql)
+        result = validate(db, sql)
         assert set(result) == {"allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions"}
         assert result["code"] in {"ok", "forbidden", "unsupported", "parser", "invalid_input", "binding"}
         assert result["allowed"] == (result["code"] == "ok")
@@ -58,7 +59,7 @@ def test_random_option_types(db):
     for _ in range(100):
         options = {rng.choice(keys): rng.choice(values)}
         try:
-            result = check(db, "SELECT 1", options)
+            result = validate(db, "SELECT 1", options)
         except duckdb.Error:
             continue
         assert result["allowed"] == (result["code"] == "ok"), json.dumps(options)
@@ -75,7 +76,7 @@ def test_filtered_table_result(db):
 def test_literal_path_and_quoted_cte_names(db):
     for name in ["a.b", "a'b", "x[0]", "a\\b", "s3://bucket/file"]:
         ident = '"' + name.replace('"', '""') + '"'
-        assert check(db, f"WITH {ident} AS (SELECT 1) SELECT * FROM {ident}", {"allowed_tables": []})["allowed"]
-    assert not check(db, "SELECT * FROM read_parquet(main.list_value('s3://bucket/file'))", {
+        assert validate(db, f"WITH {ident} AS (SELECT 1) SELECT * FROM {ident}", {"allowed_tables": []})["allowed"]
+    assert not validate(db, "SELECT * FROM read_parquet(main.list_value('s3://bucket/file'))", {
         "blocked_functions": ["read_parquet"]
     })["allowed"]

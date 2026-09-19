@@ -4,12 +4,8 @@ import concurrent.futures
 import duckdb
 import pytest
 
-from test_gatekeeper import connect, db
-from typed_helpers import configure, validate
-
-
-def policy(db):
-    return db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
+from support.artifact import connect
+from support.typed_helpers import configure, policy, validate
 
 
 def test_inspection_reset_and_complete_replacement(db):

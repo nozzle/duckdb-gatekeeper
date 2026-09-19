@@ -6,31 +6,10 @@ import threading
 import duckdb
 import pytest
 
-from test_enforcement import DENIED, PARITY_CORPUS, agent, catalog, enforce  # noqa: F401 (fixtures)
-from test_gatekeeper import connect, db  # noqa: F401 (fixture)
-from typed_helpers import configure, validate
-
-RECORD_COLUMNS = ["event", "mode", "boundary", "allowed", "code", "violations", "error_type", "error_message",
-                  "position", "objects", "functions", "statement", "statement_length", "policy_hash", "new_value"]
-
-
-def records(host, where="true"):
-    columns = ["connection_id", "query_id", "log_level"] + RECORD_COLUMNS
-    result = host.execute(f"SELECT {', '.join(columns)} FROM duckdb_logs_parsed('Gatekeeper') "
-                          f"WHERE {where} ORDER BY timestamp, context_id")
-    return [dict(zip(columns, row)) for row in result.fetchall()]
-
-
-def decisions(host, where="true"):
-    return records(host, f"event = 'decision' AND ({where})")
-
-
-def enable(host, level=None):
-    host.execute("CALL enable_logging('Gatekeeper')")
-    if level:
-        # enable_logging(type, level := ...) resets the level to the type's declared level (INFO) after applying
-        # the argument, so the level is lowered separately.
-        host.execute(f"SET logging_level = '{level}'")
+from support.audit import RECORD_COLUMNS, decisions, enable, records
+from support.corpus import PARITY_CORPUS
+from support.enforcement import DENIED, attempt, enforce
+from support.typed_helpers import configure, validate
 
 
 def test_record_shape(db):
@@ -48,16 +27,12 @@ def test_record_shape(db):
 
 @pytest.mark.parametrize("sql", PARITY_CORPUS)
 def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
-    # Third leg of the parity oracle: the record says what gatekeeper_validate says and what the agent saw.
+    # Second leg of the parity oracle: the record says what gatekeeper_validate says and what the agent saw.
     enable(catalog, "debug")
     expected = validate(catalog, sql)
-    try:
-        agent.execute(sql).fetchall()
-        outcome = "allowed"
-    except duckdb.Error as error:
-        outcome = "denied" if DENIED.search(str(error)) else "engine"
+    seen = attempt(agent, sql)
     found = decisions(catalog, "mode = 'enforce'")
-    if outcome == "engine":
+    if seen.kind == "engine":
         # Engine errors are DuckDB's, not decisions: nothing is recorded for them on the enforced path.
         assert found == [] or all(r["allowed"] for r in found), (sql, found)
         return
@@ -71,7 +46,7 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
     denied = [r for r in found if not r["allowed"]]
     assert denied in ([], found[-1:]), (sql, found)
     record = denied[0] if denied else found[0]
-    assert record["allowed"] == expected["allowed"] == (outcome == "allowed"), (sql, record)
+    assert record["allowed"] == expected["allowed"] == (seen.kind == "rows"), (sql, record)
     assert record["code"] == expected["code"], (sql, record)
     assert record["violations"] == expected["violations"], (sql, record)
     for entry in found:
@@ -285,11 +260,12 @@ def test_write_log_forgery_is_refused_even_when_allowlisted(catalog, agent):
                            ).fetchone()[0] == 0
 
 
-@pytest.mark.xfail(strict=True, reason="DuckDB 1.5.5 evaluates PRAGMA argument expressions in the statement "
-                                       "preprocessor before any extension hook (nozzle/duckdb-gatekeeper#46)")
+@pytest.mark.xfail(strict=True, reason="the engine evaluates PRAGMA argument expressions in the statement "
+                                       "preprocessor before any extension hook runs (nozzle/duckdb-gatekeeper#46)")
 def test_pragma_preprocessing_cannot_forge_a_record(catalog, agent):
-    # Pins the audit-integrity residual: the never-bind list cannot reach the preprocessor. When this starts
-    # passing, remove the xfail and the residual wording in docs/security.md#audit-log.
+    # Pins the audit-integrity residual: the never-bind list cannot reach the preprocessor. Strict, so an engine
+    # repin that closes the gap fails here; then remove the xfail and the residual wording in
+    # docs/security.md#audit-log.
     enable(catalog)
     # write_log goes through the connection's own logger, which is refreshed at query end; a fresh cursor
     # opened before enable_logging still holds a NopLogger, so run one statement first as a real agent would.

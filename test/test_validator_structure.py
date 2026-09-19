@@ -1,26 +1,23 @@
 import copy
 import json
-import os
 import subprocess
 import sys
 
 import pytest
 
-from test_gatekeeper import ROOT, db
+from support.artifact import ROOT
+from support.toolchain import compile_cpp
 
 
 @pytest.fixture(scope="module")
 def native_validator(tmp_path_factory):
     work = tmp_path_factory.mktemp("validator")
-    binary = work / "validator"
     generated = work / "generated"
     subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated)], check=True)
-    command = [os.environ.get("CXX", "c++"), "-std=c++17", "-O1", "-I" + str(generated)]
-    for path in ["src/include", "duckdb/src/include", "duckdb/third_party/yyjson/include"]:
-        command.append("-I" + str(ROOT / path))
-    command += [str(ROOT / path) for path in ["test/validator_structure.cpp", "src/validator.cpp",
-                                             "duckdb/third_party/yyjson/yyjson.cpp"]]
-    subprocess.run(command + ["-o", str(binary)], check=True)
+    binary = compile_cpp([ROOT / "test/validator_structure.cpp", ROOT / "src/validator.cpp",
+                          ROOT / "duckdb/third_party/yyjson/yyjson.cpp"], work / "validator", flags=["-O1"],
+                         includes=[generated, ROOT / "src/include", ROOT / "duckdb/src/include",
+                                   ROOT / "duckdb/third_party/yyjson/include"])
     return lambda ast: subprocess.check_output([str(binary)], input=json.dumps(ast).encode()).decode()
 
 

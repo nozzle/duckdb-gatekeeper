@@ -1,7 +1,7 @@
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import validate, configure, never_bind_names
+from support.headers import never_bind_names
+from support.typed_helpers import configure, validate
 
 
 @pytest.fixture
@@ -71,13 +71,33 @@ def test_blocks_do_not_reach_into_trusted_expansions(expressions, tmp_path):
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
 
 
+# Written out rather than read from the header: dropping a name from NeverBindFunctions() must fail here instead
+# of silently shrinking the header-derived test below. One or more from each group docs/security.md reviews.
+NEVER_BIND = ["query", "query_table", "json_execute_serialized_sql", "json_serialize_plan",  # dynamic SQL
+              "read_duckdb", "seq_scan", "which_secret",  # hidden attach, internal scan, secrets
+              "checkpoint", "force_checkpoint", "nextval", "currval",  # storage and sequence state
+              "duckdb_settings", "duckdb_tables", "duckdb_secrets", "duckdb_logs", "pragma_table_info",  # metadata
+              "enable_logging", "disable_logging", "truncate_duckdb_logs", "write_log",  # the log's lifecycle
+              "gatekeeper_configure", "gatekeeper_enforce"]  # the policy
+
+
+def never_bind_holds(db, name):
+    for options in [{"allowed_functions": [name]}, {"use_default_functions": False, "allowed_functions": [name]}]:
+        configure(db, options)
+        result = validate(db, f'SELECT "{name}"(1)', options)
+        assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
+
+
+def test_written_never_bind_names_stay_denied(db):
+    for name in NEVER_BIND:
+        never_bind_holds(db, name)
+
+
 def test_never_bind_names_absent_from_defaults_and_non_overridable(db):
     names = never_bind_names()
+    assert set(NEVER_BIND) <= names
     for name in names:
-        for options in [{"allowed_functions": [name]}, {"use_default_functions": False, "allowed_functions": [name]}]:
-            configure(db, options)
-            result = validate(db, f'SELECT "{name}"(1)', options)
-            assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
+        never_bind_holds(db, name)
 
 
 def test_missing_type_returns_binding_error(db):

@@ -1,8 +1,7 @@
 """Types are supplied by the host; executable type parameters still undergo preflight."""
 import pytest
 
-from test_gatekeeper import db
-from typed_helpers import validate
+from support.typed_helpers import validate
 
 
 @pytest.mark.parametrize("target", ["JSON", "STRUCT(j JSON[], n INTEGER)"])

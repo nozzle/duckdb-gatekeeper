@@ -1,10 +1,11 @@
-import subprocess
 import importlib.util
+import subprocess
 from types import SimpleNamespace
 
 import pytest
 
-from test_gatekeeper import ROOT
+from support import artifact
+from support.artifact import ROOT
 
 spec = importlib.util.spec_from_file_location("lakehouse_runner", ROOT / "scripts/test_lakehouses.py")
 runner = importlib.util.module_from_spec(spec)
@@ -46,7 +47,10 @@ def test_cleanup_failure_fails_successful_run(monkeypatch):
         runner.main()
 
 
-def test_fixture_closes_connection_on_setup_failure(monkeypatch, tmp_path):
+@pytest.mark.parametrize("failing", ["LOAD '", "LOAD ducklake"])
+def test_fixture_closes_connection_on_setup_failure(monkeypatch, tmp_path, failing):
+    # Whether the artifact itself fails to load (connect() closes) or a later setup statement fails (the fixture
+    # closes), no connection leaks out of a failed setup.
     fixture_spec = importlib.util.spec_from_file_location("lakehouse_fixture", ROOT / "test/integration/test_lakehouses.py")
     fixture = importlib.util.module_from_spec(fixture_spec)
     fixture_spec.loader.exec_module(fixture)
@@ -54,15 +58,23 @@ def test_fixture_closes_connection_on_setup_failure(monkeypatch, tmp_path):
     class Connection:
         closed = False
 
-        def execute(self, sql):
-            raise RuntimeError("LOAD failed")
+        def execute(self, sql, parameters=None):
+            if sql.startswith(failing):
+                raise RuntimeError(failing + " failed")
+            return self
 
         def close(self):
             self.closed = True
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exception):
+            self.close()
+
     connection = Connection()
-    monkeypatch.setattr(fixture.duckdb, "connect", lambda **kwargs: connection)
+    monkeypatch.setattr(artifact.duckdb, "connect", lambda **kwargs: connection)
     generator = fixture.lake.__wrapped__(SimpleNamespace(param="ducklake"), tmp_path)
-    with pytest.raises(RuntimeError, match="LOAD failed"):
+    with pytest.raises(RuntimeError, match=failing + " failed"):
         next(generator)
     assert connection.closed

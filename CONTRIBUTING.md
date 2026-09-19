@@ -109,6 +109,16 @@ The suite has two layers with different reach:
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
 
+`pytest.ini` puts `scripts/` and `test/` on the import path. Fixtures (`db`, `catalog`,
+`agent`) live in `test/conftest.py`; functions and constants live in `test/support/` and
+are imported explicitly (`from support.typed_helpers import validate`), never from a test
+module or from `conftest`. `support.corpus` holds the catalog and statements the three
+parity legs share (`test_enforcement`, `test_audit`, `test_log_only`); each leg keeps its
+own assertions. `support.headers` is the one reader of the name lists in
+`src/include/function_policy.hpp`; `test_documentation.py` checks the never-bind list in
+`docs/security.md` against it, and `test_resolved_functions.py` keeps a written-out sample
+of names that must stay denied whatever the header says.
+
 `scripts/smoke_loadable.py <artifact>` loads a distributed artifact into the pinned DuckDB
 Python package and exercises the checks that cross the host/loadable ABI boundary
 (bind-data inspection for lambdas and dispatched aggregates, replacement-scan callbacks,

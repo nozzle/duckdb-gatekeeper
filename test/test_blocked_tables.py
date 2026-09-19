@@ -4,9 +4,7 @@ import itertools
 import duckdb
 import pytest
 
-from test_gatekeeper import db
-from test_wildcard_tables import rule
-from typed_helpers import configure, validate
+from support.typed_helpers import configure, policy, rule, validate
 
 
 @pytest.mark.parametrize("catalog,schema,table", list(itertools.product(
@@ -105,9 +103,9 @@ def test_blocks_round_trip_without_enabling_allowlist(db):
     entries = [{"schema": "MAIN", "table": "T"}, {"catalog": None, "schema": "MAIN", "table": "T"}]
     configure(db, {"blocked_tables": entries})
     db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
-    policy = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
-    assert policy["blocked_tables"] == [rule("", "main", "t")]
-    assert not policy["restrict_tables"]
+    canonical = policy(db)
+    assert canonical["blocked_tables"] == [rule("", "main", "t")]
+    assert not canonical["restrict_tables"]
     db.execute("CREATE TABLE t(x INT); CREATE TABLE u(x INT)")
     assert not validate(db, "SELECT * FROM t")["allowed"]
     assert validate(db, "SELECT * FROM u")["allowed"]
@@ -120,12 +118,12 @@ def test_blocks_round_trip_without_enabling_allowlist(db):
                                       [{"schema": "main", "table": "t", "catlog": "memory"}]])
 def test_invalid_blocks_fail_closed_and_preserve_configuration(db, entries):
     configure(db, {"blocked_tables": [rule(table="t")]})
-    before = db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
+    before = policy(db)
     result = validate(db, "SELECT 1", {"blocked_tables": entries})
     assert result["code"] == "invalid_input"
     with pytest.raises(duckdb.Error):
         configure(db, {"blocked_tables": entries})
-    assert db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0] == before
+    assert policy(db) == before
 
 
 @pytest.mark.parametrize("entry", ["{catlog:'memory', schema:'main', 'table':'t'}",

@@ -1,14 +1,12 @@
 """Run the README and community-descriptor SQL examples in order, including their expected decisions."""
 import re
-import sys
 
 import duckdb
 import pytest
 
-from test_gatekeeper import ROOT, db
-
-sys.path.insert(0, str(ROOT / "scripts"))
 from inventory import load
+from support.artifact import ROOT
+from support.headers import control_plane_names, never_bind_names
 
 RESPONSE_TYPES = {duckdb.StatementType.SELECT, duckdb.StatementType.CALL}
 
@@ -120,6 +118,20 @@ def test_community_descriptor_headings():
     anchors = {re.sub(r"[^a-z0-9 -]", "", title.lower()).replace(" ", "-") for _, title in headings}
     for target in re.findall(r"\]\(#([^)]+)\)", extended):
         assert target in anchors, target
+
+
+def test_never_bind_list_in_prose_is_the_header():
+    """docs/security.md spells out the never-bind list and, with the README, its control-plane subset; each must
+    be exactly the header's set. A count would let a swapped name pass."""
+    section = (ROOT / "docs/security.md").read_text().split("### Never-bind functions", 1)[1]
+    listed = re.search(r"```\n(.*?)```", section, re.S)[1].split()
+    assert len(listed) == len(set(listed)), "a name is listed twice"
+    assert set(listed) == never_bind_names()
+    subset = re.search(r"The control-plane subset \((.*?)\)", section, re.S)[1]
+    assert set(re.findall(r"`([a-z_]+)`", subset)) == control_plane_names()
+    readme = re.search(r"Gatekeeper's own control plane, (.*?), which is\s+refused", (ROOT / "README.md").read_text(), re.S)[1]
+    assert set(re.findall(r"`([a-z_]+)`", readme)) == control_plane_names()
+    assert control_plane_names() < never_bind_names()
 
 
 def test_default_function_count_in_prose():
