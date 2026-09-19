@@ -45,21 +45,29 @@ def main(argv):
     db.execute("CREATE VIEW dispatched AS SELECT list_aggregate([1, 2], 'sum') AS s")
     db.execute("CREATE VIEW unnested AS SELECT unnest([1, 2]) AS u")
 
-    # Lambda bodies inside trusted definitions are reached through the host-created bind data.
-    for view in ("lambda_view", "nested_lambda"):
+    # Lambda bodies inside trusted definitions are reached through the host-created bind data: the collation's
+    # lower is observed there and is the view's own, while the same lambda written by the caller is blockable.
+    for view, expression in (("lambda_view", "list_transform(['a'], lambda v: v COLLATE nocase = 'A')"),
+                             ("nested_lambda", "list_transform([['a']], lambda xs: list_filter(xs, lambda v: v COLLATE nocase = 'A'))")):
         result = validate(db, f"SELECT * FROM {view}")
         expect(result["allowed"] and any(f["name"] == "lower" for f in result["functions"]),
                f"{view}: lambda body implementation not observed: {result}")
         result = validate(db, f"SELECT * FROM {view}", {"blocked_functions": ["lower"]})
+        expect(result["allowed"], f"{view}: block reached the view's own lambda body: {result}")
+        result = validate(db, f"SELECT {expression}", {"blocked_functions": ["lower"]})
         expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower",
-               f"{view}: block did not reach the lambda body: {result}")
+               f"{view}: block did not reach the caller's lambda body: {result}")
 
     # The dispatched aggregate is recovered through the serialization callback of the host's function.
     result = validate(db, "SELECT * FROM dispatched")
     expect(result["allowed"] and any(f["name"] == "sum" and f["type"] == "aggregate" for f in result["functions"]),
            f"dispatched aggregate not observed: {result}")
     result = validate(db, "SELECT * FROM dispatched", {"blocked_functions": ["sum"]})
-    expect(result["code"] == "forbidden", f"block did not reach the dispatched aggregate: {result}")
+    expect(result["allowed"], f"block reached the view's own dispatched aggregate: {result}")
+    db.execute("CALL gatekeeper_configure(allowed_functions := ['list_aggregate'])")
+    result = validate(db, "SELECT list_aggregate([1, 2], 'sum')", {"blocked_functions": ["sum"]})
+    expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum",
+           f"block did not reach the caller's dispatched aggregate: {result}")
     db.execute("CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value'])")
     result = validate(db, "SELECT list_aggregate([1, 2], 'sum')")
     expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum",
@@ -67,7 +75,10 @@ def main(argv):
     db.execute("RESET gatekeeper_policy")
 
     result = validate(db, "SELECT * FROM unnested", {"blocked_functions": ["unnest"]})
-    expect(result["code"] == "forbidden", f"block did not reach unnest inside a view: {result}")
+    expect(result["allowed"] and any(f["name"] == "unnest" for f in result["functions"]),
+           f"block reached unnest inside a view, or unnest not observed: {result}")
+    result = validate(db, "SELECT unnest([1, 2])", {"blocked_functions": ["unnest"]})
+    expect(result["code"] == "forbidden", f"block did not reach the caller's unnest: {result}")
 
     # Replacement scans are decided in Gatekeeper's callback before the host's reader binds.
     with tempfile.TemporaryDirectory() as directory:
