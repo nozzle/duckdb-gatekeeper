@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from support import artifact
+import artifact as loadable
 from support.artifact import ROOT
 
 spec = importlib.util.spec_from_file_location("lakehouse_runner", ROOT / "scripts/test_lakehouses.py")
@@ -73,7 +73,7 @@ def test_fixture_closes_connection_on_setup_failure(monkeypatch, tmp_path, faili
             self.close()
 
     connection = Connection()
-    monkeypatch.setattr(artifact.duckdb, "connect", lambda **kwargs: connection)
+    monkeypatch.setattr(loadable.duckdb, "connect", lambda **kwargs: connection)
     generator = fixture.lake.__wrapped__(SimpleNamespace(param="ducklake"), tmp_path)
     with pytest.raises(RuntimeError, match=failing + " failed"):
         next(generator)

@@ -1,0 +1,22 @@
+name: Wasm EH browser test
+description: >-
+  Runs test/wasm's Chromium smoke test against the EH artifact at
+  build/wasm_eh/extension/gatekeeper/gatekeeper.duckdb_extension.wasm, whether it was just built (wasm.yml)
+  or downloaded from the distribution pipeline. The checkout stays in the calling job.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: test/wasm/package-lock.json
+    - run: npm ci --ignore-scripts
+      shell: bash
+      working-directory: test/wasm
+    - run: npx playwright install --with-deps chromium
+      shell: bash
+      working-directory: test/wasm
+    - run: npm test
+      shell: bash
+      working-directory: test/wasm

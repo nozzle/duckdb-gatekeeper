@@ -1,0 +1,38 @@
+name: Python toolchain
+description: >-
+  setup-python, an optional ccache, and the hash-pinned requirements install every job shares. The checkout
+  stays in the calling job: a repository-local action cannot check itself out.
+inputs:
+  python-version:
+    description: Python version for setup-python.
+    default: '3.13'
+  ccache-key:
+    description: When set, restores and saves a compiler cache under this key (hendrikmuhs/ccache-action).
+    default: ''
+  ccache-max-size:
+    description: Size cap of that cache.
+    default: 600M
+  requirements:
+    description: >-
+      Space-separated hash-pinned lock files to install with --require-hashes; empty skips the install
+      (a job that installs a candidate engine instead).
+    default: requirements-dev.txt
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - if: inputs.ccache-key != ''
+      uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+      with:
+        key: ${{ inputs.ccache-key }}
+        max-size: ${{ inputs.ccache-max-size }}
+    - if: inputs.requirements != ''
+      shell: bash
+      env:
+        REQUIREMENTS: ${{ inputs.requirements }}
+      run: |
+        arguments=()
+        for file in $REQUIREMENTS; do arguments+=(-r "$file"); done
+        python -m pip install --require-hashes "${arguments[@]}"

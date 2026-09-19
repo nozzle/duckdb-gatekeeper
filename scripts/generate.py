@@ -103,16 +103,19 @@ def main():
                         help="directory for generated headers (the build passes its binary dir)")
     parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
                         help="DuckDB source being compiled; defaults to the local submodule")
-    parser.add_argument("--duckdb-version", default="v" + SUPPORTED_DUCKDB,
+    # The identity CMake has already computed for the engine it is compiling, to be baked into the load-time
+    # guard as-is. (The build scripts' --duckdb-version, in engine.py, is different: it tells the engine build
+    # how to compute that identity.)
+    parser.add_argument("--engine-version-label", default="v" + SUPPORTED_DUCKDB,
                         help="engine version tag DuckDB stamps into the build (CMake DUCKDB_VERSION)")
-    parser.add_argument("--duckdb-source-id", default=SUPPORTED_DUCKDB_REVISION[:10],
+    parser.add_argument("--engine-source-id", default=SUPPORTED_DUCKDB_REVISION[:10],
                         help="engine source id DuckDB stamps into the build (CMake GIT_COMMIT_HASH)")
     args = parser.parse_args()
-    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?", args.duckdb_version):
-        raise SystemExit("Refusing to bake an unrecognised engine version into the guard: " + args.duckdb_version)
-    if not re.fullmatch(r"[0-9a-f]{7,40}", args.duckdb_source_id):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?", args.engine_version_label):
+        raise SystemExit("Refusing to bake an unrecognised engine version into the guard: " + args.engine_version_label)
+    if not re.fullmatch(r"[0-9a-f]{7,40}", args.engine_source_id):
         raise SystemExit("Refusing to bake an engine source id that is not a 7-40 hex commit id: "
-                         + repr(args.duckdb_source_id))
+                         + repr(args.engine_source_id))
     _, defaults = load()
     inventory = {"defaults": defaults}
     build_grammar = grammar(args.duckdb_source)
@@ -128,7 +131,7 @@ def main():
     # string so `strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE` shows which engine an
     # artifact was built for, and so tests can rewrite it in place to prove the guard refuses a mismatch.
     # The array is fixed-width and NUL padded so a rewritten stamp of a different length still fits in place.
-    stamp = f"GATEKEEPER_BUILD_ENGINE {args.duckdb_version} {args.duckdb_source_id}"
+    stamp = f"GATEKEEPER_BUILD_ENGINE {args.engine_version_label} {args.engine_source_id}"
     if len(stamp) >= STAMP_WIDTH:
         raise SystemExit("Build engine stamp is too long: " + stamp)
     content = ('#pragma once\nnamespace gatekeeper {\n'

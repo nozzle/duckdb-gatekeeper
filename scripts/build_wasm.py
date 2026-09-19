@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from engine import add_engine_arguments, engine_cmake_flags, engine_source
+from engine import add_engine_arguments, build_command, engine_source, extension_cmake_flags
 
 IMAGE = "emscripten/emsdk@sha256:9922c93314b63a1d9ceba2e76f03737f1f9cc4b7350341211e2d3555633ffdd5"  # 3.1.71
 
@@ -54,14 +54,12 @@ def main():
     if hasattr(os, "getuid"):
         docker += ["--user", f"{os.getuid()}:{os.getgid()}"]
     docker += [IMAGE]
-    subprocess.run(docker + ["emcmake", "cmake", "-S", str(source), "-B", str(build),
-                            "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
-                            "-DCMAKE_BUILD_TYPE=Release", *engine_cmake_flags(args),
+    # The container's Emscripten CMake, not this venv's; the extension flags are the same as every native build's.
+    subprocess.run(docker + ["emcmake", "cmake", "-S", str(source), "-B", str(build), *extension_cmake_flags(args),
                             "-DDUCKDB_EXPLICIT_PLATFORM=wasm_eh", "-DWASM_LOADABLE_EXTENSIONS=1",
-                            "-DBUILD_EXTENSIONS_ONLY=1", "-DBUILD_UNITTESTS=OFF",
+                            "-DBUILD_EXTENSIONS_ONLY=1",
                             "-DCMAKE_CXX_FLAGS=-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1"], check=True)
-    subprocess.run(docker + ["cmake", "--build", str(build), "--target", "gatekeeper_loadable_extension",
-                            "--parallel", str(args.jobs)], check=True)
+    subprocess.run(docker + build_command(build, ["gatekeeper_loadable_extension"], args.jobs, cmake="cmake"), check=True)
 
 
 if __name__ == "__main__":

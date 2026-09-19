@@ -2,9 +2,9 @@
 import argparse
 import hashlib
 from pathlib import Path
-import re
 import zipfile
 
+import descriptor as community
 from versions import SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION, load_versions
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,32 +17,18 @@ PLATFORMS = (
 
 
 def release_version(tag):
-    def extract(pattern, text, location):
-        match = re.search(pattern, text)
-        if match is None:
-            raise ValueError(f"Cannot read release version from {location}")
-        return match.group(1)
-
     metadata = load_versions(ROOT)
     version = metadata["GATEKEEPER_VERSION"]
     if (metadata["GATEKEEPER_DUCKDB_VERSION"] != SUPPORTED_DUCKDB or
             metadata["GATEKEEPER_DUCKDB_REVISION"] != SUPPORTED_DUCKDB_REVISION):
         raise ValueError("Loaded and on-disk engine metadata must agree")
 
-    descriptor = (ROOT / "community/description.yml").read_text()
+    descriptor = community.text(ROOT)
     if SUPPORTED_DUCKDB_REVISION not in descriptor or f"DuckDB {SUPPORTED_DUCKDB}" not in descriptor:
         raise ValueError("community/description.yml must cite the pinned DuckDB version and source revision "
                          "from versions.cmake")
-
-    def descriptor_pin(section, key):
-        # These two pins use canonical two-space, unquoted scalar syntax in the
-        # local descriptor. Reject layout drift rather than guessing at arbitrary YAML.
-        location = f"community/description.yml {section}.{key}"
-        block = extract(rf"(?m)^{section}:[ \t]*\n((?:[ \t]+[^\n]*\n|\n)*)", descriptor, location)
-        return extract(rf"(?m)^  {key}:[ \t]*([^\s#\"']+)[ \t]*(?:#.*)?$", block, location)
-
-    descriptor_version = descriptor_pin("extension", "version")
-    descriptor_ref = descriptor_pin("repo", "ref")
+    descriptor_version = community.scalar("extension", "version", descriptor)
+    descriptor_ref = community.scalar("repo", "ref", descriptor)
     if descriptor_version != version or descriptor_ref != f"v{version}":
         raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
                          f"and release v{version} must agree")

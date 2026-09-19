@@ -9,10 +9,10 @@ import argparse
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import sys
-from engine import add_engine_arguments, engine_cmake_flags, engine_source, engine_version
+from engine import add_engine_arguments, build_command, configure_command, engine_version
+from sanitize import environment
 from versions import SUPPORTED_DUCKDB
 
 
@@ -28,13 +28,6 @@ def main():
         parser.error(f"the sanitized suite runs in the pinned duckdb=={SUPPORTED_DUCKDB} Python package; "
                      f"pass --duckdb-version v{SUPPORTED_DUCKDB} only for a checkout of that release")
 
-    def tool(name):
-        found = shutil.which(name, path=os.pathsep.join([str(root / ".venv/bin"), str(root / ".venv/Scripts"),
-                                                         os.environ.get("PATH", "")]))
-        if not found:
-            raise SystemExit(f"Missing {name}")
-        return found
-
     cc = os.environ.get("CC", "clang")
     cxx = os.environ.get("CXX", "clang++")
     for compiler in (cc, cxx):
@@ -45,18 +38,13 @@ def main():
         if version.returncode != 0 or "clang" not in version.stdout.lower():
             raise SystemExit(f"{compiler} is not Clang; the sanitized build requires Clang (see module docstring)")
     build = root / "build/sanitized"
-    subprocess.run([tool("cmake"), "-G", "Ninja", "-S", str(engine_source(args)), "-B", str(build),
-                    "-DCMAKE_C_COMPILER=" + cc, "-DCMAKE_CXX_COMPILER=" + cxx,
-                    "-DPython3_EXECUTABLE=" + sys.executable,
-                    "-DCMAKE_MAKE_PROGRAM=" + tool("ninja"), "-DCMAKE_BUILD_TYPE=RelWithDebInfo", *engine_cmake_flags(args),
-                    "-DDUCKDB_EXTENSION_CONFIGS=" + str(root / "extension_config.cmake"),
-                    "-DBUILD_UNITTESTS=OFF", "-DBUILD_SHELL=OFF", "-DGATEKEEPER_SANITIZE=ON"], check=True)
-    subprocess.run([tool("cmake"), "--build", str(build), "--target", "gatekeeper_loadable_extension", "--parallel", "4"], check=True)
-    env = os.environ.copy()
+    subprocess.run(configure_command(args, build, "RelWithDebInfo") +
+                   ["-DCMAKE_C_COMPILER=" + cc, "-DCMAKE_CXX_COMPILER=" + cxx, "-DBUILD_SHELL=OFF",
+                    "-DGATEKEEPER_SANITIZE=ON"], check=True)
+    subprocess.run(build_command(build, ["gatekeeper_loadable_extension"], 4), check=True)
+    # The instrumented loadable runs inside the uninstrumented Python package.
+    env = environment(mixed_runtime=True)
     env["GATEKEEPER_EXTENSION"] = str(build / "extension/gatekeeper/gatekeeper.duckdb_extension")
-    # Mixed instrumented/uninstrumented standard-library containers cross the ABI.
-    env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1:detect_container_overflow=0"
-    env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
     if platform.system() == "Darwin":
         runtime = subprocess.check_output([cc, "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime

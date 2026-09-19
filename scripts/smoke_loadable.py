@@ -14,6 +14,8 @@ import tempfile
 
 import duckdb
 
+from artifact import connect
+
 
 def validate(db, sql, options=None):
     arguments, values = ["?"], [sql]
@@ -33,9 +35,7 @@ def main(argv):
     if len(argv) != 2:
         raise SystemExit(__doc__)
     artifact = Path(argv[1]).resolve()
-    db = duckdb.connect(config={"allow_unsigned_extensions": "true"})
-    db.execute("SET autoload_known_extensions = false; SET autoinstall_known_extensions = false")
-    db.execute("LOAD '" + str(artifact).replace("'", "''") + "'")
+    db = connect(artifact, autoload_known_extensions=False, autoinstall_known_extensions=False)
     print("host", db.execute("PRAGMA version").fetchone(),
           "extension", db.execute("SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper'").fetchone())
 

@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from sanitize import environment, run_libfuzzer
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -45,19 +47,9 @@ def main():
                 str(root / "duckdb/third_party/yyjson/yyjson.cpp"),
                 "-o", str(out / "validator_fuzz")]
     subprocess.run(command, check=True)
-    env = os.environ.copy()
-    env["ASAN_OPTIONS"] = "detect_leaks=0"
-    env["UBSAN_OPTIONS"] = "halt_on_error=1"
-    with (out / "run.log").open("w") as log:
-        result = subprocess.run([str(out / "validator_fuzz"), str(corpus), "-max_total_time=" + str(args.seconds),
-                                 "-max_len=65536", "-timeout=5", "-artifact_prefix=" + str(out) + "/"],
-                                env=env, stdout=log, stderr=log)
-    lines = (out / "run.log").read_text(errors="replace").splitlines()
-    for line in lines:
-        if "DONE" in line or line.startswith("Done ") or "ERROR:" in line or "SUMMARY:" in line:
-            print(line)
-    print("Full log:", out / "run.log")
-    result.check_returncode()
+    # Everything in this binary is instrumented, so container-overflow detection stays on.
+    run_libfuzzer(out / "validator_fuzz", corpus, out / "run.log", args.seconds, max_len=65536,
+                  env=environment(mixed_runtime=False))
 
 
 if __name__ == "__main__":

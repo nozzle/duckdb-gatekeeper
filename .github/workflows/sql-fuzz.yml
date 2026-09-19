@@ -22,14 +22,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: '3.13'
-      - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
-        with:
-          key: sql-fuzz-ubuntu-latest
-          max-size: 600M
-      - run: python -m pip install --require-hashes -r requirements-dev.txt
+          ccache-key: sql-fuzz-ubuntu-latest
       - run: sudo apt-get update -qq && sudo apt-get install -y clang libclang-rt-dev
       - run: python scripts/fuzz_sql.py --seconds ${{ github.event_name == 'schedule' && 1800 || 120 }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
