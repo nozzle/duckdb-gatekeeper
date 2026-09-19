@@ -9,7 +9,9 @@ pass CI before submission.
 
 1. Set the extension version in `versions.cmake` and align the community descriptor.
    CMake and generated C++ constants consume this canonical metadata. Update the
-   release packaging tests when changing version pins.
+   release packaging tests when changing version pins. Regenerate the README and
+   descriptor benchmark table (`scripts/benchmark.py --markdown`); its footnote carries the
+   extension version, and `test_documentation.py` checks it against the pin.
    DuckDB upgrades additionally require the full [repinning checklist](../inventories/README.md#repinning-the-engine).
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,

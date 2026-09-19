@@ -615,8 +615,8 @@ SET lock_configuration = true;
   (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
   before they run the statement.
 - **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
-  a rebind for prepared executions). Negligible next to model latency, measurable on hot paths;
-  keep enforced connections for untrusted callers.
+  a rebind for prepared executions). Negligible next to model latency, measurable on hot paths
+  (see [Benchmarks](#benchmarks)); keep enforced connections for untrusted callers.
 
 > [!CAUTION]
 > DuckDB **evaluates `PRAGMA` argument expressions while parsing**, before any extension runs.
@@ -737,6 +737,33 @@ it **executes**. It does not:
 
 The full list of boundaries is in [docs/security.md](docs/security.md#remaining-boundaries).
 Report suspected authorization bypasses privately; see [SECURITY.md](SECURITY.md).
+
+## Benchmarks
+
+What each way of running Gatekeeper adds to a statement, against the same statement on a
+plain connection:
+
+| | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
+| --- | ---: | ---: | ---: |
+| plain connection | 63 µs | 3.7 ms | 4.1 ms |
+| enforced connection | 94 µs (+32 µs) | 3.9 ms (+214 µs) | 7.5 ms (+3.4 ms) |
+| enforced, audit log at debug | 97 µs (+34 µs) | 3.9 ms (+203 µs) | 7.5 ms (+3.4 ms) |
+| validate, then execute | 221 µs (+158 µs) | 4.1 ms (+491 µs) | 7.7 ms (+3.6 ms) |
+| denied on an enforced connection | 212 µs | 376 µs | 2.6 ms |
+
+Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python
+client on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper
+0.1.2. The plain row is the client round trip plus the engine's own work; in parentheses, what
+each mode adds to it.
+
+The check is a second parse and bind of the statement plus the AST walk, so its cost follows
+the statement's size, not the data's: tens of microseconds for a short statement, about the
+engine's own bind again for a long one. After a scan large enough to flush the caches it runs
+cold, a few hundred microseconds against milliseconds of query. `gatekeeper_validate` runs
+that same check; the rest of its row is the second client round trip, which carries a
+parameter. A refusal never reaches the engine; what it costs is the check and the error
+itself, a C++ exception surfacing through the client. Regenerate the table on a
+[source build](CONTRIBUTING.md#building) with `.venv/bin/python scripts/benchmark.py --markdown`.
 
 ## License
 
