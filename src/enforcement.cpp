@@ -17,7 +17,8 @@
 
 namespace duckdb {
 
-static constexpr const char *STATE_KEY = "gatekeeper_enforcement";
+// The registered_state key of the enforced state; a C++-side name, never a setting.
+static constexpr const char *STATE_KEY = "gatekeeper_enforced";
 static constexpr const char *LOG_ONLY_SETTING = "gatekeeper_log_only";
 
 // The global log-only switch as it stands now. Only a readable true suspends refusals: a value written natively
@@ -371,6 +372,13 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 	auto &state = input.global_state->Cast<SingleRowState>();
 	if (state.finished)
 		return;
+	// An enforced connection cannot end a transaction (COMMIT and ROLLBACK are not read statements), so latching
+	// inside one the host opened would leave the connection in a transaction nothing can close. Refuse before
+	// latching, with an exception that leaves the host's transaction usable; the host commits or rolls back
+	// first, or enforces on a connection that has not begun one.
+	if (!context.transaction.IsAutoCommit())
+		throw PermissionException("gatekeeper_enforce() cannot run inside an open transaction: an enforced "
+		                          "connection cannot COMMIT or ROLLBACK, so end the transaction first");
 	// Latch at execution, never at bind: EXPLAIN and PREPARE must not enforce.
 	Latch(context);
 	vector<Value> warnings;

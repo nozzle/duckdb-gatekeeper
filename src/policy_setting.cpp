@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 		// DuckDB overwrites duplicate named parameters in its map before calling bind.
 		if (input.ref.function &&
 		    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
-			throw std::invalid_argument("duplicate Gatekeeper configuration option");
+			throw std::invalid_argument("duplicate Gatekeeper option");
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
 		for (const auto &option : input.named_parameters)
@@ -68,7 +68,9 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 		names.push_back("Success");
 		return make_uniq<ConfigureBinding>(gatekeeper::PolicyValue(policy));
 	} catch (const std::invalid_argument &error) {
-		throw InvalidInputException(error.what());
+		// A bad option name, shape, or value is a bind error for CALL gatekeeper_configure(...) as it is for
+		// gatekeeper_validate(...); the policy is unchanged either way.
+		throw BinderException(error.what());
 	}
 }
 

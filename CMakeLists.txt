@@ -40,7 +40,9 @@ target_link_libraries(gatekeeper_extension duckdb_yyjson)
 target_link_libraries(gatekeeper_loadable_extension duckdb_yyjson)
 # vptr checks are disabled in every sanitizer configuration: the instrumented extension shares
 # RTTI with an uninstrumented DuckDB/Python runtime, which UBSan reports as false positives.
-option(GATEKEEPER_FUZZ "Build SQL/typed-option libFuzzer target (Clang required)" OFF)
+# The loadable extension is compiled with the fuzzer runtime but links its sanitizers only through
+# GATEKEEPER_SANITIZE; scripts/fuzz_sql.py always sets both.
+option(GATEKEEPER_FUZZ "Build SQL/typed-option libFuzzer target (Clang required; use with GATEKEEPER_SANITIZE)" OFF)
 if(GATEKEEPER_FUZZ)
   add_executable(gatekeeper_sql_fuzz test/fuzz/sql_options_fuzz.cpp)
   target_compile_definitions(gatekeeper_sql_fuzz PRIVATE GATEKEEPER_FUZZ)

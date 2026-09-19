@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-LogicalType ViolationType() {
+static LogicalType ViolationType() {
 	return LogicalType::STRUCT({{"rule", LogicalType::VARCHAR},
 	                            {"message", LogicalType::VARCHAR},
 	                            {"catalog", LogicalType::VARCHAR},
@@ -12,7 +12,7 @@ LogicalType ViolationType() {
 	                            {"position", LogicalType::BIGINT}});
 }
 
-LogicalType IdentityType(bool object) {
+static LogicalType IdentityType(bool object) {
 	return LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
 	                            {"schema", LogicalType::VARCHAR},
 	                            {object ? "table" : "name", LogicalType::VARCHAR},
