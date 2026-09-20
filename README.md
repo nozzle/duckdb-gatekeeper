@@ -748,15 +748,15 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 58 µs | 3.3 ms | 3.8 ms |
-| enforced connection | 94 µs (+36 µs) | 3.4 ms (+96 µs) | 7.1 ms (+3.3 ms) |
-| enforced, audit log at debug | 136 µs (+78 µs) | 3.5 ms (+224 µs) | 7.2 ms (+3.4 ms) |
-| validate, then execute | 209 µs (+151 µs) | 3.7 ms (+351 µs) | 7.3 ms (+3.4 ms) |
-| denied on an enforced connection | 206 µs | 298 µs | 2.4 ms |
+| plain connection | 65 µs | 3.5 ms | 4.0 ms |
+| enforced connection | 94 µs (+29 µs) | 3.7 ms (+174 µs) | 7.3 ms (+3.2 ms) |
+| enforced, audit log at debug | 144 µs (+79 µs) | 3.8 ms (+312 µs) | 7.4 ms (+3.4 ms) |
+| validate, then execute | 228 µs (+163 µs) | 4.0 ms (+451 µs) | 7.4 ms (+3.4 ms) |
+| denied on an enforced connection | 216 µs | 364 µs | 2.6 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python
 client on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper
-0.1.2. The plain row is the client round trip plus the engine's own work; in parentheses, what
+0.2.0. The plain row is the client round trip plus the engine's own work; in parentheses, what
 each mode adds to it.
 
 The check is a second parse and bind of the statement plus the AST walk, so its cost follows
