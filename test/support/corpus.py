@@ -11,8 +11,8 @@ import tempfile
 
 # Where the corpus's writing statements point. Enforced connections refuse them, but the log-only leg runs
 # every statement for real on a log-only and on a plain connection, so the paths must be this process's own:
-# two suites sharing a fixed path would race, and EXPORT DATABASE into a directory that exists is not
-# idempotent. Removed when the interpreter exits.
+# two suites sharing a fixed path would overwrite each other's files mid-run. Removed when the interpreter
+# exits.
 SCRATCH = Path(tempfile.mkdtemp(prefix="gatekeeper-tests-"))
 atexit.register(shutil.rmtree, SCRATCH, ignore_errors=True)
 
