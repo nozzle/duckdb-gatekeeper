@@ -129,7 +129,10 @@ The suite has two layers with different reach:
   `by_parser(postgres=..., peg=...)` from `support.artifact` rather than skipping a leg. A
   policy decision (`allowed`, a `forbidden`/`unsupported` code, a violation's `rule`) must
   never need `by_parser`; the engine-error codes `parser` and `binding` may, since they name
-  the stage that refused the text.
+  the stage that refused the text. The one thing a leg may skip is a case that crashes the
+  engine under that parser (`test_robustness.py`'s deep nesting under PEG, see
+  [Compatibility and review](docs/security.md#compatibility-and-review)); the skip names the
+  engine defect, and removing it is part of the repin that fixes it.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable
