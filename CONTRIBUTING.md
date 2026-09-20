@@ -262,7 +262,10 @@ catalog callback alone does not establish complete function coverage.
 Run the full pytest suite, the inventory audit, and `clang-format` before opening a PR.
 Changes to policy semantics should include regression tests and, where they affect the
 configuration or validation paths, a fuzz smoke run. Summarize validation results in the
-PR description.
+PR description. A change a host integrating the extension would notice (a new function or
+setting, a decision that changes, an error class or message the README documents) gets a
+line under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md), written for that host rather
+than as a commit subject; the release turns that section into the GitHub Release notes.
 
 ## Releases and community publication
 

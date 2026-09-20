@@ -253,3 +253,16 @@ def test_documentation_links():
             assert page.exists(), (path, target)
             if fragment:
                 assert page.suffix == ".md" and fragment in heading_anchors(page), (path, target)
+
+
+def test_descriptor_links_resolve_in_this_checkout():
+    """The community descriptor links to this repository at a version tag; the release gate holds the tag to the
+    version, and this holds each path and fragment to a file and heading in the tree that tag will name."""
+    links = re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/[^/]+/([^)\s]+)", (ROOT / "community/description.yml").read_text())
+    assert links, "the descriptor links to no repository documentation"
+    for target in links:
+        file, _, fragment = target.partition("#")
+        page = ROOT / file
+        assert page.is_file(), target
+        if fragment:
+            assert page.suffix == ".md" and fragment in heading_anchors(page), target
