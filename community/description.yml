@@ -9,7 +9,7 @@
 # sit beside the generated ones. test/test_documentation.py executes `hello_world`.
 extension:
   name: gatekeeper
-  description: Authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Validate a statement without executing it, or enforce a lockable policy on the connection itself, with every decision in the audit log.
+  description: Authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Validate a statement without executing it, or enforce a lockable policy on the connection itself, with an audit log of every decision once DuckDB's logging is enabled for it.
   version: 0.1.2
   language: C++
   build: cmake
