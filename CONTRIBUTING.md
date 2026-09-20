@@ -122,7 +122,7 @@ The suite has two layers with different reach:
   engine under either parser; the build-and-test workflow runs both legs. The parsers differ in
   a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
   the parser's or the binder's check, the arity a keyword-named call such as `position` must
-  have to reach the binder), so a test that pins one of those states both expectations with
+  have to reach the binder), so a test that pins one of those names both expectations with
   `by_parser(postgres=..., peg=...)` from `support.artifact` rather than skipping a leg. A
   policy decision (`allowed`, a `forbidden`/`unsupported` code, a violation's `rule`) must
   never need `by_parser`; the engine-error codes `parser` and `binding` may, since they name
