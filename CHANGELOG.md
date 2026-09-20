@@ -6,6 +6,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-20
+
 ### Added
 
 - **Enforced connections.** `CALL gatekeeper_enforce()` makes DuckDB itself refuse, on that
