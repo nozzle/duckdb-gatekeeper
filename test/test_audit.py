@@ -7,6 +7,7 @@ import time
 import duckdb
 import pytest
 
+from support.artifact import literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -275,7 +276,7 @@ def test_sandboxed_connection_cannot_reach_the_log(catalog, agent, tmp_path):
     for sql in ["SELECT * FROM duckdb_logs", "SELECT * FROM duckdb_logs_parsed('Gatekeeper')",
                 "SELECT * FROM duckdb_log_contexts()", "CALL disable_logging()", "SELECT * FROM disable_logging()",
                 "SELECT * FROM truncate_duckdb_logs()", "CALL truncate_duckdb_logs()", "CALL enable_logging('Gatekeeper')",
-                f"SELECT * FROM enable_logging(storage := 'file', storage_path := '{tmp_path / 'agent.csv'}')",
+                f"SELECT * FROM enable_logging(storage := 'file', storage_path := {literal(tmp_path / 'agent.csv')})",
                 "SELECT write_log('forged', log_type := 'Gatekeeper', level := 'info')",
                 "SET enable_logging = false", "SET logging_level = 'fatal'", "SET logging_storage = 'stdout'"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):

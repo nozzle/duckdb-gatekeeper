@@ -5,7 +5,7 @@ import threading
 import duckdb
 import pytest
 
-from support.artifact import connect
+from support.artifact import connect, literal
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
 from support.typed_helpers import configure, validate
@@ -149,7 +149,7 @@ def test_denied_statements_have_no_effect(catalog, agent, tmp_path):
     path = tmp_path / "no_effect.csv"
     before = catalog.execute("SELECT count(*) FROM duckdb_tables()").fetchone()[0]
     for sql in ["CREATE TABLE u AS SELECT * FROM reporting.orders",
-                f"COPY reporting.orders TO '{path}'",
+                f"COPY reporting.orders TO {literal(path)}",
                 "INSERT INTO reporting.orders VALUES (9, 1.0, 'z')",
                 "CREATE TEMP TABLE tmp(x INTEGER)"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
