@@ -9,7 +9,7 @@ import sys
 import duckdb
 import pytest
 
-from support.artifact import EXTENSION, ROOT, literal
+from support.artifact import EXTENSION, ROOT, literal, select_parser
 from support.toolchain import repository
 from versions import (BASELINE_FILENAME, EXTENSION_VERSION, REVIEWED_DUCKDB, SUPPORTED_DUCKDB,
                       SUPPORTED_DUCKDB_REVISION, load_versions, reviewed_duckdb)
@@ -245,4 +245,5 @@ def test_engine_guard_reads_the_builtin_engine_identity():
     db.execute("CREATE MACRO pragma_version() AS TABLE SELECT 'v0.0.0' AS library_version, 'shadow' AS source_id")
     assert db.execute("SELECT library_version FROM pragma_version()").fetchone() == ("v0.0.0",)
     db.execute("LOAD " + literal(EXTENSION))
+    select_parser(db)
     assert db.execute("SELECT allowed FROM gatekeeper_validate('SELECT 1')").fetchone() == (True,)

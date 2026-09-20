@@ -2,7 +2,9 @@
 
 The default location and the load idiom are scripts/artifact.py's; this module adds two environment overrides:
 GATEKEEPER_EXTENSION, which the distribution workflow uses to point the suite at a downloaded platform
-artifact, and GATEKEEPER_PARSER, which selects the SQL parser every connection the suite opens runs under.
+artifact, and GATEKEEPER_PARSER, which selects the SQL parser in force on every connection the suite opens here.
+The raw duckdb.connect() calls in test_versions.py exist to test the artifact's own load path and apply the
+selection with select_parser() once the artifact is loaded; those in test_typed_api.py never load Gatekeeper.
 """
 import os
 from pathlib import Path
@@ -39,14 +41,19 @@ def enable_peg_parser(connection):
     connection.execute("CALL enable_peg_parser()")
 
 
+def select_parser(connection):
+    """Put the selected parser in force on ``connection``'s database; nothing to do for the engine's default."""
+    if PARSER == "peg":
+        enable_peg_parser(connection)
+
+
 def connect(extension=EXTENSION, **config):
     """A fresh in-memory database with the artifact under test loaded and the selected parser in force; closed
     again if either step fails."""
     connection = loadable.connect(extension, **config)
-    if PARSER == "peg":
-        try:
-            enable_peg_parser(connection)
-        except Exception:
-            connection.close()
-            raise
+    try:
+        select_parser(connection)
+    except Exception:
+        connection.close()
+        raise
     return connection

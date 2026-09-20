@@ -115,9 +115,12 @@ The suite has two layers with different reach:
   tests that run against the loadable artifact on Linux and macOS. Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
-  `GATEKEEPER_PARSER=peg` runs the same suite with every connection opted into the
-  `autocomplete` extension's PEG parser override (`CALL enable_peg_parser()`, DuckDB 1.5's
-  experimental parser and the default from 2.0; it needs `INSTALL autocomplete` once).
+  `GATEKEEPER_PARSER=peg` runs the same suite with every connection `support.artifact.connect`
+  opens opted into the `autocomplete` extension's PEG parser override
+  (`CALL enable_peg_parser()`, DuckDB 1.5's experimental parser and the default from 2.0; it
+  needs `INSTALL autocomplete` once). A test that must open a raw connection because the
+  artifact's load path is what it tests applies the leg with `select_parser()` once the
+  artifact is loaded.
   Gatekeeper parses with the connection's parser options, so its decisions must agree with the
   engine under either parser; the build-and-test workflow runs both legs. The parsers differ in
   a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
