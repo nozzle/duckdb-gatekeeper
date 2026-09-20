@@ -1,3 +1,7 @@
+# name: test/sql/gatekeeper.test
+# description: gatekeeper_validate basics: statement types, options, result columns, and the never-bind list.
+# group: [gatekeeper]
+
 require gatekeeper
 
 query I

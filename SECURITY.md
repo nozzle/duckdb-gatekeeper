@@ -13,7 +13,8 @@ issue or pull request for a suspected bypass.
 Include the DuckDB version (`PRAGMA version`), the Gatekeeper version
 (`SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper'`),
 the global policy and request options in effect, the trusted catalog definitions the
-report relies on, the SQL submitted, and the `gatekeeper_validate` result row.
+report relies on, the SQL submitted, and the `gatekeeper_validate` result row or, on an
+enforced connection, the `duckdb_logs_parsed('Gatekeeper')` record.
 
 We acknowledge reports within five business days and aim to publish a fix and an advisory
 within 90 days of confirmation, sooner for bypasses that need no unusual host
@@ -41,8 +42,9 @@ to release or bypass enforcement from SQL; `gatekeeper_configure`, `SET gatekeep
 `SET gatekeeper_log_only` widening the policy or suspending refusals from a connection that
 should not be able to; and a distributed artifact loading into an engine it was not built for.
 
-Out of scope, by design and documented in
-[Remaining boundaries](docs/security.md#remaining-boundaries): row- or column-level
+Out of scope, by design and documented in the security model's
+[threat model](docs/security.md#threat-model), [residuals](docs/security.md#residuals), and
+[remaining boundaries](docs/security.md#remaining-boundaries): row- or column-level
 filtering; execution-time memory, time, or result limits; parser or binder resource
 exhaustion; I/O that trusted catalogs, views, macros, or explicitly admitted readers
 perform during binding, including the bind DuckDB performs for a prepared statement before

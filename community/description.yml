@@ -1,5 +1,6 @@
 # Prepared for extensions/gatekeeper/description.yml in duckdb/community-extensions.
-# Submit only after v0.1.2 exists and its full distribution workflow succeeds.
+# Submit an update only after the tag named in repo.ref exists and its full distribution
+# workflow succeeds.
 #
 # duckdb.org renders `description` under the title, adds its own "Installing and Loading"
 # block, shows `hello_world` as one SQL code block, renders `extended_description` as
@@ -8,7 +9,7 @@
 # sit beside the generated ones. test/test_documentation.py executes `hello_world`.
 extension:
   name: gatekeeper
-  description: Pre-execution authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Checks every resolved table, view, and function against a lockable policy without executing the query.
+  description: Authorization for untrusted read-only SQL from tenants, LLM agents, and dashboard builders. Validate a statement without executing it, or enforce a lockable policy on the connection itself, with an audit log of every decision once DuckDB's logging is enabled for it.
   version: 0.1.2
   language: C++
   build: cmake
@@ -104,7 +105,9 @@ docs:
     3. **Bind** on your connection, using the caller's search path and transaction.
     4. **Authorize** every resolved table and view, plus each caller-requested function,
        against both the global policy and the request options.
-    5. **Return** one row with named columns. Nothing is executed.
+    5. **Check the plan**: only reviewed read operators, resolved functions and
+       implementations chosen during binding pass.
+    6. **Return** one row with named columns. Nothing is executed.
 
     Two integration contracts. **Enforced connection**: run `CALL gatekeeper_enforce()`
     on the connection you hand out and execute SQL on it directly; the same steps run
@@ -126,7 +129,7 @@ docs:
     ```
 
     Enforcement is per connection and only ever switched on; there is no instance-wide
-    setting. Trusted setup, in order: load extensions and attach catalogs (`LOAD` and `ATTACH`
+    enforcement switch. Trusted setup, in order: load extensions and attach catalogs (`LOAD` and `ATTACH`
     are refused on an enforced connection), `CALL gatekeeper_configure(...)`, tighten
     `enable_external_access` and autoload where the deployment allows,
     `CALL enable_logging('Gatekeeper')`, `SET lock_configuration = true`, then
@@ -222,7 +225,7 @@ docs:
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
     | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
-    | `blocked_functions` | VARCHAR[] | `[]` | Always wins, including inside trusted views and macros. |
+    | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
     Only a whole-component `'*'` is a wildcard: `sales_*`, `?`, and `%` are literal names.
     Wildcards also match objects created or attached later, so prefer explicit catalog
@@ -255,11 +258,14 @@ docs:
     omitted options from the built-in defaults. The policy is shared by every connection
     of the database instance, is not persisted, and is not undone by rollback. Request
     options are intersected with it: either layer's block wins, and each layer must allow
-    every resolved table or view and every caller-written function. (Functions that
-    trusted views and macros introduce internally are normally exempt from the
-    allowlists but always honor blocks and the never-bind list; ambiguous caller syntax
-    such as `t.x` or `list[i]` triggers a query-wide implementation check that can reach
-    those expansions too.) Blocks also reach bound implementations such as `sum` behind
+    every resolved table or view and every caller-written function. Trusted views, macros,
+    and attached tables are opaque to function policy: what their definitions introduce is
+    theirs, not the caller's, and is exempt from the allowlist, from `blocked_functions`, and
+    from the never-bind list alike, apart from Gatekeeper's own control plane. The exemption
+    is by origin, not by name: the same function written by the caller next to the view is
+    the caller's, and ambiguous caller syntax such as `t.x` or `list[i]` triggers a
+    query-wide implementation check that can reach a trusted expansion using the same
+    function. Blocks also reach bound implementations such as `sum` behind
     `list_sum`, and when the caller writes a name-selected dispatcher (`list_aggregate`,
     `aggregate`, and aliases) the aggregate it names must itself be allowed in both layers.
     A request that tries to widen access does not error; it simply cannot authorize
@@ -278,13 +284,18 @@ docs:
     ### What is never allowed
 
     - `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP`, `COPY`, `SET`, `ATTACH`, and every
-      other non-read statement return `unsupported`.
+      other non-read statement return `unsupported`. The one `CREATE` admitted is the
+      temporary enum a dynamic `PIVOT` (no `IN` list) is rewritten into, checked as the
+      `SELECT` that defines it.
     - Dynamic SQL (`query`, `query_table`, `json_execute_serialized_sql`,
       `json_serialize_plan`), metadata readers
       (`duckdb_tables`, `information_schema.*`, `SHOW TABLES`), sequence and storage
       functions, the logging controls (`enable_logging`, `disable_logging`,
       `truncate_duckdb_logs`, `write_log`), `gatekeeper_configure`, and `gatekeeper_enforce`
-      are on a never-bind list that no option can override, including through views or macros.
+      are on a never-bind list that no option can override wherever the caller's text reaches
+      them. A host view or macro over one of these is the host's decision to expose it and is
+      admitted when the view is, except for the control plane (`gatekeeper_configure`,
+      `gatekeeper_enforce`, and the four logging controls), which is refused on every route.
     - File readers (`read_parquet`, `read_csv_auto`, `read_json_auto`) and catalog, session,
       or configuration inspection (`current_schema`, `current_setting`, `getvariable`) are
       **not** defaults. Grant them by name in the global policy. Admitting a reader permits

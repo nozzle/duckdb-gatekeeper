@@ -21,7 +21,9 @@ every enforced denial is a `Permission Error` the statement never recovers from.
 > Read the [security model](docs/security.md) before integrating.
 
 > [!NOTE]
-> Early development. Release binaries target **DuckDB 1.5.5**; community publication is pending.
+> Early development. Release binaries target **DuckDB 1.5.5**. `INSTALL gatekeeper FROM
+> community` installs the latest tagged release; this README follows `main`, which can be
+> ahead of it.
 
 ## Installation
 
@@ -30,15 +32,10 @@ INSTALL gatekeeper FROM community;
 LOAD gatekeeper;
 ```
 
-> [!IMPORTANT]
-> The `community` install becomes available once Gatekeeper is accepted into the DuckDB
-> community repository. Until then, follow the
-> [build and local-load instructions](CONTRIBUTING.md#building) and
-> [loading unsigned builds](CONTRIBUTING.md#loading-unsigned-builds).
-
 Community binaries are built and signed by DuckDB and load with signature verification
 enabled. Source builds and the binaries attached to GitHub Releases are unsigned
-development artifacts and require `allow_unsigned_extensions`.
+development artifacts and require `allow_unsigned_extensions`; see
+[loading unsigned builds](CONTRIBUTING.md#loading-unsigned-builds).
 
 Each binary is specific to the DuckDB engine it was built from and refuses to load into
 any other, even when DuckDB's own footer check is disabled. The community repository
@@ -70,7 +67,8 @@ SELECT allowed, code FROM gatekeeper_validate(
 | --- | --- |
 | true | ok |
 
-DDL is never allowed:
+DDL is never allowed (the one exception is the temporary enum a dynamic `PIVOT` is rewritten
+into; see [dynamic PIVOT](docs/security.md#residuals)):
 
 ```sql
 SELECT allowed, code FROM gatekeeper_validate('DROP TABLE reporting.orders');
@@ -477,7 +475,7 @@ about to execute is checked once more.
 Enforcement is per connection, and only ever switched on: the host runs
 `CALL gatekeeper_enforce()` on the connection it is about to hand out, and keeps its own
 connections unenforced for the setup below, the [audit log](#audit-log), and policy changes.
-There is no instance-wide switch.
+There is no instance-wide enforcement switch.
 
 | Trusted setup, in order | Why |
 | --- | --- |
@@ -711,7 +709,7 @@ if not decision["allowed"] or decision["code"] != "ok":
 rows = db.execute(sql).fetchall()
 ```
 
-Until publication, replace the install/load lines with the
+To run a source build instead, replace the install/load lines with the
 [unsigned build setup](CONTRIBUTING.md#loading-unsigned-builds). Recommended
 validating-connection settings (`autoload_known_extensions = false`, memory and thread
 limits, `lock_configuration`) are in the
@@ -735,7 +733,9 @@ it **executes**. It does not:
 - prove that every overload of a default function is harmless (defaults are a
   [reviewed name inventory](inventories/README.md)).
 
-The full list of boundaries is in [docs/security.md](docs/security.md#remaining-boundaries).
+The full list is in [docs/security.md](docs/security.md): the engine behaviors Gatekeeper cannot
+reach under [residuals](docs/security.md#residuals), and everything else under
+[remaining boundaries](docs/security.md#remaining-boundaries).
 Report suspected authorization bypasses privately; see [SECURITY.md](SECURITY.md).
 
 ## Benchmarks

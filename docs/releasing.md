@@ -1,9 +1,11 @@
 # Releases and community publication
 
 Gatekeeper's GitHub Releases and DuckDB community publication are separate steps.
-The local [community descriptor](../community/description.yml) is prepared for the
-community submission; it is not evidence of publication. Its `v0.1.2` ref must exist and
-pass CI before submission.
+Gatekeeper is published in the [community repository](https://github.com/duckdb/community-extensions)
+(`extensions/gatekeeper/description.yml`); each release updates that descriptor by pull
+request from the local [community descriptor](../community/description.yml). The local copy
+is the prepared submission, not evidence of what is deployed: the tag its `repo.ref` names
+must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
@@ -21,8 +23,8 @@ pass CI before submission.
    target must pass the SQL contract suite. Wasm EH must pass the browser test of the actual distribution artifact.
    If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging
    tests, and community descriptor aligned and document the reason.
-4. Leave the README and security doc's pending-publication statements in place until
-   the community build has actually deployed. Source loading stays in CONTRIBUTING.
+4. Keep the README and security doc's distinction between DuckDB-signed community builds
+   and unsigned local/GitHub builds intact. Source loading stays in CONTRIBUTING.
 
 ## Tag and publish GitHub assets
 
@@ -73,16 +75,17 @@ The job refuses to create a release while any draft or published release for tha
 exists, and fails closed if the release lookup fails. An existing release is never
 silently overwritten. Do not move a published version tag.
 
-## Submit the community descriptor manually
+## Update the community descriptor manually
 
 1. Check the tag workflow and GitHub Release assets. Copy
-   `community/description.yml` into `extensions/gatekeeper/description.yml` in a checkout
+   `community/description.yml` over `extensions/gatekeeper/description.yml` in a checkout
    of [duckdb/community-extensions](https://github.com/duckdb/community-extensions),
    dropping the comment preamble. Recheck its current descriptor conventions before
    submission. The prepared descriptor pins a version tag; never replace it with a
-   floating branch ref. If reviewers prefer a full commit SHA in `repo.ref`, substitute
-   the SHA the tag points at (`git rev-parse v0.1.2^{}`) in the submitted copy only; the
-   in-repo descriptor keeps the tag because it cannot name the commit that contains it.
+   floating branch ref. The community repository pins the full commit SHA in `repo.ref`:
+   substitute the SHA the tag points at (`git rev-parse vX.Y.Z^{}`) in the submitted copy
+   only; the in-repo descriptor keeps the tag because it cannot name the commit that
+   contains it.
 2. State which engine the GitHub assets target, and link compatibility validation.
    The community repository can rebuild the source against another engine; the source
    has no fixed release allowlist. Each binary still loads only into the engine it was
@@ -112,11 +115,9 @@ SELECT allowed FROM gatekeeper_validate('SELECT 1');
 SELECT code FROM gatekeeper_validate('DROP TABLE orders');
 ```
 
-Expect `true` and `unsupported`. Then remove the pending-publication qualifications
-in `README.md` and `docs/security.md`, leaving the distinction between signed community
-builds and unsigned local/GitHub builds intact. Run `test/test_documentation.py` after
-the edit. It exercises local README examples; the community-install smoke check above
-is a separate deployment verification.
+Expect `true` and `unsupported`, and `extension_version` in `duckdb_extensions()` equal to the
+released version. `test/test_documentation.py` exercises the local README examples against a
+source build; the community-install check above is the separate deployment verification.
 
 Monitor DuckDB releases and test community-style rebuilds. Update our reproducible
 build pins when adopting a new release for our own assets, and address actual build
