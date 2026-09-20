@@ -163,6 +163,10 @@ def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old
     (TAG, (("CHANGELOG.md", "## Unreleased\n", "## Unreleased\n\n- Pending.\n"),), "still lists entries under"),
     # Between releases the pending section stays, even empty, so the next change has a home.
     ("", (("CHANGELOG.md", "## Unreleased\n", "## Pending\n"),), "must keep a '## Unreleased' section"),
+    # One section per version: a release commit that adds a second heading for the version instead of renaming
+    # Unreleased is malformed, whichever body would win.
+    ("", (("CHANGELOG.md", "## Unreleased\n", f"## Unreleased\n\n## {EXTENSION_VERSION} - 2026-01-01\n\n- Twice.\n"),),
+     "more than one section for"),
 ])
 def test_changelog_gate(tmp_path, monkeypatch, tag, edits, message):
     checkout(tmp_path, monkeypatch, edits)

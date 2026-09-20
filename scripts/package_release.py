@@ -22,6 +22,10 @@ def changelog_sections(text):
     parts = re.split(r"(?m)^## (\S+)[^\n]*\n", text)
     if len(parts) < 3:
         raise ValueError("CHANGELOG.md must have at least one '## <version>' section")
+    headings = parts[1::2]
+    duplicates = sorted({heading for heading in headings if headings.count(heading) > 1})
+    if duplicates:
+        raise ValueError(f"CHANGELOG.md has more than one section for {duplicates}")
     return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts), 2)}
 
 
