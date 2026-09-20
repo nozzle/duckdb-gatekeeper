@@ -65,9 +65,10 @@ jobs:
     # linux_arm64 and the cross-compiled osx_amd64. These jobs load the actual distributed artifacts
     # into the pinned DuckDB Python package, so the host/loadable ABI boundary (bind-data inspection,
     # replacement-scan callbacks, the policy setting, the query hooks enforcement lives in, the log
-    # manager) is exercised on every desktop platform. The full Python suite runs where it can;
-    # Windows gets the smoke script, whose enforcement leg is the only execution of enforced
-    # connections, log-only mode, and the audit log against that platform's binary.
+    # manager) is exercised on the five targets below, the ones a pinned Python wheel can load. The
+    # full Python suite runs where it can; windows_amd64 gets the smoke script, whose enforcement leg
+    # is the only execution of enforced connections, log-only mode, and the audit log against that
+    # binary. The musl, Windows ARM64, and MinGW artifacts have only the pipeline's SQL suite.
     name: Distributed loadable (${{ matrix.arch }})
     needs: [metadata, build]
     runs-on: ${{ matrix.os }}
