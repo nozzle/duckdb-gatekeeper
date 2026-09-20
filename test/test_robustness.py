@@ -18,13 +18,15 @@ PEG_DEEP_NESTING_CRASH = pytest.mark.skipif(
     PARSER == "peg", reason="DuckDB 1.5.5 PEG parser recursion overflows the stack on deep nesting")
 
 
-@PEG_DEEP_NESTING_CRASH
-def test_depth_and_width(db):
+@pytest.mark.parametrize("depth", [1, 20, pytest.param(100, marks=PEG_DEEP_NESTING_CRASH)])
+def test_depth(db, depth):
     db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t(x INT)")
-    for depth in [1, 20, 100]:
-        sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
-        assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
-        assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+    sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
+    assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
+    assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+
+
+def test_width(db):
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
     assert validate(db, sql)["allowed"]
 
