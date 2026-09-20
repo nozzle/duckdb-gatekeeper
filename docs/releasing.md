@@ -9,11 +9,21 @@ must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
-1. Set the extension version in `versions.cmake` and align the community descriptor.
-   CMake and generated C++ constants consume this canonical metadata. Update the
-   release packaging tests when changing version pins. Regenerate the README and
-   descriptor benchmark table (`scripts/benchmark.py --markdown`); its footnote carries the
-   extension version, and `test_documentation.py` checks it against the pin.
+1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
+   the generated C++ constants consume) and a set of coupled edits the package gate and the
+   tests refuse to release without:
+   - `community/description.yml`: `extension.version`, `repo.ref`, the preamble comment, and
+     every `blob/vX.Y.Z/` documentation link (the gate requires all of them to name the
+     release; `grep -n 'blob/v' community/description.yml` lists them).
+   - `CHANGELOG.md`: rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` and add a fresh, empty
+     `## Unreleased` above it. The gate requires the release's section to have content and
+     Unreleased to be empty when a tag is packaged; that section becomes the top of the
+     GitHub Release notes.
+   - The README and descriptor benchmark table: regenerate with
+     `scripts/benchmark.py --markdown`; its footnote carries the extension version, and
+     `test_documentation.py` checks it against the pin.
+   `test/test_release_packaging.py` runs the gate against the checkout as the release commit
+   leaves it, so it fails on the release PR until every edit above is made.
    DuckDB upgrades additionally require the full [repinning checklist](../inventories/README.md#repinning-the-engine).
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
@@ -41,8 +51,8 @@ must exist and pass CI before it is submitted.
 After checking out the validated release commit with a clean worktree, a maintainer runs:
 
 ```sh
-git tag -a v0.1.2 -m "Gatekeeper v0.1.2"
-git push origin v0.1.2
+git tag -a vX.Y.Z -m "Gatekeeper vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
@@ -55,10 +65,12 @@ a GitHub Release.
 Only stable `vMAJOR.MINOR.PATCH` tag pushes trigger distribution; prerelease and test
 tags are excluded. The package gate validates the exact stable version again before
 the tag-only publish job can run, using the canonical `versions.cmake` metadata.
-It also checks `community/description.yml`'s `extension.version` and `repo.ref`, and
-the engine metadata loaded by `scripts/versions.py`. The descriptor must also cite the
-pinned DuckDB version and source revision in its compatibility description.
-Keep the descriptor's version/ref
+It also checks `community/description.yml`'s `extension.version`, `repo.ref`, and every
+`blob/` documentation link against that version, the engine metadata loaded by
+`scripts/versions.py`, and `CHANGELOG.md` (a tag needs its version's section with content
+and an empty `## Unreleased`; between releases `## Unreleased` must exist). The descriptor
+must also cite the pinned DuckDB version and source revision in its compatibility
+description. Keep the descriptor's version/ref
 as unquoted scalars with two-space indentation; the standard-library-only packaging
 check deliberately rejects changes to that local format.
 
@@ -76,7 +88,8 @@ registered where each function is (`src/gatekeeper_extension.cpp`, `src/policy_s
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
 all ZIPs. Native and Wasm assets are unsigned development builds, not DuckDB-signed
-community binaries. The release notes link to versioned loading and security docs.
+community binaries. The release notes open with the release's `CHANGELOG.md` section and
+link to versioned loading and security docs.
 
 The publisher initially creates a draft and publishes it after all uploads succeed.
 If upload/publication fails after draft creation, inspect that draft and the job logs.

@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 from pathlib import Path
+import re
 import zipfile
 
 import descriptor as community
@@ -14,6 +15,14 @@ PLATFORMS = (
     "osx_amd64", "osx_arm64", "windows_amd64", "windows_arm64",
     "windows_amd64_mingw", "wasm_eh",
 )
+
+
+def changelog_sections(text):
+    """CHANGELOG.md as {heading version: body} in file order; ``Unreleased`` is the pending section."""
+    parts = re.split(r"(?m)^## (\S+)[^\n]*\n", text)
+    if len(parts) < 3:
+        raise ValueError("CHANGELOG.md must have at least one '## <version>' section")
+    return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts), 2)}
 
 
 def release_version(tag):
@@ -32,8 +41,23 @@ def release_version(tag):
     if descriptor_version != version or descriptor_ref != f"v{version}":
         raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
                          f"and release v{version} must agree")
+    # The descriptor's documentation links pin the release they describe; one left at the previous tag would
+    # show duckdb.org readers documentation for a binary that does not have the feature, or the reverse.
+    stale = sorted(set(re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/([^/]+)/", descriptor)) - {f"v{version}"})
+    if stale:
+        raise ValueError(f"Community descriptor links refer to {stale}; every blob/ link must name v{version}")
     if tag and tag != f"v{version}":
         raise ValueError(f"Tag {tag!r} and version {version} must agree")
+    sections = changelog_sections((ROOT / "CHANGELOG.md").read_text())
+    if tag:
+        # A release ships with its notes written: this version's section exists with content, and nothing is left
+        # pending under Unreleased.
+        if not sections.get(version):
+            raise ValueError(f"CHANGELOG.md has no '## {version}' section with content")
+        if sections.get("Unreleased"):
+            raise ValueError("CHANGELOG.md still lists entries under '## Unreleased'; move them to the release section")
+    elif "Unreleased" not in sections:
+        raise ValueError("CHANGELOG.md must keep a '## Unreleased' section between releases")
     return version
 
 
@@ -72,7 +96,11 @@ def package_release(tag, artifacts, output):
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         checksums.append(f"{digest}  {name}\n")
     (output / "SHA256SUMS").write_text("".join(checksums))
+    # The notes lead with this version's CHANGELOG section when it has one (a tag always does; the PR/main
+    # packaging check between releases carries the previous release's).
+    changes = changelog_sections((ROOT / "CHANGELOG.md").read_text()).get(version, "")
     (output / "RELEASE_NOTES.md").write_text(
+        (changes + "\n\n---\n\n" if changes else "") +
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
         "They are not DuckDB-signed community binaries. The full distribution matrix "
