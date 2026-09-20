@@ -33,9 +33,9 @@ The smoke test starts a localhost server and an actual Chromium worker. It fails
 on assertions, unexpected page errors, or a 90-second timeout. Requests outside
 the local origin are blocked. Coverage includes binding errors, view dependency
 identities, prepared parameters, policy ceilings, narrowing, shared configuration,
-atomic replacement, reset/readback, and configuration locking. This supplements
-the native suite; it does not exercise browser lakehouse integrations or all
-browser engines.
+atomic replacement, reset/readback, an enforced connection with its audit records and
+log-only mode, and configuration locking. This supplements the native suite; it does
+not exercise browser lakehouse integrations or all browser engines.
 
 ## Load in an application
 

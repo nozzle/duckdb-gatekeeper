@@ -122,14 +122,17 @@ def _tampered_artifact(tmp_path, version, source_id):
     tampered.write_bytes(data[:match.start()] + replacement + data[match.end():])
     if platform.system() == "Darwin":
         # The kernel kills a process that pages in code whose ad-hoc signature no longer matches. Re-sign the
-        # Mach-O image (which ends at LC_CODE_SIGNATURE) and re-append DuckDB's trailing metadata footer.
+        # Mach-O image (which ends at LC_CODE_SIGNATURE) and re-append DuckDB's trailing metadata footer. The
+        # cross-compiled osx_amd64 artifact is linked without a signature (x86_64 does not require one), so
+        # there is nothing to invalidate and the rewritten copy loads as written.
         listing = subprocess.check_output(["otool", "-l", str(tampered)], text=True)
-        signature = listing[listing.index("LC_CODE_SIGNATURE"):]
-        end = sum(int(re.search(rf"{field}\s+(\d+)", signature)[1]) for field in ("dataoff", "datasize"))
-        image, footer = tampered.read_bytes()[:end], tampered.read_bytes()[end:]
-        tampered.write_bytes(image)
-        subprocess.run(["codesign", "--force", "--sign", "-", str(tampered)], check=True, capture_output=True)
-        tampered.write_bytes(tampered.read_bytes() + footer)
+        if "LC_CODE_SIGNATURE" in listing:
+            signature = listing[listing.index("LC_CODE_SIGNATURE"):]
+            end = sum(int(re.search(rf"{field}\s+(\d+)", signature)[1]) for field in ("dataoff", "datasize"))
+            image, footer = tampered.read_bytes()[:end], tampered.read_bytes()[end:]
+            tampered.write_bytes(image)
+            subprocess.run(["codesign", "--force", "--sign", "-", str(tampered)], check=True, capture_output=True)
+            tampered.write_bytes(tampered.read_bytes() + footer)
     return tampered
 
 

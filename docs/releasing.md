@@ -19,10 +19,20 @@ must exist and pass CI before it is submitted.
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
 3. Require the full distribution matrix: Linux amd64/arm64 glibc and musl, macOS
-   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native
-   target must pass the SQL contract suite. Wasm EH must pass the browser test of the actual distribution artifact.
-   If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging
-   tests, and community descriptor aligned and document the reason.
+   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Coverage differs by
+   target, and the checklist is only what actually runs:
+   - The reusable pipeline runs the SQL contract suite against a statically linked
+     `unittest` on every native target except `linux_arm64` and the cross-compiled
+     `osx_amd64`. For the musl builds, Windows ARM64, and MinGW, that is the whole test.
+   - The `loadable-test` jobs load the shipped artifact into the pinned Python package on
+     five targets, `linux_amd64`, `linux_arm64`, `osx_arm64`, `osx_amd64`, and
+     `windows_amd64`, and run `scripts/smoke_loadable.py` on each (validation, policy
+     setting, enforcement, log-only, and the audit log against the loadable). All but
+     `windows_amd64` also run the full Python suite; the two targets the pipeline skips get
+     their only test here. No other artifact is loaded by a `loadable-test` job.
+   - Wasm EH must pass the browser test of the actual distribution artifact.
+   If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging tests,
+   and community descriptor aligned and document the reason.
 4. Keep the README and security doc's distinction between DuckDB-signed community builds
    and unsigned local/GitHub builds intact. Source loading stays in CONTRIBUTING.
 

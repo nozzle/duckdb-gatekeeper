@@ -102,8 +102,10 @@ make an unsigned extension a DuckDB-signed community build. See the
 The suite has two layers with different reach:
 
 - `test/sql/*.test` is the **portable contract**: sqllogictests that the community build
-  (`make test_release`) and the engine-rebuild workflow run on every platform, including
-  Windows, musl, and engines other than the pinned one. They cover statement rejection,
+  (`make test_release`) and the engine-rebuild workflow run on every platform the reusable
+  pipeline tests, including Windows, musl, and engines other than the pinned one (it skips
+  `linux_arm64` and the cross-compiled `osx_amd64`; the distribution workflow's loadable jobs
+  cover those with the Python suite). They cover statement rejection,
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
   replacement scans, trusted expansions, nested bound implementations, enforced
   connections, log-only mode, and the audit log. Add a case here whenever a behavior must hold everywhere the extension is
@@ -142,7 +144,8 @@ with `duckdb` and `pytest` blocked.
 `scripts/smoke_loadable.py <artifact>` loads a distributed artifact into the pinned DuckDB
 Python package and exercises the checks that cross the host/loadable ABI boundary
 (bind-data inspection for lambdas and dispatched aggregates, replacement-scan callbacks,
-the policy setting). `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
+the policy setting, and an enforced connection with the audit log and log-only mode through
+the host's query hooks and log manager). `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
 and Gatekeeper stamped into an artifact against the engine checkout it was built from,
 independently of any shell built alongside it.
 

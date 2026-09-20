@@ -66,10 +66,11 @@ try {
       const decision = async (sql, options = '') => JSON.parse(JSON.stringify(
         (await rows(`SELECT * FROM gatekeeper_validate('${sql.replaceAll("'", "''")}'${options})`))[0],
         (_, v) => typeof v === 'bigint' ? Number(v) : v));
-      const rejects = async (sql, message) => {
-        try {await con.query(sql);} catch (e) {return e.message.includes(message);}
+      const rejectsOn = async (connection, sql, message) => {
+        try {await connection.query(sql);} catch (e) {return e.message.includes(message);}
         return false;
       };
+      const rejects = (sql, message) => rejectsOn(con, sql, message);
       let d = await decision('SELECT 1');
       check('simple query', d.allowed && d.code === 'ok');
       d = await decision('DROP TABLE t');
@@ -126,6 +127,29 @@ try {
       check('CALL replaces whole policy', (await decision("SELECT md5('x')")).allowed);
       await con.query("SET gatekeeper_policy = current_setting('gatekeeper_policy')");
       check('canonical SET round trip', (await decision('SELECT 1')).allowed);
+      // Enforcement, the audit log, and log-only mode run through the engine's query hooks and log manager,
+      // both compiled into this Wasm image; the host connection reads the log the agent connection cannot.
+      await con.query("CALL gatekeeper_configure(allowed_tables := [{schema:'main', 'table':'t'}, {schema:'main', 'table':'v'}])");
+      await con.query("CALL enable_logging('Gatekeeper')");
+      const agent = await db.connect();
+      try {
+        const enforced = (await agent.query('SELECT enforced FROM gatekeeper_enforce()')).toArray()[0].enforced;
+        check('enforce latches', enforced === true);
+        check('enforced allowed read', (await agent.query('SELECT count(*) AS n FROM t')).toArray().length === 1);
+        check('enforced table denial', await rejectsOn(agent, 'SELECT * FROM secret', 'Gatekeeper denied this statement'));
+        check('enforced statement denial', await rejectsOn(agent, 'CREATE TABLE u(x INTEGER)', 'Gatekeeper denied this statement'));
+        check('enforced cannot reach the log', await rejectsOn(agent, "SELECT * FROM duckdb_logs_parsed('Gatekeeper')", 'Gatekeeper denied this statement'));
+        check('host connection unenforced', (await con.query('SELECT count(*) AS n FROM secret')).toArray().length === 1);
+        const denied = (await con.query("SELECT mode, code FROM duckdb_logs_parsed('Gatekeeper') WHERE statement = 'SELECT * FROM secret'")).toArray();
+        check('denial is an audit record', denied.length === 1 && denied[0].mode === 'enforce' && denied[0].code === 'forbidden');
+        await con.query('SET gatekeeper_log_only = true');
+        check('log-only refuses nothing', (await agent.query('SELECT count(*) AS n FROM secret')).toArray().length === 1);
+        const logged = (await con.query("SELECT mode, code FROM duckdb_logs_parsed('Gatekeeper') WHERE statement = 'SELECT count(*) AS n FROM secret'")).toArray();
+        check('log-only decision recorded', logged.length === 1 && logged[0].mode === 'log_only' && logged[0].code === 'forbidden');
+        await con.query('SET gatekeeper_log_only = false');
+        check('refusals resume', await rejectsOn(agent, 'SELECT count(*) AS n FROM secret', 'Gatekeeper denied this statement'));
+      } finally {await agent.close();}
+      await con.query('CALL disable_logging()');
       await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'])");
       await con.query('SET lock_configuration = true');
       check('CALL respects lock', await rejects('CALL gatekeeper_configure()', 'locked'));
