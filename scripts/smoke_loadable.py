@@ -169,8 +169,10 @@ def enforcement(artifact):
         pass
     else:
         raise SystemExit("::error::refusals did not resume after log-only was turned off")
+    # Written order: two records can share a wall-clock timestamp, and context ids are allocated in sequence
+    # (the convention of test/support/audit.py's records()).
     changes = db.execute("""SELECT event, new_value FROM duckdb_logs_parsed('Gatekeeper')
-                            WHERE event = 'log_only_changed' ORDER BY timestamp""").fetchall()
+                            WHERE event = 'log_only_changed' ORDER BY timestamp, context_id""").fetchall()
     expect(changes == [("log_only_changed", "true"), ("log_only_changed", "false")], f"setting records: {changes}")
     db.close()
 
