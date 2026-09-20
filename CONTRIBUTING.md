@@ -93,6 +93,7 @@ make an unsigned extension a DuckDB-signed community build. See the
 
 ```sh
 .venv/bin/python -m pytest test -q
+GATEKEEPER_PARSER=peg .venv/bin/python -m pytest test -q  # the same suite under DuckDB's PEG parser
 .venv/bin/python scripts/audit_inventory.py
 .venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
@@ -114,6 +115,18 @@ The suite has two layers with different reach:
   tests that run against the loadable artifact on Linux and macOS. Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
+  `GATEKEEPER_PARSER=peg` runs the same suite with every connection opted into the
+  `autocomplete` extension's PEG parser override (`CALL enable_peg_parser()`, DuckDB 1.5's
+  experimental parser and the default from 2.0; it needs `INSTALL autocomplete` once).
+  Gatekeeper parses with the connection's parser options, so its decisions must agree with the
+  engine under either parser; the build-and-test workflow runs both legs. The parsers differ in
+  a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
+  the parser's or the binder's check, the arity a keyword-named call such as `position` must
+  have to reach the binder), so a test that pins one of those states both expectations with
+  `by_parser(postgres=..., peg=...)` from `support.artifact` rather than skipping a leg. A
+  policy decision (`allowed`, a `forbidden`/`unsupported` code, a violation's `rule`) must
+  never need `by_parser`; the engine-error codes `parser` and `binding` may, since they name
+  the stage that refused the text.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable

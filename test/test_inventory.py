@@ -24,9 +24,16 @@ def test_complete_default_inventory(db):
     assert len(names) == 953
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
-        result = validate(db, f"SELECT {quoted}(1)")
+        sql = f"SELECT {quoted}(1)"
+        result = validate(db, sql)
+        if result["code"] == "parser":
+            # A parser that owns a keyword-named call's syntax (the PEG parser rewrites even a quoted
+            # position(..) into its operator) checks the arity before the binder ever sees the name; the
+            # two-argument spelling reaches the binder under either parser.
+            sql = f"SELECT {quoted}(1, 1)"
+            result = validate(db, sql)
         assert result["code"] in {"ok", "binding"}, (name, result)
-        assert not validate(db, f"SELECT {quoted}(1)", {"blocked_functions": [name]})["allowed"]
+        assert not validate(db, sql, {"blocked_functions": [name]})["allowed"]
 
 
 def test_nondefault_inventory(db):

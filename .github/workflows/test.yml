@@ -45,6 +45,14 @@ jobs:
       - run: cmake -G Ninja -S duckdb -B build/release -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v${{ needs.metadata.outputs.duckdb_version }} -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
       - run: cmake --build build/release --target gatekeeper_loadable_extension --parallel
       - run: python -m pytest test -q
+      - name: Python suite under the PEG parser
+        # DuckDB 1.5's opt-in parser override (the default parser from 2.0). Gatekeeper parses with the
+        # connection's parser, so every decision must agree with the engine under it; see CONTRIBUTING.md.
+        env:
+          GATEKEEPER_PARSER: peg
+        run: |
+          python -c "import duckdb; duckdb.connect().execute('INSTALL autocomplete')"
+          python -m pytest test -q
       - run: python scripts/audit_inventory.py
       - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
       - name: Local lakehouse integration

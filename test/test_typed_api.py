@@ -1,6 +1,8 @@
 import duckdb
 import pytest
 
+from support.artifact import by_parser
+from support.enforcement import engine_code
 from support.typed_helpers import configure, validate
 
 
@@ -121,7 +123,9 @@ def test_structured_object_and_limit_diagnostics(db):
     result=validate(db,"SELECT md5('x')",{"blocked_functions":["md5"]})
     assert result["violations"][0]["position"]==7
     result=validate(db,"SELECT * FROM")
-    assert result["position"]==13 and result["error_type"]=="parser"
+    # The parser's own error location: the default parser reports the end of the input, the PEG parser the
+    # token it could not continue from.
+    assert result["position"]==by_parser(postgres=13, peg=9) and result["error_type"]=="parser"
 
 
 def test_file_backed_view_requires_own_permission(db,tmp_path):
@@ -395,9 +399,11 @@ def test_empty_sql_is_invalid_input(db, sql):
 def test_validation_uses_connection_parser_options(db):
     db.execute("SET max_expression_depth=10")
     sql = "SELECT " + "abs(" * 20 + "1" + ")" * 20
-    with pytest.raises(duckdb.ParserException):
+    # The default parser enforces max_expression_depth itself; the PEG parser leaves it to the binder. Either
+    # way the validator must fail the text at the same stage the engine does, under the connection's setting.
+    with pytest.raises((duckdb.ParserException, duckdb.BinderException)) as engine:
         db.execute(sql)
-    assert validate(db, sql)["code"] == "parser"
+    assert validate(db, sql)["code"] == engine_code(engine.value)
     db.execute("SET max_expression_depth=1000; SET preserve_identifier_case=false")
     result = validate(db, 'SELECT * FROM MISSING', {"allowed_tables": []})
     assert 'missing' in result["error_message"] and 'MISSING' not in result["error_message"]

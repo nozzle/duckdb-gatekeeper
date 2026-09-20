@@ -4,7 +4,7 @@ import concurrent.futures
 import duckdb
 import pytest
 
-from support.artifact import connect
+from support.artifact import by_parser, connect
 from support.typed_helpers import configure, validate
 
 
@@ -110,12 +110,14 @@ def test_occurrences(db):
     ("SELECT md5('x'), md5('y')", 7),
     ("SELECT x FROM (SELECT md5('a') x) WHERE md5('b') = x", 22),
     ("SELECT list_value(1), list_value(2)", 7),
-    # A name written and implied by syntax (ARRAY[..] is list_value), in either order: the engine stamps no
-    # location on the operator node, so the written occurrence's position is the earliest one on record.
+    # A name written and implied by syntax (ARRAY[..] is list_value), in either order. The default parser
+    # stamps no location on the operator node, so the written occurrence's position is the earliest one on
+    # record; the PEG parser stamps the ARRAY keyword's, which then is the earliest.
     ("SELECT list_value(1), ARRAY[2]", 7),
-    ("SELECT ARRAY[1], list_value(2)", 17),
-    # Only implied: no occurrence has a location, and the violation says so rather than inventing one.
-    ("SELECT ARRAY[1], ARRAY[2]", None),
+    ("SELECT ARRAY[1], list_value(2)", by_parser(postgres=17, peg=7)),
+    # Only implied: under the default parser no occurrence has a location, and the violation says so rather
+    # than inventing one.
+    ("SELECT ARRAY[1], ARRAY[2]", by_parser(postgres=None, peg=7)),
 ])
 def test_function_position_is_the_earliest_occurrence(db, sql, position):
     name = "md5" if "md5" in sql else "list_value"

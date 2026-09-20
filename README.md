@@ -636,7 +636,9 @@ network posture remain host settings; see
 
 ![Gatekeeper validation pipeline: untrusted SQL is parsed, the AST is checked, then the statement is bound on your connection and each resolved object is authorized against the global policy and request options before a result row is returned](docs/pipeline.svg)
 
-1. **Parse** the SQL and require exactly one statement.
+1. **Parse** the SQL with the connection's own parser settings (including DuckDB 1.5's
+   opt-in PEG parser, which the test suite runs as a second leg) and require exactly one
+   statement.
 2. **Inspect the AST** for statement type, dynamic SQL, never-bind functions, and
    bind-time expressions the caller wrote.
 3. **Bind** on your connection, using the caller's search path and transaction.
