@@ -1,12 +1,11 @@
 """Enforced connections: the engine refuses what gatekeeper_validate would deny, without host glue."""
 import concurrent.futures
-import os
 import threading
 
 import duckdb
 import pytest
 
-from support.artifact import connect
+from support.artifact import connect, literal
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
 from support.typed_helpers import configure, validate
@@ -146,20 +145,18 @@ def test_denied_before_binding_never_touches_readers(catalog, agent):
             agent.execute(sql).fetchall()
 
 
-def test_denied_statements_have_no_effect(catalog, agent):
-    path = "/tmp/gatekeeper_enforcement_no_effect.csv"
-    if os.path.exists(path):
-        os.remove(path)
+def test_denied_statements_have_no_effect(catalog, agent, tmp_path):
+    path = tmp_path / "no_effect.csv"
     before = catalog.execute("SELECT count(*) FROM duckdb_tables()").fetchone()[0]
     for sql in ["CREATE TABLE u AS SELECT * FROM reporting.orders",
-                f"COPY reporting.orders TO '{path}'",
+                f"COPY reporting.orders TO {literal(path)}",
                 "INSERT INTO reporting.orders VALUES (9, 1.0, 'z')",
                 "CREATE TEMP TABLE tmp(x INTEGER)"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
     assert catalog.execute("SELECT count(*) FROM duckdb_tables()").fetchone()[0] == before
     assert catalog.execute("SELECT count(*) FROM reporting.orders").fetchone()[0] == 3
-    assert not os.path.exists(path)
+    assert not path.exists()
 
 
 def test_parameters_are_authorized_with_their_values(catalog, agent):

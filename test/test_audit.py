@@ -2,10 +2,12 @@
 import concurrent.futures
 import json
 import threading
+import time
 
 import duckdb
 import pytest
 
+from support.artifact import literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -269,12 +271,12 @@ def test_multibyte_text_is_cut_on_a_character_boundary(db):
     assert record["statement"].encode() == sql.encode()[:65535]  # backed off one byte to the character boundary
 
 
-def test_sandboxed_connection_cannot_reach_the_log(catalog, agent):
+def test_sandboxed_connection_cannot_reach_the_log(catalog, agent, tmp_path):
     enable(catalog)
     for sql in ["SELECT * FROM duckdb_logs", "SELECT * FROM duckdb_logs_parsed('Gatekeeper')",
                 "SELECT * FROM duckdb_log_contexts()", "CALL disable_logging()", "SELECT * FROM disable_logging()",
-                "SELECT * FROM truncate_duckdb_logs()", "CALL truncate_duckdb_logs()",
-                "SELECT * FROM enable_logging(storage := 'file', storage_path := '/tmp/gatekeeper_agent.csv')",
+                "SELECT * FROM truncate_duckdb_logs()", "CALL truncate_duckdb_logs()", "CALL enable_logging('Gatekeeper')",
+                f"SELECT * FROM enable_logging(storage := 'file', storage_path := {literal(tmp_path / 'agent.csv')})",
                 "SELECT write_log('forged', log_type := 'Gatekeeper', level := 'info')",
                 "SET enable_logging = false", "SET logging_level = 'fatal'", "SET logging_storage = 'stdout'"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
@@ -371,10 +373,19 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
                 except duckdb.Error as error:
                     errors.append(str(error))
 
+    def seen_both():
+        found = [r for r in decisions(catalog, "mode = 'enforce'") if r["statement"] == statement]
+        return any(r["allowed"] for r in found) and any(not r["allowed"] for r in found)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         futures = [pool.submit(worker) for _ in range(4)]
-        for i in range(60):
+        # Flip until the log holds a decision under each policy, so the assertions below cannot depend on
+        # thread scheduling; 60 flips is the floor, 30 s the bound a stuck worker would hit.
+        deadline = time.monotonic() + 30
+        i = 0
+        while i < 60 or (not seen_both() and time.monotonic() < deadline):
             configure(catalog, reader_allowed if i % 2 else reader_denied)
+            i += 1
         stop.set()
         for future in futures:
             future.result()
@@ -382,7 +393,7 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
     hashes = {r["policy_hash"]: "read_parquet" in r["new_value"] for r in records(catalog, "event = 'policy_changed'")}
     assert set(hashes.values()) == {True, False}
     found = [r for r in decisions(catalog, "mode = 'enforce'") if r["statement"] == statement]
-    assert found and any(r["allowed"] for r in found) and any(not r["allowed"] for r in found)
+    assert any(r["allowed"] for r in found) and any(not r["allowed"] for r in found), len(found)
     for record in found:
         assert record["policy_hash"] in hashes, record
         # The decision is the one the snapshot dictates, and the record names that snapshot.

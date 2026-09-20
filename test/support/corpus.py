@@ -4,6 +4,23 @@ Three legs read this corpus: test_enforcement asserts the engine refuses what ga
 test_audit asserts the record says what gatekeeper_validate says and what the agent saw, and test_log_only
 asserts a log-only connection behaves like an unenforced one while recording the gatekeeper_validate row.
 Each keeps its own assertions; only the statements and the catalog are shared."""
+import atexit
+from pathlib import Path
+import shutil
+import tempfile
+
+# Where the corpus's writing statements point. Enforced connections refuse them, but the log-only leg runs
+# every statement for real on a log-only and on a plain connection, so the paths must be this process's own:
+# two suites sharing a fixed path would overwrite each other's files mid-run. Removed when the interpreter
+# exits.
+SCRATCH = Path(tempfile.mkdtemp(prefix="gatekeeper-tests-"))
+atexit.register(shutil.rmtree, SCRATCH, ignore_errors=True)
+
+
+def scratch(name):
+    """``name`` as a SQL string literal path under this process's scratch directory."""
+    return "'" + str(SCRATCH / name).replace("'", "''") + "'"
+
 
 CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
     CREATE TABLE reporting.orders(id INTEGER, amount DOUBLE, tag VARCHAR);
@@ -110,8 +127,8 @@ PARITY_CORPUS = [
     "DELETE FROM reporting.orders",
     "DROP TABLE reporting.orders",
     "ALTER TABLE reporting.orders ADD COLUMN y INTEGER",
-    "COPY reporting.orders TO '/tmp/gatekeeper_enforcement_test.csv'",
-    "EXPORT DATABASE '/tmp/gatekeeper_enforcement_export'",
+    f"COPY reporting.orders TO {scratch('enforcement_test.csv')}",
+    f"EXPORT DATABASE {scratch('enforcement_export')}",
     "ATTACH ':memory:' AS other",
     "SET threads = 1",
     "RESET threads",
