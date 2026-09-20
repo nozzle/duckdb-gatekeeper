@@ -485,7 +485,7 @@ There is no instance-wide enforcement switch.
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
 | `SET gatekeeper_log_only = true`, while rolling out | Optional. Enforced connections record every decision and refuse nothing until you set it back; see [log-only mode](#log-only-mode). |
 | `SET lock_configuration = true` | Freezes the policy and the log-only switch. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
-| `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. |
+| `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. Not inside an open transaction: an enforced connection cannot `COMMIT` or `ROLLBACK`, so the call is refused there. |
 
 Enforce this connection:
 
@@ -596,8 +596,11 @@ SET lock_configuration = true;
 > [!WARNING]
 > Log-only mode protects nothing while it is on, Gatekeeper's own settings included: an agent's
 > `CALL gatekeeper_configure()` or `SET gatekeeper_log_only = false` is recorded and then
-> executes. `SET lock_configuration = true` before handing out connections if the rollout is
-> not supervised. When reading the trail, every denied record except `code = 'binding'` is a
+> executes. If the rollout is not supervised, lock before handing out connections, and leave
+> yourself the way back: `SET allowed_configs = ['gatekeeper_log_only']` first, then
+> `SET lock_configuration = true`. Locked without it, log-only stays on until the process
+> restarts. The exception is safe to leave open: the most it lets a log-only connection do is
+> turn refusals on. When reading the trail, every denied record except `code = 'binding'` is a
 > statement enforcement would have refused.
 
 ### What enforcement covers

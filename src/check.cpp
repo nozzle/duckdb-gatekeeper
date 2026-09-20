@@ -461,7 +461,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	if (mode == DecisionMode::LOG_ONLY)
 		return nullptr;
 	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
-	throw BinderException("Table \"%s\" appeared during binding; retry validation", path);
+	throw BinderException("Table \"%s\" appeared during binding; retry the statement", path);
 }
 
 void InstallReplacementScan(DBConfig &config) {
@@ -568,13 +568,13 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
 	// parameters.rebind is a cache hint, not incomplete binding.
 	if (!bound.plan)
-		throw BinderException("Validation requires a complete bound plan; parameter values or types may be needed");
+		throw BinderException(gatekeeper::PARAMETERS_REQUIRED);
 	// Some bind callbacks return placeholder plans instead of throwing ParameterNotResolved.
 	// Mirror Planner's bound_all_parameters type check: execution must not choose a different
 	// implementation after validation by resolving an UNKNOWN parameter for the first time.
 	for (const auto &entry : bound_parameters.GetParameters())
 		if (!entry.second->return_type.IsValid())
-			throw BinderException("Validation requires a complete bound plan; parameter values or types may be needed");
+			throw BinderException(gatekeeper::PARAMETERS_REQUIRED);
 	CheckPlan(layers, unit, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 	for (auto &entry : binder->GetReplacementScans())
@@ -731,7 +731,7 @@ bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &resu
 	result.error_type = Exception::ExceptionTypeToString(data.Type());
 	result.error_message = data.RawMessage();
 	if (data.Type() == ExceptionType::PARAMETER_NOT_RESOLVED)
-		result.error_message = "Validation cannot complete binding without parameter values or types";
+		result.error_message = gatekeeper::PARAMETERS_REQUIRED;
 	return true;
 }
 

@@ -141,7 +141,8 @@ docs:
     > connection's own state, not in a setting, so neither `RESET` nor a native configuration
     > write undoes it, and `SET`, `RESET`, and `CALL` are themselves refused on the connection.
     > Denied statements are ordinary errors: the transaction survives, and the caller can try
-    > again.
+    > again. The call is refused inside a transaction the host has opened, since an enforced
+    > connection could never `COMMIT` or `ROLLBACK` it.
 
     `CALL gatekeeper_enforce()` returns `warnings` naming host settings that weaken the
     sandbox (`enable_external_access`, autoload, `lock_configuration`, log-only mode, logging
@@ -205,8 +206,9 @@ docs:
 
     > Warning Log-only mode protects nothing while it is on, Gatekeeper's own settings
     > included: an agent's `SET gatekeeper_policy` or `SET gatekeeper_log_only = false` is
-    > recorded and then executes. `SET lock_configuration = true` before handing out
-    > connections if the rollout is not supervised.
+    > recorded and then executes. If the rollout is not supervised, lock before handing out
+    > connections and keep the way back: `SET allowed_configs = ['gatekeeper_log_only']`, then
+    > `SET lock_configuration = true`. Locked without it, log-only stays on until restart.
 
     ### Functions and options
 

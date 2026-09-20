@@ -156,8 +156,14 @@ def test_set_requires_consistent_table_restriction(db):
                                      "blocked_functions := [], blocked_functions := ['md5']",
                                      "blocked_functions = [], blocked_functions = ['md5']"])
 def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument):
-    with pytest.raises(duckdb.Error):
+    # A bad option is a bind error for CALL gatekeeper_configure as it is for gatekeeper_validate (README:
+    # "DuckDB error at bind" for both); the duplicate spelling is the same in both.
+    with pytest.raises(duckdb.BinderException) as caught:
         db.execute("CALL gatekeeper_configure(" + argument + ")")
+    if "blocked_functions := [], " in argument or "blocked_functions = [], " in argument:
+        assert "duplicate Gatekeeper option" in str(caught.value), caught.value
+        with pytest.raises(duckdb.BinderException, match="duplicate Gatekeeper option"):
+            db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', blocked_functions := [], blocked_functions := ['md5'])")
 
 
 @pytest.mark.parametrize("empty", ["[]", "[]::INTEGER[]", "[]::VARCHAR[]"])

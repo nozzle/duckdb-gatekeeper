@@ -342,6 +342,38 @@ def test_explain_and_prepare_of_enforce_do_not_latch(db):
         db.execute("CREATE TABLE now_enforced(x INTEGER)")
 
 
+def test_enforce_is_refused_inside_an_open_transaction(catalog):
+    # An enforced connection cannot COMMIT or ROLLBACK (neither is a read statement), so a latch taken inside a
+    # transaction the host opened would strand the connection in a transaction nothing can end. The refusal is a
+    # Permission Error, which DuckDB does not treat as invalidating the transaction: the host's transaction stays
+    # usable, the connection stays unenforced, and enforcing after COMMIT or ROLLBACK works as before. Python's
+    # begin() is a BEGIN TRANSACTION statement and is refused the same way.
+    for end in ["COMMIT", "ROLLBACK"]:
+        with catalog.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION")
+            with pytest.raises(duckdb.PermissionException, match="cannot run inside an open transaction"):
+                cursor.execute("CALL gatekeeper_enforce()")
+            assert cursor.execute("SELECT count(*) FROM secret.salaries").fetchone() == (1,)
+            cursor.execute(end)
+            assert cursor.execute("SELECT enforced FROM gatekeeper_enforce()").fetchone() == (True,)
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                cursor.execute("SELECT * FROM secret.salaries")
+    with catalog.cursor() as cursor:
+        cursor.begin()
+        with pytest.raises(duckdb.PermissionException, match="cannot run inside an open transaction"):
+            cursor.execute("CALL gatekeeper_enforce()")
+        cursor.rollback()
+    # EXPLAIN and PREPARE inside the transaction are bind-only and unaffected; EXECUTE is the refused execution.
+    with catalog.cursor() as cursor:
+        cursor.execute("BEGIN TRANSACTION")
+        cursor.execute("EXPLAIN SELECT * FROM gatekeeper_enforce()").fetchall()
+        cursor.execute("PREPARE latch AS SELECT * FROM gatekeeper_enforce()")
+        with pytest.raises(duckdb.PermissionException, match="cannot run inside an open transaction"):
+            cursor.execute("EXECUTE latch")
+        cursor.execute("ROLLBACK")
+        assert cursor.execute("EXECUTE latch").fetchone()[0] is True
+
+
 def test_enforcement_is_per_connection(db):
     # A connection is enforced because gatekeeper_enforce() ran on it, and only then: connections open
     # before, connections opened afterwards, and the connection that created the enforced one are all

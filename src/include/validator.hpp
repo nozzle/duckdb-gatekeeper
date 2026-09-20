@@ -69,7 +69,6 @@ inline constexpr const char *UNSUPPORTED_STRUCTURE = "unsupported_structure";
 struct Violation {
 	std::string rule, message, catalog, schema, table, function_name;
 	int64_t position = -1;
-	Violation(std::string message) : rule(rules::UNSUPPORTED_STRUCTURE), message(std::move(message)) {}
 	Violation(std::string rule, std::string message, std::string catalog = {}, std::string schema = {},
 	          std::string table = {}, std::string function_name = {}, int64_t position = -1)
 	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)), schema(std::move(schema)),
@@ -95,6 +94,10 @@ struct Result {
 };
 // Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";
+// The private bind stopped short of a complete plan: a parameter without a value or a resolvable type. Thrown
+// where the bind is checked, and the error_message of the gatekeeper_validate row when the engine reports it.
+inline constexpr const char *PARAMETERS_REQUIRED =
+    "Validation requires a complete bound plan; parameter values or types may be needed";
 inline Result UnsupportedStatement() {
 	return {false, codes::UNSUPPORTED, "", "", {{rules::STATEMENT, UNSUPPORTED_STATEMENT}}};
 }

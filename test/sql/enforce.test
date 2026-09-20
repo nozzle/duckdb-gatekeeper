@@ -36,6 +36,23 @@ EXPLAIN SELECT * FROM gatekeeper_enforce();
 statement ok
 CREATE TABLE still_unenforced(x INTEGER);
 
+# Inside a transaction the host opened, the latch is refused: an enforced connection could never COMMIT or
+# ROLLBACK it. The refusal leaves the transaction usable and the connection unenforced.
+
+statement ok
+BEGIN TRANSACTION;
+
+statement error
+SELECT enforced FROM gatekeeper_enforce();
+----
+Permission Error: gatekeeper_enforce() cannot run inside an open transaction
+
+statement ok
+CREATE TABLE still_unenforced_in_transaction(x INTEGER);
+
+statement ok
+COMMIT;
+
 query I
 SELECT enforced FROM gatekeeper_enforce();
 ----

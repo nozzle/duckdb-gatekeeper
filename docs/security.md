@@ -319,7 +319,10 @@ execution time (never at bind, so `EXPLAIN` and `PREPARE` of it do not enforce).
 it; `RESET`, `lock_configuration`, and native option writes cannot reach it because it is not a
 setting. On an enforced connection `CALL`, `SET`, and `RESET` are unsupported statements, so the
 enforced state and the policy are unreachable from SQL. `gatekeeper_enforce` is on the
-never-bind list so validated SQL cannot name it either.
+never-bind list so validated SQL cannot name it either. Inside a transaction the host has
+opened, the call is refused with a `Permission Error` and latches nothing: `COMMIT` and
+`ROLLBACK` are not read statements, so an enforced connection could never end that
+transaction. The refusal leaves the transaction usable; enforce after ending it.
 
 There is deliberately no instance-wide enforcement setting. One would have to choose between enforcing the
 host's own connections (leaving no in-process reader for the audit log and no way to change
@@ -372,7 +375,14 @@ Semantics that follow from "the same decision, without the refusal":
   statement. The connection stays enforced, so flipping the switch back restores refusals on
   it, but until then the caller has the whole engine. `lock_configuration` is the mitigation,
   as for the policy; the `lock_configuration` posture warning names both settings, and
-  `gatekeeper_enforce()` warns whenever the switch is on.
+  `gatekeeper_enforce()` warns whenever the switch is on. Locking while the switch is on
+  freezes it on: `SET allowed_configs = ['gatekeeper_log_only']` before locking keeps the way
+  back to refusals. That exception is safe to leave open because of where an enforced
+  connection can reach `SET` from: while the switch is off it is refusing, so `SET` is an
+  unsupported statement and the agent cannot turn the switch on; while the switch is on,
+  `SET gatekeeper_log_only = false` executes and restores refusals on that connection, after
+  which `SET ... = true` is refused. The only change the exception hands an agent is turning
+  refusals back on. The host, unenforced, moves the switch either way.
 - Only a BOOLEAN `true` suspends refusals. A value written natively through
   `DBConfig::SetOption` without the `SET` callback is read as it is stored; anything that is
   not a BOOLEAN `true` (a NULL, a VARCHAR `'true'`) is enforcing. The unvalidated direction
