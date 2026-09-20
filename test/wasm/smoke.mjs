@@ -148,6 +148,9 @@ try {
         check('log-only decision recorded', logged.length === 1 && logged[0].mode === 'log_only' && logged[0].code === 'forbidden');
         await con.query('SET gatekeeper_log_only = false');
         check('refusals resume', await rejectsOn(agent, 'SELECT count(*) AS n FROM secret', 'Gatekeeper denied this statement'));
+        // Written order, as scripts/smoke_loadable.py reads them: a shared timestamp is broken by context id.
+        const changes = (await con.query("SELECT new_value FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'log_only_changed' ORDER BY timestamp, context_id")).toArray();
+        check('setting changes are audit records', changes.length === 2 && changes[0].new_value === 'true' && changes[1].new_value === 'false');
       } finally {await agent.close();}
       await con.query('CALL disable_logging()');
       await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'])");

@@ -33,13 +33,13 @@ must exist and pass CI before it is submitted.
    target, and the checklist is only what actually runs:
    - The reusable pipeline runs the SQL contract suite against a statically linked
      `unittest` on every native target except `linux_arm64` and the cross-compiled
-     `osx_amd64`. For the musl builds, Windows ARM64, and MinGW, that is the whole test.
+     `osx_amd64`. For the musl builds and MinGW, that is the whole test.
    - The `loadable-test` jobs load the shipped artifact into the pinned Python package on
-     five targets, `linux_amd64`, `linux_arm64`, `osx_arm64`, `osx_amd64`, and
-     `windows_amd64`, and run `scripts/smoke_loadable.py` on each (validation, policy
-     setting, enforcement, log-only, and the audit log against the loadable). All but
-     `windows_amd64` also run the full Python suite; the two targets the pipeline skips get
-     their only test here. No other artifact is loaded by a `loadable-test` job.
+     six targets, `linux_amd64`, `linux_arm64`, `osx_arm64`, `osx_amd64`, `windows_amd64`,
+     and `windows_arm64`, and run `scripts/smoke_loadable.py` on each (validation, policy
+     setting, enforcement, log-only, and the audit log against the loadable). All but the
+     two Windows targets also run the full Python suite; the two targets the pipeline skips
+     get their only test here. No other artifact is loaded by a `loadable-test` job.
    - Wasm EH must pass the browser test of the actual distribution artifact.
    If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging tests,
    and community descriptor aligned and document the reason.
