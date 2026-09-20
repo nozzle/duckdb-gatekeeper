@@ -818,6 +818,18 @@ need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
+Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
+1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
+2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ
+only in diagnostics (query locations, which stage reports `max_expression_depth`). One
+engine property does not carry over: the 1.5.5 PEG matcher recurses once per nesting level
+with no depth guard and no stack check, so `max_expression_depth`, which is the binder's check
+under PEG, never runs on text deep enough to matter. About 1000 nested calls overflow an
+8 MiB main-thread stack in the engine's own parse, and about 75 nested calls or 100 nested
+subqueries overflow a 512 KiB worker-thread stack (the macOS default), which is where
+`gatekeeper_validate(?)` parses when its pipeline runs on a worker. The process dies before
+Gatekeeper's own depth limit sees the statement. Until the engine bounds that recursion, do
+not enable the PEG override on a database that takes untrusted SQL text.
 The local tests and randomized-input checks are not a complete security audit.
 DuckDB builds and signs the binaries it distributes through its community repository.
 Local builds, CI artifacts, and this project's GitHub Release binaries are unsigned. Distribution

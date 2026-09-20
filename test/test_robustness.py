@@ -4,15 +4,29 @@ import random
 import duckdb
 import pytest
 
+from support.artifact import PARSER
 from support.typed_helpers import validate
 
+# DuckDB 1.5.5's PEG matcher recurses once per nesting level with no depth guard and no stack check, and
+# gatekeeper_validate with a parameter parses at execution on whichever thread runs the pipeline: a worker
+# thread's 512 KiB stack (macOS) overflows at about 75 nested calls or 100 nested subqueries, and the engine's
+# own parse overflows the 8 MiB main-thread stack at about 1000, under max_expression_depth's default. The
+# process dies (SIGBUS/SIGILL); nothing downstream, Gatekeeper's depth limit included, ever runs. This is the
+# engine's to bound (docs/security.md, "Compatibility and review"); these two cases are the ones deep enough
+# to reach it and are run only under the default parser until it does.
+PEG_DEEP_NESTING_CRASH = pytest.mark.skipif(
+    PARSER == "peg", reason="DuckDB 1.5.5 PEG parser recursion overflows the stack on deep nesting")
 
-def test_depth_and_width(db):
+
+@pytest.mark.parametrize("depth", [1, 20, pytest.param(100, marks=PEG_DEEP_NESTING_CRASH)])
+def test_depth(db, depth):
     db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t(x INT)")
-    for depth in [1, 20, 100]:
-        sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
-        assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
-        assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+    sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
+    assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
+    assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+
+
+def test_width(db):
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
     assert validate(db, sql)["allowed"]
 
@@ -24,7 +38,8 @@ def test_depth_and_width(db):
     # Traversal counts fields/arrays too; leave margin above node/depth thresholds
     # while staying below the serialized-byte and connection parser limits.
     ("SELECT " + ",".join("1" for _ in range(40000)), "AST size or depth limit exceeded"),
-    ("SELECT " + "abs(" * 400 + "1" + ")" * 400, "AST size or depth limit exceeded"),
+    pytest.param("SELECT " + "abs(" * 400 + "1" + ")" * 400, "AST size or depth limit exceeded",
+                 marks=PEG_DEEP_NESTING_CRASH),
 ], ids=["input-bytes", "serialized-bytes", "nodes", "depth"])
 def test_fixed_ast_guardrails_and_recovery(db, sql, message):
     if message == "serialized AST exceeds fixed size limit":

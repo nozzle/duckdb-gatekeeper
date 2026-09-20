@@ -29,3 +29,9 @@ def attempt(connection, sql, parameters=None):
     except duckdb.Error as error:
         return Outcome("denied" if DENIED.search(str(error)) else "engine", None, error)
     return Outcome("rows", rows, None)
+
+
+def engine_code(error):
+    """The ``code`` gatekeeper_validate reports for an engine error the text raised: ``parser`` when the parser
+    refused it, ``binding`` once the text was admitted and the private bind failed (engine_errors.hpp)."""
+    return "parser" if isinstance(error, duckdb.ParserException) else "binding"

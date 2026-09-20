@@ -5,10 +5,17 @@ import pytest
 
 from audit_inventory import compare, coverage
 from inventory import load
-from support.artifact import ROOT
+from support.artifact import ROOT, by_parser
 from support.headers import never_bind_names
 from support.typed_helpers import validate
 from versions import BASELINE_FILENAME
+
+# Default names whose call syntax the parser under test owns, with the argument list that reaches the binder
+# there. The PEG parser rewrites even a quoted position(..) into its operator and checks the arity before the
+# binder ever sees the name, so the one-argument probe is a parser error under it; the two-argument spelling
+# binds under either parser. Naming the cases keeps any other parser error a failure, and a new name here at
+# an engine repin is a real finding about that parser.
+PARSER_OWNED_ARGUMENTS = by_parser(postgres={}, peg={"position": "(1, 1)"})
 
 
 def test_never_bind_inventory_excluded_from_defaults():
@@ -24,9 +31,10 @@ def test_complete_default_inventory(db):
     assert len(names) == 953
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
-        result = validate(db, f"SELECT {quoted}(1)")
+        sql = f"SELECT {quoted}" + PARSER_OWNED_ARGUMENTS.get(name, "(1)")
+        result = validate(db, sql)
         assert result["code"] in {"ok", "binding"}, (name, result)
-        assert not validate(db, f"SELECT {quoted}(1)", {"blocked_functions": [name]})["allowed"]
+        assert not validate(db, sql, {"blocked_functions": [name]})["allowed"]
 
 
 def test_nondefault_inventory(db):

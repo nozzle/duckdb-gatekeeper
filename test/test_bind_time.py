@@ -1,6 +1,7 @@
 """Bind-time expression restrictions and complete-binding dependency evidence."""
 import pytest
 
+from support.artifact import by_parser
 from support.typed_helpers import configure, validate
 
 
@@ -121,7 +122,9 @@ def test_qualified_function_capability_diagnostics(db):
     result = validate(db, "SELECT * FROM SYSTEM.main.query('SELECT 1')")
     violation = next(v for v in result["violations"] if v["rule"] == "dynamic_sql")
     assert violation["catalog"] == "SYSTEM" and violation["schema"] == "main"
-    assert violation["position"] is not None
+    # The position is the parser's: the default parser stamps the qualified table function's location, the
+    # PEG parser stamps none, and the violation reports NULL rather than inventing one.
+    assert violation["position"] == by_parser(postgres=14, peg=None)
 
 
 def test_quoted_dependency_identities_are_not_dotted_strings(db):

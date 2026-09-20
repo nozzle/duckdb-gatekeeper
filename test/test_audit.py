@@ -7,7 +7,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import literal
+from support.artifact import by_parser, literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -98,10 +98,13 @@ def test_text_the_engine_parsed_but_the_binding_boundary_cannot_read(catalog, ag
 
 def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(catalog, agent):
     # The engine parses a batch with the settings in force when it arrives; a statement in it that lowers
-    # max_expression_depth changes what the binding boundary can parse for the statements after it. Enforcing,
-    # the SET is refused first; log-only, it runs, and the next statement's text reaches QueryBegin's
-    # ParserException path. The record must describe it as gatekeeper_validate does on a connection with the
-    # same setting.
+    # max_expression_depth changes what the binding boundary accepts for the statements after it. Enforcing,
+    # the SET is refused first; log-only, it runs, and QueryBegin re-reads the next statement's text under the
+    # lowered depth. The default parser refuses it there (the binding boundary, code parser); the PEG parser
+    # leaves the depth check to the binder, so the text is admitted and the private bind fails (the authorize
+    # boundary, code binding). Either way the engine itself, having parsed the whole batch before the SET ran,
+    # fails the statement in its binder. The record must describe it as gatekeeper_validate does on a
+    # connection with the same setting.
     enable(catalog)
     catalog.execute("SET gatekeeper_log_only = true")
     nested = "SELECT " + "abs(" * 12 + "1" + ")" * 12
@@ -110,11 +113,13 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     with catalog.cursor() as same_settings:
         same_settings.execute("SET max_expression_depth = 8")
         expected = validate(same_settings, nested)
-    assert expected["code"] == "parser" and "Max expression depth" in expected["error_message"], expected
-    unsupported, parser = decisions(catalog, "mode = 'log_only'")
+    assert expected["code"] == by_parser(postgres="parser", peg="binding"), expected
+    assert "Max expression depth" in expected["error_message"], expected
+    unsupported, record = decisions(catalog, "mode = 'log_only'")
     assert unsupported["code"] == "unsupported" and unsupported["statement"] == "SET max_expression_depth = 8"
-    assert parser["boundary"] == "binding" and parser["statement"].strip() == nested
-    assert [parser[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], parser
+    assert record["boundary"] == by_parser(postgres="binding", peg="authorize"), record
+    assert record["statement"].strip() == nested
+    assert [record[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], record
 
 
 def test_binding_denial_carries_the_text_and_the_connection_recovers(catalog, agent):
