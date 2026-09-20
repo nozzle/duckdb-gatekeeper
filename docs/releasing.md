@@ -67,8 +67,8 @@ tags are excluded. The package gate validates the exact stable version again bef
 the tag-only publish job can run, using the canonical `versions.cmake` metadata.
 It also checks `community/description.yml`'s `extension.version`, `repo.ref`, and every
 `blob/` documentation link against that version, the engine metadata loaded by
-`scripts/versions.py`, and `CHANGELOG.md` (a tag needs its version's section with content
-and an empty `## Unreleased`; between releases `## Unreleased` must exist). The descriptor
+`scripts/versions.py`, and `CHANGELOG.md` (`## Unreleased` must always exist; a tag additionally
+needs its version's section with content and `## Unreleased` empty). The descriptor
 must also cite the pinned DuckDB version and source revision in its compatibility
 description. Keep the descriptor's version/ref
 as unquoted scalars with two-space indentation; the standard-library-only packaging

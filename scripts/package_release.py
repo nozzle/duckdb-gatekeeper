@@ -53,15 +53,17 @@ def release_version(tag):
     if tag and tag != f"v{version}":
         raise ValueError(f"Tag {tag!r} and version {version} must agree")
     sections = changelog_sections((ROOT / "CHANGELOG.md").read_text())
+    # The pending section is always present: between releases it is where the next change goes, and the
+    # release commit leaves it empty rather than removing it.
+    if "Unreleased" not in sections:
+        raise ValueError("CHANGELOG.md must keep a '## Unreleased' section (empty on a release commit)")
     if tag:
         # A release ships with its notes written: this version's section exists with content, and nothing is left
         # pending under Unreleased.
         if not sections.get(version):
             raise ValueError(f"CHANGELOG.md has no '## {version}' section with content")
-        if sections.get("Unreleased"):
+        if sections["Unreleased"]:
             raise ValueError("CHANGELOG.md still lists entries under '## Unreleased'; move them to the release section")
-    elif "Unreleased" not in sections:
-        raise ValueError("CHANGELOG.md must keep a '## Unreleased' section between releases")
     return version
 
 

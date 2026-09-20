@@ -161,8 +161,10 @@ def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old
      f"no '## {EXTENSION_VERSION}' section with content"),
     # ...and nothing left pending, whatever the checkout's Unreleased holds today.
     (TAG, (("CHANGELOG.md", "## Unreleased\n", "## Unreleased\n\n- Pending.\n"),), "still lists entries under"),
-    # Between releases the pending section stays, even empty, so the next change has a home.
+    # The pending section stays on both paths: between releases so the next change has a home, and on the release
+    # commit, empty, because that commit is the tree main carries afterwards.
     ("", (("CHANGELOG.md", "## Unreleased\n", "## Pending\n"),), "must keep a '## Unreleased' section"),
+    (TAG, RELEASED + (("CHANGELOG.md", "## Unreleased\n", "## Pending\n"),), "must keep a '## Unreleased' section"),
     # One section per version: a release commit that adds a second heading for the version instead of renaming
     # Unreleased is malformed, whichever body would win.
     ("", (("CHANGELOG.md", "## Unreleased\n", f"## Unreleased\n\n## {EXTENSION_VERSION} - 2026-01-01\n\n- Twice.\n"),),
