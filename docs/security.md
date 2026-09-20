@@ -377,8 +377,12 @@ Semantics that follow from "the same decision, without the refusal":
   as for the policy; the `lock_configuration` posture warning names both settings, and
   `gatekeeper_enforce()` warns whenever the switch is on. Locking while the switch is on
   freezes it on: `SET allowed_configs = ['gatekeeper_log_only']` before locking keeps the way
-  back to refusals, and is safe to leave open because the switch's only unlocked direction of
-  consequence, off to on, is one an agent would not choose.
+  back to refusals. That exception is safe to leave open because of where an enforced
+  connection can reach `SET` from: while the switch is off it is refusing, so `SET` is an
+  unsupported statement and the agent cannot turn the switch on; while the switch is on,
+  `SET gatekeeper_log_only = false` executes and restores refusals on that connection, after
+  which `SET ... = true` is refused. The only change the exception hands an agent is turning
+  refusals back on. The host, unenforced, moves the switch either way.
 - Only a BOOLEAN `true` suspends refusals. A value written natively through
   `DBConfig::SetOption` without the `SET` callback is read as it is stored; anything that is
   not a BOOLEAN `true` (a NULL, a VARCHAR `'true'`) is enforcing. The unvalidated direction
