@@ -403,11 +403,11 @@ static void CheckHostileRelation(DuckDB &database) {
 		Fail("hostile relation: the honest rendering was refused");
 	// A node scanning an identity the rendering never reached.
 	if (outcome("SELECT * FROM secret.t", "SELECT * FROM v")
-	        .find("plan scans an object the validated statement did not") == std::string::npos)
+	        .find("plan scans an object more often than the validated statement did") == std::string::npos)
 		Fail("hostile relation: a scan of an identity the rendering never reached was admitted");
 	// A node scanning the view's table more often than the view does.
 	if (outcome("SELECT * FROM t, t AS again", "SELECT * FROM v")
-	        .find("plan scans an object the validated statement did not") == std::string::npos)
+	        .find("plan scans an object more often than the validated statement did") == std::string::npos)
 		Fail("hostile relation: a second scan of the view's table was admitted");
 	// The residual: the view's table, scanned exactly as often as the view scans it, under the view's authority.
 	if (outcome("SELECT * FROM t", "SELECT * FROM v") != "ok")
@@ -417,14 +417,14 @@ static void CheckHostileRelation(DuckDB &database) {
 	if (outcome("SELECT * FROM query_table('t')", "SELECT * FROM v") != "ok")
 		Fail("hostile relation: query_table over the view's table is the residual, not a new case");
 	if (outcome("SELECT * FROM query_table('secret.t')", "SELECT * FROM v")
-	        .find("plan scans an object the validated statement did not") == std::string::npos)
+	        .find("plan scans an object more often than the validated statement did") == std::string::npos)
 		Fail("hostile relation: query_table over an identity the rendering never reached was admitted");
 	// A table function the rendering never bound is a source the validated statement did not scan.
 	if (outcome("SELECT * FROM range(3)", "SELECT * FROM v")
-	        .find("plan scans a source the validated statement did not") == std::string::npos)
+	        .find("plan scans a source more often than the validated statement did") == std::string::npos)
 		Fail("hostile relation: a table function the rendering never bound was admitted");
 	if (outcome("SELECT * FROM t, range(3)", "SELECT * FROM v")
-	        .find("plan scans a source the validated statement did not") == std::string::npos)
+	        .find("plan scans a source more often than the validated statement did") == std::string::npos)
 		Fail("hostile relation: a table function next to the view's table was admitted");
 	// The caller's own rendering of the table is refused before any node is planned.
 	if (outcome("SELECT * FROM t", "SELECT * FROM t").find("object is not allowed") == std::string::npos)

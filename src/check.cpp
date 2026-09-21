@@ -273,7 +273,7 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 	auto remaining = provenance.validated_scans;
 	auto remaining_functions = provenance.validated_function_scans;
 	// One scan of the engine's plan against the private bind's record: recorded by the private pass, consumed by
-	// the engine pass, which refuses a source the record does not hold or holds fewer times.
+	// the engine pass, which refuses a source the record holds fewer times than the plan scans it, never included.
 	auto account = [&](auto &recorded, auto &left, const auto &key, const gatekeeper::Violation &divergence) {
 		if (origin == PlanOrigin::PRIVATE) {
 			recorded[key]++;
@@ -303,14 +303,15 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 			if (table) {
 				auto catalog = table->schema.catalog.GetName(), schema = table->schema.name, name = table->name;
 				account(provenance.validated_scans, remaining, gatekeeper::ObjectKey(catalog, schema, name),
-				        {gatekeeper::rules::STATEMENT, "plan scans an object the validated statement did not", catalog,
-				         schema, name});
+				        {gatekeeper::rules::STATEMENT,
+				         "plan scans an object more often than the validated statement did", catalog, schema, name});
 				AuthorizeObject(layers, unit.binding, *table, result,
 				                provenance.ObjectAttributable(unit.binding, catalog, schema, name));
 			} else {
 				account(provenance.validated_function_scans, remaining_functions, get.function.name,
-				        {gatekeeper::rules::STATEMENT, "plan scans a source the validated statement did not", "", "",
-				         "", get.function.name});
+				        {gatekeeper::rules::STATEMENT,
+				         "plan scans a source more often than the validated statement did", "", "", "",
+				         get.function.name});
 			}
 		}
 		for (auto &child : op->children)
