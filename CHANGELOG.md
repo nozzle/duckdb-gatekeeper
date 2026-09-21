@@ -8,11 +8,6 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## 0.2.0 - 2026-09-21
 
-This replacement release supersedes the September 20 GitHub release from
-`d9a7c749552ad6917f1753b77a69af9ab1f55654`, before the 0.2.0 community submission was merged.
-The `v0.2.0` tag, unsigned binaries, and checksums have been replaced; download the new assets
-if you used the earlier GitHub release. The replacement includes the table-policy changes below.
-
 ### Added
 
 - **Enforced connections.** `CALL gatekeeper_enforce()` makes DuckDB itself refuse, on that
@@ -50,8 +45,8 @@ if you used the earlier GitHub release. The replacement includes the table-polic
   with what a definition reads is checked as the caller's too (rename the CTE to lift it).
   `objects` still lists every table and view read. A host definition that derives a table name
   from a caller argument (`query_table(n)` in a macro body) delegates table selection to the
-  caller through that capability. A `Prepare()` of a statement table policy denies prepares;
-  execution is what the `authorize` boundary refuses. The execution boundary holds the engine's
+  caller through that capability. Statements denied by table policy can still be prepared;
+  their execution is refused at the `authorize` boundary. The execution boundary holds the engine's
   plan to the sources the validated statement scanned, base tables by identity and table
   functions by name, each by count. A relation whose query node introduces a source or extra
   scan absent from its SQL rendering is refused as a `statement` violation; a same-source,
