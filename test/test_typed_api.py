@@ -140,13 +140,19 @@ def test_file_backed_view_requires_own_permission(db,tmp_path):
     assert validate(db, "SELECT * FROM v", {"blocked_functions": ["read_parquet"]})["allowed"]
 
 
-def test_view_and_underlying_table_must_both_pass(db):
+def test_view_is_authorized_by_its_own_identity(db):
+    # The view the caller names must pass; the table its body reads is the view's own and appears as evidence.
+    # The caller's own reference to that table, next to the view, is still the caller's.
     db.execute("CREATE TABLE t(x INT); CREATE VIEW v AS SELECT * FROM t")
     table={"schema":"main","table":"t"}
     view={"schema":"main","table":"v"}
-    assert not validate(db,"SELECT * FROM v",{"allowed_tables":[view]})["allowed"]
+    result = validate(db,"SELECT * FROM v",{"allowed_tables":[view]})
+    assert result["allowed"] and [(o["table"], o["type"]) for o in result["objects"]] == [("t", "table"), ("v", "view")]
     assert not validate(db,"SELECT * FROM v",{"allowed_tables":[table]})["allowed"]
     assert validate(db,"SELECT * FROM v",{"allowed_tables":[view,table]})["allowed"]
+    denied = validate(db,"SELECT * FROM v JOIN t USING (x)",{"allowed_tables":[view]})
+    assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "t", denied
+    assert validate(db,"SELECT * FROM v JOIN t USING (x)",{"allowed_tables":[view,table]})["allowed"]
 
 
 def test_dynamic_table_lookup_keeps_object_policy(db):
@@ -426,15 +432,19 @@ def test_qualified_suffix_catalog_table_uses_table_policy(db, name):
         assert not validate(db, sql, {"allowed_tables": []})["allowed"]
 
 
-def test_internal_dependency_of_trusted_view_requires_opt_in(db):
-    # The internal duckdb_tables view needs an exact table rule even through a host view; once granted, the
-    # never-bind reader behind it is the definition's own, not the caller's.
+def test_internal_dependency_of_trusted_view_is_the_views_own(db):
+    # The internal duckdb_tables view is the host view's own dependency: allowing the host view admits it, and
+    # the never-bind reader behind it is the definition's, not the caller's. The caller's own duckdb_tables, as
+    # a view or as the reader, still needs its own permission, next to the host view included.
     db.execute("CREATE VIEW my_tables AS SELECT table_name FROM duckdb_tables")
-    assert validate(db, "SELECT * FROM my_tables")["violations"][0]["rule"] == "internal_object"
-    options = {"allowed_tables": [{"schema": "main", "table": "my_tables"},
-                                  {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
+    assert validate(db, "SELECT * FROM my_tables")["allowed"]
+    assert validate(db, "SELECT * FROM duckdb_tables")["violations"][0]["rule"] == "internal_object"
+    options = {"allowed_tables": [{"schema": "main", "table": "my_tables"}]}
     configure(db, options)
     result = validate(db, "SELECT * FROM my_tables", options)
     assert result["allowed"] and any(f["name"] == "duckdb_tables" for f in result["functions"]), result
+    assert {"catalog": "system", "schema": "main", "table": "duckdb_tables", "type": "view"} in result["objects"], result
+    assert validate(db, "SELECT * FROM duckdb_tables", options)["violations"][0]["rule"] == "internal_object"
+    assert validate(db, "SELECT * FROM my_tables, duckdb_tables", options)["violations"][0]["rule"] == "internal_object"
     assert validate(db, "SELECT * FROM duckdb_tables()", options)["code"] == "forbidden"
     assert validate(db, "SELECT * FROM my_tables, duckdb_tables()", options)["code"] == "forbidden"

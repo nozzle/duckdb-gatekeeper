@@ -37,8 +37,8 @@ struct TextCheck {
 		// Authorize binds the statement against placeholder values instead (see SubstitutePivotEnums).
 		gatekeeper::Names pivot_enums;
 		// The unit to check a plan against when no text and no private bind are on record (a Prepare()
-		// pre-screen): nothing in the plan can be attributed to the caller, so blocks are deferred to execution,
-		// which rebinds inside the query. Table policy and the never-bind list still hold.
+		// pre-screen): nothing in the plan can be attributed to the caller, so blocks and table policy alike are
+		// deferred to execution, which rebinds inside the query. The read-only operator allowlist still holds.
 		static Unit Unattributed();
 	};
 	// The decision on the text: allowed, or the first denial in the order the engine runs the statements.
@@ -57,14 +57,20 @@ struct TextCheck {
 TextCheck CheckText(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
                     const gatekeeper::Limits &limits);
 
+// Which plan the execution boundary is looking at. The private bind's own plan records what the validated
+// statement scans; the engine's plan for the same admitted statement is held to that record; a Prepare()
+// pre-screen has neither text nor private bind on record and defers everything but plan structure.
+enum class PlanOrigin { PRIVATE, ENGINE, PRESCREEN };
+
 // Execution boundary. Requires a read-only statement whose plan contains only reviewed read operators,
 // then authorizes the plan against both layers, ceiling first: the tables it scans in one pass, the
 // functions it binds in another (AuthorizePlan). The unit supplies what the plan is attributed against:
-// the caller's text as the walk recorded it and what the private bind learned about origin. The one other
-// root accepted is a dynamic PIVOT's enum type over such a plan (PivotEnumPlan). Records each violation in
-// result and throws PermissionException at the first denial.
-void CheckPlan(const gatekeeper::Layers &layers, const TextCheck::Unit &unit, const StatementProperties &properties,
-               LogicalOperator &plan, gatekeeper::Result &result);
+// the caller's text as the walk recorded it and what the private bind learned about origin; the private
+// pass records the base tables the validated statement scans, and the engine pass refuses a plan that scans
+// any other, or any more often. The one other root accepted is a dynamic PIVOT's enum type over such a plan
+// (PivotEnumPlan). Records each violation in result and throws PermissionException at the first denial.
+void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrigin origin,
+               const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result);
 
 // Private bind of one admitted statement on the caller's connection with the catalog-lookup callback
 // and replacement interception, followed by the execution boundary on that plan. Parameter values,

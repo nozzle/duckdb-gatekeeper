@@ -28,14 +28,18 @@ def test_binding_errors_and_no_execution(db):
 
 
 def test_trusted_views_and_macros(db):
+    # A trusted definition is opaque to table policy: the view or macro the caller names must pass, and what its
+    # body reads is its own. The caller's own reference to the same table is still the caller's.
     configure(db, {"allowed_functions": ["report"]})
     db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
     reporting = {"catalog": "*", "schema": "reporting", "table": "*"}
     secret = {"catalog": "*", "schema": "secret", "table": "*"}
-    assert not validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[reporting]})["allowed"]
-    assert validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[reporting,secret]})["allowed"]
-    assert not validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[reporting]})["allowed"]
-    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[secret]})["allowed"]
+    assert validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[reporting]})["allowed"]
+    assert not validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[secret]})["allowed"]
+    assert not validate(db,"SELECT * FROM reporting.v, secret.t",{"allowed_tables":[reporting]})["allowed"]
+    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[reporting]})["allowed"]
+    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[]})["allowed"]
+    assert not validate(db,"SELECT * FROM report(), secret.t",{"allowed_functions":["report"],"allowed_tables":[reporting]})["allowed"]
 
 
 def test_attached_database_and_trusted_reader(db,tmp_path):

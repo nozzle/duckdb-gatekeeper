@@ -163,6 +163,39 @@ bool Provenance::Attributable(const BindingPolicy &binding, const std::string &n
 	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
 	return CallerCanName(binding, name) || caller_lookups.count(CanonicalFunction(name));
 }
+Table ObjectKey(const std::string &catalog, const std::string &schema, const std::string &table) {
+	return {Lower(catalog), Lower(schema), Lower(table)};
+}
+bool NamesObject(const std::set<Table> &written, const std::string &catalog, const std::string &schema,
+                 const std::string &table) {
+	auto key = ObjectKey(catalog, schema, table);
+	for (const auto &ref : written) {
+		if (ref.table != key.table)
+			continue;
+		if (!ref.catalog.empty()) {
+			if (ref.catalog == key.catalog && (ref.schema.empty() || ref.schema == key.schema))
+				return true;
+			continue;
+		}
+		// Two parts: schema.table, or catalog.table with the catalog's default schema.
+		if (ref.schema.empty() || ref.schema == key.schema || ref.schema == key.catalog)
+			return true;
+	}
+	return false;
+}
+bool Provenance::CallerNamesObject(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+                                   const std::string &table) const {
+	return NamesObject(binding.caller_table_names, catalog, schema, table);
+}
+bool Provenance::ObjectAttributable(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+                                    const std::string &table) const {
+	if (unattributed)
+		return false;
+	auto key = ObjectKey(catalog, schema, table);
+	if (caller_objects.count(key) || CallerNamesObject(binding, catalog, schema, table))
+		return true;
+	return !trusted_objects.count(key);
+}
 struct Stop {
 	std::string message;
 	std::string rule = rules::UNSUPPORTED_STRUCTURE;
@@ -315,11 +348,15 @@ struct Walker {
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
-		// replacement scan turns into a reader. Only the last matters, and only the replacement callback learns
-		// which names are which, so it is told every name the caller wrote and treats the rest as trusted.
-		if (kind == "BaseTableRef" && binding)
-			binding->caller_table_refs.insert(
-			    TableRefPath(Field(value, "catalog_name"), Field(value, "schema_name"), Field(value, "table_name")));
+		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
+		// which names are which and treats the rest as trusted. The same names, as written components, are what
+		// the catalog callback and the plan walk attribute to the caller wherever they resolve.
+		if (kind == "BaseTableRef" && binding) {
+			auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
+			     table = Field(value, "table_name");
+			binding->caller_table_refs.insert(TableRefPath(catalog, schema, table));
+			binding->caller_table_names.insert({Lower(catalog), Lower(schema), Lower(table)});
+		}
 		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
 		if (kind == "CollateExpression" && binding)
 			binding->caller_collates = true;

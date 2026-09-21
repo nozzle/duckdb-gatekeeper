@@ -50,18 +50,39 @@ def split(db):
     "WITH t AS (SELECT * FROM secret.t) SELECT * FROM t",
     "WITH t AS MATERIALIZED (SELECT * FROM secret.t) SELECT * FROM t",
     "WITH t AS NOT MATERIALIZED (SELECT * FROM secret.t) SELECT * FROM t",
-    "SELECT * FROM allowed.v",
-    "SELECT * FROM allowed.nested_v",
-    "SELECT secret_scalar()",
-    "SELECT * FROM secret_table()",
+    "SELECT * FROM allowed.v, secret.t",
+    "SELECT * FROM allowed.nested_v WHERE x IN (SELECT x FROM secret.t)",
+    "SELECT secret_scalar() FROM secret.t",
+    "SELECT * FROM secret_table(), secret.t",
     "DESCRIBE secret.t",
     "SUMMARIZE secret.t",
 ])
 def test_hidden_table_references(split, sql):
+    configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
     options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}], "allowed_functions": ["secret_scalar", "secret_table"]}
     result = validate(split, sql, options)
     assert not result["allowed"], (sql, result)
     assert result["code"] == "forbidden", (sql, result)
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM allowed.v",
+    "SELECT * FROM allowed.nested_v",
+    "SELECT secret_scalar()",
+    "SELECT * FROM secret_table()",
+    "SELECT secret_scalar() FROM allowed.v",
+    "WITH t AS (SELECT 1 AS x) SELECT * FROM allowed.v",
+])
+def test_trusted_definitions_are_opaque_to_table_policy(split, sql):
+    # The caller may reach secret.t only through a definition the host created and the policy allows: the view,
+    # the nested view, the scalar macro's subquery, the table macro's body. What such a definition reads is its
+    # own, and is still reported as evidence. A CTE named like the table the view reads is not a reference to it.
+    configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
+    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]}
+    result = validate(split, sql, options)
+    assert result["allowed"], (sql, result)
+    assert {"catalog": "memory", "schema": "secret", "table": "t", "type": "table"} in result["objects"], (sql, result)
+    assert not validate(split, sql, {"allowed_tables": [], "allowed_functions": []})["allowed"]
 
 
 @pytest.mark.parametrize("sql", [
@@ -119,11 +140,16 @@ def test_request_cannot_opt_out_of_ceiling(split):
 
 
 def test_catalog_changes_rechecked(split):
+    # Every validation binds against the catalog as it is: the definition behind a name is read again, so the
+    # evidence follows a replaced view and the decision follows a dropped one.
     split.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    split.execute("PREPARE validation AS SELECT allowed FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
-    assert split.execute("EXECUTE validation").fetchone()[0]
+    split.execute("PREPARE validation AS SELECT allowed, list_transform(objects, o -> o.schema || '.' || o.\"table\") "
+                  "FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
+    assert split.execute("EXECUTE validation").fetchone() == (True, ["allowed.changing", "allowed.t"])
     split.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
-    assert not split.execute("EXECUTE validation").fetchone()[0]
+    assert split.execute("EXECUTE validation").fetchone() == (True, ["allowed.changing", "secret.t"])
+    split.execute("DROP VIEW allowed.changing")
+    assert split.execute("EXECUTE validation").fetchone() == (False, [])
 
 
 def test_search_path_and_temp_shadowing(split):

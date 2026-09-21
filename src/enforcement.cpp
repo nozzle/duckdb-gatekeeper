@@ -284,7 +284,10 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		}
 		result.allowed = true;
 		try {
-			CheckPlan({policy, policy}, TextCheck::Unit::Unattributed(), input.binder.GetStatementProperties(),
+			// Plan structure only: with no text and no private bind, nothing here can be attributed, so table
+			// policy and blocks wait for the rebind inside the query, as gatekeeper::Provenance::unattributed says.
+			auto unattributed = TextCheck::Unit::Unattributed();
+			CheckPlan({policy, policy}, unattributed, PlanOrigin::PRESCREEN, input.binder.GetStatementProperties(),
 			          *statement.plan, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
@@ -315,8 +318,8 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 			return;
 	}
 	try {
-		CheckPlan(state->Snapshot(), state->unit, input.binder.GetStatementProperties(), *statement.plan,
-		          state->result);
+		CheckPlan(state->Snapshot(), state->unit, PlanOrigin::ENGINE, input.binder.GetStatementProperties(),
+		          *statement.plan, state->result);
 	} catch (const PermissionException &) {
 		MarkDenied(state->result);
 	}

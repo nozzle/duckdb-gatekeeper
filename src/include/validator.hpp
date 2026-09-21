@@ -1,6 +1,7 @@
 #pragma once
 #include "yyjson.hpp"
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
 #include <tuple>
@@ -129,12 +130,24 @@ struct BindingPolicy {
 	// readers such bodies name explicitly. The replacement callback sees no origin, so a name both sides use
 	// is checked as the caller's, query-wide, like other ambiguous caller syntax.
 	Names caller_table_refs;
+	// The same references as written components (catalog, schema, table; empty where the caller wrote none),
+	// case-folded: the table names the caller can produce. A resolved object one of them names is the caller's
+	// wherever it binds, so a trusted definition reading the same object does not make it the definition's.
+	std::set<Table> caller_table_names;
 };
+// A written reference (catalog, schema, table; empty parts unwritten) names a resolved object when the table
+// names agree and every written qualifier agrees with the object's. A two-part name is schema.table or
+// catalog.table, as DuckDB resolves it. An unqualified name matches the same table name in any schema of any
+// catalog: conservative on purpose, since a written name is attributed to the caller wherever it resolves.
+bool NamesObject(const std::set<Table> &written, const std::string &catalog, const std::string &schema,
+                 const std::string &table);
 // What the private bind learned about origin, for the execution boundary. Trusted definitions (host views,
-// macros, attached tables) are exempt from blocked_functions; the bound plan carries no scope, so the plan walk
-// applies blocks to the names it can attribute to the caller: the text's names (BindingPolicy), the names the
-// caller's own binders looked up (default-macro expansions of caller-written names included), and the
-// implementations those select. Everything else in the plan came from a trusted definition.
+// macros, attached tables) are opaque to policy: what their bodies introduce is exempt from function policy
+// and from table policy alike. The bound plan carries no scope, so the plan walk applies policy to what it
+// can attribute to the caller. Functions: the text's names (BindingPolicy), the names the caller's own binders
+// looked up (default-macro expansions of caller-written names included), and the implementations those select.
+// Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
+// Everything else in the plan came from a trusted definition.
 struct Provenance {
 	// Canonical function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
@@ -146,13 +159,36 @@ struct Provenance {
 	// so its names are recognized by name; a name the caller can also produce is checked as the caller's,
 	// query-wide.
 	Names trusted_names;
-	// No text and no private bind on record (a Prepare() pre-screen): nothing can be attributed, and blocks are
-	// deferred to execution, which rebinds inside the query.
+	// Table references host scalar-macro bodies write (default arguments included), as written components. A
+	// scalar macro body binds in the caller's own binder, so the objects its subqueries read are recognized by
+	// name, exactly as its functions are; an object the caller also names is the caller's, query-wide.
+	std::set<Table> trusted_table_names;
+	// Resolved table and view identities (case-folded) by attribution: retrieved by the caller's own binders
+	// or named in the caller's text, and retrieved only by trusted definitions. An identity in both is the
+	// caller's.
+	std::set<Table> caller_objects, trusted_objects;
+	// How many times the private bind's plan scans each base table, by identity, and each table function, by
+	// name. The engine's plan for the same statement may scan no other source and none more often; a plan that
+	// does diverged from the validated statement and is refused.
+	std::map<Table, size_t> validated_scans;
+	std::map<std::string, size_t> validated_function_scans;
+	// No text and no private bind on record (a Prepare() pre-screen): nothing can be attributed, and blocks and
+	// table policy alike are deferred to execution, which rebinds inside the query.
 	bool unattributed = false;
 	// The caller's text, or a default macro it expands to, can produce this name.
 	bool CallerCanName(const BindingPolicy &binding, const std::string &name) const;
 	bool Attributable(const BindingPolicy &binding, const std::string &name) const;
+	// The caller's text names this object.
+	bool CallerNamesObject(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+	                       const std::string &table) const;
+	// A resolved object a plan scans is the caller's: the caller's binders retrieved it or the caller's text
+	// names it. An identity only trusted definitions retrieved is theirs. One the private bind never retrieved
+	// at all is the caller's too: it can only have come from a plan that diverged from the validated statement.
+	bool ObjectAttributable(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+	                        const std::string &table) const;
 };
+// A resolved identity as the provenance sets hold it: every component case-folded.
+Table ObjectKey(const std::string &catalog, const std::string &schema, const std::string &table);
 // The qualified name DuckDB hands its replacement-scan callbacks (ReplacementScan::GetFullPath): the non-empty
 // parts joined with dots. Case-folded here because caller_table_refs is matched by name, never by file identity.
 std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table);

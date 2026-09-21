@@ -159,16 +159,17 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     # The relation API goes through the same hooks with the relation's SQL rendering.
     assert agent.table("secret.salaries").fetchall() == [("x", 1.0)]
     assert [r["statement"] for r in decisions(catalog, "statement LIKE '%\"secret\"%'")] == ['SELECT * FROM "secret".salaries']
-    # executemany prepares once outside any query, which is pre-screened at the prepare boundary (no text is
-    # available there), then executes twice inside queries: one record per engine operation, none refused.
+    # executemany prepares once outside any query. The pre-screen there has no text and no private bind, so
+    # table policy waits for the executions, which rebind inside a query: one record per execution, none refused,
+    # and nothing at the prepare boundary.
     agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0], [0]])
     assert agent.fetchall() == [("x", 1.0)]
     found = decisions(catalog, "boundary = 'prepare' OR statement = 'SELECT * FROM secret.salaries WHERE amount > ?'")
     assert [(r["boundary"], r["code"], r["statement"] is None) for r in found] == [
         ("authorize", "forbidden", False),  # the execute() above
-        ("prepare", "forbidden", True), ("authorize", "forbidden", False), ("authorize", "forbidden", False)]
+        ("authorize", "forbidden", False), ("authorize", "forbidden", False)]
     assert found[1]["violations"][0]["rule"] == "table"
-    assert len(decisions(catalog, "mode = 'log_only' AND NOT allowed")) == 4 + 1 + 2 + 1 + 3
+    assert len(decisions(catalog, "mode = 'log_only' AND NOT allowed")) == 4 + 1 + 2 + 1 + 2
     # Both tables were created: log-only refused nothing.
     assert catalog.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('u', 'v')").fetchone() == (2,)
 
@@ -192,13 +193,15 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
     assert logged["statement"] == sql
     # The same through Prepare(): the gate decides the bind outside any statement (no text is available), the
     # failed bind runs no pre-screen, and the mark it left is cleared with that prepare attempt, so the next
-    # Prepare() is decided on its own, whether or not a statement or transaction boundary came between.
+    # Prepare() is decided on its own, whether or not a statement or transaction boundary came between. The
+    # pre-screen defers table policy, so the statement it still decides is one whose plan is not a read.
     with pytest.raises(duckdb.IOException):
         agent.executemany(sql, [[1]])
-    agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0]])
+    agent.executemany("EXPLAIN SELECT ?::INTEGER", [[1]])
     found = decisions(catalog, "mode = 'log_only'")[1:]
     assert [(r["boundary"], r["statement"]) for r in found] == [("replacement_scan", None), ("prepare", None),
-                                                                 ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
+                                                                 ("binding", "EXPLAIN SELECT ?::INTEGER")]
+    assert found[1]["violations"][0]["rule"] == "statement"
     # Inside an explicit transaction no statement or transaction boundary separates two Prepare() calls (the
     # first failure aborts the transaction, and Prepare() still binds in an aborted one).
     agent.execute("BEGIN")
@@ -206,11 +209,11 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
         with pytest.raises(duckdb.IOException):
             agent.executemany(sql, [[1]])
     agent.execute("ROLLBACK")
-    agent.executemany("SELECT * FROM secret.salaries WHERE amount > ?", [[0]])
+    agent.executemany("EXPLAIN SELECT ?::INTEGER", [[1]])
     found = decisions(catalog, "mode = 'log_only'")[4:]
     assert [(r["boundary"], r["statement"]) for r in found] == [
         ("binding", "BEGIN"), ("replacement_scan", None), ("replacement_scan", None), ("binding", "ROLLBACK"),
-        ("prepare", None), ("authorize", "SELECT * FROM secret.salaries WHERE amount > ?")]
+        ("prepare", None), ("binding", "EXPLAIN SELECT ?::INTEGER")]
 
 
 @pytest.mark.parametrize("sql, error", [

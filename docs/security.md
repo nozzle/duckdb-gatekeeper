@@ -80,6 +80,14 @@ table; `[]` denies all tables and views. The rules, which the README's
 - A rule names a `catalog`, `schema`, and `table`; all three are matched against the
   **resolved** identity of a table or view, never the caller's spelling, a CTE name, a file
   path, or a reader argument. Text is exact and ASCII case-folded.
+- Rules apply to the objects attributable to the caller: those the caller's own text names,
+  wherever the name binds, and those the caller's own binders retrieve. A trusted definition
+  (a host view, scalar or table macro, or an attached catalog's table or view) is
+  authorized by its own identity, and what its body reads is its own, outside every rule
+  below: allowing a view admits the tables behind it, and a CTE, alias, or table the caller
+  reads under a name a definition also reads makes that object the caller's, query-wide
+  (conservative; rename the CTE to lift it). The evidence still lists everything read. See
+  [trusted definitions](#function-enforcement-and-trusted-expansion) for the mechanism.
 - Only a whole-component `*` is a wildcard (`sales_*`, `?`, and `%` are literal names). A
   wildcard also matches objects created or attached later, and `catalog: '*'` matches
   temporary shadow tables. An omitted `catalog` is `*`.
@@ -87,12 +95,16 @@ table; `[]` denies all tables and views. The rules, which the README's
   intersection: both the ceiling and the request layer must grant. Multiple entries pair
   specific catalogs and schemas without granting their cross-product.
 - `blocked_tables` uses the same matching, defaults to none, and works independently of the
-  allowlist. A matching block in either layer always wins, including on the underlying tables
-  and views a trusted view or macro expands to.
-- Internal objects need an allow rule with exact schema and table names in each layer;
-  schema/table wildcards never grant them, though the catalog may be `*` or omitted. Block
-  wildcards do match them, even when an exact allow rule exists. Metadata *readers* stay on
-  the [never-bind list](#never-bind-functions) for the caller's own text regardless.
+  allowlist. A matching block in either layer always wins for what the caller names; it does
+  not reach the tables and views a trusted view or macro reads. Block the view or macro to
+  withdraw it.
+- Internal objects the caller names need an allow rule with exact schema and table names in
+  each layer; schema/table wildcards never grant them, though the catalog may be `*` or
+  omitted. Block wildcards do match them, even when an exact allow rule exists. Metadata
+  *readers* stay on the [never-bind list](#never-bind-functions) for the caller's own text
+  regardless, so an exact rule for a caller-named metadata view is necessary and not
+  sufficient; a host view or macro over an internal view is the host's decision to expose
+  it, reader included.
 - Schema-wide `SHOW` is denied whenever either layer configures any table restriction;
   `DESCRIBE table` checks the resolved table normally.
 - Table rules govern tables and views only. Types, casts, and collations are trusted as part of
@@ -120,10 +132,12 @@ be stated and tested independently.
 statement text is parsed with the connection's parser options, serialized, and walked
 against the compiled grammar and the global policy exactly as `gatekeeper_validate` does.
 When the statement has no parameters, it is then bound privately with the catalog-lookup
-callback and replacement-scan interception, so every retrieved table and view, including
-those a view or macro expands to, is authorized by resolved identity. Guarantee: no SQL text
-submitted for execution reaches the engine's binder unless it is a single `SELECT` whose
-grammar, caller-written functions and (parameter-free) resolved objects the policy allows, or
+callback and replacement-scan interception, so every retrieved table and view is recorded by
+resolved identity and by who retrieved it, and those attributable to the caller are
+authorized; what a trusted view or macro body retrieves is that definition's own. Guarantee:
+no SQL text submitted for execution reaches the engine's binder unless it is a single
+`SELECT` whose grammar, caller-written functions and (parameter-free) caller-attributable
+resolved objects the policy allows, or
 the one statement DuckDB's own parser derives from such a `SELECT`: the temporary enum type of
 a dynamic `PIVOT` (below), admitted by exact shape and checked as the `SELECT` that defines it.
 Consequently an agent-written `read_csv('s3://...')`, `FROM 'file'`, or `duckdb_settings()`
@@ -132,24 +146,35 @@ never reach the binder.
 
 **Execution boundary** (`PlannerExtension::post_bind_function`, after the engine binds and
 before it optimizes or executes). The plan the engine produced must contain only reviewed
-read-only logical operators, modify no database, return a query result, scan only base
-tables the policy allows (each `LOGICAL_GET` table entry is authorized by resolved identity),
-and pass the same resolved-function and implementation checks `gatekeeper_validate` applies
-to its own plan. The one other root it accepts is a dynamic `PIVOT`'s enum type
-(`LOGICAL_CREATE_TYPE` of that exact shape, in the temporary catalog, returning nothing) over
-such a plan. If the binding boundary deferred object authorization because the statement
-had parameters, it runs here with the values the engine bound them to. Guarantee: no plan
-executes on an enforced connection unless it consists of allowlisted operators over allowed
-base tables and functions. This holds for every plan the engine's planner produces, whatever
-produced the statement: SQL text, a prepared statement, or DuckDB's relation API. Views are
-inlined before this point; they are authorized by the private bind's catalog callback, which
-for a relation statement sees the relation's SQL rendering rather than its query node.
+read-only logical operators, modify no database, return a query result, scan only the
+sources the private bind of the admitted statement scanned, none of them more often than
+that bind did (each `LOGICAL_GET` is matched by count: a table entry by resolved identity,
+a table function by name; the tables attributable to the caller are authorized again), and
+pass the same resolved-function
+and implementation checks `gatekeeper_validate` applies to its own plan. The one other root
+it accepts is a dynamic `PIVOT`'s enum type (`LOGICAL_CREATE_TYPE` of that exact shape, in the
+temporary catalog, returning nothing) over such a plan. If the binding boundary deferred
+object authorization because the statement had parameters, it runs here with the values the
+engine bound them to. Guarantee: no plan executes on an enforced connection unless it consists
+of allowlisted operators over the base tables the validated statement reached, each
+authorized according to who reached it there, and allowed functions. This holds for every
+plan the engine's planner produces, whatever produced the statement: SQL text, a prepared
+statement, or DuckDB's relation API. Views are inlined before this point; who reached each
+table is what the private bind's catalog callback recorded, which for a relation statement
+sees the relation's SQL rendering rather than its query node. A node that scans a table or
+table function the rendering never reached, or one more often than the rendering did, is
+refused as a `statement` violation. A node that scans an identity exactly as often as a trusted
+definition in the rendering did is not distinguished from it and runs under that definition's
+authority; this is the same exposure function attribution has always had, and the linked fuzz
+harness pins both halves (`CheckHostileRelation`).
 
 Both boundaries read one policy snapshot per statement. DuckDB's `Prepare()` path binds
 before any extension hook runs, so on that path the execution boundary only pre-screens the
-prepared plan; at execution, `OnExecutePrepared` forces a rebind inside the query so the plan
-that runs is authorized under the current policy, and a cached plan can never outlive a policy
-change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
+prepared plan's structure: with no text and no private bind on record nothing in it can be
+attributed, so table policy and function blocks alike wait for execution, where
+`OnExecutePrepared` forces a rebind inside the query so the plan that runs is authorized
+under the current policy (the `authorize` boundary), and a cached plan can never outlive a
+policy change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
 statement that reaches them, which `test/test_enforcement.py` checks over a corpus of allowed,
 denied, and erroneous statements. What DuckDB does to a statement before they run is listed
 under residuals.
@@ -240,9 +265,9 @@ under residuals.
   executing the statement directly (with or without parameters) binds inside the query,
   where the text is on record, and a view written with an explicit `read_parquet(...)` call
   is unaffected either way. The plan pre-screen after that bind has no record either, so it
-  applies table policy and Gatekeeper's control plane and defers the rest of function policy
-  to execution: a prepared statement whose text names a blocked or never-bind function is
-  refused when executed, not when prepared.
+  checks plan structure and Gatekeeper's control plane and defers table policy and the rest
+  of function policy to execution: a prepared statement whose text names a denied table or a
+  blocked or never-bind function prepares, and is refused when executed.
 - **Preprocessor rewrites.** DuckDB rewrites query pragmas (`PRAGMA version`) into the
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
@@ -493,28 +518,33 @@ permission. This explicit pair is source-reviewed in
 discovery. CSV/JSON reader names are not grouped. Parquet violations use the canonical
 name `read_parquet`; successful dependency lists retain observed function names.
 
-**Trusted definitions are opaque to function policy.** A view, scalar macro, or table
-macro the host created (any non-internal catalog entry), and the scan an attached catalog
-uses for a table the policy allows, are trusted definitions. What their bodies introduce is
+**Trusted definitions are opaque to policy.** A view, scalar macro, or table macro the host
+created (any non-internal catalog entry), and an attached catalog's tables and views with
+the scans the catalog uses for them, are trusted definitions. What their bodies introduce is
 theirs, not the caller's: an explicit `read_parquet(...)`, a file path (`FROM 'x.parquet'`),
 `md5`, `list_sum` and the `sum` it dispatches, the `lower` behind a `COLLATE nocase`,
-`duckdb_tables()`, `iceberg_scan`. None of it is subject to the allowlist, to
-`blocked_functions`, or to the never-bind list; a host view over `duckdb_settings()` is the
-host's decision to expose settings. The one exception is Gatekeeper's own control plane
-(`gatekeeper_configure`, `gatekeeper_enforce`, `enable_logging`, `disable_logging`,
-`truncate_duckdb_logs`, `write_log`, `ControlPlaneFunctions()` in
-`src/include/function_policy.hpp`), refused on every route: a definition over one of these
-would let a `SELECT` rewrite the policy or erase its own record, which no definition
-legitimately intends. Table policy still governs the view or table itself (and every table
-the body reads, internal views included, which need their exact rule), while a macro must
-itself be allowed by name. Function policy governs what is attributable to the caller: the
-names in the caller's text, the names the caller's own binders retrieve while binding it
-(the default macros a caller-written name expands to, such as `list_sum` to `list_aggr`,
-and everything those name in turn), the aggregate a caller-attributable dispatcher
-selects, and the collation functions when the caller wrote `COLLATE`. The exemption is by
-origin, not by name: the same function written by the caller next to a view that also
-uses it is the caller's, and the caller's
-rules then apply query-wide, since the bound plan carries no scope.
+`duckdb_tables()`, `iceberg_scan`, and every table and view the body reads, internal views
+included. None of it is subject to the function allowlist, to `blocked_functions`, to the
+never-bind list, to `allowed_tables`, to `blocked_tables`, or to the internal-object rule; a
+host view over `duckdb_settings()` is the host's decision to expose settings, and a host view
+over `secret.t` is the host's decision to expose those rows. The one exception is
+Gatekeeper's own control plane (`gatekeeper_configure`, `gatekeeper_enforce`,
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`,
+`ControlPlaneFunctions()` in `src/include/function_policy.hpp`), refused on every route: a
+definition over one of these would let a `SELECT` rewrite the policy or erase its own record,
+which no definition legitimately intends. Policy governs what is attributable to the caller.
+For objects: the view or table the caller names, checked by resolved identity, and every
+object the caller's own binders retrieve or the caller's text names, wherever that name
+binds. For functions: the names in the caller's text, the names the caller's own binders
+retrieve while binding it (the default macros a caller-written name expands to, such as
+`list_sum` to `list_aggr`, and everything those name in turn), the aggregate a
+caller-attributable dispatcher selects, and the collation functions when the caller wrote
+`COLLATE`. A macro must itself be allowed by name. The exemption is by origin, not by name:
+the same function written by the caller next to a view that also uses it is the caller's,
+the same table the caller reads next to a view that also reads it is the caller's, and the
+caller's rules then apply query-wide, since the bound plan carries no scope. A CTE or alias
+the caller reads under a name a definition also reads counts as naming that object: the
+walk records what was written, not what it resolved to.
 
 Origin is established during the private bind. DuckDB copies a binder's catalog-lookup
 callback into every child binder it creates and creates the binder for a view or table
@@ -522,16 +552,23 @@ macro body right after retrieving that entry, so Gatekeeper's callback carries s
 retrieving a host view or table macro arms the copy that made the lookup, the next copy
 made from it (the body's binder) starts trusted, and trusted copies beget trusted copies.
 Lookups a trusted copy makes are the definition's own. A scalar macro body binds in the
-caller's own binder, so its names are learned from its definition: the macro's expression
-is walked by the same grammar walker as the caller's text, and a name it introduces is the
-macro's unless the caller can produce it too, in its text or through a default macro its
-text expands to (the caller's `list_count` names `list_aggr` without writing it, and a host
+caller's own binder, so its names and table references are learned from its definition: the
+macro's expression and default arguments are walked by the same grammar walker as the
+caller's text, and a name it introduces, or a table its subqueries read, is the macro's
+unless the caller can produce it too, in its text or through a default macro its text
+expands to (the caller's `list_count` names `list_aggr` without writing it, and a host
 macro over `list_sum` does not make that `list_aggr`, or the `count` it dispatches, the
-macro's). The execution boundary then applies function policy only to names the record
-attributes to the caller; an attached table's scan (`LogicalGet` with a table entry) is
-never attributed. A `Prepare()` bind outside any statement has no text and no record; its
-pre-screen applies table policy and the control plane and defers the rest of function
-policy to execution, which rebinds inside the query.
+macro's). Caller-written CTEs a table macro inherits are the caller's text bound in the
+caller's scope, and a table-function argument is a literal or a parameter before anything
+binds, so no caller-written table reference reaches a trusted body's binder. The execution
+boundary then applies function policy only to names the record attributes to the caller and
+table policy only to identities it does, holding the engine's plan to the tables, table
+functions and scan counts of the private bind's plan; an attached table's scan (`LogicalGet`
+with a table entry) is never attributed as a function. A table function a trusted definition
+named binds what it replaces itself with as that definition's: `query_table(n)` in a host
+scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()` bind outside any statement has no
+text and no record; its pre-screen checks plan structure and the control plane and defers
+table policy and the rest of function policy to execution, which rebinds inside the query.
 
 The callback exposes no expression origin within one binder: when caller syntax requires
 an implementation check, a trusted expansion using the same implementation must also pass
@@ -540,7 +577,10 @@ does not grant an exception to caller code. Type names, casts, and collations ar
 host database configuration and are not authorized separately. Trust covers the whole
 body, arguments included: a host macro that forwards a caller argument into a reader
 (`CREATE MACRO files(p) AS TABLE SELECT * FROM read_parquet(p)`) hands the caller that
-choice, and neither the allowlist nor `blocked_functions` stands in the way. Do not create
+choice, and neither the allowlist nor `blocked_functions` stands in the way; one that
+forwards it into a table lookup (`CREATE MACRO peek(n) AS TABLE SELECT * FROM query_table(n)`)
+delegates table selection to the caller through the host's trusted capability, and the
+caller's own `allowed_tables` and `blocked_tables` do not apply to what it selects. Do not create
 pass-through definitions for capabilities the policy is meant to withhold; DuckDB itself
 refuses a macro that forwards an aggregate name into a dispatcher, since the name must be
 a constant.
@@ -613,9 +653,13 @@ JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
 All listed names are excluded from defaults and cannot be admitted by options.
-Metadata views expanding to these readers are denied even with `allowed_tables`.
-This is deliberate: metadata readers enumerate across catalogs and cannot be row-
-filtered by object callbacks. Tenant introspection must use a host-controlled API.
+Metadata views the caller names (`information_schema.tables`, `duckdb_tables`) expand to
+these readers and are denied even with exact `allowed_tables` rules for the view: the
+internal view is the caller's, so its reader is the caller's and never-bind. This is
+deliberate: metadata readers enumerate across catalogs and cannot be row-filtered by
+object callbacks. Tenant introspection must use a host-controlled API: a host view or
+macro over such a metadata view is one, its reader is the definition's own, and exposing
+it is the host's decision.
 `json_serialize_plan` is listed because it binds and plans caller-supplied SQL at
 execution time, outside this validation.
 
@@ -670,10 +714,11 @@ reliable provenance. Arbitrary extension bind data is not introspected.
 
 ## Remaining boundaries
 
-- Validation always binds on the calling connection and authorizes retrieved table
-  and view identities, including underlying objects from views/macros. No public
-  syntax-only mode exists. Function matching remains name-based, not a proof of a
-  macro/UDF's implementation; catalog integrity is assumed.
+- Validation always binds on the calling connection and authorizes the retrieved table
+  and view identities attributable to the caller; what a trusted view or macro reads is
+  recorded, not authorized, so a host definition is the host's decision to expose what it
+  reads. No public syntax-only mode exists. Function matching remains name-based, not a
+  proof of a macro/UDF's implementation; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
   identify tables without depending on a particular scan operator. Local Iceberg
@@ -790,8 +835,8 @@ record observed lookups and surviving function implementations, may omit hidden
 extension work, and do not hash definitions or identify overloads. Failed decisions
 return empty lists to avoid presenting an incomplete dependency set as authorization.
 Omitted/NULL catalogs and `catalog: '*'` in `allowed_tables` include `temp` shadow tables. Table macros may
-inherit caller CTEs whereas views do not; compare actual resolved objects rather than
-assuming definition-time bindings. User-defined enum types can expose all their labels
+inherit caller CTEs whereas views do not; the CTE is the caller's text and is authorized as
+such, so compare actual resolved objects rather than assuming definition-time bindings. User-defined enum types can expose all their labels
 via `enum_range`, even when no table is read; type definitions are host-trusted data.
 
 ## Compatibility and review
