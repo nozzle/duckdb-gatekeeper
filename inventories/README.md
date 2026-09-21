@@ -154,7 +154,12 @@ or minor release. To change our release build defaults, update together:
   that embeds another engine fails there;
 - the benchmark table in the README and the community descriptor, regenerated with
   `scripts/benchmark.py --markdown` on the new engine. Its footnote names the engine and
-  extension version it was taken on, and `test_documentation.py` checks that against the pin.
+  extension version it was taken on, and `test_documentation.py` checks that against the pin;
+- the parser-specific expectations of the Python suite's PEG leg (`GATEKEEPER_PARSER=peg`,
+  see [CONTRIBUTING.md](../CONTRIBUTING.md#testing)): every `by_parser(...)` site, the
+  `PEG_DEEP_NESTING_CRASH` skips, and the enablement path in `test/support/artifact.py` state
+  facts about the pinned engine's PEG parser and are re-derived, not carried. The checklist is
+  [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90).
 
 Historical inventory source references and baselines need not change with the build pin.
 

@@ -14,7 +14,7 @@ from support.typed_helpers import validate
 # process dies (SIGBUS/SIGILL); nothing downstream, Gatekeeper's depth limit included, ever runs. Upstream
 # duckdb#24618, fixed on main by the heap-based matcher of duckdb#25204 and in no 1.5.x release
 # (docs/security.md, "Compatibility and review"). These two cases are the ones deep enough to reach it; they
-# run only under the default parser until the pinned engine carries the fix, when this marker goes.
+# run only under the default parser until the pinned engine carries the fix, when this marker goes (#90).
 PEG_DEEP_NESTING_CRASH = pytest.mark.skipif(
     PARSER == "peg", reason="DuckDB 1.5.5 PEG matcher recursion overflows the stack on deep nesting (duckdb#24618)")
 
