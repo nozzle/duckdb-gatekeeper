@@ -266,38 +266,51 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 	if (properties.return_type != (pivot_enum ? StatementReturnType::NOTHING : StatementReturnType::QUERY_RESULT))
 		deny("statement does not return a query result");
 	auto &provenance = unit.provenance;
-	if (origin == PlanOrigin::PRIVATE)
+	if (origin == PlanOrigin::PRIVATE) {
 		provenance.validated_scans.clear();
+		provenance.validated_function_scans.clear();
+	}
 	auto remaining = provenance.validated_scans;
+	auto remaining_functions = provenance.validated_function_scans;
+	// One scan of the engine's plan against the private bind's record: recorded by the private pass, consumed by
+	// the engine pass, which refuses a source the record does not hold or holds fewer times.
+	auto account = [&](auto &recorded, auto &left, const auto &key, const gatekeeper::Violation &divergence) {
+		if (origin == PlanOrigin::PRIVATE) {
+			recorded[key]++;
+		} else if (left[key] == 0) {
+			result.violations.insert(divergence);
+			throw PermissionException("plan diverged from the validated statement");
+		} else {
+			left[key]--;
+		}
+	};
 	vector<LogicalOperator *> operators{&plan};
 	while (!operators.empty()) {
 		auto op = operators.back();
 		operators.pop_back();
 		if (!ReadOperator(op->type) && !(pivot_enum && op == &plan))
 			deny("unsupported plan operator: " + LogicalOperatorToString(op->type));
-		// Base tables the plan actually scans, by resolved identity. Views are inlined by now, so who reached a
-		// table is what the private bind's catalog callback recorded: an identity the caller's binders retrieved
-		// or the caller's text names is authorized again here, one only trusted definitions retrieved is theirs.
-		// The engine's plan for an admitted statement may scan no identity the private bind did not, and none
-		// more often: a plan that does (a relation whose SQL rendering diverged from its query node) is refused
-		// rather than authorized. A Prepare() pre-screen has no private bind to compare against and defers.
-		if (op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto table = op->Cast<LogicalGet>().GetTable();
-			if (table && origin != PlanOrigin::PRESCREEN) {
+		// Every source the plan actually scans: base tables by resolved identity, table functions by name. Views
+		// are inlined by now, so who reached a table is what the private bind's catalog callback recorded: an
+		// identity the caller's binders retrieved or the caller's text names is authorized again here, one only
+		// trusted definitions retrieved is theirs. The engine's plan for an admitted statement may scan no source
+		// the private bind did not, and none more often: a plan that does (a relation whose SQL rendering
+		// diverged from its query node) is refused rather than authorized. A Prepare() pre-screen has no private
+		// bind to compare against and defers.
+		if (op->type == LogicalOperatorType::LOGICAL_GET && origin != PlanOrigin::PRESCREEN) {
+			auto &get = op->Cast<LogicalGet>();
+			auto table = get.GetTable();
+			if (table) {
 				auto catalog = table->schema.catalog.GetName(), schema = table->schema.name, name = table->name;
-				auto key = gatekeeper::ObjectKey(catalog, schema, name);
-				if (origin == PlanOrigin::PRIVATE) {
-					provenance.validated_scans[key]++;
-				} else if (remaining[key] == 0) {
-					result.violations.emplace(gatekeeper::rules::STATEMENT,
-					                          "plan scans an object the validated statement did not", catalog, schema,
-					                          name);
-					throw PermissionException("plan diverged from the validated statement");
-				} else {
-					remaining[key]--;
-				}
+				account(provenance.validated_scans, remaining, gatekeeper::ObjectKey(catalog, schema, name),
+				        {gatekeeper::rules::STATEMENT, "plan scans an object the validated statement did not", catalog,
+				         schema, name});
 				AuthorizeObject(layers, unit.binding, *table, result,
 				                provenance.ObjectAttributable(unit.binding, catalog, schema, name));
+			} else {
+				account(provenance.validated_function_scans, remaining_functions, get.function.name,
+				        {gatekeeper::rules::STATEMENT, "plan scans a source the validated statement did not", "", "",
+				         "", get.function.name});
 			}
 		}
 		for (auto &child : op->children)
@@ -556,7 +569,10 @@ struct LookupCallback {
 			(attributable ? s.provenance.caller_objects : s.provenance.trusted_objects)
 			    .insert(gatekeeper::ObjectKey(catalog, schema, entry.name));
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
-			if (!trusted && !entry.internal && entry.type == CatalogType::VIEW_ENTRY)
+			// A host view's body is trusted, and so is the body of any view a trusted definition reached: an
+			// internal metadata view a host scalar-macro body names is the macro's, readers included. The same
+			// internal view the caller names keeps its readers on the caller's never-bind list.
+			if (!trusted && entry.type == CatalogType::VIEW_ENTRY && (!entry.internal || !attributable))
 				armed = true;
 			return;
 		}
@@ -571,7 +587,12 @@ struct LookupCallback {
 			s.provenance.caller_lookups.insert(canonical);
 		if (trusted)
 			return;
-		if (entry.type == CatalogType::TABLE_MACRO_ENTRY && !entry.internal)
+		// A host table macro's body binds in the next child binder. So does what a table function a trusted
+		// definition named binds in turn: query_table(n) in a host scalar-macro body replaces itself with a
+		// subquery over the table it selects, and that subquery is the macro's, whatever table it names. The
+		// caller's own query_table is never-bind before this point.
+		if ((entry.type == CatalogType::TABLE_MACRO_ENTRY && (!entry.internal || !attributable)) ||
+		    (entry.type == CatalogType::TABLE_FUNCTION_ENTRY && !attributable))
 			armed = true;
 		if (entry.type != CatalogType::MACRO_ENTRY)
 			return;

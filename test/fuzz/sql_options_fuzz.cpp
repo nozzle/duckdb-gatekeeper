@@ -369,11 +369,11 @@ static void CheckEnforcedLatch(DuckDB &database) {
 
 // A relation statement is admitted on its SQL rendering and executed from its query node. DuckDB's own
 // QueryRelation takes the two separately, which is how a hostile embedder would build one whose node scans
-// what its rendering does not. The execution boundary holds the engine's plan to the base tables the validated
-// rendering scanned, by identity and count: an identity the rendering never reached is refused, and so is one
-// it reached fewer times. What it cannot tell apart is a node scanning an identity exactly as often as a trusted
-// definition in the rendering did: that plan is admitted under the definition's authority, the documented
-// residual (docs/security.md, execution boundary).
+// what its rendering does not. The execution boundary holds the engine's plan to the sources the validated
+// rendering scanned, base tables by identity and table functions by name, each by count: a source the
+// rendering never reached is refused, and so is one it reached fewer times. What it cannot tell apart is a node
+// scanning an identity exactly as often as a trusted definition in the rendering did: that plan is admitted
+// under the definition's authority, the documented residual (docs/security.md, execution boundary).
 static void CheckHostileRelation(DuckDB &database) {
 	Connection host(database);
 	auto policy = host.Query("CALL gatekeeper_configure(allowed_tables := [{schema: 'main', \"table\": 'v'}])");
@@ -412,6 +412,20 @@ static void CheckHostileRelation(DuckDB &database) {
 	// The residual: the view's table, scanned exactly as often as the view scans it, under the view's authority.
 	if (outcome("SELECT * FROM t", "SELECT * FROM v") != "ok")
 		Fail("hostile relation: the documented residual changed; update docs/security.md with the new guarantee");
+	// query_table replaces itself with a subquery over its target before planning, so its target is a base
+	// table scan like any other: the view's own table is the residual again, another table is refused.
+	if (outcome("SELECT * FROM query_table('t')", "SELECT * FROM v") != "ok")
+		Fail("hostile relation: query_table over the view's table is the residual, not a new case");
+	if (outcome("SELECT * FROM query_table('secret.t')", "SELECT * FROM v")
+	        .find("plan scans an object the validated statement did not") == std::string::npos)
+		Fail("hostile relation: query_table over an identity the rendering never reached was admitted");
+	// A table function the rendering never bound is a source the validated statement did not scan.
+	if (outcome("SELECT * FROM range(3)", "SELECT * FROM v")
+	        .find("plan scans a source the validated statement did not") == std::string::npos)
+		Fail("hostile relation: a table function the rendering never bound was admitted");
+	if (outcome("SELECT * FROM t, range(3)", "SELECT * FROM v")
+	        .find("plan scans a source the validated statement did not") == std::string::npos)
+		Fail("hostile relation: a table function next to the view's table was admitted");
 	// The caller's own rendering of the table is refused before any node is planned.
 	if (outcome("SELECT * FROM t", "SELECT * FROM t").find("object is not allowed") == std::string::npos)
 		Fail("hostile relation: the caller's own rendering of a denied table was admitted");

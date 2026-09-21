@@ -167,10 +167,11 @@ struct Provenance {
 	// or named in the caller's text, and retrieved only by trusted definitions. An identity in both is the
 	// caller's.
 	std::set<Table> caller_objects, trusted_objects;
-	// How many times the private bind's plan scans each base table, by identity. The engine's plan for the same
-	// statement may scan no other identity and none more often; a plan that does diverged from the validated
-	// statement and is refused.
+	// How many times the private bind's plan scans each base table, by identity, and each table function, by
+	// name. The engine's plan for the same statement may scan no other source and none more often; a plan that
+	// does diverged from the validated statement and is refused.
 	std::map<Table, size_t> validated_scans;
+	std::map<std::string, size_t> validated_function_scans;
 	// No text and no private bind on record (a Prepare() pre-screen): nothing can be attributed, and blocks and
 	// table policy alike are deferred to execution, which rebinds inside the query.
 	bool unattributed = false;

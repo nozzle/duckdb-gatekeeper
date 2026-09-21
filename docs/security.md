@@ -100,9 +100,11 @@ table; `[]` denies all tables and views. The rules, which the README's
   withdraw it.
 - Internal objects the caller names need an allow rule with exact schema and table names in
   each layer; schema/table wildcards never grant them, though the catalog may be `*` or
-  omitted. Block wildcards do match them, even when an exact allow rule exists. A host view
-  over an internal view is the host's decision to expose it. Metadata *readers* stay on the
-  [never-bind list](#never-bind-functions) for the caller's own text regardless.
+  omitted. Block wildcards do match them, even when an exact allow rule exists. Metadata
+  *readers* stay on the [never-bind list](#never-bind-functions) for the caller's own text
+  regardless, so an exact rule for a caller-named metadata view is necessary and not
+  sufficient; a host view or macro over an internal view is the host's decision to expose
+  it, reader included.
 - Schema-wide `SHOW` is denied whenever either layer configures any table restriction;
   `DESCRIBE table` checks the resolved table normally.
 - Table rules govern tables and views only. Types, casts, and collations are trusted as part of
@@ -144,10 +146,11 @@ never reach the binder.
 
 **Execution boundary** (`PlannerExtension::post_bind_function`, after the engine binds and
 before it optimizes or executes). The plan the engine produced must contain only reviewed
-read-only logical operators, modify no database, return a query result, scan only base
-tables the private bind of the admitted statement scanned, none of them more often than that
-bind did (each `LOGICAL_GET` table entry is matched by resolved identity and count, and the
-ones attributable to the caller are authorized again), and pass the same resolved-function
+read-only logical operators, modify no database, return a query result, scan only the
+sources the private bind of the admitted statement scanned, none of them more often than
+that bind did (each `LOGICAL_GET` is matched by count: a table entry by resolved identity,
+a table function by name; the tables attributable to the caller are authorized again), and
+pass the same resolved-function
 and implementation checks `gatekeeper_validate` applies to its own plan. The one other root
 it accepts is a dynamic `PIVOT`'s enum type (`LOGICAL_CREATE_TYPE` of that exact shape, in the
 temporary catalog, returning nothing) over such a plan. If the binding boundary deferred
@@ -158,9 +161,9 @@ authorized according to who reached it there, and allowed functions. This holds 
 plan the engine's planner produces, whatever produced the statement: SQL text, a prepared
 statement, or DuckDB's relation API. Views are inlined before this point; who reached each
 table is what the private bind's catalog callback recorded, which for a relation statement
-sees the relation's SQL rendering rather than its query node. A node that scans an identity
-the rendering never reached, or one more often than the rendering did, is refused as a
-`statement` violation. A node that scans an identity exactly as often as a trusted
+sees the relation's SQL rendering rather than its query node. A node that scans a table or
+table function the rendering never reached, or one more often than the rendering did, is
+refused as a `statement` violation. A node that scans an identity exactly as often as a trusted
 definition in the rendering did is not distinguished from it and runs under that definition's
 authority; this is the same exposure function attribution has always had, and the linked fuzz
 harness pins both halves (`CheckHostileRelation`).
@@ -559,9 +562,11 @@ macro's). Caller-written CTEs a table macro inherits are the caller's text bound
 caller's scope, and a table-function argument is a literal or a parameter before anything
 binds, so no caller-written table reference reaches a trusted body's binder. The execution
 boundary then applies function policy only to names the record attributes to the caller and
-table policy only to identities it does, holding the engine's plan to the identities and
-scan counts of the private bind's plan; an attached table's scan (`LogicalGet` with a table
-entry) is never attributed as a function. A `Prepare()` bind outside any statement has no
+table policy only to identities it does, holding the engine's plan to the tables, table
+functions and scan counts of the private bind's plan; an attached table's scan (`LogicalGet`
+with a table entry) is never attributed as a function. A table function a trusted definition
+named binds what it replaces itself with as that definition's: `query_table(n)` in a host
+scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()` bind outside any statement has no
 text and no record; its pre-screen checks plan structure and the control plane and defers
 table policy and the rest of function policy to execution, which rebinds inside the query.
 
@@ -648,10 +653,13 @@ JSON SQL execution is defined in `extension/json/`. `pragma_table_sample` is a
 reserved defensive spelling; the pinned registration is `duckdb_table_sample`.
 Static `duckdb_keywords`/`duckdb_optimizers` are deliberately not prefix-denied.
 All listed names are excluded from defaults and cannot be admitted by options.
-Caller-named metadata views expanding to these readers are denied unless exactly allowed.
-This is deliberate: metadata readers enumerate across catalogs and cannot be row-
-filtered by object callbacks. Tenant introspection must use a host-controlled API; a host
-view over such a metadata view is one, and is the host's decision.
+Metadata views the caller names (`information_schema.tables`, `duckdb_tables`) expand to
+these readers and are denied even with exact `allowed_tables` rules for the view: the
+internal view is the caller's, so its reader is the caller's and never-bind. This is
+deliberate: metadata readers enumerate across catalogs and cannot be row-filtered by
+object callbacks. Tenant introspection must use a host-controlled API: a host view or
+macro over such a metadata view is one, its reader is the definition's own, and exposing
+it is the host's decision.
 `json_serialize_plan` is listed because it binds and plans caller-supplied SQL at
 execution time, outside this validation.
 

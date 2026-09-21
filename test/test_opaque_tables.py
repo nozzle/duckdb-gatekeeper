@@ -170,6 +170,54 @@ def test_dynamic_table_selection_through_a_trusted_macro_is_the_hosts_capability
     assert not validate(chain, "SELECT * FROM peek('secret')", {"blocked_functions": ["peek"]})["allowed"]
 
 
+def test_scalar_macros_carry_trust_into_what_their_table_functions_bind(chain):
+    # A scalar macro body binds in the caller's binder, so query_table(n) inside it is recognized by name; the
+    # subquery it replaces itself with is the macro's whatever table it selects, exactly as a table macro's is.
+    chain.execute("CREATE MACRO scalar_peek(n) AS (SELECT count(*) FROM query_table(n)); "
+                  "CREATE MACRO scalar_fixed() AS (SELECT count(*) FROM query_table('secret'))")
+    configure(chain, {"allowed_functions": ["scalar_peek", "scalar_fixed", "peek"]})
+    denied_secret = {"allowed_tables": [], "blocked_tables": tables("secret")}
+    for sql in ["SELECT scalar_peek('secret')", "SELECT scalar_fixed()", "SELECT * FROM peek('secret')"]:
+        result = validate(chain, sql, denied_secret)
+        assert result["allowed"] and objects(result) == [("main", "secret", "table")], (sql, result)
+    # The caller's own reference to the selected table, and the caller's own query_table, are the caller's.
+    for sql in ["SELECT scalar_peek('secret') FROM secret", "SELECT scalar_fixed(), (SELECT count(*) FROM secret)"]:
+        denied = validate(chain, sql, denied_secret)
+        assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "secret", (sql, denied)
+    for sql in ["SELECT * FROM query_table('secret')", "SELECT scalar_peek('secret'), (SELECT count(*) FROM query_table('secret'))"]:
+        denied = validate(chain, sql, denied_secret)
+        assert denied["code"] == "forbidden" and denied["violations"][0]["function_name"] == "query_table", (sql, denied)
+    assert not validate(chain, "SELECT scalar_peek('secret')", {"blocked_functions": ["scalar_peek"]})["allowed"]
+
+
+def test_scalar_macros_over_internal_views_own_their_readers(db):
+    # An internal metadata view a host scalar macro names is the macro's, and so is the never-bind reader behind
+    # it, as it already was behind a host view. The same view named by the caller keeps its reader on the
+    # caller's never-bind list, whatever table rules the caller holds.
+    db.execute("CREATE MACRO metadata_count() AS (SELECT count(*) FROM information_schema.tables); "
+               "CREATE VIEW my_tables AS SELECT table_name FROM information_schema.tables")
+    configure(db, {"allowed_functions": ["metadata_count"]})
+    for sql in ["SELECT metadata_count()", "SELECT * FROM my_tables", "SELECT metadata_count() FROM my_tables"]:
+        result = validate(db, sql, {"allowed_tables": tables("my_tables")})
+        assert result["allowed"] and any(f["name"] == "duckdb_tables" for f in result["functions"]), (sql, result)
+    denied = validate(db, "SELECT metadata_count(), * FROM information_schema.tables", {"allowed_tables": tables("my_tables")})
+    assert denied["violations"][0]["rule"] == "internal_object", denied
+    denied = validate(db, "SELECT metadata_count(), (SELECT count(*) FROM duckdb_tables())", {"allowed_tables": tables("my_tables")})
+    assert denied["violations"][0]["function_name"] == "duckdb_tables", denied
+
+
+def test_caller_named_metadata_views_keep_their_readers_never_bind(db):
+    # Exact table rules for a caller-named internal metadata view are necessary and not sufficient: the reader
+    # behind it is the caller's, and never-bind. Tenant introspection goes through a host definition.
+    exact = {"allowed_tables": [{"catalog": "system", "schema": "information_schema", "table": "tables"},
+                                {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
+    configure(db, exact)
+    for sql in ["SELECT * FROM information_schema.tables", "SELECT * FROM duckdb_tables"]:
+        denied = validate(db, sql, exact)
+        assert denied["code"] == "forbidden", (sql, denied)
+        assert denied["violations"][0]["rule"] == "function" and denied["violations"][0]["function_name"] == "duckdb_tables", (sql, denied)
+
+
 def test_internal_views_behind_a_host_view_are_the_views_own(db):
     db.execute("CREATE VIEW my_settings AS SELECT name FROM duckdb_settings() WHERE name = 'threads'; "
                "CREATE VIEW my_tables AS SELECT table_name FROM information_schema.tables")
