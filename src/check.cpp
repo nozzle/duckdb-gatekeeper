@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -250,8 +251,8 @@ static bool ReadOperator(LogicalOperatorType type) {
 	}
 }
 
-void CheckPlan(const gatekeeper::Layers &layers, const TextCheck::Unit &unit, const StatementProperties &properties,
-               LogicalOperator &plan, gatekeeper::Result &result) {
+void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrigin origin,
+               const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result) {
 	auto deny = [&](const string &message) {
 		result.violations.emplace(gatekeeper::rules::STATEMENT, message);
 		throw PermissionException(gatekeeper::UNSUPPORTED_STATEMENT);
@@ -264,20 +265,40 @@ void CheckPlan(const gatekeeper::Layers &layers, const TextCheck::Unit &unit, co
 		deny("statement modifies a database");
 	if (properties.return_type != (pivot_enum ? StatementReturnType::NOTHING : StatementReturnType::QUERY_RESULT))
 		deny("statement does not return a query result");
+	auto &provenance = unit.provenance;
+	if (origin == PlanOrigin::PRIVATE)
+		provenance.validated_scans.clear();
+	auto remaining = provenance.validated_scans;
 	vector<LogicalOperator *> operators{&plan};
 	while (!operators.empty()) {
 		auto op = operators.back();
 		operators.pop_back();
 		if (!ReadOperator(op->type) && !(pivot_enum && op == &plan))
 			deny("unsupported plan operator: " + LogicalOperatorToString(op->type));
-		// Base tables the plan actually scans are authorized by resolved identity here as well as in the
-		// private bind's catalog callback, so a plan that did not come from that bind (a relation whose SQL
-		// rendering diverged from its query node) still cannot read a table the policy denies. Views are
-		// inlined by now and remain the callback's responsibility.
+		// Base tables the plan actually scans, by resolved identity. Views are inlined by now, so who reached a
+		// table is what the private bind's catalog callback recorded: an identity the caller's binders retrieved
+		// or the caller's text names is authorized again here, one only trusted definitions retrieved is theirs.
+		// The engine's plan for an admitted statement may scan no identity the private bind did not, and none
+		// more often: a plan that does (a relation whose SQL rendering diverged from its query node) is refused
+		// rather than authorized. A Prepare() pre-screen has no private bind to compare against and defers.
 		if (op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto table = op->Cast<LogicalGet>().GetTable();
-			if (table)
-				AuthorizeObject(layers, unit.binding, *table, result);
+			if (table && origin != PlanOrigin::PRESCREEN) {
+				auto catalog = table->schema.catalog.GetName(), schema = table->schema.name, name = table->name;
+				auto key = gatekeeper::ObjectKey(catalog, schema, name);
+				if (origin == PlanOrigin::PRIVATE) {
+					provenance.validated_scans[key]++;
+				} else if (remaining[key] == 0) {
+					result.violations.emplace(gatekeeper::rules::STATEMENT,
+					                          "plan scans an object the validated statement did not", catalog, schema,
+					                          name);
+					throw PermissionException("plan diverged from the validated statement");
+				} else {
+					remaining[key]--;
+				}
+				AuthorizeObject(layers, unit.binding, *table, result,
+				                provenance.ObjectAttributable(unit.binding, catalog, schema, name));
+			}
 		}
 		for (auto &child : op->children)
 			operators.push_back(child.get());
@@ -475,8 +496,11 @@ void InstallReplacementScan(DBConfig &config) {
 // caller's text: each overload's expression and default arguments are serialized as the select list of an
 // empty SELECT and walked by the same grammar walker, so syntax-implied names (list_value for [..],
 // struct_extract for x.y) are learned the same way. The walk's verdict is irrelevant here and discarded; only
-// the names it records are kept.
-static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names) {
+// the names it records are kept. The table references the definition writes (in its subqueries) are learned
+// by the same walk, for the same reason: the body binds in the caller's binder, so the objects it reads can
+// only be recognized by name.
+static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names,
+                           std::set<gatekeeper::Table> *tables = nullptr) {
 	auto node = make_uniq<SelectNode>();
 	for (auto &overload : macro.macros) {
 		node->select_list.push_back(overload->Cast<ScalarMacroFunction>().expression->Copy());
@@ -491,6 +515,8 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 	gatekeeper::Validate(yyjson_doc_get_root(ast.get()), gatekeeper::Policy(), &body);
 	for (const auto *set : {&body.caller_functions, &body.synthesized_functions, &body.literal_constructors})
 		names.insert(set->begin(), set->end());
+	if (tables)
+		tables->insert(body.caller_table_names.begin(), body.caller_table_names.end());
 	// A COLLATE in the body binds its collation's function (lower, icu_collate_de, ...) directly, never through
 	// the catalog callback, so there is no lookup to recognize here: the plan walk attributes a collation
 	// function to the caller only when the caller wrote COLLATE (BindingPolicy::caller_collates).
@@ -501,8 +527,10 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 // and creates the binder for a view or table macro body right after retrieving that entry. Retrieving a host
 // view or table macro arms the copy that made the lookup; the next copy made from it, the body's binder, starts
 // trusted, and trusted copies beget trusted copies. Lookups a trusted copy makes are that definition's own:
-// table policy and the never-bind list still apply, blocks do not, and nothing is attributed to the caller.
-// A scalar macro body binds in the caller's own binder, so its names are learned from its definition instead.
+// outside table policy, the allowlists, blocks and the never-bind list alike, recorded as evidence, and
+// attributed to nothing, with one exception: Gatekeeper's control plane is refused on every route. A scalar
+// macro body binds in the caller's own binder, so its names and table references are learned from its
+// definition instead, and an object the caller's text names is the caller's wherever it binds.
 struct LookupCallback {
 	shared_ptr<PrivateBind> bind;
 	bool trusted = false;
@@ -515,18 +543,30 @@ struct LookupCallback {
 	void operator()(CatalogEntry &entry) {
 		auto &s = *bind;
 		bool function = FunctionKind(entry.type) != nullptr;
-		auto canonical = gatekeeper::CanonicalFunction(entry.name);
-		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
-		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
-		// bind in the same binder.
-		bool attributable = !trusted && !(function && s.provenance.trusted_names.count(canonical) &&
-		                                  !s.provenance.CallerCanName(s.binding, canonical));
-		AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		if (!function) {
+			if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
+				return;
+			// An object the caller names is the caller's, whichever binder retrieved it. Otherwise it is the
+			// caller's when the caller's own binder retrieved it and no host scalar-macro body names it.
+			auto &object = entry.Cast<StandardEntry>();
+			auto catalog = object.schema.catalog.GetName(), schema = object.schema.name;
+			bool attributable =
+			    s.provenance.CallerNamesObject(s.binding, catalog, schema, entry.name) ||
+			    (!trusted && !gatekeeper::NamesObject(s.provenance.trusted_table_names, catalog, schema, entry.name));
+			(attributable ? s.provenance.caller_objects : s.provenance.trusted_objects)
+			    .insert(gatekeeper::ObjectKey(catalog, schema, entry.name));
+			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 			if (!trusted && !entry.internal && entry.type == CatalogType::VIEW_ENTRY)
 				armed = true;
 			return;
 		}
+		auto canonical = gatekeeper::CanonicalFunction(entry.name);
+		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
+		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
+		// bind in the same binder.
+		bool attributable = !trusted && !(s.provenance.trusted_names.count(canonical) &&
+		                                  !s.provenance.CallerCanName(s.binding, canonical));
+		AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		if (attributable)
 			s.provenance.caller_lookups.insert(canonical);
 		if (trusted)
@@ -536,10 +576,11 @@ struct LookupCallback {
 		if (entry.type != CatalogType::MACRO_ENTRY)
 			return;
 		auto &macro = entry.Cast<ScalarMacroCatalogEntry>();
-		// A host scalar macro's body, and the default macros such a body expands to, are trusted names. A default
-		// macro the caller reached is the caller's, and so is everything its body names.
+		// A host scalar macro's body, and the default macros such a body expands to, are trusted names, and the
+		// objects its subqueries read are trusted objects. A default macro the caller reached is the caller's,
+		// and so is everything its body names.
 		if (!entry.internal || !attributable)
-			MacroBodyNames(macro, s.provenance.trusted_names);
+			MacroBodyNames(macro, s.provenance.trusted_names, &s.provenance.trusted_table_names);
 		else
 			MacroBodyNames(macro, s.provenance.caller_expansions);
 	}
@@ -575,7 +616,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	for (const auto &entry : bound_parameters.GetParameters())
 		if (!entry.second->return_type.IsValid())
 			throw BinderException(gatekeeper::PARAMETERS_REQUIRED);
-	CheckPlan(layers, unit, binder->GetStatementProperties(), *bound.plan, result);
+	CheckPlan(layers, unit, PlanOrigin::PRIVATE, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
 	for (auto &entry : binder->GetReplacementScans())
 		if (!scope.authorized.count(gatekeeper::Lower(entry.first)))

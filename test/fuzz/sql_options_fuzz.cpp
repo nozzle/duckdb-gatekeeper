@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -363,6 +364,58 @@ static void CheckEnforcedLatch(DuckDB &database) {
 		std::abort();
 	auto refused = enforced.Query("DROP TABLE fuzz_observed");
 	if (!refused->HasError() || !GatekeeperDenial(refused->GetErrorObject()))
+		std::abort();
+}
+
+// A relation statement is admitted on its SQL rendering and executed from its query node. DuckDB's own
+// QueryRelation takes the two separately, which is how a hostile embedder would build one whose node scans
+// what its rendering does not. The execution boundary holds the engine's plan to the base tables the validated
+// rendering scanned, by identity and count: an identity the rendering never reached is refused, and so is one
+// it reached fewer times. What it cannot tell apart is a node scanning an identity exactly as often as a trusted
+// definition in the rendering did: that plan is admitted under the definition's authority, the documented
+// residual (docs/security.md, execution boundary).
+static void CheckHostileRelation(DuckDB &database) {
+	Connection host(database);
+	auto policy = host.Query("CALL gatekeeper_configure(allowed_tables := [{schema: 'main', \"table\": 'v'}])");
+	if (policy->HasError())
+		std::abort();
+	Connection enforced(database);
+	if (enforced.Query("CALL gatekeeper_enforce()")->HasError())
+		std::abort();
+	auto relation = [&](const std::string &node, const std::string &rendering) {
+		auto statement = QueryRelation::ParseStatement(*enforced.context, node, "hostile relation");
+		return make_shared_ptr<QueryRelation>(enforced.context, std::move(statement), "hostile", rendering);
+	};
+	auto outcome = [&](const std::string &node, const std::string &rendering) -> std::string {
+		unique_ptr<QueryResult> result;
+		try {
+			result = relation(node, rendering)->Execute();
+		} catch (const Exception &error) {
+			ErrorData data(error);
+			return GatekeeperDenial(data) ? data.RawMessage() : "engine";
+		}
+		if (!result->HasError())
+			return "ok";
+		return GatekeeperDenial(result->GetErrorObject()) ? result->GetErrorObject().RawMessage() : "engine";
+	};
+	// The rendering alone: v is allowed, t is the view's own.
+	if (outcome("SELECT * FROM v", "SELECT * FROM v") != "ok")
+		Fail("hostile relation: the honest rendering was refused");
+	// A node scanning an identity the rendering never reached.
+	if (outcome("SELECT * FROM secret.t", "SELECT * FROM v")
+	        .find("plan scans an object the validated statement did not") == std::string::npos)
+		Fail("hostile relation: a scan of an identity the rendering never reached was admitted");
+	// A node scanning the view's table more often than the view does.
+	if (outcome("SELECT * FROM t, t AS again", "SELECT * FROM v")
+	        .find("plan scans an object the validated statement did not") == std::string::npos)
+		Fail("hostile relation: a second scan of the view's table was admitted");
+	// The residual: the view's table, scanned exactly as often as the view scans it, under the view's authority.
+	if (outcome("SELECT * FROM t", "SELECT * FROM v") != "ok")
+		Fail("hostile relation: the documented residual changed; update docs/security.md with the new guarantee");
+	// The caller's own rendering of the table is refused before any node is planned.
+	if (outcome("SELECT * FROM t", "SELECT * FROM t").find("object is not allowed") == std::string::npos)
+		Fail("hostile relation: the caller's own rendering of a denied table was admitted");
+	if (host.Query("RESET gatekeeper_policy")->HasError())
 		std::abort();
 }
 
@@ -801,6 +854,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		Setup(connection);
 		CheckFuzzLimits(connection);
 		CheckEnforcedLatch(database);
+		CheckHostileRelation(database);
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");

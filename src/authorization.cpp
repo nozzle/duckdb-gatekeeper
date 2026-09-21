@@ -83,7 +83,9 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		return;
 	auto &object = entry.Cast<StandardEntry>();
 	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
-	if (!gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
+	// Table policy, the internal-object rule included, holds for objects attributable to the caller. An object
+	// a trusted definition's body retrieved is that definition's own: recorded as evidence, outside policy.
+	if (attributable && !gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
 		if (gatekeeper::TableBlocked(policy, catalog, schema, name))
 			result.violations.emplace(gatekeeper::rules::TABLE, "object is blocked", catalog, schema, name);
 		else if (entry.internal)

@@ -141,7 +141,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
-| `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies, including inside views and macros. |
+| `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
@@ -251,7 +251,8 @@ have empty `error_type` and `error_message`; the details are in `violations`.
 </details>
 
 `objects` and `functions` are sorted, deduplicated binding evidence: views appear with
-their underlying tables; CTE names do not. They help detect search-path surprises but do
+their underlying tables, whether or not policy was applied to those (it is not: see
+[Table ACL](#table-acl)); CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
 
 ## Table ACL
@@ -283,7 +284,18 @@ SELECT allowed FROM gatekeeper_validate(
 | Nothing | `allowed_tables := []` |
 
 Multiple entries pair specific catalogs and schemas without granting their cross-product.
-Blocks apply to views and the tables they expand to, macros included.
+
+Table policy applies to what the caller names. Trusted **views, macros, and attached tables**
+are opaque to it, as they are to function policy: the caller must be allowed the view, table,
+or macro it names, and what that definition reads is the definition's own, exempt from the
+allowlist, from `blocked_tables`, and from the internal-object rule alike. Allowing
+`reporting.totals` admits the `reporting.orders` behind it; blocking `reporting.orders` stops
+the caller's own `FROM reporting.orders`, not the view. Block the view to withdraw it. What
+the caller writes is the caller's wherever it binds: `FROM reporting.totals JOIN
+reporting.orders` is checked on `reporting.orders`, and so is a CTE or alias the caller reads
+under that name. A host definition that selects its table from a caller argument
+(`query_table(n)` in a macro body) hands that selection to the caller; see
+[trusted definitions](docs/security.md#function-enforcement-and-trusted-expansion).
 
 > [!IMPORTANT]
 > Only a whole-component `'*'` is a wildcard. `sales_*`, `?`, and `%` are literal names.
@@ -316,8 +328,9 @@ flowchart LR
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
   `read_parquet(...)`, a file path (`FROM 'x.parquet'`), `duckdb_tables()`, or the scan
   an attached catalog uses. Only Gatekeeper's own control plane (below) is refused
-  inside a body. Table policy still governs the view or table itself, and a macro must
-  itself be allowed. The exemption is by origin, not by name: the same function written
+  inside a body. Table policy governs the view or table itself, and a macro must
+  itself be allowed; what their bodies read is theirs too ([Table ACL](#table-acl)).
+  The exemption is by origin, not by name: the same function written
   by the caller next to the view is the caller's, and ambiguous caller syntax such as
   `t.x` or `list[i]` triggers a query-wide implementation check that can also reach a
   trusted expansion using the same function (for example `struct_extract`). See

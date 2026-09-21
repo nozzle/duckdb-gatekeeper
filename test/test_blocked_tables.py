@@ -36,14 +36,23 @@ def test_blocks_in_either_layer_cannot_be_overridden(db):
     assert validate(db, "SELECT * FROM t")["allowed"]
 
 
-@pytest.mark.parametrize("blocked", ["t", "v"])
-def test_view_and_macro_dependencies_are_blocked(db, blocked):
+def test_blocks_do_not_reach_into_trusted_definitions(db):
+    # A block applies to the objects the caller names. What a trusted view or table macro reads is its own: a
+    # block on the table behind v reaches neither v nor the macro over v, and a block on v reaches the caller's
+    # v but not the macro whose body reads it. Every object read is still evidence.
     db.execute("CREATE TABLE t(x INT); CREATE VIEW v AS SELECT * FROM t; CREATE MACRO m() AS TABLE SELECT * FROM v")
-    configure(db, {"allowed_functions": ["m"], "blocked_tables": [rule(table=blocked)]})
+    configure(db, {"allowed_functions": ["m"], "blocked_tables": [rule(table="t")]})
     for sql in ["SELECT * FROM v", "SELECT * FROM m()"]:
         result = validate(db, sql)
-        assert result["code"] == "forbidden", result
-        assert result["violations"][0]["table"] == blocked
+        assert result["allowed"] and {o["table"] for o in result["objects"]} >= {"t", "v"}, (sql, result)
+    denied = validate(db, "SELECT * FROM v, t")
+    assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "t", denied
+    configure(db, {"allowed_functions": ["m"], "blocked_tables": [rule(table="v")]})
+    denied = validate(db, "SELECT * FROM v")
+    assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "v", denied
+    assert validate(db, "SELECT * FROM m()")["allowed"]
+    assert validate(db, "SELECT * FROM m(), t")["allowed"]
+    assert validate(db, "SELECT * FROM m(), v")["code"] == "forbidden"
 
 
 def test_blocks_use_resolved_objects_not_cte_names_and_include_future_temp_tables(db):

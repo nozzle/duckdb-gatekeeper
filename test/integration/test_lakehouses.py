@@ -86,6 +86,15 @@ def test_trusted_view_and_no_writes(lake):
                                  {"catalog": "memory", "schema": "main", "table": "*"}]}
     assert validate(db, "SELECT * FROM main.allowed_view", policy)["allowed"]
     assert not validate(db, "SELECT * FROM main.allowed_view", {**policy, "allowed_tables": []})["allowed"]
+    # The host view is a trusted definition: the lake table it reads is the view's own, still reported as
+    # evidence with the identity the attached catalog resolved it to. The caller's own reference to that table,
+    # next to the view, is the caller's.
+    view_only = {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "allowed_view"}]}
+    result = validate(db, "SELECT * FROM main.allowed_view", view_only)
+    assert result["allowed"], result
+    assert {"catalog": "lake", "schema": schema, "table": "orders", "type": "table"} in result["objects"], result
+    assert not validate(db, f"SELECT * FROM main.allowed_view, lake.{schema}.orders", view_only)["allowed"]
+    assert not validate(db, f"SELECT * FROM lake.{schema}.orders", view_only)["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)
     assert result["code"] == "unsupported"
     assert db.execute(f"SELECT count(*) FROM lake.{schema}.orders").fetchone() == (2,)
@@ -136,11 +145,17 @@ def test_host_policy_changes_apply_to_enforced_connections_at_their_next_stateme
         configure(db, {**policy, "blocked_functions": [SCAN[kind]]})
         assert agent.execute(sql).fetchone() == (50.0,)
         assert agent.execute(f"SELECT amount FROM lake.{schema}.orders WHERE id = ?", [2]).fetchone() == (30.0,)
-        # A trusted view is still authorized against the tables it reads.
+        # A trusted view is authorized by its own identity: the lake table it reads is the view's own, so
+        # withdrawing the lake from the policy leaves the view readable and refuses the caller's own reads.
         configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "*"}]})
+        assert agent.execute("SELECT count(*) FROM main.allowed_view").fetchone() == (2,)
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql)
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(f"SELECT count(*) FROM main.allowed_view, lake.{schema}.orders")
+        configure(db, {"allowed_tables": []})
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute("SELECT count(*) FROM main.allowed_view")
-        configure(db, {"allowed_tables": []})
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
         configure(db, policy)

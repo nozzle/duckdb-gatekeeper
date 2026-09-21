@@ -6,6 +6,26 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Changed
+
+- **Trusted views, macros, and attached tables are opaque to table policy.** A host view, scalar
+  or table macro, or attached-catalog table or view is authorized by its own identity: the caller
+  must be allowed to name it, and what its definition reads is its own, exempt from
+  `allowed_tables`, from `blocked_tables`, and from the internal-object rule alike, exactly as its
+  functions have been exempt from function policy since 0.2.0. Allowing a view no longer requires
+  allowing every table behind it, and a block on such a table no longer reaches the views and
+  macros that read it; block the view or macro itself to withdraw it. What the caller's own text
+  names is the caller's wherever it binds, so `FROM v JOIN t` is still checked on `t` when `v`
+  reads `t`, and a CTE or table the caller names that shares a name with what a definition reads
+  is checked as the caller's too (rename the CTE to lift it). `objects` still lists every table
+  and view read. Consequences to review when upgrading: a host definition that derives a table
+  name from a caller argument (`query_table(n)` in a macro body) now delegates table selection to
+  the caller through that capability; a `Prepare()` of a statement table policy denies now
+  prepares, and the execution is what the `authorize` boundary refuses; and the execution
+  boundary holds the engine's plan to the base tables the validated statement scanned, by
+  identity and count, rather than re-authorizing each one, so a relation whose query node scans
+  what its SQL rendering does not is refused as a `statement` violation.
+
 ## 0.2.0 - 2026-09-20
 
 ### Added
