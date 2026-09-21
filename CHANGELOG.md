@@ -24,7 +24,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   prepares, and the execution is what the `authorize` boundary refuses; and the execution
   boundary holds the engine's plan to the base tables the validated statement scanned, by
   identity and count, rather than re-authorizing each one, so a relation whose query node scans
-  what its SQL rendering does not is refused as a `statement` violation.
+  what its SQL rendering does not is refused as a `statement` violation. (#91)
 
 ## 0.2.0 - 2026-09-20
 
