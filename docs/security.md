@@ -940,8 +940,10 @@ under PEG, never runs on text deep enough to matter. About 1000 nested calls ove
 8 MiB main-thread stack in the engine's own parse, and about 75 nested calls or 100 nested
 subqueries overflow a 512 KiB worker-thread stack (the macOS default), which is where
 `gatekeeper_validate(?)` parses when its pipeline runs on a worker. The process dies before
-Gatekeeper's own depth limit sees the statement. Until the engine bounds that recursion, do
-not enable the PEG override on a database that takes untrusted SQL text.
+Gatekeeper's own depth limit sees the statement. Upstream fixed this on `main` by moving the
+matcher's recursion to the heap ([duckdb#24618](https://github.com/duckdb/duckdb/issues/24618),
+[duckdb#25204](https://github.com/duckdb/duckdb/pull/25204)); no 1.5.x release carries the fix.
+On 1.5.5, do not enable the PEG override on a database that takes untrusted SQL text.
 The local tests and randomized-input checks are not a complete security audit.
 DuckDB builds and signs the binaries it distributes through its community repository.
 Local builds, CI artifacts, and this project's GitHub Release binaries are unsigned. Distribution
