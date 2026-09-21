@@ -763,11 +763,11 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 65 µs | 3.5 ms | 4.0 ms |
-| enforced connection | 94 µs (+29 µs) | 3.7 ms (+174 µs) | 7.3 ms (+3.2 ms) |
-| enforced, audit log at debug | 144 µs (+79 µs) | 3.8 ms (+312 µs) | 7.4 ms (+3.4 ms) |
-| validate, then execute | 228 µs (+163 µs) | 4.0 ms (+451 µs) | 7.4 ms (+3.4 ms) |
-| denied on an enforced connection | 216 µs | 364 µs | 2.6 ms |
+| plain connection | 68 µs | 3.8 ms | 4.1 ms |
+| enforced connection | 96 µs (+29 µs) | 4.0 ms (+188 µs) | 7.4 ms (+3.3 ms) |
+| enforced, audit log at debug | 148 µs (+80 µs) | 4.1 ms (+335 µs) | 7.5 ms (+3.5 ms) |
+| validate, then execute | 236 µs (+168 µs) | 4.3 ms (+481 µs) | 7.6 ms (+3.5 ms) |
+| denied on an enforced connection | 218 µs | 384 µs | 2.6 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python
 client on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper
