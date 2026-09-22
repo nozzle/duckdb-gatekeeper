@@ -51,7 +51,7 @@ NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled 
 See [global policy](../README.md#global-policy) in the README.
 
 Validation returns one row with `allowed`, `code`, `violations`, `error_type`,
-`error_message`, `position`, `objects`, and `functions` as named columns. Require
+`error_message`, `position`, `objects`, `functions`, and `caller_objects` as named columns. Require
 `allowed = true` and `code = 'ok'`. The diagnostic/dependency lists retain nested
 STRUCT elements. SQL text and options accept constant expressions or host-bound
 parameters, not correlated/lateral per-row expressions. For multiple SQL strings,
@@ -111,6 +111,73 @@ table; `[]` denies all tables and views. The rules, which the README's
   the host-configured database and need no permission by name; function policy still applies
   to the implementations they bind (`'a' COLLATE nocase = 'A'` binds `lower`), see
   [callback bypasses](#callback-bypasses).
+
+### Declared input validation
+
+For a SQL node with declared inputs, pass only those inputs as `allowed_tables`, without
+adding their ancestors. Validate on the real connection after prerequisite relations exist.
+On success, `caller_objects` reports the catalog tables/views attributable to the caller;
+`objects` also reports dependencies introduced by trusted definitions. For B, a view over C:
+
+| Query | Allowed tables | `caller_objects` | `objects` | Decision |
+| --- | --- | --- | --- | --- |
+| `SELECT * FROM B` | B | B | B, C | allowed |
+| `SELECT * FROM B JOIN C USING (id)` | B | empty | empty | forbidden |
+| `SELECT * FROM B JOIN C USING (id)` | B, C | B, C | B, C | allowed |
+
+The same applies to a host source view over an attached Iceberg or DuckLake relation: declare
+the source view, not its backing table. Binding still resolves and may perform I/O through the
+lakehouse. Nested views remain opaque; a separately referenced inner view becomes caller-attributable.
+
+For example, after creating `reporting.source_b` over `lake.main.orders` on the connection:
+
+```python
+declared = {("memory", "reporting", "source_b")}
+rules = [{"catalog": c, "schema": s, "table": t} for c, s, t in declared]
+row = con.execute("""
+    SELECT allowed, code, caller_objects
+    FROM gatekeeper_validate(?, allowed_tables := ?)
+""", [sql, rules]).fetchone()
+if row is None or not row[0] or row[1] != "ok":
+    raise ValueError("Query does not satisfy its declared inputs")
+# Fold ASCII only, like DuckDB identifiers and Gatekeeper's rules, not Unicode casefold().
+fold = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+actual = {(o["catalog"].translate(fold), o["schema"].translate(fold),
+           o["table"].translate(fold)) for o in row[2]}
+expected = {tuple(part.translate(fold) for part in key) for key in declared}
+if actual != expected:
+    raise ValueError("Declared inputs differ from caller-attributable inputs")
+```
+
+Let validation exceptions propagate as failures. The global ceiling must also allow the
+declared objects. A successful decision already establishes the allowed-input subset;
+the equality comparison additionally detects unused declarations. Select named columns:
+`caller_objects` is appended to the result and also included in audit decisions, so positional
+`SELECT *` consumers must accept a ninth column. Existing refusal ordering is unchanged.
+
+**Evidence contract:**
+
+- Entries have the same `{catalog, schema, table, type}` shape as `objects`, with `type`
+  `table` or `view`. They preserve resolved catalog spelling, are sorted and deduplicated
+  by those four fields, and form a subset of `objects`. Compare identities as structured
+  components, ASCII case-insensitively; dots within quoted names are not separators.
+- Caller attribution wins when an identity is reached both directly and through a trusted
+  definition. CTE aliases are not catalog entries; tables read by consumed CTEs are. Unused
+  CTE bodies may never bind. Temporary shadows and attached catalogs retain their resolved identities.
+- This is **conservative policy attribution**, not exact lexical dependency extraction.
+  A caller-written name can also attribute a matching object inside a trusted definition,
+  even when that name resolves to a CTE or a different schema for the caller. Even an unused
+  CTE's written table name participates if that object is retrieved elsewhere. Alias
+  declarations alone do not. Rename colliding CTE references or use unambiguous qualification
+  when a consumer needs a narrower set.
+- Macros are function capabilities, not entries in `caller_objects`; their hidden tables
+  remain in `objects`. Replacement scans likewise appear as `type = 'replacement'` only
+  in `objects`, and reader functions appear in `functions`. An empty `caller_objects` does
+  **not** mean no data access. Table-input-only consumers must control macro/reader grants
+  in the global policy and expose external inputs through host-created catalog views.
+- Every failed decision returns an empty list, including failures after some objects were
+  resolved. A successful empty list means no caller-attributable catalog objects were retrieved.
+  No diagnostic collection mode or continued binding after denial is introduced.
 
 ## Enforced connections
 
@@ -421,7 +488,7 @@ and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
 gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
 `DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
-`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`), so the
+`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
 the enforcement parity corpus. The rest of the record is:
 

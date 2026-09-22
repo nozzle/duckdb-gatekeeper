@@ -56,6 +56,7 @@ def test_allowed_and_denied_tables(lake):
     configure(db, policy)
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
+    assert result["caller_objects"] == [{"catalog": "lake", "schema": schema, "table": "orders", "type": "table"}]
     assert db.execute(sql).fetchone() == (50.0,)
     # The scan function an attached catalog resolves an allowed table to is the catalog's, not the caller's: a
     # block on it does not reach the read, and it is still reported in the dependency list. The caller's own
@@ -92,7 +93,12 @@ def test_trusted_view_and_no_writes(lake):
     view_only = {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "allowed_view"}]}
     result = validate(db, "SELECT * FROM main.allowed_view", view_only)
     assert result["allowed"], result
+    assert result["caller_objects"] == [{"catalog": "memory", "schema": "main", "table": "allowed_view", "type": "view"}]
     assert {"catalog": "lake", "schema": schema, "table": "orders", "type": "table"} in result["objects"], result
+    mixed = validate(db, f"SELECT * FROM main.allowed_view, lake.{schema}.orders", policy)
+    assert mixed["allowed"] and mixed["caller_objects"] == [
+        {"catalog": "lake", "schema": schema, "table": "orders", "type": "table"},
+        {"catalog": "memory", "schema": "main", "table": "allowed_view", "type": "view"}]
     assert not validate(db, f"SELECT * FROM main.allowed_view, lake.{schema}.orders", view_only)["allowed"]
     assert not validate(db, f"SELECT * FROM lake.{schema}.orders", view_only)["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)
@@ -191,7 +197,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
             (write, False, "unsupported", "INFO")], found
         for record in found:
             expected = validate(db, record["statement"], policy)
-            for column in ["allowed", "code", "violations", "objects", "functions"]:
+            for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
                 assert record[column] == expected[column], (record["statement"], column, record, expected)
         assert found[0]["objects"] == [{"catalog": "lake", "schema": schema, "table": "orders", "type": "table"}]
         assert SCAN[kind] in {f["name"] for f in found[0]["functions"]}, found[0]

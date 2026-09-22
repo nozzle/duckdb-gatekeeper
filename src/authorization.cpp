@@ -96,7 +96,10 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 	}
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
-	result.objects.insert({catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"});
+	gatekeeper::Identity identity{catalog, schema, name, entry.type == CatalogType::TABLE_ENTRY ? "table" : "view"};
+	result.objects.insert(identity);
+	if (attributable)
+		result.caller_objects.insert(identity);
 }
 
 void AuthorizeObject(const gatekeeper::Layers &layers, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,

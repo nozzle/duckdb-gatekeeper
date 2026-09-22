@@ -8,6 +8,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Added
 
+- `caller_objects` is appended to validation results and included in audit decisions. It lists
+  the resolved catalog tables/views attributable to the caller, separately from the transitive
+  `objects` evidence, and is empty on any failed decision. It supports checking declared inputs
+  without admitting a view's ancestors. Attribution retains the conservative query-wide name
+  rules; macro and reader capabilities are not catalog inputs. Named-column consumers are
+  unaffected; positional `SELECT *` consumers must accept the extra column.
 - Both `gatekeeper_configure` and `gatekeeper_validate` accept `json := document` as an
   alternative to typed options for shared policies. JSON and typed options are mutually
   exclusive; decoded options retain the same replacement, validation, and global-ceiling

@@ -118,6 +118,17 @@ def test_community_descriptor_headings():
         assert target in anchors, target
 
 
+def test_documented_result_columns_match_runtime(db):
+    """Both public result tables list every runtime column in order."""
+    result = db.execute("SELECT * FROM gatekeeper_validate('SELECT 1')")
+    expected = [column[0] for column in result.description]
+    for text, heading in [((ROOT / "README.md").read_text(), "### Result\n"),
+                          ("\n".join(block_scalar("docs", "extended_description")), "### Result columns\n")]:
+        section = text.split(heading, 1)[1].split("\n###", 1)[0]
+        columns = re.findall(r"(?m)^\| `([a-z_]+)` \|", section)
+        assert columns == expected
+
+
 def test_never_bind_list_in_prose_is_the_header():
     """docs/security.md spells out the never-bind list and, with the README, its control-plane subset; each must
     be exactly the header's set. A count would let a swapped name pass."""

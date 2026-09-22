@@ -241,7 +241,7 @@ result columns. Inspect the global policy with `current_setting('gatekeeper_poli
 ### Result
 
 Each call returns exactly one row unless it raises an exception. `violations`,
-`objects`, and `functions` remain lists of STRUCTs within their respective columns.
+`objects`, `functions`, and `caller_objects` remain lists of STRUCTs within their respective columns.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
@@ -253,6 +253,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
 | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`/`replacement`) the query bound to. Empty unless `ok`. |
 | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
+| `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
 
 Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 `replacement_scan`, `bind_time_expression`, `statement`, `limit`, `unsupported_structure`.
@@ -264,9 +265,9 @@ Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 SELECT * FROM gatekeeper_validate('SELECT 1');
 ```
 
-| allowed | code | violations | error_type | error_message | position | objects | functions |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| true | ok | [] | '' | '' | NULL | [] | [] |
+| allowed | code | violations | error_type | error_message | position | objects | functions | caller_objects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| true | ok | [] | '' | '' | NULL | [] | [] | [] |
 
 In these result tables, `''` denotes an empty string and `NULL` a SQL NULL.
 
@@ -312,13 +313,18 @@ FROM gatekeeper_validate('SELECT * FROM missing_table');
 | --- | --- | --- | --- | --- |
 | false | binding | [] | Catalog | Table with name missing_table does not exist! |
 
-All three denials return empty `objects` and `functions` lists. Policy denials
+All three denials return empty `objects`, `functions`, and `caller_objects` lists. Policy denials
 have empty `error_type` and `error_message`; the details are in `violations`.
 
 </details>
 
+`caller_objects` contains the catalog tables/views attributable to the caller; `objects`
+also includes their trusted dependencies. All evidence lists are empty unless validation
+succeeds. See [declared input validation](docs/security.md#declared-input-validation) for
+the comparison contract and conservative name-attribution rules.
+
 `objects` and `functions` are sorted, deduplicated binding evidence: views appear with
-their underlying tables, whether or not policy was applied to those (it is not: see
+their underlying tables, whether or not policy was applied to those (see
 [Table ACL](#table-acl)); CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
 

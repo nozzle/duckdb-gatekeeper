@@ -60,6 +60,7 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
     if record["allowed"]:
         assert all(entry["boundary"] == "execution" for entry in found)
         assert union(found, "objects") == union([expected], "objects"), (sql, found)
+        assert union(found, "caller_objects") == union([expected], "caller_objects"), (sql, found)
         # The pivoting SELECT of a dynamic PIVOT is validated in both plan shapes DuckDB can choose, so the
         # functions gatekeeper_validate reports cover those the shape the data selected bound.
         if rewritten:
@@ -68,7 +69,7 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
             assert record["functions"] == expected["functions"], (sql, record)
     else:
         assert record["boundary"] in {"binding", "authorize", "execution", "replacement_scan"}
-        assert record["objects"] == [] and record["functions"] == []
+        assert record["objects"] == record["functions"] == record["caller_objects"] == []
 
 
 def union(records, column):
