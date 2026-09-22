@@ -196,7 +196,10 @@ when a typed option is empty or NULL.
 The [version 1 JSON Schema](docs/policy-v1.schema.json) provides editor completion and
 document validation. `version` and `options` are required; `version` is the document
 format version, independent of the DuckDB or Gatekeeper release. `$schema` is optional
-and, when present, must be the schema URL above; Gatekeeper never fetches it. Unknown
+and, when present, must be the schema URL above; Gatekeeper never fetches it. This exact
+match rejects documents labeled for another schema, even if they retain `version: 1`.
+For a vendored schema, use your editor's external schema association and omit `$schema`
+from the policy document. Unknown
 fields, duplicate object keys, unsupported versions, and incorrect types are rejected.
 JSON Schema validators operate on parsed objects, so duplicate-key rejection must also
 be enabled in your JSON parser when validating documents outside Gatekeeper.

@@ -223,3 +223,19 @@ def test_json_uses_existing_audit_records(db):
     [record] = decisions(db)
     assert record["code"] == result["code"] == "invalid_input"
     assert record["error_message"] == result["error_message"]
+
+
+@pytest.mark.parametrize("options,path", [
+    ({"allowed_functions": [1]}, "options.allowed_functions[0]"),
+    ({"allowed_tables": [{"schema": "main", "table": 1}]}, "options.allowed_tables[0].table"),
+    ({"allowed_tables": ["main.t"]}, "options.allowed_tables[0]"),
+    ([], "options"),
+])
+def test_json_shape_diagnostics_identify_the_path(db, options, path):
+    arguments = encoded(options)
+    result = validate(db, "SELECT 1", arguments)
+    assert result["code"] == "invalid_input"
+    assert result["error_message"].startswith(path + ": expected JSON")
+    with pytest.raises(duckdb.BinderException) as caught:
+        configure(db, arguments)
+    assert result["error_message"] in str(caught.value)
