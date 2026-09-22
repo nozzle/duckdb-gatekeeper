@@ -78,9 +78,10 @@ def schema_cases():
     for value in [None, 0, 1, "false", [], {}]:
         yield document({"use_default_functions": value}), False
     for name in ["allowed_functions", "blocked_functions"]:
-        for value in [None, "md5", {}, True, [None], [1], [True], [{}], [[]], [""], ["a\0b"], ["\0\n"]]:
+        for value in [None, "md5", {}, True, [None], [1], [True], [{}], [[]], [""], ["a\0b"], ["\0\n"],
+                      ["\ud800"], ["\udfff"], ["a\ud800b"], ["\udc00\ud800"]]:
             yield document({name: value}), False
-        for value in [[], ["a", "a"], ["\n"], ["*"], ["a\nb"]]:
+        for value in [[], ["a", "a"], ["\n"], ["*"], ["a\nb"], ["😀"], ["\ud83d\ude00"]]:
             yield document({name: value}), True
     for name in ["allowed_tables", "blocked_tables"]:
         for value in [None, {}, "main.t", [None], [1], ["main.t"], [[]], [{}],
@@ -88,10 +89,12 @@ def schema_cases():
                       [{"schema": "main", "table": "t", "catlog": "memory"}]]:
             yield document({name: value}), False
         for field in ["catalog", "schema", "table"]:
-            for value in [None, "", "a\0b", 1, True, [], {}, "*", "λ", "a'b", "a\nb"]:
+            for value in [None, "", "a\0b", 1, True, [], {}, "*", "λ", "a'b", "a\nb", "😀",
+                          "\ud800", "\udfff", "a\ud800b"]:
                 entry = {"schema": "main", "table": "t", field: value}
                 valid = (field == "catalog" and value is None) or (
-                    isinstance(value, str) and value != "" and "\0" not in value)
+                    isinstance(value, str) and value != "" and "\0" not in value
+                    and not any(0xD800 <= ord(c) <= 0xDFFF for c in value))
                 yield document({name: [entry]}), valid
 
 

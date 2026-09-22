@@ -45,10 +45,10 @@
   },
   "$defs": {
     "name": {
-      "description": "Nonempty, NUL-free name; ASCII case-insensitive.",
+      "description": "Nonempty Unicode name without NUL or unpaired surrogates; ASCII case-insensitive.",
       "type": "string",
       "minLength": 1,
-      "pattern": "^[^\u0000]+$"
+      "pattern": "^(?:[^\u0000\uD800-\uDFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF])+$"
     },
     "functionNames": {
       "type": "array",
