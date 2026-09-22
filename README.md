@@ -117,6 +117,8 @@ CALL gatekeeper_enforce()                                -- enforces the global 
 
 `gatekeeper_validate` and `gatekeeper_configure` take the same named options and accept
 host-bound parameters (`?`, `$1`), so policies never need to be spliced into SQL text.
+Both also accept a mutually exclusive `json := document` argument for
+[shared JSON policies](#json-policy-documents).
 `gatekeeper_enforce` takes no options; see [Enforced connections](#enforced-connections).
 
 Select `*` for all result columns or name just the columns you need. SQL text and
@@ -129,6 +131,8 @@ global policy and binds the submitted SQL again.
 | --- | --- | --- |
 | Unknown/duplicate option name, wrong type | DuckDB error at bind | DuckDB error at bind |
 | Invalid value (NULL list member, empty function name) | `code = 'invalid_input'` | Raises; policy unchanged |
+| `json` mixed with typed options, or non-string `json` | DuckDB error at bind | DuckDB error at bind |
+| NULL `json`, malformed JSON, or invalid policy document | `code = 'invalid_input'` | Raises; policy unchanged |
 
 Empty option lists accept any element type, since DuckDB resolves untyped `[]` to
 `INTEGER[]` before table-function binding. All-NULL lists also pass the element-type
@@ -170,6 +174,66 @@ SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := f
 
 > [!NOTE]
 > Authorize replacement-scan readers through function policy (see [File readers](#file-readers)).
+
+### JSON policy documents
+
+Use `json := document` instead of typed options to load a policy shared as JSON. The
+argument is JSON text (`VARCHAR`), including a host-bound parameter; it does not require
+DuckDB's SQL JSON extension. JSON and typed options cannot appear in the same call, even
+when a typed option is empty or NULL.
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json",
+  "version": 1,
+  "options": {
+    "allowed_tables": [{"schema": "reporting", "table": "*"}],
+    "blocked_functions": ["md5"]
+  }
+}
+```
+
+The [version 1 JSON Schema](docs/policy-v1.schema.json) provides editor completion and
+document validation. `version` and `options` are required; `version` is the document
+format version, independent of the DuckDB or Gatekeeper release. `$schema` is optional
+and, when present, must be the schema URL above; Gatekeeper never fetches it. Unknown
+fields, duplicate object keys, unsupported versions, and incorrect types are rejected.
+JSON Schema validators operate on parsed objects, so duplicate-key rejection must also
+be enabled in your JSON parser when validating documents outside Gatekeeper.
+
+The decoder routes through the same typed option validation and policy application:
+
+- `gatekeeper_configure(json := ...)` replaces the global policy atomically; omitted
+  options take their built-in defaults. `{"version": 1, "options": {}}` resets it.
+- `gatekeeper_validate(sql, json := ...)` applies request options under the current
+  global policy; omitted options inherit that policy and requests cannot widen it.
+- Omitted `allowed_tables` differs from `"allowed_tables": []`, which denies all tables
+  and views. Omitted or JSON `null` catalog matches any catalog; other NULL values are
+  invalid. Names must be nonempty and NUL-free, just as in typed options.
+- `use_default_functions: true` uses this installation's reviewed defaults; it does not
+  freeze those defaults across Gatekeeper releases.
+
+```sql
+SELECT allowed FROM gatekeeper_validate(
+    'SELECT md5(''hello'')',
+    json := '{"version": 1, "options": {"blocked_functions": ["md5"]}}'
+);
+```
+
+| allowed |
+| --- |
+| false |
+
+Load a shared document from application code:
+
+```python
+from pathlib import Path
+
+db.execute("CALL gatekeeper_configure(json := ?)", [Path("policy.json").read_text()])
+```
+
+Configuration still returns its `Success` row and validation returns the same typed
+result columns. Inspect the global policy with `current_setting('gatekeeper_policy')`.
 
 ### Result
 

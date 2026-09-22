@@ -1,0 +1,115 @@
+# name: test/sql/json_options.test
+# description: JSON input is mutually exclusive with typed options and preserves policy semantics.
+# group: [gatekeeper]
+
+require gatekeeper
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":1,"options":{"blocked_functions":["md5"]}}');
+----
+forbidden
+
+query I
+CALL gatekeeper_configure(json := '{"version":1,"options":{"blocked_functions":["md5"]}}');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":1,"options":{"blocked_functions":[]}}');
+----
+forbidden
+
+statement error
+CALL gatekeeper_configure(json := '{"version":1,"options":{}}', blocked_functions := []);
+----
+mutually exclusive
+
+statement error
+SELECT * FROM gatekeeper_validate('SELECT 1', json := NULL, allowed_tables := []);
+----
+mutually exclusive
+
+statement error
+SELECT * FROM gatekeeper_validate('SELECT 1', json := 1);
+----
+json requires VARCHAR
+
+statement error
+CALL gatekeeper_configure(json := '{}', json := '{}');
+----
+duplicate Gatekeeper option
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', json := NULL);
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', json := 'bad json');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"allowed_tables":[{"schema":"main","table":"t","catlog":"memory"}]}}');
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"use_default_functions":"false"}}');
+----
+invalid_input
+
+statement error
+CALL gatekeeper_configure(json := '{"version":2,"options":{}}');
+----
+version must be 1
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT md5(''x'')');
+----
+forbidden
+
+statement ok
+CREATE TABLE t(x INT);
+
+statement ok
+CALL gatekeeper_configure(json := '{"version":1,"options":{"allowed_tables":[]}}');
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":1,"options":{}}');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(json := '{"version":1,"options":{}}');
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":1,"options":{"allowed_tables":[{"catalog":null,"schema":"main","table":"t"}]}}');
+----
+ok
+
+statement ok
+PREPARE validation AS SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := $1);
+
+query T
+EXECUTE validation('{"version":1,"options":{}}');
+----
+ok
+
+query T
+EXECUTE validation('{"version":1,"options":{"blocked_functions":["md5"]}}');
+----
+forbidden
+
+statement ok
+SET lock_configuration = true;
+
+statement error
+CALL gatekeeper_configure(json := '{"version":1,"options":{}}');
+----
+locked

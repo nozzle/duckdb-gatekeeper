@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json",
+  "title": "Gatekeeper policy document, version 1",
+  "description": "Input to gatekeeper_configure(json := ...) or gatekeeper_validate(sql, json := ...). Configure replaces the global policy with defaults plus these options; validation applies these request options under the current global ceiling. Duplicate object keys are rejected by the decoder before schema validation could represent them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "options"],
+  "properties": {
+    "$schema": {
+      "description": "Optional editor schema association; never fetched by Gatekeeper.",
+      "const": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json"
+    },
+    "version": {
+      "description": "Document format version, independent of DuckDB and Gatekeeper releases.",
+      "type": "integer",
+      "const": 1
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "use_default_functions": {
+          "description": "Use this installation's reviewed function defaults plus allowed_functions. False allows only allowed_functions. Defaults to true for configuration; validation inherits the global value when omitted.",
+          "type": "boolean"
+        },
+        "allowed_functions": {
+          "description": "Additional function leaf names, ASCII case-insensitive. '*' is multiplication, not a wildcard.",
+          "$ref": "#/$defs/functionNames"
+        },
+        "blocked_functions": {
+          "description": "Function leaf names to deny; denies win over allows.",
+          "$ref": "#/$defs/functionNames"
+        },
+        "allowed_tables": {
+          "description": "Allowed table/view identities. An empty array denies all tables/views. Omission leaves configuration unrestricted for non-internal objects, or inherits the global restriction during validation.",
+          "$ref": "#/$defs/tables"
+        },
+        "blocked_tables": {
+          "description": "Table/view identities to deny; denies win over allows.",
+          "$ref": "#/$defs/tables"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "description": "Nonempty, NUL-free name; ASCII case-insensitive.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\u0000]+$"
+    },
+    "functionNames": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/name"}
+    },
+    "tables": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/table"}
+    },
+    "table": {
+      "description": "'*' matches any whole component. Omitted or null catalog matches any catalog.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "table"],
+      "properties": {
+        "catalog": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "schema": {"$ref": "#/$defs/name"},
+        "table": {"$ref": "#/$defs/name"}
+      }
+    }
+  }
+}

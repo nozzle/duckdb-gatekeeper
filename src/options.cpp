@@ -1,5 +1,6 @@
 #include "options.hpp"
 #include "duckdb/common/types/value.hpp"
+#include <memory>
 #include <stdexcept>
 
 namespace gatekeeper {
@@ -72,6 +73,132 @@ static Names Strings(const Value &value, bool lower) {
 		result.insert(lower ? Lower(text) : text);
 	}
 	return result;
+}
+
+void CheckArguments(const std::vector<std::pair<std::string, Value>> &arguments) {
+	for (const auto &argument : arguments) {
+		if (argument.first == "json") {
+			if (arguments.size() != 1)
+				throw std::invalid_argument("json and typed Gatekeeper options are mutually exclusive");
+			if (!argument.second.IsNull() && argument.second.type().id() != LogicalTypeId::VARCHAR)
+				throw std::invalid_argument("json requires VARCHAR");
+		} else
+			CheckOptionShape(argument.first, argument.second);
+	}
+}
+
+using namespace duckdb_yyjson;
+
+static std::string JsonString(Json *value) {
+	if (!yyjson_is_str(value))
+		throw std::invalid_argument("expected JSON string");
+	return std::string(yyjson_get_str(value), yyjson_get_len(value));
+}
+
+static std::vector<std::pair<std::string, Json *>> JsonObject(Json *object) {
+	if (!yyjson_is_obj(object))
+		throw std::invalid_argument("expected JSON object");
+	std::vector<std::pair<std::string, Json *>> fields;
+	Names seen;
+	size_t i, count;
+	Json *key, *value;
+	yyjson_obj_foreach(object, i, count, key, value) {
+		auto name = JsonString(key);
+		if (!seen.insert(name).second)
+			throw std::invalid_argument("duplicate JSON field: " + name);
+		fields.emplace_back(std::move(name), value);
+	}
+	return fields;
+}
+
+static Value JsonOption(const std::string &name, Json *value) {
+	auto element = FindOption(name).element;
+	if (yyjson_is_null(value))
+		return Value(); // Let the shared decoder report NULL options.
+	if (element == LogicalTypeId::BOOLEAN) {
+		if (!yyjson_is_bool(value))
+			throw std::invalid_argument(name + " requires JSON boolean");
+		return Value::BOOLEAN(yyjson_get_bool(value));
+	}
+	if (!yyjson_is_arr(value))
+		throw std::invalid_argument(name + " requires JSON array");
+	auto type = element == LogicalTypeId::VARCHAR ? LogicalType::VARCHAR
+	                                              : LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
+	                                                                     {"schema", LogicalType::VARCHAR},
+	                                                                     {"table", LogicalType::VARCHAR}});
+	duckdb::vector<Value> entries;
+	size_t i, count;
+	Json *entry;
+	yyjson_arr_foreach(value, i, count, entry) {
+		if (yyjson_is_null(entry))
+			entries.emplace_back(type);
+		else if (element == LogicalTypeId::VARCHAR)
+			entries.emplace_back(JsonString(entry));
+		else {
+			duckdb::vector<Value> fields(3, Value(LogicalType::VARCHAR));
+			bool schema = false, table = false;
+			for (const auto &field : JsonObject(entry)) {
+				size_t index;
+				if (field.first == "catalog")
+					index = 0;
+				else if (field.first == "schema") {
+					index = 1;
+					schema = true;
+				} else if (field.first == "table") {
+					index = 2;
+					table = true;
+				} else
+					throw std::invalid_argument("unknown table field: " + field.first);
+				if (!yyjson_is_null(field.second))
+					fields[index] = Value(JsonString(field.second));
+			}
+			if (!schema || !table)
+				throw std::invalid_argument("table entries require schema and table");
+			entries.push_back(Value::STRUCT(type, fields));
+		}
+	}
+	return Value::LIST(type, entries);
+}
+
+static std::vector<std::pair<std::string, Value>> JsonOptions(const Value &input) {
+	if (input.IsNull())
+		throw std::invalid_argument("NULL json argument");
+	auto text = input.GetValue<std::string>();
+	yyjson_read_err error;
+	std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
+	    yyjson_read_opts(text.data(), text.size(), 0, nullptr, &error), yyjson_doc_free);
+	if (!doc)
+		throw std::invalid_argument("invalid policy JSON at byte " + std::to_string(error.pos) + ": " + error.msg);
+	Json *options = nullptr;
+	bool version = false;
+	for (const auto &field : JsonObject(yyjson_doc_get_root(doc.get()))) {
+		if (field.first == "version") {
+			if (!yyjson_is_num(field.second) || yyjson_get_num(field.second) != 1)
+				throw std::invalid_argument("policy JSON version must be 1");
+			version = true;
+		} else if (field.first == "options")
+			options = field.second;
+		else if (field.first == "$schema") {
+			if (JsonString(field.second) !=
+			    "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json")
+				throw std::invalid_argument("unknown policy JSON $schema");
+		} else
+			throw std::invalid_argument("unknown policy JSON field: " + field.first);
+	}
+	if (!version || !options)
+		throw std::invalid_argument("policy JSON requires version and options");
+	std::vector<std::pair<std::string, Value>> result;
+	for (const auto &option : JsonObject(options))
+		result.emplace_back(option.first, JsonOption(option.first, option.second));
+	return result;
+}
+
+void ApplyArguments(Policy &policy, const std::vector<std::pair<std::string, Value>> &arguments) {
+	CheckArguments(arguments);
+	if (arguments.size() == 1 && arguments[0].first == "json")
+		ApplyOptions(policy, JsonOptions(arguments[0].second));
+	else
+		ApplyOptions(policy, arguments);
 }
 
 void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value>> &options) {
