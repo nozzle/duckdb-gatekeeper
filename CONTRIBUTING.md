@@ -260,7 +260,9 @@ source notes and baselines remain independent of build-engine versions. Follow t
 - `src/authorization.cpp`: catalog authorization and iterative bound-plan implementation
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
-- `src/options.cpp`: shared option specifications, typed decoding, and canonical global settings.
+- `src/options.cpp`: shared option specifications, JSON-to-typed decoding, typed validation,
+  and canonical global settings. `docs/policy-v1.schema.json` describes the JSON input;
+  `test/test_json_options.py` checks schema/decoder agreement and typed API equivalence.
 - `versions.cmake`: canonical extension/engine metadata; generation emits `version.hpp`.
 
 Two namespaces: `gatekeeper::` is the policy model (`Policy`, `Result`, the result codes and

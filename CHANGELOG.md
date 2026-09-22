@@ -6,6 +6,14 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Added
+
+- Both `gatekeeper_configure` and `gatekeeper_validate` accept `json := document` as an
+  alternative to typed options for shared policies. JSON and typed options are mutually
+  exclusive; decoded options retain the same replacement, validation, and global-ceiling
+  semantics. The versioned document has a published authoring schema at
+  [`docs/policy-v1.schema.json`](docs/policy-v1.schema.json).
+
 ## 0.2.0 - 2026-09-21
 
 ### Added

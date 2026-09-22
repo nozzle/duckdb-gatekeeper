@@ -1,4 +1,4 @@
-"""Build the linked SQL/typed-options fuzz target using a libFuzzer-capable Clang."""
+"""Build the linked SQL/typed/JSON-options fuzz target using a libFuzzer-capable Clang."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -36,9 +36,19 @@ def main():
         for flags in range(16):
             (corpus / f"policy-{i}-{flags}").write_bytes(bytes([13,flags,0,0]) + query.encode())
     for mode in [1, 2, 15]:
-        for option in range(6):
+        for option in range(7):
             for value in range(34):
                 (corpus / f"option-{mode}-{option}-{value}").write_bytes(bytes([mode, option, value, 10]) + b"t")
+    for i, document in enumerate([
+        '{"version":1,"options":{}}',
+        '{"version":1,"options":{"allowed_tables":[]}}',
+        '{"version":1,"options":{"allowed_tables":[{"catalog":null,"schema":"main","table":"t"}]}}',
+        '{"version":1,"options":{"use_default_functions":false,"allowed_functions":["abs"],"blocked_functions":["md5"]}}',
+        '{"version":1,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
+        '{"version":1,"options":{"blocked_tables":[{"schema":"main","table":"t","extra":1}]}}',
+    ]):
+        for mode in [1, 15]:
+            (corpus / f"json-{mode}-{i}").write_bytes(bytes([mode, 5, 0, 10]) + document.encode())
     # The instrumented extension and harness link the uninstrumented engine library.
     run_libfuzzer(build / "extension/gatekeeper/gatekeeper_sql_fuzz", corpus, build / "fuzz.log", args.seconds,
                   max_len=4096, env=environment(mixed_runtime=True))

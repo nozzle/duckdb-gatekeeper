@@ -194,7 +194,7 @@ def test_function_metadata_for_generated_docs(db):
                          FROM duckdb_functions() WHERE function_name LIKE 'gatekeeper%'
                          ORDER BY function_name""").fetchall()
     assert [row[0] for row in rows] == ["gatekeeper_configure", "gatekeeper_enforce", "gatekeeper_validate"]
-    options = ["allowed_tables", "blocked_tables", "use_default_functions", "allowed_functions", "blocked_functions"]
+    options = ["allowed_tables", "blocked_tables", "use_default_functions", "allowed_functions", "blocked_functions", "json"]
     for name, description, examples, parameters, parameter_types in rows:
         assert description and "\n" not in description and examples, name
         if name == "gatekeeper_enforce":

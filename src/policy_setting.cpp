@@ -63,7 +63,7 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 		std::vector<std::pair<std::string, Value>> options;
 		for (const auto &option : input.named_parameters)
 			options.emplace_back(option.first, option.second);
-		gatekeeper::ApplyOptions(policy, options);
+		gatekeeper::ApplyArguments(policy, options);
 		types.push_back(LogicalType::BOOLEAN);
 		names.push_back("Success");
 		return make_uniq<ConfigureBinding>(gatekeeper::PolicyValue(policy));
@@ -96,6 +96,7 @@ void RegisterPolicySetting(ExtensionLoader &loader) {
 	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
 	for (const auto &name : gatekeeper::OptionNames())
 		configure.named_parameters[name] = LogicalType::ANY;
+	configure.named_parameters["json"] = LogicalType::ANY;
 	// One short sentence and no newlines; parameter names in OptionNames() order. See the description of
 	// gatekeeper_validate in gatekeeper_extension.cpp for why.
 	FunctionDescription description;
@@ -105,6 +106,7 @@ void RegisterPolicySetting(ExtensionLoader &loader) {
 	                        "'*'}], blocked_functions := ['md5'])"};
 	for (const auto &name : gatekeeper::OptionNames())
 		description.parameter_names.push_back(name);
+	description.parameter_names.push_back("json");
 	CreateTableFunctionInfo info(std::move(configure));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	info.descriptions.push_back(std::move(description));

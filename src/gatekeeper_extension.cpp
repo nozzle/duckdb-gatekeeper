@@ -65,13 +65,13 @@ static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindI
 	for (const auto &option : input.named_parameters) {
 		auto &name = option.first;
 		auto value = option.second;
-		try {
-			gatekeeper::CheckOptionShape(name, value);
-		} catch (const std::invalid_argument &error) {
-			throw BinderException(error.what());
-		}
 		// ANY preserves nested field sets rather than silently coercing away unknown fields.
 		result->options.emplace_back(name, std::move(value));
+	}
+	try {
+		gatekeeper::CheckArguments(result->options);
+	} catch (const std::invalid_argument &error) {
+		throw BinderException(error.what());
 	}
 	auto type = ResultType();
 	for (const auto &field : StructType::GetChildTypes(type)) {
@@ -108,7 +108,7 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 		defaults = GlobalPolicy(context);
 		have_defaults = true;
 		auto policy = defaults;
-		gatekeeper::ApplyOptions(policy, binding.options);
+		gatekeeper::ApplyArguments(policy, binding.options);
 		if (binding.sql.IsNull())
 			decision = gatekeeper::InvalidInput("NULL SQL input");
 		else
@@ -204,6 +204,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                       InitSingleRow);
 	for (const auto &name : gatekeeper::OptionNames())
 		validate.named_parameters[name] = LogicalType::ANY;
+	validate.named_parameters["json"] = LogicalType::ANY;
 	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
 	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.
 	// The generator keeps only the first line of each description and shows it in one table cell, so keep
@@ -219,6 +220,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                        "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
 	for (const auto &name : gatekeeper::OptionNames())
 		description.parameter_names.push_back(name);
+	description.parameter_names.push_back("json");
 	CreateTableFunctionInfo info(std::move(validate));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	info.descriptions.push_back(std::move(description));

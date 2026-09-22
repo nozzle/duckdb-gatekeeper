@@ -111,8 +111,11 @@ static Value Decision(QueryResult &result) {
 
 static std::string Option(uint8_t selector, const std::string &text) {
 	const auto &names = gatekeeper::OptionNames();
-	if (selector % (names.size() + 1) < names.size())
-		return names[selector % (names.size() + 1)];
+	auto index = selector % (names.size() + 2);
+	if (index < names.size())
+		return names[index];
+	if (index == names.size())
+		return "json";
 	// Arbitrary option names remain one quoted identifier, never executable SQL.
 	std::string name = "\"";
 	for (auto c : text) {
