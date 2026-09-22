@@ -6,6 +6,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-22
+
 ### Added
 
 - `caller_objects` is appended to validation results and included in audit decisions. It lists
@@ -13,12 +15,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   `objects` evidence, and is empty on any failed decision. It supports checking declared inputs
   without admitting a view's ancestors. Attribution retains the conservative query-wide name
   rules; macro and reader capabilities are not catalog inputs. Named-column consumers are
-  unaffected; positional `SELECT *` consumers must accept the extra column.
+  unaffected; positional `SELECT *` consumers must accept the extra column. (#95)
 - Both `gatekeeper_configure` and `gatekeeper_validate` accept `json := document` as an
   alternative to typed options for shared policies. JSON and typed options are mutually
   exclusive; decoded options retain the same replacement, validation, and global-ceiling
   semantics. The versioned document has a published authoring schema at
-  [`docs/policy-v1.schema.json`](docs/policy-v1.schema.json).
+  [`docs/policy-v1.schema.json`](docs/policy-v1.schema.json). (#94)
 
 ## 0.2.0 - 2026-09-21
 
