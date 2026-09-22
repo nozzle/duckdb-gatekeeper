@@ -28,6 +28,7 @@ def chain(db):
 @pytest.mark.parametrize("sql, expected", [
     ("SELECT * FROM b", [identity("b", "view")]),
     ("SELECT * FROM nested_b", [identity("nested_b", "view")]),
+    ("SELECT * FROM nested_b JOIN b USING (id)", [identity("b", "view"), identity("nested_b", "view")]),
     ("SELECT * FROM b JOIN c USING (id)", [identity("b", "view"), identity("c")]),
     ("SELECT * FROM c JOIN b USING (id)", [identity("b", "view"), identity("c")]),
     ("SELECT * FROM b x, b y", [identity("b", "view")]),

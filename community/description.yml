@@ -243,8 +243,9 @@ docs:
     | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) for engine errors. |
     | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
     | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
-    | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`, `view`, `replacement`) the query bound to. Empty unless `ok`. |
+    | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`, `view`, `replacement`), including trusted dependencies. See `caller_objects` for the caller-attributable catalog subset. Empty unless `ok`. |
     | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` the query bound to. Empty unless `ok`. |
+    | `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
 
     Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
     `replacement_scan`, `bind_time_expression`, `statement`, `limit`,

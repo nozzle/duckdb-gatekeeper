@@ -79,6 +79,14 @@ static Value Decision(QueryResult &result) {
 		}
 	}
 	const auto code = fields[1].GetValue<std::string>();
+	const auto &objects = ListValue::GetChildren(fields[6]);
+	for (const auto &caller : ListValue::GetChildren(fields[8])) {
+		bool found = false;
+		for (const auto &object : objects)
+			found |= Value::NotDistinctFrom(caller, object);
+		if (!found)
+			std::abort();
+	}
 	const auto &violations = ListValue::GetChildren(fields[2]);
 	const auto error = fields[4].GetValue<std::string>();
 	if (fields[0].GetValue<bool>() != (code == "ok"))
