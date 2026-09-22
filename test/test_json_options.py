@@ -23,6 +23,8 @@ def encoded(options):
 
 
 def test_schema_is_valid_and_covers_the_sql_options(db):
+    # Regex escapes must remain text after JSON decoding, not become lone surrogates.
+    json.dumps(SCHEMA, ensure_ascii=False).encode("utf-8")
     Draft202012Validator.check_schema(SCHEMA)
     for name, parameters in db.execute("""SELECT function_name, parameters FROM duckdb_functions()
             WHERE function_name IN ('gatekeeper_configure', 'gatekeeper_validate')""").fetchall():
