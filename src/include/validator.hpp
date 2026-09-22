@@ -92,6 +92,9 @@ struct Result {
 	std::set<Violation> violations;
 	int64_t position = -1;
 	std::set<Identity> objects, functions;
+	// Resolved catalog tables/views attributed to the caller, a subset of objects. Replacement scans are
+	// reader capabilities, not catalog identities. Like all evidence, exposed only for an allowed result.
+	std::set<Identity> caller_objects;
 };
 // Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";

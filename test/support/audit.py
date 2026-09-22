@@ -2,7 +2,7 @@
 
 # The Gatekeeper record, after DuckDB's own context columns.
 RECORD_COLUMNS = ["event", "mode", "boundary", "allowed", "code", "violations", "error_type", "error_message",
-                  "position", "objects", "functions", "statement", "statement_length", "policy_hash", "new_value"]
+                  "position", "objects", "functions", "caller_objects", "statement", "statement_length", "policy_hash", "new_value"]
 
 
 def records(host, where="true"):

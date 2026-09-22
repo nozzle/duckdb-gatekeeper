@@ -27,7 +27,8 @@ LogicalType ResultType() {
 	                            {"error_message", LogicalType::VARCHAR},
 	                            {"position", LogicalType::BIGINT},
 	                            {"objects", LogicalType::LIST(IdentityType(true))},
-	                            {"functions", LogicalType::LIST(IdentityType(false))}});
+	                            {"functions", LogicalType::LIST(IdentityType(false))},
+	                            {"caller_objects", LogicalType::LIST(IdentityType(true))}});
 }
 
 static Value Position(int64_t position) { return position < 0 ? Value(LogicalType::BIGINT) : Value::BIGINT(position); }
@@ -51,6 +52,7 @@ Value ResultValue(const gatekeeper::Result &result) {
 	return Value::STRUCT(ResultType(),
 	                     {Value::BOOLEAN(result.allowed), Value(result.code), Value::LIST(ViolationType(), violations),
 	                      Value(result.error_type), Value(result.error_message), Position(result.position),
-	                      identities(result.objects, true), identities(result.functions, false)});
+	                      identities(result.objects, true), identities(result.functions, false),
+	                      identities(result.caller_objects, true)});
 }
 } // namespace duckdb

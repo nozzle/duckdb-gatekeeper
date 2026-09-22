@@ -9,7 +9,7 @@ from support.typed_helpers import configure, validate
 def test_named_prepared_options_and_result_columns(db):
     result = db.execute("SELECT * FROM gatekeeper_validate(?, blocked_functions := ?)", ["SELECT md5('x')", ["md5"]])
     assert [column[0] for column in result.description] == [
-        "allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions"
+        "allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions", "caller_objects"
     ]
     rows = result.fetchall()
     assert len(rows) == 1

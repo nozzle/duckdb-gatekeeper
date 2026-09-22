@@ -1,0 +1,34 @@
+# Caller-attributable catalog evidence is separate from trusted expansion and empty on failure.
+require gatekeeper
+
+statement ok
+CREATE TABLE caller_c(id INTEGER);
+
+statement ok
+CREATE VIEW caller_b AS SELECT * FROM caller_c;
+
+query TT
+SELECT list_transform(caller_objects, o -> o."table"), list_transform(objects, o -> o."table") FROM gatekeeper_validate('SELECT * FROM caller_b', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
+----
+[caller_b]	[caller_b, caller_c]
+
+query T
+SELECT list_transform(caller_objects, o -> o."table") FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c');
+----
+[caller_b, caller_c]
+
+query TT
+SELECT code, caller_objects FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
+----
+forbidden	[]
+
+query T
+SELECT list_transform(caller_objects, o -> o."table") FROM gatekeeper_validate('WITH x AS (SELECT * FROM caller_b) SELECT * FROM x');
+----
+[caller_b]
+
+statement ok
+DROP VIEW caller_b;
+
+statement ok
+DROP TABLE caller_c;

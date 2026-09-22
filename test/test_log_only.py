@@ -95,7 +95,7 @@ def test_log_only_records_are_what_enforcement_would_have_refused(catalog, agent
         relaxed = outcome(agent, sql) if "?" not in sql else outcome_with(agent, sql, [1])
         [enforced] = decisions(catalog, f"mode = 'enforce' AND statement = {literal(sql)}")
         [logged] = decisions(catalog, f"mode = 'log_only' AND statement = {literal(sql)}")
-        for column in ["boundary", "allowed", "code", "violations", "objects", "functions", "policy_hash"]:
+        for column in ["boundary", "allowed", "code", "violations", "objects", "functions", "caller_objects", "policy_hash"]:
             assert enforced[column] == logged[column], (sql, column)
         if enforced["allowed"]:
             assert strict == relaxed and strict[0] == "ok"

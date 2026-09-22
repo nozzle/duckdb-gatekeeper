@@ -49,7 +49,7 @@ static Value Decision(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!chunk || chunk->size() != 1)
 		std::abort();
-	if (chunk->ColumnCount() != 8)
+	if (chunk->ColumnCount() != 9)
 		std::abort();
 	child_list_t<Value> columns;
 	for (idx_t i = 0; i < chunk->ColumnCount(); i++)
@@ -59,9 +59,9 @@ static Value Decision(QueryResult &result) {
 	if (extra && extra->size())
 		std::abort();
 	auto &fields = StructValue::GetChildren(value);
-	if (fields.size() != 8)
+	if (fields.size() != 9)
 		std::abort();
-	for (size_t i : {size_t(6), size_t(7)}) {
+	for (size_t i : {size_t(6), size_t(7), size_t(8)}) {
 		const auto &entries = ListValue::GetChildren(fields[i]);
 		if (!fields[0].GetValue<bool>() && !entries.empty())
 			std::abort();
@@ -926,7 +926,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		auto first = Run(
 		    connection, "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
 		    text, limit);
-		if (StructValue::GetChildren(first).size() == 8) {
+		if (StructValue::GetChildren(first).size() == 9) {
 			for (const auto &violation : ListValue::GetChildren(StructValue::GetChildren(first)[2])) {
 				auto &fields = StructValue::GetChildren(violation);
 				if (fields[0].GetValue<string>() != "function")
@@ -943,7 +943,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 					    "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
 					    Value("SELECT \"" + quoted + "\"(1)"), limit);
 				auto &decision = StructValue::GetChildren(explicit_result);
-				if (decision.size() != 8 || decision[1].GetValue<string>() != "forbidden")
+				if (decision.size() != 9 || decision[1].GetValue<string>() != "forbidden")
 					std::abort();
 			}
 		}
