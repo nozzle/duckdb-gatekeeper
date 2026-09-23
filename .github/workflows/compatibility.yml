@@ -45,16 +45,22 @@ jobs:
           - name: DuckDB 2.0 candidate (6844d1b)
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+    env:
+      CANDIDATE_ENGINE: ${{ matrix.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: duckdb/duckdb
-          ref: ${{ matrix.ref }}
-          path: build/candidate-source
-          fetch-depth: 0
+      - name: Check out the candidate engine
+        # Fetched by commit with full history and tags, which is what labels the build (`git describe` on
+        # 1.5, `git rev-list --count` on 2.0). Fetched by git, as the community job below does, rather than
+        # through actions/checkout: code scanning cannot see that a matrix ref is a literal SHA.
+        run: |
+          git init --quiet build/candidate-source
+          git -C build/candidate-source remote add origin https://github.com/duckdb/duckdb.git
+          git -C build/candidate-source fetch --quiet --tags origin "$CANDIDATE_ENGINE"
+          git -C build/candidate-source checkout --quiet "$CANDIDATE_ENGINE"
+          git -C build/candidate-source log -1 --oneline
       - uses: ./.github/actions/setup
         with:
           ccache-key: candidate-${{ matrix.key }}-ubuntu
