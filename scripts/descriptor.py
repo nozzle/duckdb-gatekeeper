@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def text(root=ROOT):
-    return (root / "community/description.yml").read_text()
+    return (root / "community/description.yml").read_text(encoding="utf-8")
 
 
 class DescriptorError(ValueError):
