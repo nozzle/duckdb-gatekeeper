@@ -46,10 +46,12 @@ applies the same revision-gated rule, so a community rebuild for a newer engine 
 labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
-`Engine rebuild compatibility` workflow rebuilds against a post-release engine snapshot
-through both the direct CMake path and the community `make release` path, checks the
-stamped engine identity against the candidate checkout's own `git describe`, and loads
-the resulting artifact into that engine's shell.
+`Engine rebuild compatibility` workflow rebuilds against two pinned engine snapshots, one
+past the pinned release on its line and one on the next major's branch (`v2.0-cyanoptera`,
+the engine the community repository builds a descriptor's `ref_next` against), through both
+the direct CMake path and the community `make release` path; it checks the stamped engine
+identity against what the candidate checkout labels itself, runs `test/sql`, and loads the
+resulting artifact into that engine's shell.
 
 The community-extension build path also works and runs on CI:
 

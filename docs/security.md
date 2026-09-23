@@ -926,8 +926,8 @@ statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serialize
 `GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
 public API, so an engine upgrade can require source changes. Compatibility is therefore
 checked by compilation and functional regressions on every candidate engine
-(`compatibility.yml`), through both the direct CMake path and the community `make release`
-path. Existing function classifications do not
+(`compatibility.yml`: a post-release snapshot of the pinned line and a `v2.0-cyanoptera`
+snapshot), through both the direct CMake path and the community `make release` path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
