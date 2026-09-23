@@ -346,8 +346,10 @@ def test_file_storage_receives_records(catalog, agent, tmp_path):
     catalog.execute("CALL enable_logging('Gatekeeper', storage := 'file', storage_path := ?)", [str(path)])
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT * FROM secret.salaries")
-    catalog.execute("CALL disable_logging()")  # flushes
-    text = path.read_text()
+    # disable_logging flushes but keeps the file open; replacing the storage closes it, which Windows
+    # requires before another handle can read the file.
+    catalog.execute("CALL disable_logging(); CALL enable_logging('Gatekeeper', storage := 'memory'); CALL disable_logging()")
+    text = path.read_text(encoding="utf-8")
     assert "Gatekeeper" in text and "SELECT * FROM secret.salaries" in text and "object is not allowed" in text
 
 
