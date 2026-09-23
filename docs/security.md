@@ -242,7 +242,9 @@ attributed; table policy and function blocks alike wait for execution, where the
 (`OnExecutePrepared` on 1.5, `OnRebindPreparedStatement` on 2.0, whose `Prepare()` and
 `Execute()` run as statements carrying the prepared text) forces a rebind inside the query so
 the plan that runs is authorized under the current policy (the `authorize` boundary), and a
-cached plan can never outlive a policy change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
+cached plan can never outlive a policy change. (On 2.0 the text boundary applies to the
+prepare as well, so parameterless prepared text the policy denies is refused at `Prepare()`;
+see [Compatibility and review](#compatibility-and-review).) Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
 statement that reaches them, which `test/test_enforcement.py` checks over a corpus of allowed,
 denied, and erroneous statements. What DuckDB does to a statement before they run is listed
 under residuals.
