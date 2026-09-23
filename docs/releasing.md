@@ -46,8 +46,12 @@ must exist and pass CI before it is submitted.
      `linux_arm64_musl` (`loadable-cli`: `scripts/smoke_cli.sh`); the CRAN R package for
      `windows_amd64_mingw` (`loadable-r`: `scripts/smoke_loadable.R`, the one leg that takes
      a client `Prepare()` into the shipped binary); and Chromium for Wasm EH (`browser-test`).
-     The CLI and R legs run the portable SQL form of the smoke (`scripts/smoke/*.sql`), which
-     the Python leg and `test/test_smoke_sql.py` run as well.
+     The R leg runs the portable SQL form of the smoke (`scripts/smoke/loadable.sql` and
+     `enforced.sql`), which the Python leg and `test/test_smoke_sql.py` run as well. The CLI
+     is one connection: it runs `loadable.sql` as is, and `scripts/smoke_cli.sh` replays the
+     enforced half by hand as separate CLI processes (latch, allowed read, the four refusals,
+     the audit records through `stdout` log storage, log-only), so a change to `enforced.sql`
+     is mirrored there, not picked up.
    If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging tests,
    and community descriptor aligned and document the reason.
 4. Keep the README and security doc's distinction between DuckDB-signed community builds

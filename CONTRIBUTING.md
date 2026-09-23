@@ -220,8 +220,11 @@ the policy setting, and an enforced connection with the audit log and log-only m
 the host's query hooks and log manager). The same checks exist as plain SQL in
 `scripts/smoke/loadable.sql` (one connection, every check asserting with `error()` inside SQL)
 and `scripts/smoke/enforced.sql` (two connections, one `-- @host`/`-- @agent` directive per
-paragraph): the form the hosts without a Python package run, `scripts/smoke_cli.sh` through the
-engine's musl CLI and `scripts/smoke_loadable.R` through the CRAN package for MinGW.
+paragraph): the form the hosts without a Python package run, `scripts/smoke_loadable.R` through
+the CRAN package for MinGW (both files) and `scripts/smoke_cli.sh` through the engine's musl CLI
+(`loadable.sql` as one stdin script; the CLI is one connection, so the script replays the
+enforced half by hand as separate processes, and a change to `enforced.sql` has to be mirrored
+there).
 `smoke_loadable.py` runs those files too, and `test/test_smoke_sql.py` runs them against the
 local build, so a change to them is exercised here before it reaches those hosts; keep every
 statement of `loadable.sql` runnable as one stdin script (the CLI reads it under `-bail`), and in
