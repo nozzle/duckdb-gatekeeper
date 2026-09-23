@@ -61,7 +61,7 @@ def release_version(tag):
         raise ValueError(f"Community descriptor links refer to {stale}; every blob/ link must name v{version}")
     if tag and tag != f"v{version}":
         raise ValueError(f"Tag {tag!r} and version {version} must agree")
-    sections = changelog_sections((ROOT / "CHANGELOG.md").read_text())
+    sections = changelog_sections((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
     # The pending section is always present: between releases it is where the next change goes, and the
     # release commit leaves it empty rather than removing it.
     if "Unreleased" not in sections:
@@ -110,10 +110,10 @@ def package_release(tag, artifacts, output):
                 bundle.write(ROOT / notice, notice)
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         checksums.append(f"{digest}  {name}\n")
-    (output / "SHA256SUMS").write_text("".join(checksums))
+    (output / "SHA256SUMS").write_text("".join(checksums), encoding="utf-8")
     # The notes lead with this version's CHANGELOG section when it has one (a tag always does; the PR/main
     # packaging check between releases carries the previous release's).
-    changes = changelog_sections((ROOT / "CHANGELOG.md").read_text()).get(version, "")
+    changes = changelog_sections((ROOT / "CHANGELOG.md").read_text(encoding="utf-8")).get(version, "")
     (output / "RELEASE_NOTES.md").write_text(
         (changes + "\n\n---\n\n" if changes else "") +
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
@@ -131,7 +131,8 @@ def package_release(tag, artifacts, output):
         "Other DuckDB versions need matching extension builds. Gatekeeper source can be "
         "rebuilt against another engine; compatibility is checked by builds and regression tests, "
         "not an exact-version allowlist or a repeat review of existing function names. "
-        "Community submission and deployment are separate from this GitHub Release.\n"
+        "Community submission and deployment are separate from this GitHub Release.\n",
+        encoding="utf-8",
     )
 
 

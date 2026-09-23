@@ -118,7 +118,9 @@ The suite has two layers with different reach:
   engines (nested schema paths, DML inside a CTE). Add a case here whenever a behavior must hold
   everywhere the extension is distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
-  tests that run against the loadable artifact on Linux and macOS. Set
+  tests that run against the loadable artifact on Linux and macOS here, and on every target
+  the pinned Python package has a wheel for in the distribution workflow (Linux, macOS, and
+  Windows, both architectures each). Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
   `GATEKEEPER_PARSER=peg` runs the same suite with every connection `support.artifact.connect`
@@ -215,7 +217,21 @@ with `duckdb` and `pytest` blocked.
 Python package and exercises the checks that cross the host/loadable ABI boundary
 (bind-data inspection for lambdas and dispatched aggregates, replacement-scan callbacks,
 the policy setting, and an enforced connection with the audit log and log-only mode through
-the host's query hooks and log manager). `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
+the host's query hooks and log manager). The same checks exist as plain SQL in
+`scripts/smoke/loadable.sql` (one connection, every check asserting with `error()` inside SQL)
+and `scripts/smoke/enforced.sql` (two connections, one `-- @host`/`-- @agent` directive per
+paragraph): the form the hosts without a Python package run, `scripts/smoke_loadable.R` through
+the CRAN package for MinGW (both files) and `scripts/smoke_cli.sh` through the engine's musl CLI
+(`loadable.sql` as one stdin script; the CLI is one connection, so the script replays the
+enforced half by hand as separate processes, and a change to `enforced.sql` has to be mirrored
+there).
+`smoke_loadable.py` runs those files too, and `test/test_smoke_sql.py` runs them against the
+local build, so a change to them is exercised here before it reaches those hosts; keep every
+statement of `loadable.sql` runnable as one stdin script (the CLI reads it under `-bail`), and in
+`enforced.sql` do not follow a denial directly with a statement the engine preprocesses inside a
+transaction (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement), which fails on
+DuckDB 2.0 until a plain statement has ended the denied one (`test/support/enforcement.py`,
+`settle()`); any other statement, refused or not, may follow a denial. `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
 and Gatekeeper stamped into an artifact against the engine checkout it was built from,
 independently of any shell built alongside it.
 

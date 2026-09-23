@@ -9,15 +9,102 @@ writes to the host's log manager. This script fails if any of those paths silent
 where the Python suite does not run against the artifact, this is the only execution of enforcement, log-only
 mode, and the audit log against the shipped binary.
 
+The same checks exist once more as plain SQL in scripts/smoke/ (loadable.sql, enforced.sql), the form the
+hosts without a Python package run: the DuckDB CLI for the musl targets (scripts/smoke_cli.sh) and the CRAN
+package for MinGW (scripts/smoke_loadable.R). This script runs those files too, so the portable form is
+exercised on every Python-capable target and test/test_smoke_sql.py keeps it current on the local build.
+
     python scripts/smoke_loadable.py path/to/gatekeeper.duckdb_extension
 """
+from contextlib import contextmanager
+import os
 from pathlib import Path
+import re
 import sys
 import tempfile
+from typing import NamedTuple, Optional
 
 import duckdb
 
 from artifact import connect
+
+SMOKE_DIR = Path(__file__).resolve().parent / "smoke"
+# One per paragraph in enforced.sql: the connection, and the text a statement that must fail has to raise.
+DIRECTIVE = re.compile(r"^--\s*@(host|agent)(?:\s+expect error:\s*(.+?))?\s*$")
+
+
+class Statement(NamedTuple):
+    connection: str  # "host" or "agent"
+    sql: str
+    error: Optional[str]  # substring the statement must fail with; None when it must succeed
+    line: int  # first line of the paragraph, for messages
+
+
+def statements(path):
+    """The paragraphs of a smoke SQL file: blank-line separated, comment lines removed, directive parsed.
+
+    A paragraph without a directive runs on the host connection and must succeed, which is every paragraph of
+    loadable.sql. The trailing semicolon is dropped so a logged statement equals the text the file shows."""
+    result, paragraph, first_line = [], [], None
+    for number, line in enumerate(Path(path).read_text().splitlines() + [""], start=1):
+        if line.strip():
+            if not paragraph:
+                first_line = number
+            paragraph.append(line)
+            continue
+        if not paragraph:
+            continue
+        connection, error, directives = "host", None, 0
+        for comment in (l for l in paragraph if l.lstrip().startswith("--")):
+            match = DIRECTIVE.match(comment.strip())
+            if match:
+                connection, error, directives = match.group(1), match.group(2), directives + 1
+        if directives > 1:
+            raise ValueError(f"{Path(path).name}:{first_line}: {directives} directives in one paragraph")
+        sql = "\n".join(l for l in paragraph if not l.lstrip().startswith("--")).strip().rstrip(";").strip()
+        if sql:
+            result.append(Statement(connection, sql, error, first_line))
+        paragraph = []
+    return result
+
+
+def run(path, connections):
+    """Execute a smoke SQL file. ``connections`` maps ``host`` (and ``agent`` for enforced.sql) to DuckDB
+    connections on one database. Exits with the failing statement's message. Run it from a scratch directory:
+    loadable.sql writes gatekeeper_smoke.parquet relative to the working directory."""
+    name = Path(path).name
+    for statement in statements(path):
+        try:
+            connections[statement.connection].execute(statement.sql).fetchall()
+        except duckdb.Error as error:
+            if statement.error is None:
+                raise SystemExit(f"::error::{name}:{statement.line}: {error}")
+            expect(statement.error in str(error), f"{name}:{statement.line}: failed with the wrong error: {error}")
+        else:
+            expect(statement.error is None, f"{name}:{statement.line}: succeeded, expected an error containing "
+                                            f"{statement.error!r}")
+
+
+@contextmanager
+def scratch_directory():
+    """A temporary working directory for the files a smoke run writes."""
+    previous = os.getcwd()
+    with tempfile.TemporaryDirectory() as directory:
+        os.chdir(directory)
+        try:
+            yield Path(directory)
+        finally:
+            os.chdir(previous)
+
+
+def run_sql_smoke(artifact):
+    """Both portable files against fresh databases on ``artifact``, as the CLI and R drivers run them."""
+    with scratch_directory():
+        with connect(artifact, autoload_known_extensions=False, autoinstall_known_extensions=False) as host:
+            run(SMOKE_DIR / "loadable.sql", {"host": host})
+        with connect(artifact, autoload_known_extensions=False, autoinstall_known_extensions=False) as host:
+            with host.cursor() as agent:
+                run(SMOKE_DIR / "enforced.sql", {"host": host, "agent": agent})
 
 
 def validate(db, sql, options=None):
@@ -112,6 +199,7 @@ def main(argv):
         raise SystemExit("::error::gatekeeper_configure ignored lock_configuration")
 
     enforcement(artifact)
+    run_sql_smoke(artifact)
     print(artifact.name + ": loadable smoke checks passed")
 
 

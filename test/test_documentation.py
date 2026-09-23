@@ -54,7 +54,7 @@ def runnable_blocks(db, blocks):
 
 def test_readme_sql_examples(db):
     examples = re.findall(r"```sql\n(.*?)```(?:\n\n(\|[^\n]*\n(?:\|[^\n]*(?:\n|$))+))?",
-                          (ROOT / "README.md").read_text(), re.S)
+                          (ROOT / "README.md").read_text(encoding="utf-8"), re.S)
     runnable = runnable_blocks(db, [block for block, _ in examples])
 
     for block, table in examples:
@@ -106,7 +106,7 @@ def test_community_hello_world(db):
 
 def test_community_descriptor_headings():
     """Sub-headings must be ### so they sit beside the site's generated 'About' section."""
-    descriptor = (ROOT / "community/description.yml").read_text()
+    descriptor = (ROOT / "community/description.yml").read_text(encoding="utf-8")
     parts = descriptor.split("  extended_description: |\n", 1)
     assert len(parts) == 2, "community/description.yml docs.extended_description must be a two-space indented block scalar"
     extended = parts[1]
@@ -122,7 +122,7 @@ def test_documented_result_columns_match_runtime(db):
     """Both public result tables list every runtime column in order."""
     result = db.execute("SELECT * FROM gatekeeper_validate('SELECT 1')")
     expected = [column[0] for column in result.description]
-    for text, heading in [((ROOT / "README.md").read_text(), "### Result\n"),
+    for text, heading in [((ROOT / "README.md").read_text(encoding="utf-8"), "### Result\n"),
                           ("\n".join(block_scalar("docs", "extended_description")), "### Result columns\n")]:
         section = text.split(heading, 1)[1].split("\n###", 1)[0]
         columns = re.findall(r"(?m)^\| `([a-z_]+)` \|", section)
@@ -132,13 +132,13 @@ def test_documented_result_columns_match_runtime(db):
 def test_never_bind_list_in_prose_is_the_header():
     """docs/security.md spells out the never-bind list and, with the README, its control-plane subset; each must
     be exactly the header's set. A count would let a swapped name pass."""
-    section = (ROOT / "docs/security.md").read_text().split("### Never-bind functions", 1)[1]
+    section = (ROOT / "docs/security.md").read_text(encoding="utf-8").split("### Never-bind functions", 1)[1]
     listed = re.search(r"```\n(.*?)```", section, re.S)[1].split()
     assert len(listed) == len(set(listed)), "a name is listed twice"
     assert set(listed) == never_bind_names()
     subset = re.search(r"The control-plane subset \((.*?)\)", section, re.S)[1]
     assert set(re.findall(r"`([a-z_]+)`", subset)) == control_plane_names()
-    readme = re.search(r"Gatekeeper's own control plane, (.*?), which is\s+refused", (ROOT / "README.md").read_text(), re.S)[1]
+    readme = re.search(r"Gatekeeper's own control plane, (.*?), which is\s+refused", (ROOT / "README.md").read_text(encoding="utf-8"), re.S)[1]
     assert set(re.findall(r"`([a-z_]+)`", readme)) == control_plane_names()
     assert control_plane_names() < never_bind_names()
 
@@ -147,7 +147,7 @@ def test_default_function_count_in_prose():
     """The default count quoted in the README and descriptor must track the reviewed inventory."""
     _, defaults = load()
     for path in [ROOT / "README.md", ROOT / "community/description.yml"]:
-        counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text())
+        counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text(encoding="utf-8"))
         assert counts and set(counts) == {str(len(defaults))}, (path, counts, len(defaults))
 
 
@@ -237,7 +237,7 @@ def test_installation_drift_rejected_before_execution(db, block):
 
 def prose(path):
     """The Markdown outside fenced code blocks: a `# comment` in a shell block is not a heading."""
-    return re.sub(r"(?ms)^ {0,3}(```|~~~).*?^ {0,3}\1[^\n]*$", "", path.read_text())
+    return re.sub(r"(?ms)^ {0,3}(```|~~~).*?^ {0,3}\1[^\n]*$", "", path.read_text(encoding="utf-8"))
 
 
 def heading_anchors(path):
@@ -271,7 +271,7 @@ def test_documentation_links():
 def test_descriptor_links_resolve_in_this_checkout():
     """The community descriptor links to this repository at a version tag; the release gate holds the tag to the
     version, and this holds each path and fragment to a file and heading in the tree that tag will name."""
-    links = re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/[^/]+/([^)\s]+)", (ROOT / "community/description.yml").read_text())
+    links = re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/[^/]+/([^)\s]+)", (ROOT / "community/description.yml").read_text(encoding="utf-8"))
     assert links, "the descriptor links to no repository documentation"
     for target in links:
         file, _, fragment = target.partition("#")

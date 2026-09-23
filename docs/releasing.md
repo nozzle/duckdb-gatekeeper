@@ -31,18 +31,28 @@ must exist and pass CI before it is submitted.
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
 3. Require the full distribution matrix: Linux amd64/arm64 glibc and musl, macOS
-   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Coverage differs by
-   target, and the checklist is only what actually runs:
+   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native artifact
+   is tested in two ways and Wasm EH in the browser, and the checklist is only what actually
+   runs:
    - The reusable pipeline runs the SQL contract suite against a statically linked
      `unittest` on every native target except `linux_arm64` and the cross-compiled
-     `osx_amd64`. For the musl builds and MinGW, that is the whole test.
-   - The `loadable-test` jobs load the shipped artifact into the pinned Python package on
-     six targets, `linux_amd64`, `linux_arm64`, `osx_arm64`, `osx_amd64`, `windows_amd64`,
-     and `windows_arm64`, and run `scripts/smoke_loadable.py` on each (validation, policy
-     setting, enforcement, log-only, and the audit log against the loadable). All but the
-     two Windows targets also run the full Python suite; the two targets the pipeline skips
-     get their only test here. No other artifact is loaded by a `loadable-test` job.
-   - Wasm EH must pass the browser test of the actual distribution artifact.
+     `osx_amd64` (an upstream skip; those two get the full Python suite below instead).
+   - Every shipped artifact is then loaded, as the loadable it is, into an official DuckDB
+     host of the pinned engine, and the checks that cross the host/loadable ABI boundary run
+     against it (validation over host-created bind data, replacement scans, the policy
+     setting, an enforced connection, log-only mode, the audit log, the configuration lock):
+     the pinned Python package for `linux_amd64`, `linux_arm64`, `osx_amd64`, `osx_arm64`,
+     `windows_amd64`, and `windows_arm64` (`loadable-test`: `scripts/smoke_loadable.py` and
+     the full Python suite); the engine's musl CLI in Alpine for `linux_amd64_musl` and
+     `linux_arm64_musl` (`loadable-cli`: `scripts/smoke_cli.sh`); the CRAN R package for
+     `windows_amd64_mingw` (`loadable-r`: `scripts/smoke_loadable.R`, the one leg that takes
+     a client `Prepare()` into the shipped binary); and Chromium for Wasm EH (`browser-test`).
+     The R leg runs the portable SQL form of the smoke (`scripts/smoke/loadable.sql` and
+     `enforced.sql`), which the Python leg and `test/test_smoke_sql.py` run as well. The CLI
+     is one connection: it runs `loadable.sql` as is, and `scripts/smoke_cli.sh` replays the
+     enforced half by hand as separate CLI processes (latch, allowed read, the four refusals,
+     the audit records through `stdout` log storage, log-only), so a change to `enforced.sql`
+     is mirrored there, not picked up.
    If a target is deferred, keep the workflow, `scripts/package_release.py`, packaging tests,
    and community descriptor aligned and document the reason.
 4. Keep the README and security doc's distinction between DuckDB-signed community builds
