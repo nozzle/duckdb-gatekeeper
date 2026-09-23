@@ -34,6 +34,11 @@ STAMP = re.compile(rb"GATEKEEPER_BUILD_ENGINE ([^\s\0]+) ([^\s\0]+)\0+")
 REFUSAL = "was built for DuckDB"
 
 
+def literal(text) -> str:
+    """``text`` as a SQL string literal (scripts/artifact.py's helper, which imports duckdb; this script must not)."""
+    return "'" + str(text).replace("'", "''") + "'"
+
+
 def stamp(data: bytes):
     matches = STAMP.findall(data)
     if len(matches) != 1:
@@ -80,20 +85,20 @@ def check(extension: Path, unittest: Path) -> list:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         settings = ("query I\nSELECT current_setting('allow_unsigned_extensions');\n----\ntrue\n\n"
-                    f"statement ok\nSET extension_directory = '{root / 'extensions'}';\n\n"
+                    f"statement ok\nSET extension_directory = {literal(root / 'extensions')};\n\n"
                     "statement ok\nSET allow_extensions_metadata_mismatch = true;\n\n")
         tampered = root / "tampered" / extension.name
         tampered.parent.mkdir()
         write_copy(extension, tampered, *((altered, source_id) if release else (version, altered)))
         ok, output = probe(unittest, root, "tampered",
-                           settings + f"statement error\nLOAD '{tampered}';\n----\n{REFUSAL}\n")
+                           settings + f"statement error\nLOAD {literal(tampered)};\n----\n{REFUSAL}\n")
         if not ok:
             problems.append("the guard did not refuse a copy stamped for another engine:\n" + output.strip()[-1500:])
         intact = root / "intact" / extension.name
         intact.parent.mkdir()
         write_copy(extension, intact, version, source_id)
         ok, output = probe(unittest, root, "intact",
-                           settings + f"statement ok\nLOAD '{intact}';\n\n"
+                           settings + f"statement ok\nLOAD {literal(intact)};\n\n"
                            "query I\nSELECT allowed FROM gatekeeper_validate('SELECT 1');\n----\ntrue\n")
         if not ok:
             problems.append("the same copy with its stamp intact did not load and validate:\n" + output.strip()[-1500:])
