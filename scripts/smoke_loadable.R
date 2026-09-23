@@ -40,12 +40,17 @@ statements <- function(path) {
     comments <- grepl("^\\s*--", paragraph)
     connection <- "host"
     error <- NA_character_
+    directives <- 0L
     for (comment in trimws(paragraph[comments])) {
       match <- regmatches(comment, regexec("^--\\s*@(host|agent)(?:\\s+expect error:\\s*(.+?))?\\s*$", comment, perl = TRUE))[[1]]
       if (length(match)) {
         connection <- match[[2]]
         error <- if (nzchar(match[[3]])) match[[3]] else NA_character_
+        directives <- directives + 1L
       }
+    }
+    if (directives > 1L) {
+      fail(basename(path), ":", first_line, ": ", directives, " directives in one paragraph")
     }
     sql <- trimws(paste(paragraph[!comments], collapse = "\n"))
     sql <- trimws(sub(";\\s*$", "", sql))
