@@ -15,7 +15,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   sees differently: `SHOW name` is unsupported there (it can read a setting at bind time), DML
   inside a CTE and nested schema paths (`a.b.c.name`) are `unsupported` rather than parser errors,
   and 2.0's lazy `SELECT` results are accounted for: `gatekeeper_enforce` and
-  `gatekeeper_configure` run when their statement runs under every spelling, read or not. (#98)
+  `gatekeeper_configure` run when their statement runs under every spelling, read or not. The
+  engine-rebuild workflow builds against a 1.5 and a 2.0 candidate and, besides the SQL contract,
+  runs a native probe holding a prepared statement handle across a policy change on each. (#98)
 
 ### Fixed
 

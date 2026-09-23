@@ -330,8 +330,11 @@ def test_parameterless_prepared_statements_are_decided_under_the_policy_in_force
     Execute()) is decided under the policy in force when it runs, on either engine. On DuckDB 2.0 the prepare
     is a statement carrying the text, so a parameterless statement the policy denies is refused already at
     the prepare (its text is authorized at QueryBegin, as any parameterless statement's is); the execution is
-    authorized again under the policy in force then, so a policy change between the two decides the execution.
-    executemany couples the two calls, so the observable outcome is the same on both engines."""
+    authorized again under the policy in force then. Each executemany here is its own Prepare() and Execute(),
+    so the policy changes sit between preparations as much as between executions. A handle held across the
+    change is the native probe's (test/native/prepared_handle_probe.cpp, run against each candidate engine
+    in CI): the Python package cannot hold one, since executemany materializes its parameter sets before the
+    first execution."""
     enable(catalog, "debug")
     sql = "SELECT * FROM reporting.leak"
     agent.executemany(sql, [[]])

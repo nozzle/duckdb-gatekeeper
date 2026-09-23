@@ -100,7 +100,7 @@ make an unsigned extension a DuckDB-signed community build. See the
 .venv/bin/python -m pytest test -q
 GATEKEEPER_PARSER=peg .venv/bin/python -m pytest test -q  # the same suite under DuckDB's PEG parser
 .venv/bin/python scripts/audit_inventory.py
-.venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
+.venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
 .venv/bin/python scripts/benchmark.py --markdown  # the README's Benchmarks table; about a minute
 ```
@@ -143,6 +143,14 @@ The suite has two layers with different reach:
   [Compatibility and review](docs/security.md#compatibility-and-review)); the skip names the
   engine defect, and removing it is part of the repin that carries the fix
   ([#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90) is that repin's checklist).
+  On DuckDB 2.0 the same two cases run: its parser is the heap-based matcher.
+- `test/native/*.cpp` are **client-API probes** for behavior neither layer can express: a
+  prepared statement handle held across a policy change (`prepared_handle_probe.cpp`; the
+  Python package's `executemany` materializes its parameter sets before the first execution, so
+  it cannot hold one). They link against the engine with Gatekeeper built in, under
+  `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
+  each candidate engine. Their expectations hold on both engines; add one here when a guarantee
+  is made to a client API rather than to SQL text.
 
 ### Running the suite on DuckDB 2.0
 
@@ -159,9 +167,10 @@ git -C build/candidate-source checkout <commit from PRAGMA version>
 cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release \
   -DOVERRIDE_GIT_DESCRIBE=<library_version from PRAGMA version> \
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
-  -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON
-cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension
+  -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
+cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe
 build/v2/test/unittest 'test/sql/*'
+build/v2/extension/gatekeeper/gatekeeper_prepared_probe
 python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
 GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \

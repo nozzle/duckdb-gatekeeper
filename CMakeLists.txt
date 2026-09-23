@@ -73,5 +73,13 @@ if(GATEKEEPER_SANITIZE)
     target_link_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr)
   endforeach()
 endif()
+# Client-API behavior that neither sqllogictest nor the Python package can express (a prepared statement
+# handle held across a policy change); linked against the engine with Gatekeeper built in, like the fuzz
+# target, and run by the compatibility workflow against each candidate engine.
+option(GATEKEEPER_NATIVE_PROBES "Build the native client-API probes (test/native)" OFF)
+if(GATEKEEPER_NATIVE_PROBES)
+  add_executable(gatekeeper_prepared_probe test/native/prepared_handle_probe.cpp)
+  target_link_libraries(gatekeeper_prepared_probe duckdb)
+endif()
 install(TARGETS gatekeeper_extension EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
