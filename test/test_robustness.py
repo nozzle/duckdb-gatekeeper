@@ -11,11 +11,12 @@ from support.typed_helpers import validate
 # gatekeeper_validate with a parameter parses at execution on whichever thread runs the pipeline: a worker
 # thread's 512 KiB stack (macOS) overflows at about 75 nested calls or 100 nested subqueries, and the engine's
 # own parse overflows the 8 MiB main-thread stack at about 1000, under max_expression_depth's default. The
-# process dies (SIGBUS/SIGILL); nothing downstream, Gatekeeper's depth limit included, ever runs. This is the
-# engine's to bound (docs/security.md, "Compatibility and review"); these two cases are the ones deep enough
-# to reach it and are run only under the default parser until it does.
+# process dies (SIGBUS/SIGILL); nothing downstream, Gatekeeper's depth limit included, ever runs. Upstream
+# duckdb#24618, fixed on main by the heap-based matcher of duckdb#25204 and in no 1.5.x release
+# (docs/security.md, "Compatibility and review"). These two cases are the ones deep enough to reach it; they
+# run only under the default parser until the pinned engine carries the fix, when this marker goes (#90).
 PEG_DEEP_NESTING_CRASH = pytest.mark.skipif(
-    PARSER == "peg", reason="DuckDB 1.5.5 PEG parser recursion overflows the stack on deep nesting")
+    PARSER == "peg", reason="DuckDB 1.5.5 PEG matcher recursion overflows the stack on deep nesting (duckdb#24618)")
 
 
 @pytest.mark.parametrize("depth", [1, 20, pytest.param(100, marks=PEG_DEEP_NESTING_CRASH)])
