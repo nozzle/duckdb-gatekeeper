@@ -360,8 +360,9 @@ def test_enforce_is_refused_inside_an_open_transaction(catalog):
     # An enforced connection cannot COMMIT or ROLLBACK (neither is a read statement), so a latch taken inside a
     # transaction the host opened would strand the connection in a transaction nothing can end. The refusal is a
     # Permission Error. Whether the host's transaction stays usable after it is the engine's transaction
-    # invalidation policy (DuckDB 1.5: yes; 2.0's default: no error leaves it usable); either way the connection
-    # stays unenforced, the host ends the transaction, and enforcing after COMMIT or ROLLBACK works as before.
+    # invalidation policy: DuckDB 1.5 keeps it usable after a Permission Error; 2.0's default aborts it on any
+    # error, so only ROLLBACK is left. Either way the connection stays unenforced, the host ends the transaction,
+    # and enforcing after COMMIT or ROLLBACK works as before.
     # Python's begin() is a BEGIN TRANSACTION statement and is refused the same way.
     for end in ["COMMIT", "ROLLBACK"]:
         with catalog.cursor() as cursor:

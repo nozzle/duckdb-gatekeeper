@@ -235,13 +235,14 @@ definition in the rendering did is not distinguished from it and runs under that
 authority; this is the same exposure function attribution has always had, and the linked fuzz
 harness pins both halves (`CheckHostileRelation`).
 
-Both boundaries read one policy snapshot per statement. DuckDB's `Prepare()` path binds
-before any extension hook runs, so on that path the execution boundary only pre-screens the
-prepared plan's structure: with no text and no private bind on record nothing in it can be
-attributed, so table policy and function blocks alike wait for execution, where
-`OnExecutePrepared` forces a rebind inside the query so the plan that runs is authorized
-under the current policy (the `authorize` boundary), and a cached plan can never outlive a
-policy change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
+Both boundaries read one policy snapshot per statement. A `Prepare()` only pre-screens the
+prepared plan's structure: its parameter values are not known, and on DuckDB 1.5, which binds
+it before any extension hook runs, no text is on record either, so nothing in it can be
+attributed; table policy and function blocks alike wait for execution, where the rebind hook
+(`OnExecutePrepared` on 1.5, `OnRebindPreparedStatement` on 2.0, whose `Prepare()` and
+`Execute()` run as statements carrying the prepared text) forces a rebind inside the query so
+the plan that runs is authorized under the current policy (the `authorize` boundary), and a
+cached plan can never outlive a policy change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
 statement that reaches them, which `test/test_enforcement.py` checks over a corpus of allowed,
 denied, and erroneous statements. What DuckDB does to a statement before they run is listed
 under residuals.
@@ -321,13 +322,16 @@ under residuals.
   statement (for example when that view is blocked by table policy). Object identity is a
   bind-time property, so this cannot move earlier. `enable_external_access=false` and
   `allowed_directories` are the controls; `CALL gatekeeper_enforce()` warns when they are loose.
-- **`Prepare()` before hooks.** DuckDB binds a prepared statement before any extension hook
-  runs. Agent-written readers are still denied before execution, but the bind of a statement
-  that will be denied has already happened; with external access enabled, that bind can
-  perform reader I/O whose only observable effect for the caller is the denial's timing.
-  The replacement-scan gate does run during that bind, with no statement text on record, so
-  it holds every substituted reader to the allowlist there: a caller's `FROM 'file'` is
-  refused before anything opens, and so is a trusted view that names its file the same way.
+- **`Prepare()` binds before it is decided.** DuckDB 1.5 binds a prepared statement before
+  any extension hook runs; 2.0 runs the prepare as a statement whose text is checked first, but
+  a statement the text admits is still bound before its pre-screen. Agent-written readers are
+  denied before execution either way, but the bind of a statement that will be denied has
+  already happened; with external access enabled, that bind can perform reader I/O whose only
+  observable effect for the caller is the denial's timing. The replacement-scan gate does run
+  during that bind and holds every substituted reader to the allowlist: a caller's `FROM 'file'`
+  is refused before anything opens. On 1.5, with no statement text on record, so is a trusted
+  view that names its file the same way; 2.0's gate has the text and knows the view's file is
+  the view's.
   Such a view cannot be prepared on an enforced connection unless its reader is allowed;
   executing the statement directly (with or without parameters) binds inside the query,
   where the text is on record, and a view written with an explicit `read_parquet(...)` call
@@ -445,7 +449,7 @@ Semantics that follow from "the same decision, without the refusal":
   log-only statement has been decided, the hooks the engine reaches while binding and
   executing it anyway do not decide it again. The replacement-scan gate lets the engine's own
   bind through for a statement already decided; for one not yet decided (parameters defer
-  authorization to the engine's bind, and a `Prepare()` has no statement in progress) the gate
+  authorization to the engine's bind, and a 1.5 `Prepare()` has no statement in progress) the gate
   records the denied reader itself, under the statement's snapshotted mode and policy, marks
   the statement decided, and then lets the bind continue. That ordering matters: a reader
   whose file does not exist fails the bind before any later hook runs, and the gate's record is
@@ -461,8 +465,9 @@ Semantics that follow from "the same decision, without the refusal":
   connection shows; `test/test_log_only.py` asserts
   this over the enforcement parity corpus on identical fresh instances, and asserts the record
   equals the `gatekeeper_validate` row.
-- A `Prepare()` outside any query is pre-screened as before and a denial there is recorded
-  with `mode = 'log_only'`; each later execution is its own record.
+- A `Prepare()` is pre-screened as before and a denial there is recorded with
+  `mode = 'log_only'` (on 1.5 with no statement text, on 2.0 with the prepared text); each
+  later execution is its own record.
 - **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
   gatekeeper_policy`, `CALL gatekeeper_configure()`, and `SET gatekeeper_log_only` are
   unsupported statements that are recorded and then execute, exactly like every other
@@ -635,9 +640,10 @@ table policy only to identities it does, holding the engine's plan to the tables
 functions and scan counts of the private bind's plan; an attached table's scan (`LogicalGet`
 with a table entry) is never attributed as a function. A table function a trusted definition
 named binds what it replaces itself with as that definition's: `query_table(n)` in a host
-scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()` bind outside any statement has no
-text and no record; its pre-screen checks plan structure and the control plane and defers
-table policy and the rest of function policy to execution, which rebinds inside the query.
+scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()`
+has no record of who wrote what (on 1.5 it binds outside any statement, with no text at all);
+its pre-screen checks plan structure and the control plane and defers table policy and the
+rest of function policy to execution, which rebinds inside the query.
 
 The callback exposes no expression origin within one binder: when caller syntax requires
 an implementation check, a trusted expansion using the same implementation must also pass
@@ -823,10 +829,10 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   explicit `read_parquet(...)` in that body is. The
   callback receives only the name, so the text walk records every table name the caller
   wrote and the gate consults that record (the private bind's, or the admitted statement's
-  on an enforced connection); a name both sides use is checked as the caller's. A
-  `Prepare()` bind outside any statement has no text on record and is pre-screened as
-  though the caller wrote every name; `OnExecutePrepared` then rebinds inside the query,
-  where the record exists.
+  on an enforced connection); a name both sides use is checked as the caller's. On DuckDB
+  1.5 a `Prepare()` bind outside any statement has no text on record and is pre-screened as
+  though the caller wrote every name (2.0's prepare carries the text, and the gate consults
+  it); the rebind hook then rebinds inside the query, where the record exists.
   Host-language scans that resolve to subqueries are always denied. When no callback
   claims a name, Gatekeeper raises the engine's missing-table error itself rather than
   returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and

@@ -815,7 +815,7 @@ it **executes**. It does not:
 - enforce execution deadlines or memory budgets;
 - isolate the filesystem or network;
 - prevent binding from performing I/O through trusted views and macros before a denial,
-  or before a denial of a prepared statement, which DuckDB binds before any extension hook runs;
+  or before a denial of a prepared statement, which DuckDB binds before Gatekeeper can decide it;
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
   parsing, before any extension hook, which can run any scalar function the connection can see,
   `write_log` into the audit log included;
