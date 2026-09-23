@@ -6,6 +6,27 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Changed
+
+- Every distributed artifact is now loaded, as the loadable it is, into an official DuckDB host
+  of the pinned engine and exercised across the host/loadable ABI boundary before a release is
+  published: the Python package on Linux, macOS, and Windows (both architectures each, now with
+  the full test suite on Windows too), the engine's musl CLI in Alpine for the two musl builds,
+  the CRAN R package for the MinGW build, and Chromium for Wasm EH. Previously the musl and
+  MinGW artifacts were only tested statically linked. The portable form of those checks is
+  `scripts/smoke/*.sql`. (#103)
+- The `wasm_threads` (COI) exclusion is now documented against its cause, a link-flag bug in
+  the upstream toolchain that leaves every `wasm_threads` extension unloadable, with the exit
+  condition in [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101). (#103)
+
+### Known
+
+- On the DuckDB 2.0 alpha, an expression that reads `warnings` after `enforced` from the same
+  `gatekeeper_enforce()` row mis-evaluates; read the columns separately or use `CALL`. Release
+  binaries target 1.5.5, which is unaffected.
+  See [Compatibility and review](docs/security.md#compatibility-and-review) and
+  [#102](https://github.com/nozzle/duckdb-gatekeeper/issues/102).
+
 ## 0.3.0 - 2026-09-23
 
 ### Added

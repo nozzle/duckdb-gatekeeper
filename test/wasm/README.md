@@ -83,9 +83,15 @@ against a user who controls their browser.
 - **MVP:** builds/loads, but the tested runtime throws `_setThrew is not defined`
   on a missing-table error even without Gatekeeper. Exception paths cannot be
   supported until the runtime is fixed and regression-tested.
-- **Threads/COI:** excluded because loader recovery after an engine error and the
-  distribution toolchain's thread/shared-memory flags are not verified. Supporting
-  it requires repeatable load/error/recovery tests with the actual distribution artifact.
+- **Threads/COI:** excluded because the toolchain's `wasm_threads` artifacts cannot load. The
+  `wasm_threads` target in `extension-ci-tools` never passes `-DUSE_WASM_THREADS=1`, so the side
+  module is linked without `-pthread -sSHARED_MEMORY=1` and the threaded main module rejects
+  its memory import (`LinkError: mismatch in shared state of memory`). This is
+  [extension-ci-tools#391](https://github.com/duckdb/extension-ci-tools/issues/391), unfixed on
+  every branch, and it affects DuckDB's own core extensions
+  ([duckdb-wasm#2041](https://github.com/duckdb/duckdb-wasm/issues/2041)), so no COI deployment
+  can load extensions today. The exit condition, and the COI browser test to add when it is
+  met, are in [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101).
 
 ## Maintenance
 

@@ -152,6 +152,15 @@ or minor release. To change our release build defaults, update together:
   `scripts/build_wasm.py`. The npm package version differs from the engine it embeds; the EH
   browser test asserts the embedded engine against the pin in `versions.cmake`, so a runtime
   that embeds another engine fails there;
+- the hosts of the distribution workflow's loadable legs that are not the pinned Python package
+  (`env` of `.github/workflows/MainDistributionPipeline.yml`): the musl CLI is the engine's own
+  release asset and follows `versions.cmake` without an edit, but the CRAN `duckdb` package that
+  loads the MinGW artifact is pinned through `R_CRAN_SNAPSHOT`, a dated Posit Package Manager
+  snapshot, which must move to a date after CRAN published the R package of the new engine
+  version (with `R_VERSION` still one the snapshot has Windows binaries for). Both legs assert the
+  host's engine version, so a stale snapshot fails rather than tests the wrong engine. The CLI
+  smoke (`scripts/smoke_cli.sh`) reads audit records from the engine's `stdout` log storage and
+  matches its rendering of the record; check those patterns on the new engine;
 - the benchmark table in the README and the community descriptor, regenerated with
   `scripts/benchmark.py --markdown` on the new engine. Its footnote names the engine and
   extension version it was taken on, and `test_documentation.py` checks that against the pin;

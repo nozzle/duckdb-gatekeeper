@@ -981,6 +981,13 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   connection; any plain statement in between clears it. This is engine sequencing in
   `ClientContext::BeginQueryInternal`'s caller, to be reported upstream; it does not weaken a
   refusal, it changes the error the following statement reports.
+- On the 2.0 alpha, `gatekeeper_enforce()`'s one row mis-evaluates when an expression reads
+  `warnings` after `enforced` in the same projection: `SELECT enforced AND warnings IS NOT NULL
+  FROM gatekeeper_enforce()` raises an internal error (which invalidates the database), and
+  `SELECT enforced, warnings IS NOT NULL ...` returns `false` for the second column. Latching
+  itself is unaffected. `CALL gatekeeper_enforce()`, `SELECT enforced FROM gatekeeper_enforce()`,
+  and reading the two columns separately are correct on both engines; see
+  [#102](https://github.com/nozzle/duckdb-gatekeeper/issues/102).
 Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
 2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ

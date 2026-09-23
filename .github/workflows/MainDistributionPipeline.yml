@@ -5,6 +5,11 @@ name: Extension distribution
 # Windows/musl platform matrix. Wasm EH is browser-tested here and in wasm.yml; MVP and threads
 # remain excluded (see test/wasm/README.md). Both refs below are pinned to the commit tracked by the
 # extension-ci-tools submodule; upstream publishes 1.5.x tooling on the v1.5-variegata branch.
+#
+# Every shipped artifact is then loaded, as the loadable it is, into an official DuckDB host of the
+# pinned version and exercised across the host/loadable ABI boundary: the Python package for the six
+# targets it has wheels for (loadable-test), the musl CLI in Alpine for the two musl targets
+# (loadable-cli), the CRAN R package for MinGW (loadable-r), and Chromium for Wasm EH (browser-test).
 on:
   push:
     branches: [main]
@@ -16,6 +21,17 @@ permissions:
 concurrency:
   group: distribution-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  # The hosts of the loadable jobs that are not the pinned Python package. Both move with the engine pin
+  # (inventories/README.md, "Repinning the engine"): the CLI is the engine's own release asset; the R
+  # package is CRAN's build of the same engine, installed as a Windows binary from a dated Posit Package
+  # Manager snapshot so the version stays what it was validated with (CRAN keeps only the current binary).
+  # The snapshot must postdate the CRAN release of the duckdb package version equal to the engine pin.
+  R_VERSION: '4.6.1'
+  R_CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-09-01
+  # The container the musl CLI runs in (multi-arch index digest; alpine:3.22). Reviewed with the other
+  # container images in the periodic dependency pass, not engine-coupled.
+  ALPINE_IMAGE: alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 jobs:
   metadata:
     # The engine pin the reusable pipeline builds against and names its artifacts with, read from
@@ -65,10 +81,9 @@ jobs:
     # linux_arm64 and the cross-compiled osx_amd64. These jobs load the actual distributed artifacts
     # into the pinned DuckDB Python package, so the host/loadable ABI boundary (bind-data inspection,
     # replacement-scan callbacks, the policy setting, the query hooks enforcement lives in, the log
-    # manager) is exercised on the six targets below, the ones a pinned Python wheel can load. The
-    # full Python suite runs where it can; the two Windows targets get the smoke script, whose
-    # enforcement leg is the only execution of enforced connections, log-only mode, and the audit
-    # log against those binaries. The musl and MinGW artifacts have only the pipeline's SQL suite.
+    # manager) is exercised on the six targets below, the ones a pinned Python wheel can load, each
+    # with scripts/smoke_loadable.py and the full Python suite. The musl and MinGW artifacts have
+    # their own hosts below.
     name: Distributed loadable (${{ matrix.arch }})
     needs: [metadata, build]
     runs-on: ${{ matrix.os }}
@@ -77,12 +92,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, arch: linux_amd64, pytest: true }
-          - { os: ubuntu-24.04-arm, arch: linux_arm64, pytest: true }
-          - { os: macos-latest, arch: osx_arm64, pytest: true }
-          - { os: macos-15-intel, arch: osx_amd64, pytest: true }
-          - { os: windows-latest, arch: windows_amd64, pytest: false }
-          - { os: windows-11-arm, arch: windows_arm64, pytest: false }
+          - { os: ubuntu-latest, arch: linux_amd64 }
+          - { os: ubuntu-24.04-arm, arch: linux_arm64 }
+          - { os: macos-latest, arch: osx_arm64 }
+          - { os: macos-15-intel, arch: osx_amd64 }
+          - { os: windows-latest, arch: windows_amd64 }
+          - { os: windows-11-arm, arch: windows_arm64 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -95,15 +110,78 @@ jobs:
       - name: ABI-sensitive smoke checks against the distributed artifact
         run: python scripts/smoke_loadable.py build/distributed/gatekeeper.duckdb_extension
       - name: Full pytest suite against the distributed artifact
-        if: matrix.pytest
         env:
           GATEKEEPER_EXTENSION: ${{ github.workspace }}/build/distributed/gatekeeper.duckdb_extension
         # The C++-compiling tests need the build tree; everything else loads GATEKEEPER_EXTENSION.
         run: python -m pytest test -q --ignore test/test_engine_errors.py --ignore test/test_validator_structure.py --ignore test/test_inventory_tooling.py
 
+  loadable-cli:
+    # The musl artifacts: no Python wheel exists, so the host is the engine's own musl CLI (dynamically
+    # linked against musl, so it can dlopen the extension) inside Alpine. scripts/smoke_cli.sh runs the
+    # portable SQL smoke on it and replays the enforced checks as separate CLI processes.
+    name: Distributed loadable (${{ matrix.arch }})
+    needs: [metadata, build]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, arch: linux_amd64_musl, cli: amd64 }
+          - { os: ubuntu-24.04-arm, arch: linux_arm64_musl, cli: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gatekeeper-v${{ needs.metadata.outputs.duckdb_version }}-extension-${{ matrix.arch }}
+          path: build/distributed
+      - name: Stamped engine identity matches the pinned engine
+        # Standard library only; no Python toolchain is installed in this job.
+        run: python3 scripts/check_engine_stamp.py --extension build/distributed/gatekeeper.duckdb_extension --expect-version v${{ needs.metadata.outputs.duckdb_version }}
+      - name: Fetch the engine's musl CLI release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v${{ needs.metadata.outputs.duckdb_version }}" --repo duckdb/duckdb \
+            --pattern "duckdb_cli-linux-${{ matrix.cli }}-musl.zip" --dir build/cli
+          unzip -q build/cli/duckdb_cli-linux-${{ matrix.cli }}-musl.zip -d build/cli
+      - name: CLI smoke checks against the distributed artifact, in Alpine
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work "$ALPINE_IMAGE" sh -c \
+            'apk add --no-cache libstdc++ >/dev/null && sh scripts/smoke_cli.sh build/cli/duckdb build/distributed/gatekeeper.duckdb_extension v${{ needs.metadata.outputs.duckdb_version }} ${{ matrix.arch }}'
+
+  loadable-r:
+    # The MinGW artifact exists for DuckDB's R package, which RTools builds with MinGW; no other official
+    # host loads it. scripts/smoke_loadable.R runs the portable SQL smoke through DBI, with two connections
+    # for the enforced half. R's dbExecute prepares before executing, so this is also the only leg that
+    # takes the client Prepare() path on the shipped binary.
+    name: Distributed loadable (windows_amd64_mingw)
+    needs: [metadata, build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gatekeeper-v${{ needs.metadata.outputs.duckdb_version }}-extension-windows_amd64_mingw
+          path: build/distributed
+      - name: Stamped engine identity matches the pinned engine
+        run: python scripts/check_engine_stamp.py --extension build/distributed/gatekeeper.duckdb_extension --expect-version v${{ needs.metadata.outputs.duckdb_version }}
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: ${{ env.R_VERSION }}
+          rtools-version: none
+          use-public-rspm: false
+      - name: Install the CRAN duckdb package (Windows binary from the pinned snapshot)
+        shell: bash
+        run: Rscript -e 'install.packages(c("DBI", "duckdb"), repos = Sys.getenv("R_CRAN_SNAPSHOT"), quiet = TRUE); cat("duckdb", as.character(packageVersion("duckdb")), "\n")'
+      - name: R smoke checks against the distributed artifact
+        shell: bash
+        run: Rscript scripts/smoke_loadable.R build/distributed/gatekeeper.duckdb_extension v${{ needs.metadata.outputs.duckdb_version }} windows_amd64_mingw
+
   package:
     name: Package unsigned release artifacts
-    needs: [build, browser-test, loadable-test]
+    needs: [build, browser-test, loadable-test, loadable-cli, loadable-r]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
