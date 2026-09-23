@@ -587,9 +587,7 @@ SELECT enforced FROM gatekeeper_enforce();
 > [!NOTE]
 > The full row also carries `warnings`, naming host settings that weaken the sandbox
 > (`enable_external_access`, autoload, `lock_configuration`, log-only mode, and logging that
-> would not record a denial). Gatekeeper reports them; it never changes them. The latch is the
-> statement's effect, not the row's: the connection is enforced once the statement has run,
-> whether or not you read the result, under either spelling (`CALL` or `SELECT ... FROM`).
+> would not record a denial). Gatekeeper reports them; it never changes them.
 
 From then on, on that connection only, allowed reads work as before:
 
