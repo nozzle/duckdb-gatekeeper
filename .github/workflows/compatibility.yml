@@ -30,13 +30,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   candidate:
-    name: Rebuild against ${{ matrix.engine.name }}
+    name: Rebuild against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        engine:
+        include:
           # Post-1.5.5 v1.5-variegata snapshot: a different engine of the pinned release line.
           - name: DuckDB 1.5 candidate (a3cd0de)
             key: a3cd0de
@@ -52,12 +52,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: duckdb/duckdb
-          ref: ${{ matrix.engine.ref }}
+          ref: ${{ matrix.ref }}
           path: build/candidate-source
           fetch-depth: 0
       - uses: ./.github/actions/setup
         with:
-          ccache-key: candidate-${{ matrix.engine.key }}-ubuntu
+          ccache-key: candidate-${{ matrix.key }}-ubuntu
           ccache-max-size: 1G
       - name: Configure against the actual candidate source
         run: >-
@@ -90,13 +90,13 @@ jobs:
     # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile must let the
     # checkout describe itself rather than labeling the rebuild as the pinned release. For the 2.0 candidate
     # this is the `ref_next` build, with our pinned extension-ci-tools Makefile rather than its `main`.
-    name: Community make release against ${{ matrix.engine.name }}
+    name: Community make release against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        engine:
+        include:
           - name: DuckDB 1.5 candidate (a3cd0de)
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
@@ -104,7 +104,7 @@ jobs:
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
     env:
-      CANDIDATE_ENGINE: ${{ matrix.engine.ref }}
+      CANDIDATE_ENGINE: ${{ matrix.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,7 +119,7 @@ jobs:
           git -C duckdb describe --tags --long
       - uses: ./.github/actions/setup
         with:
-          ccache-key: community-makefile-${{ matrix.engine.key }}-ubuntu
+          ccache-key: community-makefile-${{ matrix.key }}-ubuntu
           ccache-max-size: 1G
       - name: Show the engine label the Makefile passes to CMake
         run: |
