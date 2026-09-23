@@ -101,7 +101,7 @@ statement ok
 CREATE VIEW by_call AS SELECT * FROM read_parquet('__TEST_DIR__/data.parquet');
 
 query TT
-SELECT code, list_sort(list_transform(objects, o -> o.type)) FROM gatekeeper_validate('SELECT * FROM by_path');
+SELECT code, list_sort(list_transform(objects, lambda o: o.type)) FROM gatekeeper_validate('SELECT * FROM by_path');
 ----
 ok	[replacement, view]
 

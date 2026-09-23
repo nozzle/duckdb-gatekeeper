@@ -30,6 +30,7 @@
 #include "duckdb/planner/operator/logical_create.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "enforcement.hpp"
+#include "engine_api.hpp"
 #include "engine_errors.hpp"
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
@@ -50,9 +51,8 @@ static Doc SerializeStatement(const SelectStatement &select) {
 	yyjson_mut_obj_add_false(doc.get(), root, "error");
 	auto statements = yyjson_mut_arr(doc.get());
 	yyjson_mut_obj_add_val(doc.get(), root, "statements", statements);
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-	yyjson_mut_arr_append(statements, JsonSerializer::Serialize(select, doc.get(), true, true, true, options));
+	yyjson_mut_arr_append(
+	    statements, JsonSerializer::Serialize(select, doc.get(), true, true, true, engine::LatestSerialization()));
 	Doc ast(yyjson_mut_doc_imut_copy(doc.get(), nullptr), yyjson_doc_free);
 	if (!ast)
 		throw std::bad_alloc();
@@ -84,7 +84,7 @@ static bool PivotEnumInfo(const CreateInfo &info) {
 	    info.on_conflict != OnCreateConflict::REPLACE_ON_CONFLICT)
 		return false;
 	auto &type = info.Cast<CreateTypeInfo>();
-	return type.type.id() == LogicalTypeId::INVALID && PivotEnumName(type.name);
+	return type.type.id() == LogicalTypeId::INVALID && PivotEnumName(engine::TypeName(type));
 }
 
 // The statement as parsed from text: unqualified, with the SELECT that defines the enum still attached.
@@ -92,7 +92,7 @@ static bool PivotEnumStatement(const SQLStatement &statement) {
 	if (statement.type != StatementType::CREATE_STATEMENT)
 		return false;
 	auto &info = *statement.Cast<CreateStatement>().info;
-	if (!PivotEnumInfo(info) || !info.catalog.empty() || !info.schema.empty())
+	if (!PivotEnumInfo(info) || !engine::InfoCatalog(info).empty() || !engine::InfoSchema(info).empty())
 		return false;
 	auto &query = info.Cast<CreateTypeInfo>().query;
 	return query && query->type == StatementType::SELECT_STATEMENT;
@@ -104,7 +104,8 @@ static bool PivotEnumPlan(const LogicalOperator &plan) {
 	if (plan.type != LogicalOperatorType::LOGICAL_CREATE_TYPE || plan.children.size() != 1)
 		return false;
 	auto &info = plan.Cast<LogicalCreate>().info;
-	return info && PivotEnumInfo(*info) && info->catalog == TEMP_CATALOG && !info->Cast<CreateTypeInfo>().query;
+	return info && PivotEnumInfo(*info) && engine::InfoCatalog(*info) == TEMP_CATALOG &&
+	       !info->Cast<CreateTypeInfo>().query;
 }
 
 TextCheck::Unit TextCheck::Unit::Unattributed() {
@@ -148,7 +149,7 @@ static TextCheck CheckBatchText(ClientContext &context, const gatekeeper::Layers
 		check.units.push_back(std::move(part.units[0]));
 		check.units.back().pivot_enums = enums;
 		if (statement->type == StatementType::CREATE_STATEMENT)
-			enums.insert(statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>().name);
+			enums.insert(engine::TypeName(statement->Cast<CreateStatement>().info->Cast<CreateTypeInfo>()));
 	}
 	check.result = {true, gatekeeper::codes::OK};
 	return check;
@@ -301,17 +302,18 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 			auto &get = op->Cast<LogicalGet>();
 			auto table = get.GetTable();
 			if (table) {
-				auto catalog = table->schema.catalog.GetName(), schema = table->schema.name, name = table->name;
+				auto catalog = engine::CatalogName(table->schema.catalog), schema = engine::EntryName(table->schema),
+				     name = engine::EntryName(*table);
 				account(provenance.validated_scans, remaining, gatekeeper::ObjectKey(catalog, schema, name),
 				        {gatekeeper::rules::STATEMENT,
 				         "plan scans an object more often than the validated statement did", catalog, schema, name});
 				AuthorizeObject(layers, unit.binding, *table, result,
 				                provenance.ObjectAttributable(unit.binding, catalog, schema, name));
 			} else {
-				account(provenance.validated_function_scans, remaining_functions, get.function.name,
+				auto &scan = engine::FunctionName(get.function);
+				account(provenance.validated_function_scans, remaining_functions, scan,
 				        {gatekeeper::rules::STATEMENT,
-				         "plan scans a source more often than the validated statement did", "", "", "",
-				         get.function.name});
+				         "plan scans a source more often than the validated statement did", "", "", "", scan});
 			}
 		}
 		for (auto &child : op->children)
@@ -388,7 +390,7 @@ static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScan
 		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
 			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
 			        "replacement scan has no resolvable function: " + path};
-		auto name = function->Cast<FunctionExpression>().function_name;
+		auto name = engine::FunctionName(function->Cast<FunctionExpression>());
 		return {Resolution::Kind::FUNCTION, std::move(replacement), std::move(name), ""};
 	}
 	return {};
@@ -495,7 +497,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// are asked a second time, which is the one place log-only departs from once-per-lookup.
 	if (mode == DecisionMode::LOG_ONLY)
 		return nullptr;
-	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
+	engine::GetEntry(context, CatalogType::TABLE_ENTRY, engine::Str(input.catalog_name), engine::Str(input.schema_name),
+	                 engine::Str(input.table_name));
 	throw BinderException("Table \"%s\" appeared during binding; retry the statement", path);
 }
 
@@ -563,12 +566,13 @@ struct LookupCallback {
 			// An object the caller names is the caller's, whichever binder retrieved it. Otherwise it is the
 			// caller's when the caller's own binder retrieved it and no host scalar-macro body names it.
 			auto &object = entry.Cast<StandardEntry>();
-			auto catalog = object.schema.catalog.GetName(), schema = object.schema.name;
+			auto catalog = engine::CatalogName(object.schema.catalog), schema = engine::EntryName(object.schema);
+			auto &name = engine::EntryName(entry);
 			bool attributable =
-			    s.provenance.CallerNamesObject(s.binding, catalog, schema, entry.name) ||
-			    (!trusted && !gatekeeper::NamesObject(s.provenance.trusted_table_names, catalog, schema, entry.name));
+			    s.provenance.CallerNamesObject(s.binding, catalog, schema, name) ||
+			    (!trusted && !gatekeeper::NamesObject(s.provenance.trusted_table_names, catalog, schema, name));
 			(attributable ? s.provenance.caller_objects : s.provenance.trusted_objects)
-			    .insert(gatekeeper::ObjectKey(catalog, schema, entry.name));
+			    .insert(gatekeeper::ObjectKey(catalog, schema, name));
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 			// A host view's body is trusted, and so is the body of any view a trusted definition reached: an
 			// internal metadata view a host scalar-macro body names is the macro's, readers included. The same
@@ -577,7 +581,7 @@ struct LookupCallback {
 				armed = true;
 			return;
 		}
-		auto canonical = gatekeeper::CanonicalFunction(entry.name);
+		auto canonical = gatekeeper::CanonicalFunction(engine::EntryName(entry));
 		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
 		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
 		// bind in the same binder.
@@ -610,10 +614,9 @@ struct LookupCallback {
 
 // Binds statement, the unit's own or a copy of it, against the unit's text record; fills the unit's provenance.
 static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers &layers, SQLStatement &statement,
-                               TextCheck::Unit &unit,
-                               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters,
+                               TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
-	case_insensitive_map_t<BoundParameterData> parameter_data;
+	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
 	BoundParameterMap bound_parameters(parameter_data);
@@ -640,10 +643,12 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 			throw BinderException(gatekeeper::PARAMETERS_REQUIRED);
 	CheckPlan(layers, unit, PlanOrigin::PRIVATE, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
-	for (auto &entry : binder->GetReplacementScans())
-		if (!scope.authorized.count(gatekeeper::Lower(entry.first)))
+	for (auto &entry : binder->GetReplacementScans()) {
+		auto &path = engine::Str(entry.first);
+		if (!scope.authorized.count(gatekeeper::Lower(path)))
 			result.violations.emplace(gatekeeper::rules::REPLACEMENT_SCAN,
-			                          "replacement scan was not authorized: " + entry.first, "", "", entry.first);
+			                          "replacement scan was not authorized: " + path, "", "", path);
+	}
 	if (!result.violations.empty())
 		throw PermissionException("unauthorized replacement scan");
 }
@@ -661,7 +666,7 @@ static idx_t HostEnumSize(ClientContext &context, const string &name) {
 	try {
 		// The untyped lookup: the typed template names TypeCatalogEntry::Name, which a loadable extension then
 		// defines a second time next to the engine's own definition on Linux.
-		auto &entry = Catalog::GetEntry(context, CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name);
+		auto &entry = engine::GetEntry(context, CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name);
 		auto &type = entry.Cast<TypeCatalogEntry>().user_type;
 		if (type.id() == LogicalTypeId::ENUM)
 			return EnumType::GetSize(type);
@@ -687,7 +692,8 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 	bool distinct = false;
 	std::function<void(ParsedExpression &)> expression = [&](ParsedExpression &expr) {
 		if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY)
-			distinct |= SubstitutePivotEnums(context, *expr.Cast<SubqueryExpression>().subquery->node, enums, large);
+			distinct |=
+			    SubstitutePivotEnums(context, *engine::Subquery(expr.Cast<SubqueryExpression>()).node, enums, large);
 		ParsedExpressionIterator::EnumerateChildren(expr, expression);
 	};
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
@@ -714,12 +720,13 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 				    fixed *= values;
 		    };
 		    for (auto &column : pivots) {
-			    if (!column.pivot_enum.empty() && enums.count(column.pivot_enum))
+			    auto &pivot_enum = engine::Str(column.pivot_enum);
+			    if (!pivot_enum.empty() && enums.count(pivot_enum))
 				    dynamic.emplace_back(column);
 			    else if (!column.entries.empty())
 				    multiply(column.entries.size());
-			    else if (!column.pivot_enum.empty())
-				    multiply(HostEnumSize(context, column.pivot_enum));
+			    else if (!pivot_enum.empty())
+				    multiply(HostEnumSize(context, pivot_enum));
 		    }
 		    if (dynamic.empty())
 			    return;
@@ -733,12 +740,13 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 		    }
 		    distinct |= count > 1;
 		    for (auto &column : dynamic) {
-			    column.get().pivot_enum.clear();
+			    column.get().pivot_enum = engine::Name();
 			    for (idx_t i = 0; i < count; i++) {
 				    PivotColumnEntry entry;
-				    entry.alias = std::to_string(i);
+				    auto alias = std::to_string(i);
+				    entry.alias = engine::ToName(alias);
 				    for (size_t n = 0; n < column.get().pivot_expressions.size(); n++)
-					    entry.values.emplace_back(entry.alias);
+					    entry.values.emplace_back(alias);
 				    column.get().entries.push_back(std::move(entry));
 			    }
 			    count = 1;
@@ -748,7 +756,7 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 }
 
 void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
-               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result) {
+               optional_ptr<const engine::ParameterMap> parameters, gatekeeper::Result &result) {
 	if (unit.pivot_enums.empty()) {
 		if (unit.statement->type == StatementType::SELECT_STATEMENT)
 			return AuthorizeStatement(context, layers, *unit.statement, unit, parameters, result);

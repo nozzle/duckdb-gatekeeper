@@ -9,8 +9,8 @@ import sys
 import duckdb
 import pytest
 
-from support.artifact import EXTENSION, ROOT, literal, select_parser
-from support.toolchain import repository
+from support.artifact import ENGINE_SOURCE, EXTENSION, ROOT, literal, select_parser
+from support.toolchain import git, repository
 from versions import (BASELINE_FILENAME, EXTENSION_VERSION, REVIEWED_DUCKDB, SUPPORTED_DUCKDB,
                       SUPPORTED_DUCKDB_REVISION, load_versions, reviewed_duckdb)
 
@@ -177,8 +177,8 @@ def test_check_engine_stamp_script():
     from engine import checkout_revision
     version, source_id = _stamp(EXTENSION.read_bytes())
     arguments = ["--extension", str(EXTENSION)]
-    if checkout_revision(ROOT / "duckdb"):
-        arguments += ["--engine-source", str(ROOT / "duckdb")]
+    if checkout_revision(ENGINE_SOURCE):
+        arguments += ["--engine-source", str(ENGINE_SOURCE)]
     assert check_engine_stamp.main(arguments + ["--expect-version", version]) == 0
     assert check_engine_stamp.main(arguments + ["--expect-version", version + "x"]) == 1
     with pytest.raises(SystemExit):
@@ -218,6 +218,33 @@ def test_check_engine_stamp_release_and_dev_footers(tmp_path):
     # Swapped checkouts fail on the source id.
     assert any("prefix" in p for p in check_engine_stamp.check(release, tmp_path / "dev"))
     assert any("requested" in p for p in check_engine_stamp.check(release, tmp_path / "release", "v1.5.6"))
+
+
+def test_check_engine_stamp_follows_duckdb_2_labels(tmp_path):
+    """DuckDB 2.0 labels a build v<release>.0-dev<commit count> from scripts/ci/release_version.txt rather than
+    from git describe (the file does not exist on the 1.5 line); a prerelease label (-alphaN, -rcN) is given to
+    the build explicitly and can only be confirmed by naming it."""
+    import check_engine_stamp
+    # A 2.0 checkout: the release version file and 5 commits (no tags to describe from).
+    source = tmp_path / "v2"
+    source.mkdir()
+    (source / "scripts/ci").mkdir(parents=True)
+    (source / "scripts/ci/release_version.txt").write_text("2.0\n")
+    git(source, "init", "-q")
+    for i in range(5):
+        git(source, "commit", "-q", "--allow-empty", "-m", f"commit {i}")
+    commit = git(source, "rev-parse", "HEAD")
+    dev = _synthetic_artifact(tmp_path / "dev.duckdb_extension", "v2.0.0-dev5", commit[:10], commit[:10])
+    assert check_engine_stamp.check(dev, source) == []
+    # The count is part of the label: a build labeled for another commit count is a mislabeled build.
+    off_by_one = _synthetic_artifact(tmp_path / "off.duckdb_extension", "v2.0.0-dev6", commit[:10], commit[:10])
+    assert any("v2.0.0-dev5" in p for p in check_engine_stamp.check(off_by_one, source))
+    # A prerelease label is release-like for the footer (the label, not the hash) and must be requested.
+    alpha = _synthetic_artifact(tmp_path / "alpha.duckdb_extension", "v2.0.0-alpha42", commit[:10], "v2.0.0-alpha42")
+    assert check_engine_stamp.check(alpha, source, "v2.0.0-alpha42") == []
+    assert any("prerelease label" in p for p in check_engine_stamp.check(alpha, source))
+    # A prerelease label other than the requested one is not confirmed by it.
+    assert any("requested" in p for p in check_engine_stamp.check(alpha, None, "v2.0.0-alpha43"))
 
 
 def test_check_engine_stamp_accepts_the_pinned_shallow_checkout(tmp_path):

@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "engine_api.hpp"
 #include "options.hpp"
 #include "single_row.hpp"
 
@@ -53,16 +54,17 @@ struct ConfigureBinding : FunctionData {
 };
 
 static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
-                                              vector<LogicalType> &types, vector<string> &names) {
+                                              vector<LogicalType> &types, engine::NameList &names) {
+	engine::RunAtOnce(input);
 	try {
 		// DuckDB overwrites duplicate named parameters in its map before calling bind.
 		if (input.ref.function &&
-		    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size())
+		    engine::ArgumentCount(input.ref.function->Cast<FunctionExpression>()) != input.named_parameters.size())
 			throw std::invalid_argument("duplicate Gatekeeper option");
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
 		for (const auto &option : input.named_parameters)
-			options.emplace_back(option.first, option.second);
+			options.emplace_back(engine::Str(option.first), option.second);
 		gatekeeper::ApplyArguments(policy, options);
 		types.push_back(LogicalType::BOOLEAN);
 		names.push_back("Success");
@@ -95,7 +97,7 @@ void RegisterPolicySetting(ExtensionLoader &loader) {
 	                          default_policy, SetPolicy, SetScope::GLOBAL);
 	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
 	for (const auto &name : gatekeeper::OptionNames())
-		configure.named_parameters[name] = LogicalType::ANY;
+		configure.named_parameters[engine::ToName(name)] = LogicalType::ANY;
 	configure.named_parameters["json"] = LogicalType::ANY;
 	// One short sentence and no newlines; parameter names in OptionNames() order. See the description of
 	// gatekeeper_validate in gatekeeper_extension.cpp for why.

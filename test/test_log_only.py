@@ -6,7 +6,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import connect, literal
+from support.artifact import by_engine, connect, literal
 from support.audit import decisions, enable, records
 from support.corpus import CATALOG_POLICY, CATALOG_SQL, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -144,8 +144,9 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
         assert [(r["boundary"], r["code"]) for r in found] == [(boundary, code)], (sql, found)
     # A batch is one statement at a time, each with its own text and record, and none of them stops the batch.
     assert agent.execute("SELECT 1; CREATE TABLE v(x INTEGER); SELECT 2").fetchall() == [(2,)]
-    found = decisions(catalog, "trim(statement) IN ('SELECT 1', 'CREATE TABLE v(x INTEGER)', 'SELECT 2')")
-    assert [(r["statement"].strip(), r["boundary"], r["code"]) for r in found] == [
+    # Each statement's text is the engine's slice of the batch; DuckDB 2.0 keeps the separator on it.
+    found = decisions(catalog, "trim(statement, '; ') IN ('SELECT 1', 'CREATE TABLE v(x INTEGER)', 'SELECT 2')")
+    assert [(r["statement"].strip("; "), r["boundary"], r["code"]) for r in found] == [
         ("SELECT 1", "execution", "ok"), ("CREATE TABLE v(x INTEGER)", "binding", "unsupported"),
         ("SELECT 2", "execution", "ok")]
     # Parameters defer authorization to the engine's bind: a reader is decided at the replacement gate the
@@ -156,9 +157,10 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     found = decisions(catalog, "statement LIKE '%?%'")
     assert [(r["boundary"], r["code"]) for r in found] == [("replacement_scan", "forbidden"),
                                                             ("authorize", "forbidden"), ("execution", "ok")]
-    # The relation API goes through the same hooks with the relation's SQL rendering.
+    # The relation API goes through the same hooks with the relation's SQL rendering (2.0 qualifies the catalog).
     assert agent.table("secret.salaries").fetchall() == [("x", 1.0)]
-    assert [r["statement"] for r in decisions(catalog, "statement LIKE '%\"secret\"%'")] == ['SELECT * FROM "secret".salaries']
+    assert [r["statement"] for r in decisions(catalog, "statement LIKE '%\"secret\"%'")] == [
+        by_engine(v1='SELECT * FROM "secret".salaries', v2='SELECT * FROM memory."secret".salaries')]
     # executemany prepares once outside any query. The pre-screen there has no text and no private bind, so
     # table policy waits for the executions, which rebind inside a query: one record per execution, none refused,
     # and nothing at the prepare boundary.
@@ -191,16 +193,20 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
         assert enforced[column] == logged[column], column
     assert logged["boundary"] == "replacement_scan" and logged["violations"][0]["function_name"] == "read_parquet"
     assert logged["statement"] == sql
-    # The same through Prepare(): the gate decides the bind outside any statement (no text is available), the
-    # failed bind runs no pre-screen, and the mark it left is cleared with that prepare attempt, so the next
-    # Prepare() is decided on its own, whether or not a statement or transaction boundary came between. The
-    # pre-screen defers table policy, so the statement it still decides is one whose plan is not a read.
+    # The same through Prepare(). Under DuckDB 1.5 the gate decides the bind outside any statement (no text is
+    # available), the failed bind runs no pre-screen, and the mark it left is cleared with that prepare attempt,
+    # so the next Prepare() is decided on its own, whether or not a statement or transaction boundary came
+    # between. The pre-screen defers table policy, so the statement it still decides is one whose plan is not a
+    # read. DuckDB 2.0 prepares as a statement carrying the text: the gate records that text, and a statement
+    # the text boundary refuses is decided there, at the prepare and again at the execution.
+    explain = "EXPLAIN SELECT ?::INTEGER"
     with pytest.raises(duckdb.IOException):
         agent.executemany(sql, [[1]])
-    agent.executemany("EXPLAIN SELECT ?::INTEGER", [[1]])
+    agent.executemany(explain, [[1]])
     found = decisions(catalog, "mode = 'log_only'")[1:]
-    assert [(r["boundary"], r["statement"]) for r in found] == [("replacement_scan", None), ("prepare", None),
-                                                                 ("binding", "EXPLAIN SELECT ?::INTEGER")]
+    assert [(r["boundary"], r["statement"]) for r in found] == by_engine(
+        v1=[("replacement_scan", None), ("prepare", None), ("binding", explain)],
+        v2=[("replacement_scan", sql), ("binding", explain), ("binding", explain)])
     assert found[1]["violations"][0]["rule"] == "statement"
     # Inside an explicit transaction no statement or transaction boundary separates two Prepare() calls (the
     # first failure aborts the transaction, and Prepare() still binds in an aborted one).
@@ -209,11 +215,13 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
         with pytest.raises(duckdb.IOException):
             agent.executemany(sql, [[1]])
     agent.execute("ROLLBACK")
-    agent.executemany("EXPLAIN SELECT ?::INTEGER", [[1]])
+    agent.executemany(explain, [[1]])
     found = decisions(catalog, "mode = 'log_only'")[4:]
-    assert [(r["boundary"], r["statement"]) for r in found] == [
-        ("binding", "BEGIN"), ("replacement_scan", None), ("replacement_scan", None), ("binding", "ROLLBACK"),
-        ("prepare", None), ("binding", "EXPLAIN SELECT ?::INTEGER")]
+    assert [(r["boundary"], r["statement"]) for r in found] == by_engine(
+        v1=[("binding", "BEGIN"), ("replacement_scan", None), ("replacement_scan", None), ("binding", "ROLLBACK"),
+            ("prepare", None), ("binding", explain)],
+        v2=[("binding", "BEGIN"), ("replacement_scan", sql), ("replacement_scan", sql), ("binding", "ROLLBACK"),
+            ("binding", explain), ("binding", explain)])
 
 
 @pytest.mark.parametrize("sql, error", [

@@ -8,12 +8,12 @@ statement ok
 CREATE VIEW caller_b AS SELECT * FROM caller_c;
 
 query TT
-SELECT list_transform(caller_objects, o -> o."table"), list_transform(objects, o -> o."table") FROM gatekeeper_validate('SELECT * FROM caller_b', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
+SELECT list_transform(caller_objects, lambda o: o."table"), list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT * FROM caller_b', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
 ----
 [caller_b]	[caller_b, caller_c]
 
 query T
-SELECT list_transform(caller_objects, o -> o."table") FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c');
+SELECT list_transform(caller_objects, lambda o: o."table") FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c');
 ----
 [caller_b, caller_c]
 
@@ -23,7 +23,7 @@ SELECT code, caller_objects FROM gatekeeper_validate('SELECT * FROM caller_b, ca
 forbidden	[]
 
 query T
-SELECT list_transform(caller_objects, o -> o."table") FROM gatekeeper_validate('WITH x AS (SELECT * FROM caller_b) SELECT * FROM x');
+SELECT list_transform(caller_objects, lambda o: o."table") FROM gatekeeper_validate('WITH x AS (SELECT * FROM caller_b) SELECT * FROM x');
 ----
 [caller_b]
 

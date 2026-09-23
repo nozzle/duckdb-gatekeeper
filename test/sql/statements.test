@@ -437,3 +437,45 @@ query I
 SELECT allowed FROM gatekeeper_validate('UNPIVOT t ON x INTO NAME n VALUE v');
 ----
 true
+
+# The next two sections pin refusals DuckDB 2.0 introduced that hold on both engines: a parser error on 1.5,
+# `unsupported` with a violation on 2.0. They assert only what is common, so the compatibility legs check them
+# on either candidate. The repin that moves the engine to 2.0 tightens each to `code = 'unsupported'` and the
+# violation message (https://github.com/nozzle/duckdb-gatekeeper/issues/99).
+
+# DuckDB 2.0 parses data-modifying CTEs (WITH d AS (DELETE ...)) that 1.5's parser refuses; their query nodes
+# (DELETE_QUERY_NODE, ...) are absent from the grammar's dispatch and fail closed.
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d');
+----
+false	true
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d');
+----
+false	true
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('WITH d AS (UPDATE t SET x = 1 RETURNING *) SELECT * FROM d');
+----
+false	true
+
+# DuckDB 2.0 qualifies names with nested schema paths (a.b.c.name) and writes them as qualified_name next to
+# catalog/schema/name properties that are lossy views of such a path; the walker refuses the path before
+# anything binds (validator.cpp References). 1.5's parser refuses the spelling itself.
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT * FROM a.b.c.d');
+----
+false	true
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT a.b.c.f(1)');
+----
+false	true
+
+query II
+SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT max(x) OVER () FROM a.b.c.d');
+----
+false	true

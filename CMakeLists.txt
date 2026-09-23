@@ -38,6 +38,18 @@ build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
 target_link_libraries(gatekeeper_extension duckdb_yyjson)
 target_link_libraries(gatekeeper_loadable_extension duckdb_yyjson)
+# The engine release line being compiled selects the API adapters in src/include/engine_api.hpp.
+if(NOT DUCKDB_MAJOR_VERSION MATCHES "^[0-9]+$")
+  message(FATAL_ERROR "DuckDB did not export a numeric DUCKDB_MAJOR_VERSION: '${DUCKDB_MAJOR_VERSION}'")
+endif()
+foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
+  target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
+endforeach()
+# The loadable statically links its own engine copy, so the load-time engine guard is compiled only into
+# it (see LoadInternal). Gatekeeper sets this marker itself: DuckDB 1.5 defined
+# DUCKDB_BUILD_LOADABLE_EXTENSION on loadable targets, 2.0 no longer does, and a guard keyed on an engine
+# implementation detail would vanish silently across that change.
+target_compile_definitions(gatekeeper_loadable_extension PRIVATE GATEKEEPER_LOADABLE)
 # vptr checks are disabled in every sanitizer configuration: the instrumented extension shares
 # RTTI with an uninstrumented DuckDB/Python runtime, which UBSan reports as false positives.
 # The loadable extension is compiled with the fuzzer runtime but links its sanitizers only through
@@ -45,7 +57,7 @@ target_link_libraries(gatekeeper_loadable_extension duckdb_yyjson)
 option(GATEKEEPER_FUZZ "Build SQL/typed-option libFuzzer target (Clang required; use with GATEKEEPER_SANITIZE)" OFF)
 if(GATEKEEPER_FUZZ)
   add_executable(gatekeeper_sql_fuzz test/fuzz/sql_options_fuzz.cpp)
-  target_compile_definitions(gatekeeper_sql_fuzz PRIVATE GATEKEEPER_FUZZ)
+  target_compile_definitions(gatekeeper_sql_fuzz PRIVATE GATEKEEPER_FUZZ GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
   target_compile_definitions(gatekeeper_extension PRIVATE GATEKEEPER_FUZZ)
   target_compile_options(gatekeeper_sql_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize=vptr)
   target_link_options(gatekeeper_sql_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize=vptr)
@@ -60,6 +72,14 @@ if(GATEKEEPER_SANITIZE)
     target_compile_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr -fno-omit-frame-pointer)
     target_link_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr)
   endforeach()
+endif()
+# Client-API behavior that neither sqllogictest nor the Python package can express (a prepared statement
+# handle held across a policy change); linked against the engine with Gatekeeper built in, like the fuzz
+# target, and run by the compatibility workflow against each candidate engine.
+option(GATEKEEPER_NATIVE_PROBES "Build the native client-API probes (test/native)" OFF)
+if(GATEKEEPER_NATIVE_PROBES)
+  add_executable(gatekeeper_prepared_probe test/native/prepared_handle_probe.cpp)
+  target_link_libraries(gatekeeper_prepared_probe duckdb)
 endif()
 install(TARGETS gatekeeper_extension EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

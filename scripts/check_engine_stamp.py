@@ -10,12 +10,13 @@ from the engine checkout's own Git metadata instead and fails when the stamps di
     python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension \\
         --engine-source duckdb [--expect-version v1.5.6]
 
-``--engine-source`` must be the checkout that was compiled. When it can ``git describe`` itself the
-display version is derived the way DuckDB's CMakeLists.txt does; a shallow or tagless checkout is
-accepted only when its commit is exactly the pinned release revision in versions.cmake, in which case
-the canonical release version is the expectation. ``--expect-version`` additionally pins the display
-version the caller knows the engine to be. At least one of the two is required; without a checkout only
-the footer, the Gatekeeper stamp, and the expected version are compared.
+``--engine-source`` must be the checkout that was compiled. The display version is derived the way the
+engine's CMakeLists.txt derives it (DuckDB 2.0 from its release version file and commit count, 1.5 from
+``git describe``); the pinned release revision in versions.cmake is expected as the pinned release, as
+the build labels it. ``--expect-version`` additionally pins the display version the caller knows the engine
+to be, and is the only confirmation of a prerelease label (``-alphaN``, ``-rcN``), which a build is given
+explicitly rather than deriving. At least one of the two is required; without a checkout only the footer,
+the Gatekeeper stamp, and the expected version are compared.
 """
 import argparse
 from pathlib import Path
@@ -44,17 +45,33 @@ def describe(source: Path):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def expected_version(source: Path, commit: str):
-    """The display version DuckDB derives for the checkout without an override.
+def commit_count(source: Path):
+    """``git rev-list --count HEAD`` of the checkout, or None when Git cannot count it."""
+    result = subprocess.run(["git", "-C", str(source), "rev-list", "--count", "HEAD"], capture_output=True, text=True)
+    return int(result.stdout.strip()) if result.returncode == 0 else None
 
-    Returns ``vX.Y.Z`` for a tagged release commit and ``-devN`` (suffix only: the bumped component depends
-    on MAIN_BRANCH_VERSIONING) for other commits. A checkout that cannot describe itself is accepted only
-    when it is the independently verified pinned release revision.
+
+def expected_version(source: Path, commit: str):
+    """The display version DuckDB derives for the checkout, as Gatekeeper's build passes it.
+
+    The pinned release revision is always built as the pinned release (Makefile, scripts/engine.py pass
+    OVERRIDE_GIT_DESCRIBE). Otherwise DuckDB 2.0 (CMakeLists.txt, DUCKDB_RELEASE_VERSION_FILE) labels every
+    build ``v<release>.0-dev<commit count>`` from ``scripts/ci/release_version.txt``, and DuckDB 1.5 describes
+    the checkout from its tags: ``vX.Y.Z`` for a tagged release commit and ``-devN`` (suffix only: the bumped
+    component depends on MAIN_BRANCH_VERSIONING) for other commits. A 1.5 checkout that cannot describe itself
+    is refused.
     """
+    if commit == SUPPORTED_DUCKDB_REVISION:
+        return "v" + SUPPORTED_DUCKDB
+    release_file = source / "scripts/ci/release_version.txt"
+    if release_file.exists():
+        release = release_file.read_text().strip()
+        count = commit_count(source)
+        if not re.fullmatch(r"\d+\.\d+", release) or count is None:
+            raise SystemExit(f"{source} has an unreadable release version or commit count")
+        return f"v{release}.0-dev{count}"
     described = describe(source)
     if described is None:
-        if commit == SUPPORTED_DUCKDB_REVISION:
-            return "v" + SUPPORTED_DUCKDB
         raise SystemExit(f"{source} cannot be described (shallow or tagless checkout) and is not the pinned "
                          f"release revision {SUPPORTED_DUCKDB_REVISION}")
     match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)-(\d+)-g[0-9a-f]+", described)
@@ -88,12 +105,20 @@ def check(extension: Path, engine_source=None, expect_version=None):
             raise SystemExit(f"{engine_source} is not a Git checkout")
         if not commit.startswith(source_id):
             problems.append(f"stamp source id {source_id} is not a prefix of the checkout commit {commit}")
-        expected = expected_version(engine_source, commit)
-        if expected.startswith("-dev"):
-            if release or not version.endswith(expected):
-                problems.append(f"stamp version {version} is not the {expected} build of the checkout")
-        elif version != expected:
-            problems.append(f"stamp version {version} does not match the checkout's release {expected}")
+        if re.search(r"-(alpha|rc)\d+$", version):
+            # A prerelease label is never derived from a checkout: DuckDB's build is given it explicitly (the
+            # nightly Python packages, for one, are v2.0.0-alphaN), so the caller must name it, and the
+            # checkout is held to the source id alone.
+            if version != expect_version:
+                problems.append(f"stamp version {version} is a prerelease label the checkout cannot confirm; "
+                                "pass it with --expect-version")
+        else:
+            expected = expected_version(engine_source, commit)
+            if expected.startswith("-dev"):
+                if release or not version.endswith(expected):
+                    problems.append(f"stamp version {version} is not the {expected} build of the checkout")
+            elif version != expected:
+                problems.append(f"stamp version {version} does not match the checkout's release {expected}")
     if expect_version and version != expect_version:
         problems.append(f"stamp version {version} is not the requested {expect_version}")
     if not problems:

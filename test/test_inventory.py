@@ -5,7 +5,7 @@ import pytest
 
 from audit_inventory import compare, coverage
 from inventory import load
-from support.artifact import ROOT, by_parser
+from support.artifact import ENGINE_MAJOR, ROOT, by_parser
 from support.headers import never_bind_names
 from support.typed_helpers import validate
 from versions import BASELINE_FILENAME
@@ -80,8 +80,8 @@ def test_registered_aliases_share_classification(db):
     ("SELECT random()", "random"), ("SELECT uuid()", "uuid"), ("SELECT uuidv7()", "uuidv7"),
     ("SELECT setseed(0.5)", "setseed"), ("SELECT current_user", "current_user"),
     ("SELECT has_table_privilege('t', 'SELECT')", "has_table_privilege"), ("SELECT pg_typeof(1)", "pg_typeof"),
-    ("SELECT apply([1, 2], x -> x + 1)", "apply"), ("SELECT filter([1, 2], x -> x > 1)", "filter"),
-    ("SELECT version()", "version"), ("SELECT reduce([1, 2], (a, b) -> a + b)", "reduce"),
+    ("SELECT apply([1, 2], lambda x: x + 1)", "apply"), ("SELECT filter([1, 2], lambda x: x > 1)", "filter"),
+    ("SELECT version()", "version"), ("SELECT reduce([1, 2], lambda a, b: a + b)", "reduce"),
     ("SELECT variant_typeof(1::VARIANT)", "variant_typeof"), ("SELECT st_astext(NULL::GEOMETRY)", "st_astext"),
     ("SELECT st_crs(st_geomfromwkb(NULL::BLOB))", "st_crs"),
     ("FROM duckdb_keywords()", "duckdb_keywords"), ("FROM pg_timezone_names()", "pg_timezone_names"),
@@ -157,6 +157,8 @@ def test_audit_named_arguments_and_positional_order():
     assert compare(baseline, candidate)["changed"] == ["reader"]
 
 
+@pytest.mark.skipif(ENGINE_MAJOR >= 2, reason="DuckDB 2.0's random() is not reproducible across statements "
+                                            "after setseed(), so the draw comparison cannot show anything")
 def test_rejected_validation_does_not_touch_the_rng(db):
     """switch evaluates its MAP argument at bind time without a foldability check; a caller-authored
     switch is rejected before binding, so the setseed inside it never runs during validation."""

@@ -46,10 +46,15 @@ applies the same revision-gated rule, so a community rebuild for a newer engine 
 labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
-`Engine rebuild compatibility` workflow rebuilds against a post-release engine snapshot
-through both the direct CMake path and the community `make release` path, checks the
-stamped engine identity against the candidate checkout's own `git describe`, and loads
-the resulting artifact into that engine's shell.
+`Engine rebuild compatibility` workflow rebuilds against two pinned engine snapshots, one
+past the pinned release on its line and one on the next major's branch (`v2.0-cyanoptera`,
+the engine the community repository builds a descriptor's `ref_next` against), through both
+the direct CMake path and the community `make release` path; it checks the stamped engine
+identity against what the candidate checkout labels itself, runs `test/sql`, and runs
+`scripts/check_engine_guard.py`, which loads the resulting artifact into that engine's
+`unittest` runner and proves the load-time guard refuses a copy stamped for another engine.
+(A shell with Gatekeeper linked in cannot do that: `LOAD` of a file by that name answers
+"already loaded" without opening it.)
 
 The community-extension build path also works and runs on CI:
 
@@ -95,7 +100,7 @@ make an unsigned extension a DuckDB-signed community build. See the
 .venv/bin/python -m pytest test -q
 GATEKEEPER_PARSER=peg .venv/bin/python -m pytest test -q  # the same suite under DuckDB's PEG parser
 .venv/bin/python scripts/audit_inventory.py
-.venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
+.venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
 .venv/bin/python scripts/benchmark.py --markdown  # the README's Benchmarks table; about a minute
 ```
@@ -109,18 +114,22 @@ The suite has two layers with different reach:
   cover those with the Python suite). They cover statement rejection,
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
   replacement scans, trusted expansions, nested bound implementations, enforced
-  connections, log-only mode, and the audit log. Add a case here whenever a behavior must hold everywhere the extension is
-  distributed.
+  connections, log-only mode, the audit log, and the refusals DuckDB 2.0 introduced that hold on both
+  engines (nested schema paths, DML inside a CTE). Add a case here whenever a behavior must hold
+  everywhere the extension is distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
   tests that run against the loadable artifact on Linux and macOS. Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
   `GATEKEEPER_PARSER=peg` runs the same suite with every connection `support.artifact.connect`
   opens opted into the `autocomplete` extension's PEG parser override
-  (`CALL enable_peg_parser()`, DuckDB 1.5's experimental parser and the default from 2.0; it
+  (`CALL enable_peg_parser()`, DuckDB 1.5's experimental parser and the only parser from 2.0; it
   needs `INSTALL autocomplete` once). A test that must open a raw connection because the
   artifact's load path is what it tests applies the leg with `select_parser()` once the
-  artifact is loaded.
+  artifact is loaded. The tests that compile against the engine's headers or generate the
+  grammar from its schema (`test_validator_structure.py`, `test_engine_errors.py`,
+  `test_versions.py`'s stamp check) use the submodule unless `GATEKEEPER_ENGINE_SOURCE` names
+  the checkout the artifact was built from.
   Gatekeeper parses with the connection's parser options, so its decisions must agree with the
   engine under either parser; the build-and-test workflow runs both legs. The parsers differ in
   a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
@@ -134,6 +143,47 @@ The suite has two layers with different reach:
   [Compatibility and review](docs/security.md#compatibility-and-review)); the skip names the
   engine defect, and removing it is part of the repin that carries the fix
   ([#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90) is that repin's checklist).
+  On DuckDB 2.0 the same two cases run: its parser is the heap-based matcher.
+- `test/native/*.cpp` are **client-API probes** for behavior neither layer can express: a
+  prepared statement handle held across a policy change (`prepared_handle_probe.cpp`; the
+  Python package's `executemany` materializes its parameter sets before the first execution, so
+  it cannot hold one). They link against the engine with Gatekeeper built in, under
+  `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
+  each candidate engine. Their expectations hold on both engines; add one here when a guarantee
+  is made to a client API rather than to SQL text.
+
+### Running the suite on DuckDB 2.0
+
+The same source builds against `v2.0-cyanoptera` (see
+[Compatibility and review](docs/security.md#compatibility-and-review) for what the engine
+does differently there). The deep suite runs inside a `duckdb` Python package, and the load-time
+guard requires that package to be the exact engine the artifact was built from: for a
+prerelease that means DuckDB's nightly wheels (`pip install --pre --extra-index-url
+https://artifacts.duckdb.org/duckdb-python/nightly/simple duckdb==2.0.0.devN`), whose
+`PRAGMA version` names the engine commit and label to build against:
+
+```sh
+git -C build/candidate-source checkout <commit from PRAGMA version>
+cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release \
+  -DOVERRIDE_GIT_DESCRIBE=<library_version from PRAGMA version> \
+  -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
+  -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
+cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe
+build/v2/test/unittest 'test/sql/*'
+build/v2/extension/gatekeeper/gatekeeper_prepared_probe
+python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
+GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
+  GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \
+  <venv with that wheel>/bin/python -m pytest test -q --ignore test/test_inventory_tooling.py
+```
+
+On 2.0 the suite has one parser leg (`peg`); `test_inventory_tooling.py` tests the pin tooling
+against the submodule and stays on the pinned engine. Engine behavior a test pins that 2.0
+changed is named on both sides with `by_engine(v1=..., v2=...)` from `support.artifact`, under
+the same rule as `by_parser`: never a policy decision. The 1.5 side of every such site, and of
+the `#if GATEKEEPER_DUCKDB_MAJOR` branches in `src/`, is removed by the repin that moves the
+engine to 2.0; [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99) is that repin's
+checklist.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable

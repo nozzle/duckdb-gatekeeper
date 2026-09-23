@@ -235,13 +235,16 @@ definition in the rendering did is not distinguished from it and runs under that
 authority; this is the same exposure function attribution has always had, and the linked fuzz
 harness pins both halves (`CheckHostileRelation`).
 
-Both boundaries read one policy snapshot per statement. DuckDB's `Prepare()` path binds
-before any extension hook runs, so on that path the execution boundary only pre-screens the
-prepared plan's structure: with no text and no private bind on record nothing in it can be
-attributed, so table policy and function blocks alike wait for execution, where
-`OnExecutePrepared` forces a rebind inside the query so the plan that runs is authorized
-under the current policy (the `authorize` boundary), and a cached plan can never outlive a
-policy change. Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
+Both boundaries read one policy snapshot per statement. A `Prepare()` only pre-screens the
+prepared plan's structure: its parameter values are not known, and on DuckDB 1.5, which binds
+it before any extension hook runs, no text is on record either, so nothing in it can be
+attributed; table policy and function blocks alike wait for execution, where the rebind hook
+(`OnExecutePrepared` on 1.5, `OnRebindPreparedStatement` on 2.0, whose `Prepare()` and
+`Execute()` run as statements carrying the prepared text) forces a rebind inside the query so
+the plan that runs is authorized under the current policy (the `authorize` boundary), and a
+cached plan can never outlive a policy change. (On 2.0 the text boundary applies to the
+prepare as well, so parameterless prepared text the policy denies is refused at `Prepare()`;
+see [Compatibility and review](#compatibility-and-review).) Together the two boundaries make enforcement agree with `gatekeeper_validate` on every
 statement that reaches them, which `test/test_enforcement.py` checks over a corpus of allowed,
 denied, and erroneous statements. What DuckDB does to a statement before they run is listed
 under residuals.
@@ -321,13 +324,16 @@ under residuals.
   statement (for example when that view is blocked by table policy). Object identity is a
   bind-time property, so this cannot move earlier. `enable_external_access=false` and
   `allowed_directories` are the controls; `CALL gatekeeper_enforce()` warns when they are loose.
-- **`Prepare()` before hooks.** DuckDB binds a prepared statement before any extension hook
-  runs. Agent-written readers are still denied before execution, but the bind of a statement
-  that will be denied has already happened; with external access enabled, that bind can
-  perform reader I/O whose only observable effect for the caller is the denial's timing.
-  The replacement-scan gate does run during that bind, with no statement text on record, so
-  it holds every substituted reader to the allowlist there: a caller's `FROM 'file'` is
-  refused before anything opens, and so is a trusted view that names its file the same way.
+- **`Prepare()` binds before it is decided.** DuckDB 1.5 binds a prepared statement before
+  any extension hook runs; 2.0 runs the prepare as a statement whose text is checked first, but
+  a statement the text admits is still bound before its pre-screen. Agent-written readers are
+  denied before execution either way, but the bind of a statement that will be denied has
+  already happened; with external access enabled, that bind can perform reader I/O whose only
+  observable effect for the caller is the denial's timing. The replacement-scan gate does run
+  during that bind and holds every substituted reader to the allowlist: a caller's `FROM 'file'`
+  is refused before anything opens. On 1.5, with no statement text on record, so is a trusted
+  view that names its file the same way; 2.0's gate has the text and knows the view's file is
+  the view's.
   Such a view cannot be prepared on an enforced connection unless its reader is allowed;
   executing the statement directly (with or without parameters) binds inside the query,
   where the text is on record, and a view written with an explicit `read_parquet(...)` call
@@ -414,7 +420,9 @@ enforced state and the policy are unreachable from SQL. `gatekeeper_enforce` is 
 never-bind list so validated SQL cannot name it either. Inside a transaction the host has
 opened, the call is refused with a `Permission Error` and latches nothing: `COMMIT` and
 `ROLLBACK` are not read statements, so an enforced connection could never end that
-transaction. The refusal leaves the transaction usable; enforce after ending it.
+transaction. End the transaction, then enforce. (Whether the refused statement also aborts the
+transaction is the engine's transaction-invalidation policy: DuckDB 1.5 leaves it usable after a
+`Permission Error`; DuckDB 2.0 aborts it by default, so `ROLLBACK` first.)
 
 There is deliberately no instance-wide enforcement setting. One would have to choose between enforcing the
 host's own connections (leaving no in-process reader for the audit log and no way to change
@@ -443,7 +451,7 @@ Semantics that follow from "the same decision, without the refusal":
   log-only statement has been decided, the hooks the engine reaches while binding and
   executing it anyway do not decide it again. The replacement-scan gate lets the engine's own
   bind through for a statement already decided; for one not yet decided (parameters defer
-  authorization to the engine's bind, and a `Prepare()` has no statement in progress) the gate
+  authorization to the engine's bind, and a 1.5 `Prepare()` has no statement in progress) the gate
   records the denied reader itself, under the statement's snapshotted mode and policy, marks
   the statement decided, and then lets the bind continue. That ordering matters: a reader
   whose file does not exist fails the bind before any later hook runs, and the gate's record is
@@ -459,8 +467,9 @@ Semantics that follow from "the same decision, without the refusal":
   connection shows; `test/test_log_only.py` asserts
   this over the enforcement parity corpus on identical fresh instances, and asserts the record
   equals the `gatekeeper_validate` row.
-- A `Prepare()` outside any query is pre-screened as before and a denial there is recorded
-  with `mode = 'log_only'`; each later execution is its own record.
+- A `Prepare()` is pre-screened as before and a denial there is recorded with
+  `mode = 'log_only'` (on 1.5 with no statement text, on 2.0 with the prepared text); each
+  later execution is its own record.
 - **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
   gatekeeper_policy`, `CALL gatekeeper_configure()`, and `SET gatekeeper_log_only` are
   unsupported statements that are recorded and then execute, exactly like every other
@@ -633,9 +642,10 @@ table policy only to identities it does, holding the engine's plan to the tables
 functions and scan counts of the private bind's plan; an attached table's scan (`LogicalGet`
 with a table entry) is never attributed as a function. A table function a trusted definition
 named binds what it replaces itself with as that definition's: `query_table(n)` in a host
-scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()` bind outside any statement has no
-text and no record; its pre-screen checks plan structure and the control plane and defers
-table policy and the rest of function policy to execution, which rebinds inside the query.
+scalar-macro body selects the macro's table, as it does in a table macro's body. A `Prepare()`
+has no record of who wrote what (on 1.5 it binds outside any statement, with no text at all);
+its pre-screen checks plan structure and the control plane and defers table policy and the
+rest of function policy to execution, which rebinds inside the query.
 
 The callback exposes no expression origin within one binder: when caller syntax requires
 an implementation check, a trusted expansion using the same implementation must also pass
@@ -821,10 +831,10 @@ reliable provenance. Arbitrary extension bind data is not introspected.
   explicit `read_parquet(...)` in that body is. The
   callback receives only the name, so the text walk records every table name the caller
   wrote and the gate consults that record (the private bind's, or the admitted statement's
-  on an enforced connection); a name both sides use is checked as the caller's. A
-  `Prepare()` bind outside any statement has no text on record and is pre-screened as
-  though the caller wrote every name; `OnExecutePrepared` then rebinds inside the query,
-  where the record exists.
+  on an enforced connection); a name both sides use is checked as the caller's. On DuckDB
+  1.5 a `Prepare()` bind outside any statement has no text on record and is pre-screened as
+  though the caller wrote every name (2.0's prepare carries the text, and the gate consults
+  it); the rebind hook then rebinds inside the query, where the record exists.
   Host-language scans that resolve to subqueries are always denied. When no callback
   claims a name, Gatekeeper raises the engine's missing-table error itself rather than
   returning to DuckDB's loop, so host callbacks are invoked exactly once per lookup and
@@ -912,8 +922,8 @@ Release binaries target DuckDB 1.5.5. Source builds may use another engine check
 the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
 `allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
-from (the version tag for releases, the source id for dev builds, mirroring DuckDB's own
-footer identity) and refuses to load into any other engine. The stamp is a single string
+from (the version tag for releases and prereleases such as `v2.0.0-alphaN`, the source id for
+`-dev` builds, mirroring DuckDB's own footer identity) and refuses to load into any other engine. The stamp is a single string
 (`strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE`). The host's identity
 is read from its catalog (`pragma_version()`) rather than `DuckDB::LibraryVersion()`:
 distributed loadables statically link their own DuckDB copy, so the latter only ever
@@ -924,12 +934,53 @@ statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serialize
 `GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
 public API, so an engine upgrade can require source changes. Compatibility is therefore
 checked by compilation and functional regressions on every candidate engine
-(`compatibility.yml`), through both the direct CMake path and the community `make release`
-path. Existing function classifications do not
+(`compatibility.yml`: a post-release snapshot of the pinned line and a `v2.0-cyanoptera`
+snapshot), through both the direct CMake path and the community `make release` path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
+
+The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`); `src/include/engine_api.hpp`
+adapts the engine APIs that differ, and `scripts/generate.py` reads either release's
+serialization schema. The decisions are the same on both engines. Where 2.0 changed what the
+engine itself does, Gatekeeper follows the engine, and these differences are worth knowing:
+
+- 2.0 has only the PEG parser; the 1.5 `postgres` leg does not exist there.
+- 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
+  grammar does not know their query nodes and refuses them as `unsupported`.
+- 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
+  no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
+  the supported spelling. `SHOW TABLES` and the other catalog-wide forms still bind to
+  never-bind readers and are refused as before.
+- 2.0 runs `Prepare()` and `Execute()` from client APIs as statements carrying the prepared
+  text. A prepare's plan is pre-screened as under 1.5 (its parameter values are not known) and
+  each execution is authorized with its values under the policy in force then. Because the
+  prepare carries the text, the text boundary applies to it: parameterless text is authorized
+  privately at the prepare, as any parameterless statement is, so a statement the policy denies
+  is refused at `Prepare()` rather than at its first `Execute()`; and the prepare's replacement
+  gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
+  time as it is on 1.5.
+- 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once by
+  marking the statement. `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from
+  their bind, so `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either
+  function, and `EXECUTE` of one run when the statement runs, whether or not the host reads the
+  row; an unread `SELECT ... FROM gatekeeper_enforce()` would otherwise have left the connection
+  unenforced while the host believed it latched.
+- 2.0 can qualify a name with a nested schema path (`a.b.c.name`); such paths are `unsupported`
+  until the name-based checks are reviewed for them.
+- 2.0's default transaction-invalidation policy aborts an open transaction on any error,
+  including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
+  connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`
+  inside their own transaction, which then `ROLLBACK`.
+- A refusal at the text boundary is thrown from DuckDB's `QueryBegin` hook, after the engine
+  began the statement's auto-commit transaction and before it can end the query. On 2.0 that
+  leftover transaction is invalid, and a statement the engine preprocesses inside a transaction
+  before the next cleanup (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement)
+  fails with "Current transaction is aborted" if it directly follows a refusal on the same
+  connection; any plain statement in between clears it. This is engine sequencing in
+  `ClientContext::BeginQueryInternal`'s caller, to be reported upstream; it does not weaken a
+  refusal, it changes the error the following statement reports.
 Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
 2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ

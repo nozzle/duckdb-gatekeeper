@@ -1,6 +1,9 @@
 name: Engine rebuild compatibility
-# Builds the full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
-# the build or engine-facing sources rather than every documentation change.
+# Builds each full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
+# the build or engine-facing sources rather than every documentation change. Two candidates: a
+# post-release snapshot of the pinned release line, and a snapshot of the next major's branch, the
+# engine duckdb/community-extensions builds a descriptor's `ref_next` against. Both pins are moved
+# by hand (AGENTS.md); a build that breaks against a new snapshot is the signal, not noise.
 on:
   push:
     branches: [main]
@@ -19,33 +22,49 @@ on:
       - scripts/**
       - src/**
       - test/sql/**
+      - test/native/**
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: compatibility-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-env:
-  # Post-1.5.5 v1.5-variegata snapshot; test a different engine without repinning inventories.
-  CANDIDATE_ENGINE: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
 jobs:
   candidate:
-    name: Rebuild against another engine checkout
+    name: Rebuild against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Post-1.5.5 v1.5-variegata snapshot: a different engine of the pinned release line.
+          - name: DuckDB 1.5 candidate (a3cd0de)
+            key: a3cd0de
+            ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+          # v2.0-cyanoptera snapshot: the next major, which labels itself v2.0.0-devN.
+          - name: DuckDB 2.0 candidate (6844d1b)
+            key: 6844d1b
+            ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+    env:
+      CANDIDATE_ENGINE: ${{ matrix.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: duckdb/duckdb
-          ref: ${{ env.CANDIDATE_ENGINE }}
-          path: build/candidate-source
-          fetch-depth: 0
+      - name: Check out the candidate engine
+        # Fetched by commit with full history and tags, which is what labels the build (`git describe` on
+        # 1.5, `git rev-list --count` on 2.0). Fetched by git, as the community job below does, rather than
+        # through actions/checkout: code scanning cannot see that a matrix ref is a literal SHA.
+        run: |
+          git init --quiet build/candidate-source
+          git -C build/candidate-source remote add origin https://github.com/duckdb/duckdb.git
+          git -C build/candidate-source fetch --quiet --tags origin "$CANDIDATE_ENGINE"
+          git -C build/candidate-source checkout --quiet "$CANDIDATE_ENGINE"
+          git -C build/candidate-source log -1 --oneline
       - uses: ./.github/actions/setup
         with:
-          ccache-key: candidate-a3cd0de-ubuntu
+          ccache-key: candidate-${{ matrix.key }}-ubuntu
           ccache-max-size: 1G
       - name: Configure against the actual candidate source
         run: >-
@@ -54,39 +73,51 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
           -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
-          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON
-      - run: cmake --build build/candidate --target unittest shell gatekeeper_loadable_extension --parallel 4
+          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF -DGATEKEEPER_NATIVE_PROBES=ON
+      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension gatekeeper_prepared_probe --parallel 4
       - name: SQL contract on the candidate engine
         run: build/candidate/test/unittest 'test/sql/*'
-      - name: Loadable artifact loads into the candidate engine
-        # The static unittest link above cannot prove the distributable artifact is usable: its
-        # footer and Gatekeeper's own engine guard must both accept the candidate engine.
-        run: |
-          build/candidate/duckdb -unsigned -bail <<'EOF'
-          PRAGMA version;
-          LOAD 'build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension';
-          SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper';
-          SELECT CASE WHEN allowed THEN 'ok' ELSE error('loadable did not validate') END FROM gatekeeper_validate('SELECT 1');
-          SELECT CASE WHEN allowed THEN error('loadable did not enforce') ELSE 'ok' END FROM gatekeeper_validate('DROP TABLE t');
-          EOF
+      - name: A prepared handle held across a policy change is decided at each execution
+        # Client-API behavior sqllogictest cannot express; the same expectations on both engines.
+        run: build/candidate/extension/gatekeeper/gatekeeper_prepared_probe
+      - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
+        # The static unittest link above cannot prove the distributable artifact is usable, and a shell with
+        # Gatekeeper linked in answers LOAD of the file with "already loaded" without opening it. The probe
+        # loads the file into the unittest runner, which loads no linked extension on its own: an intact copy
+        # must load and validate, a copy stamped for another engine must be refused by the guard even with
+        # DuckDB's footer check disabled. A build that lost the guard fails here, not at a customer's.
+        run: python scripts/check_engine_guard.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/candidate/test/unittest
       - name: Stamped engine identity matches the candidate checkout
-        # Independent of the co-built shell, which would carry the same label if the build were mislabeled.
+        # Independent of the co-built runner, which would carry the same label if the build were mislabeled.
         run: python scripts/check_engine_stamp.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source build/candidate-source
 
   community-makefile:
     # The path duckdb/community-extensions actually runs: `make release` with the candidate engine checked
     # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile must let the
-    # checkout describe itself rather than labeling the rebuild as the pinned release.
-    name: Community make release against another engine
+    # checkout describe itself rather than labeling the rebuild as the pinned release. For the 2.0 candidate
+    # this is the `ref_next` build, with our pinned extension-ci-tools Makefile rather than its `main`.
+    name: Community make release against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: DuckDB 1.5 candidate (a3cd0de)
+            key: a3cd0de
+            ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+          - name: DuckDB 2.0 candidate (6844d1b)
+            key: 6844d1b
+            ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+    env:
+      CANDIDATE_ENGINE: ${{ matrix.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Check out the candidate engine inside the submodule directory
-        # The submodule checkout is shallow; `git describe` needs the history back to the last tag,
-        # exactly as the community pipeline's full-depth checkout provides it.
+        # The submodule checkout is shallow; `git describe` (1.5) and `git rev-list --count` (2.0) need the
+        # history back to the last tag, exactly as the community pipeline's full-depth checkout provides it.
         run: |
           git -C duckdb fetch --unshallow --tags origin || git -C duckdb fetch --tags origin
           git -C duckdb fetch origin "$CANDIDATE_ENGINE"
@@ -94,7 +125,7 @@ jobs:
           git -C duckdb describe --tags --long
       - uses: ./.github/actions/setup
         with:
-          ccache-key: community-makefile-a3cd0de-ubuntu
+          ccache-key: community-makefile-${{ matrix.key }}-ubuntu
           ccache-max-size: 1G
       - name: Show the engine label the Makefile passes to CMake
         run: |
@@ -109,11 +140,5 @@ jobs:
       - run: make test_release
       - name: Stamped engine identity matches the candidate checkout
         run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb
-      - name: Loadable artifact loads into the candidate engine
-        run: |
-          build/release/duckdb -unsigned -bail <<'EOF'
-          PRAGMA version;
-          LOAD 'build/release/extension/gatekeeper/gatekeeper.duckdb_extension';
-          SELECT CASE WHEN allowed THEN 'ok' ELSE error('loadable did not validate') END FROM gatekeeper_validate('SELECT 1');
-          SELECT CASE WHEN allowed THEN error('loadable did not enforce') ELSE 'ok' END FROM gatekeeper_validate('DROP TABLE t');
-          EOF
+      - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
+        run: python scripts/check_engine_guard.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/release/test/unittest

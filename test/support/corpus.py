@@ -50,7 +50,7 @@ PARITY_CORPUS = [
     "SELECT id FROM reporting.orders UNION SELECT id + 10 FROM reporting.orders",
     "SELECT id FROM reporting.orders EXCEPT SELECT 1",
     "SELECT unnest([1, 2, 3])",
-    "SELECT list_transform([1, 2], x -> x + 1)",
+    "SELECT list_transform([1, 2], lambda x: x + 1)",
     "SELECT [1, 2, 3][2], {'a': 1}.a, 'x' || 'y'",
     "SELECT * FROM reporting.orders USING SAMPLE 1",
     "SELECT * FROM (SELECT tag, amount FROM reporting.orders) PIVOT (sum(amount) FOR tag IN ('a', 'b'))",

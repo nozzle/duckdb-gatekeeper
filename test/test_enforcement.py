@@ -5,9 +5,9 @@ import threading
 import duckdb
 import pytest
 
-from support.artifact import connect, literal
+from support.artifact import by_engine, connect, literal
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
-from support.enforcement import DENIED, attempt, enforce
+from support.enforcement import DENIED, attempt, enforce, settle
 from support.typed_helpers import configure, validate
 
 
@@ -44,6 +44,7 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
     for pragma in ["PRAGMA table_info('reporting.orders')", "PRAGMA show_tables", "PRAGMA database_list",
                    "PRAGMA storage_info('reporting.orders')", "PRAGMA threads = 1", "PRAGMA enable_verification",
                    "PRAGMA enable_profiling"]:
+        settle(agent)
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(pragma).fetchall()
 
@@ -74,6 +75,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     with pytest.raises(duckdb.PermissionException, match="list"):
         agent.execute("PIVOT reporting.wide ON k USING sum(v)").fetchall()
     catalog.execute("SET GLOBAL pivot_filter_threshold = 0")
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match="list"):
         agent.execute(sql).fetchall()
     configure(catalog, CATALOG_POLICY)
@@ -83,6 +85,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     catalog.execute("SET GLOBAL pivot_limit = 30")
     mixed = "PIVOT reporting.orders ON tag, id IN (1, 2) USING count(*)"
     assert validate(catalog, mixed)["allowed"]
+    settle(agent)
     assert sorted(agent.execute(mixed).fetchall()) == sorted(catalog.execute(
         "PIVOT reporting.orders ON tag IN ('a', 'b'), id IN (1, 2) USING count(*)").fetchall())
     configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
@@ -102,6 +105,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
                    "PIVOT reporting.orders ON tag IN (SELECT who FROM secret.salaries) USING sum(amount)",
                    "PIVOT reporting.orders ON tag USING sum(amount), md5(tag)"]:
         assert validate(catalog, denied)["code"] == "forbidden", denied
+        settle(agent)
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(denied).fetchall()
     assert catalog.execute("SELECT count(*) FROM secret.salaries").fetchone()[0] == 1
@@ -109,6 +113,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     # cannot bind comes before a pivoting SELECT the policy would deny.
     result = validate(catalog, "PIVOT reporting.missing ON tag USING sum(amount), md5(tag)")
     assert result["code"] == "binding", result
+    settle(agent)
     with pytest.raises(duckdb.CatalogException):
         agent.execute("PIVOT reporting.missing ON tag USING sum(amount), md5(tag)").fetchall()
 
@@ -179,10 +184,13 @@ def test_relation_api_is_enforced(catalog, agent):
     assert agent.table("reporting.orders").filter("id > 2").fetchall() == [(3, 5.0, "a")]
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.sql("SELECT * FROM secret.salaries").fetchall()
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.table("secret.salaries").fetchall()
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.sql("SELECT * FROM duckdb_settings()").fetchall()
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.sql("CREATE TABLE q(x INTEGER)")
 
@@ -323,14 +331,20 @@ def test_file_shorthand_inside_trusted_views_is_enforced_like_the_reader_call(ca
         assert validate(catalog, f"SELECT * FROM {view}")["allowed"]
         assert agent.execute(f"SELECT sum(x) FROM {view}").fetchone() == (3,)
         assert agent.execute(f"SELECT x FROM {view} WHERE x > ?", [0]).fetchall() == [(1,), (2,)]
-    # Prepare() (executemany) binds before any hook and outside any statement, so no text is on record and the
-    # gate pre-screens every replacement as caller-written: the shorthand view is refused at prepare time, the
-    # explicit-call view is not. The one entry point where the two spellings differ; execute() above does not.
+    # Prepare() (executemany). Under DuckDB 1.5 it binds before any hook and outside any statement, so no text
+    # is on record and the gate pre-screens every replacement as caller-written: the shorthand view is refused
+    # at prepare time, the explicit-call view is not; the one entry point where the two spellings differ.
+    # DuckDB 2.0 prepares as a statement carrying the text, so the gate knows the view's body is trusted and
+    # both spellings run, as execute() above does on either engine.
     configure(catalog, CATALOG_POLICY)
     agent.executemany("SELECT x FROM reporting.by_call WHERE x > ?", [[1]])
     assert agent.fetchall() == [(2,)]
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
+    if by_engine(v1=True, v2=False):
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.executemany("SELECT x FROM reporting.by_path WHERE x > ?", [[1]])
+    else:
         agent.executemany("SELECT x FROM reporting.by_path WHERE x > ?", [[1]])
+        assert agent.fetchall() == [(2,)]
 
 
 def test_explain_and_prepare_of_enforce_do_not_latch(db):
@@ -342,19 +356,39 @@ def test_explain_and_prepare_of_enforce_do_not_latch(db):
         db.execute("CREATE TABLE now_enforced(x INTEGER)")
 
 
+@pytest.mark.parametrize("spelling", ["CALL gatekeeper_enforce()", "SELECT enforced FROM gatekeeper_enforce()",
+                                      "EXECUTE latch"])
+def test_enforce_latches_when_its_statement_runs_whether_or_not_the_row_is_read(db, spelling):
+    """The latch is the statement's effect, not its row's: a host that never reads the result is enforced all
+    the same, under every spelling. DuckDB 2.0 produces a SELECT's rows only as the client reads them and
+    would otherwise leave the connection unenforced while the host believes it latched; gatekeeper_enforce's
+    bind marks its statement to run at once, as CALL does (engine::RunAtOnce)."""
+    db.execute("PREPARE latch AS SELECT enforced FROM gatekeeper_enforce()")
+    db.execute(spelling)  # unread on purpose
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        db.execute("CREATE TABLE never_created(x INTEGER)")
+
+
 def test_enforce_is_refused_inside_an_open_transaction(catalog):
     # An enforced connection cannot COMMIT or ROLLBACK (neither is a read statement), so a latch taken inside a
     # transaction the host opened would strand the connection in a transaction nothing can end. The refusal is a
-    # Permission Error, which DuckDB does not treat as invalidating the transaction: the host's transaction stays
-    # usable, the connection stays unenforced, and enforcing after COMMIT or ROLLBACK works as before. Python's
-    # begin() is a BEGIN TRANSACTION statement and is refused the same way.
+    # Permission Error. Whether the host's transaction stays usable after it is the engine's transaction
+    # invalidation policy: DuckDB 1.5 keeps it usable after a Permission Error; 2.0's default aborts it on any
+    # error, so only ROLLBACK is left. Either way the connection stays unenforced, the host ends the transaction,
+    # and enforcing after COMMIT or ROLLBACK works as before.
+    # Python's begin() is a BEGIN TRANSACTION statement and is refused the same way.
     for end in ["COMMIT", "ROLLBACK"]:
         with catalog.cursor() as cursor:
             cursor.execute("BEGIN TRANSACTION")
             with pytest.raises(duckdb.PermissionException, match="cannot run inside an open transaction"):
                 cursor.execute("CALL gatekeeper_enforce()")
-            assert cursor.execute("SELECT count(*) FROM secret.salaries").fetchone() == (1,)
-            cursor.execute(end)
+            if by_engine(v1=True, v2=False):
+                assert cursor.execute("SELECT count(*) FROM secret.salaries").fetchone() == (1,)
+                cursor.execute(end)
+            else:
+                with pytest.raises(duckdb.TransactionException, match="aborted"):
+                    cursor.execute("SELECT count(*) FROM secret.salaries")
+                cursor.execute("ROLLBACK")
             assert cursor.execute("SELECT enforced FROM gatekeeper_enforce()").fetchone() == (True,)
             with pytest.raises(duckdb.PermissionException, match=DENIED):
                 cursor.execute("SELECT * FROM secret.salaries")

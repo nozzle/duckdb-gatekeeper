@@ -216,6 +216,27 @@ struct Walker {
 		std::string edge;
 	};
 	std::vector<Work> pending;
+	// The arguments of a call as the serializer lists them, in call order: DuckDB 1.5 writes the child
+	// expressions, 2.0 writes {name, expression} pairs (FunctionArgument) with the expression as the value.
+	static std::vector<Json *> Arguments(Json *call) {
+		std::vector<Json *> arguments;
+		size_t i, n;
+		Json *item;
+		yyjson_arr_foreach(yyjson_obj_get(call, "children"), i, n, item) arguments.push_back(item);
+		yyjson_arr_foreach(yyjson_obj_get(call, "arguments"), i, n, item)
+		    arguments.push_back(yyjson_obj_get(item, "expression"));
+		return arguments;
+	}
+	// The value of a table-function argument. `name = value` reaches the binder as a comparison on a single-part
+	// column reference, which it unwraps as a named parameter on both engines (bind_table_function.cpp); the
+	// name is not an argument. A 2.0 `name := value` argument already carries its value as the expression.
+	static Json *ArgumentValue(Json *argument) {
+		if (Field(argument, "type") == "COMPARE_EQUAL" &&
+		    Field(yyjson_obj_get(argument, "left"), "class") == "COLUMN_REF" &&
+		    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(argument, "left"), "column_names")) == 1)
+			return yyjson_obj_get(argument, "right");
+		return argument;
+	}
 	// Recognize syntax, never evaluate it. Literal containers are permitted only in
 	// contexts that require them; casts must have literal-form children.
 	bool BindLiteral(Json *value, bool containers = false, bool pivot_names = false) {
@@ -252,12 +273,10 @@ struct Walker {
 			if ((!Field(expr, "catalog").empty() && Lower(Field(expr, "catalog")) != "system") ||
 			    (!Field(expr, "schema").empty() && Lower(Field(expr, "schema")) != "main"))
 				return false;
-			auto children = yyjson_obj_get(expr, "children");
-			if (!yyjson_is_arr(children))
+			if (!yyjson_is_arr(yyjson_obj_get(expr, "children")) && !yyjson_is_arr(yyjson_obj_get(expr, "arguments")))
 				return false;
-			size_t i, n;
-			Json *child;
-			yyjson_arr_foreach(children, i, n, child) work.push_back(child);
+			for (auto argument : Arguments(expr))
+				work.push_back(argument);
 		}
 		return true;
 	}
@@ -282,8 +301,8 @@ struct Walker {
 			// Never mistake literal payloads, type metadata or lambda variables for row references.
 			if (kind == "CONSTANT" || kind == "TYPE" || kind == "LAMBDA")
 				continue;
-			for (auto key : {"children", "child", "left", "right", "input", "lower", "upper", "else_expr",
-			                 "case_checks", "when_expr", "then_expr"}) {
+			for (auto key : {"children", "arguments", "expression", "child", "left", "right", "input", "lower", "upper",
+			                 "else_expr", "case_checks", "when_expr", "then_expr"}) {
 				auto child = yyjson_obj_get(expr, key);
 				if (child)
 					work.push_back(child);
@@ -347,6 +366,14 @@ struct Walker {
 		                   Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		// DuckDB 2.0 can qualify a name with a nested schema path (a.b.c.name) and writes it as qualified_name
+		// next to the catalog/schema/name properties, which are lossy views of such a path: the catalog is its
+		// first component, the schema the one before the name. The name-based checks below read those views
+		// and were written for three-part names; the bound entry is still checked in full at authorization,
+		// but a text-level view that disagrees with it is not one to reason from. Refused until reviewed.
+		auto qualified = yyjson_obj_get(value, "qualified_name");
+		if (qualified && yyjson_arr_size(yyjson_obj_get(qualified, "path")) > 3)
+			throw Stop{"nested schema paths are unsupported"};
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
 		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
 		// which names are which and treats the rest as trusted. The same names, as written components, are what
@@ -360,7 +387,7 @@ struct Walker {
 		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
 		if (kind == "CollateExpression" && binding)
 			binding->caller_collates = true;
-		if (kind == "LimitModifier" || kind == "LimitPercentModifier") {
+		if (kind == "LimitModifier" || kind == "LimitPercentModifier" || kind == "LegacyLimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
 		}
@@ -376,6 +403,13 @@ struct Walker {
 			if (sample &&
 			    (!yyjson_is_obj(sample) || !yyjson_obj_get(sample, "type") || yyjson_obj_get(sample, "class")))
 				Reject(rules::BIND_TIME_EXPRESSION, "sample size requires a literal", value);
+		}
+		if (kind == "CastExpression") {
+			// DuckDB 2.0 writes the target as a type expression (1.5 wrote a bound LogicalType, checked by Type()).
+			// Only a named type is a cast target; a computed one is not a type the grammar can read.
+			auto target = yyjson_obj_get(value, "type_expr");
+			if (target && Field(target, "class") != "TYPE")
+				throw Stop{"computed type expressions are unsupported"};
 		}
 		if (kind == "TypeExpression") {
 			auto children = yyjson_obj_get(value, "children");
@@ -429,44 +463,32 @@ struct Walker {
 		}
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
-			auto children = yyjson_obj_get(value, "children");
-			size_t i, n;
-			Json *child;
+			auto arguments = Arguments(value);
 			if (edge == "function") {
 				static const Names runtime_capable = {"unnest", "range", "generate_series"};
 				bool runtime = false;
 				if (runtime_capable.count(name)) {
-					yyjson_arr_foreach(children, i, n, child) {
-						auto argument = child;
-						if (Field(child, "type") == "COMPARE_EQUAL" &&
-						    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
-						    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
-							argument = yyjson_obj_get(child, "right");
-						runtime = runtime || HasRuntimeReference(argument);
-					}
+					for (auto argument : arguments)
+						runtime = runtime || HasRuntimeReference(ArgumentValue(argument));
 				}
 				if (runtime && binding)
 					binding->runtime_table_functions.insert(name);
-				yyjson_arr_foreach(children, i, n, child) {
-					auto argument = child;
-					if (Field(child, "type") == "COMPARE_EQUAL" &&
-					    Field(yyjson_obj_get(child, "left"), "class") == "COLUMN_REF" &&
-					    yyjson_arr_size(yyjson_obj_get(yyjson_obj_get(child, "left"), "column_names")) == 1)
-						argument = yyjson_obj_get(child, "right");
-					if (!runtime)
-						BindTime(argument, "table-function argument", true);
+				if (!runtime) {
+					for (auto argument : arguments)
+						BindTime(ArgumentValue(argument), "table-function argument", true);
 				}
 			}
 			if (name == "unnest") {
-				yyjson_arr_foreach(children, i, n, child) if (i > 0) BindTime(child, "UNNEST option");
+				for (size_t i = 1; i < arguments.size(); i++)
+					BindTime(arguments[i], "UNNEST option");
 			}
 			static const Names quantiles = {"quantile", "quantile_cont", "quantile_disc", "approx_quantile",
 			                                "reservoir_quantile"};
 			if (quantiles.count(name)) {
 				auto orders = yyjson_obj_get(yyjson_obj_get(value, "order_bys"), "orders");
-				size_t fraction = yyjson_arr_size(children) == 1 && yyjson_arr_size(orders) ? 0 : 1;
-				yyjson_arr_foreach(children, i, n, child) if (i >= fraction)
-				    BindTime(child, "quantile fraction/options", true);
+				size_t fraction = arguments.size() == 1 && yyjson_arr_size(orders) ? 0 : 1;
+				for (size_t i = fraction; i < arguments.size(); i++)
+					BindTime(arguments[i], "quantile fraction/options", true);
 			}
 			Function(name, value);
 			// The aggregate these dispatch to is selected by a caller-supplied (foldable) expression that only
@@ -545,7 +567,12 @@ struct Walker {
 		if (found == inventory.rules.end())
 			throw Stop{"unknown grammar rule"};
 		auto &rule = found->second;
-		static const Names show_kinds = {"SHOW_FROM", "SHOW_UNQUALIFIED", "DESCRIBE", "SUMMARY"};
+		// DuckDB 1.5: SHOW_UNQUALIFIED is `SHOW name` and the catalog-wide forms alike, all bound as DESCRIBE or
+		// as SQL over the duckdb_* readers, which the never-bind list then refuses. DuckDB 2.0 splits it:
+		// SHOW_SPECIAL keeps the catalog-wide forms on that path; SHOW (`SHOW name`) may instead read a setting's
+		// value at bind time into the plan, autoloading extensions on the way, with no function for the
+		// never-bind list to see (Binder::TryBindShowSetting). That kind is refused; DESCRIBE name remains.
+		static const Names show_kinds = {"SHOW_FROM", "SHOW_UNQUALIFIED", "SHOW_SPECIAL", "DESCRIBE", "SUMMARY"};
 		static const Names set_operations = {"UNION", "EXCEPT", "INTERSECT", "UNION_BY_NAME"};
 		if (expected == "ShowRef" && !show_kinds.count(Field(value, "show_type")))
 			throw Stop{"unsupported SHOW kind"};

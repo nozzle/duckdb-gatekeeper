@@ -54,7 +54,7 @@ jobs:
           python -c "import duckdb; duckdb.connect().execute('INSTALL autocomplete')"
           python -m pytest test -q
       - run: python scripts/audit_inventory.py
-      - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp
+      - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp
       - name: Local lakehouse integration
         if: runner.os == 'Linux'
         run: |

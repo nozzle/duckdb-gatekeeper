@@ -6,6 +6,25 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Added
+
+- The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`) as well as the pinned 1.5.5, and
+  the test suite runs on either engine. Release binaries still target 1.5.5. Decisions are the
+  same on both engines; where the engine itself changed, Gatekeeper follows it, and
+  [Compatibility and review](docs/security.md#compatibility-and-review) lists what a host on 2.0
+  sees differently: `SHOW name` is unsupported there (it can read a setting at bind time), DML
+  inside a CTE and nested schema paths (`a.b.c.name`) are `unsupported` rather than parser errors,
+  and 2.0's lazy `SELECT` results are accounted for: `gatekeeper_enforce` and
+  `gatekeeper_configure` run when their statement runs under every spelling, read or not. The
+  engine-rebuild workflow builds against a 1.5 and a 2.0 candidate and, besides the SQL contract,
+  runs a native probe holding a prepared statement handle across a policy change on each. (#98)
+
+### Fixed
+
+- The load-time engine guard is compiled into the loadable under Gatekeeper's own build marker
+  rather than a DuckDB build define that 2.0 no longer sets; a 2.0 build would otherwise have
+  shipped without the guard. (#98)
+
 ## 0.3.0 - 2026-09-22
 
 ### Added

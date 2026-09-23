@@ -202,7 +202,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()', allowed_tables :
 true
 
 query TT
-SELECT allowed, list_transform(objects, o -> o."table") FROM gatekeeper_validate('SELECT secret_count()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT allowed, list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT secret_count()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
 ----
 true	[secrets]
 

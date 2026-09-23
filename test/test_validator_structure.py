@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from support.artifact import ROOT
+from support.artifact import ENGINE_MAJOR, ENGINE_SOURCE, ROOT, by_engine
 from support.toolchain import compile_cpp
 
 
@@ -13,11 +13,12 @@ from support.toolchain import compile_cpp
 def native_validator(tmp_path_factory):
     work = tmp_path_factory.mktemp("validator")
     generated = work / "generated"
-    subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated)], check=True)
+    subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated),
+                    "--duckdb-source", str(ENGINE_SOURCE)], check=True)
     binary = compile_cpp([ROOT / "test/validator_structure.cpp", ROOT / "src/validator.cpp",
-                          ROOT / "duckdb/third_party/yyjson/yyjson.cpp"], work / "validator", flags=["-O1"],
-                         includes=[generated, ROOT / "src/include", ROOT / "duckdb/src/include",
-                                   ROOT / "duckdb/third_party/yyjson/include"])
+                          ENGINE_SOURCE / "third_party/yyjson/yyjson.cpp"], work / "validator", flags=["-O1"],
+                         includes=[generated, ROOT / "src/include", ENGINE_SOURCE / "src/include",
+                                   ENGINE_SOURCE / "third_party/yyjson/include"])
 
     def run(ast):
         return subprocess.check_output([str(binary)], input=json.dumps(ast).encode()).decode()
@@ -34,11 +35,19 @@ def test_set_operation_representations_and_all_branches(db, native_validator):
     def ast(sql):
         return json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
                                      [sql]).fetchone()[0])
-    pair = ast("SELECT 1 UNION ALL SELECT 2")
+    # DuckDB 1.5's json_serialize_sql writes a set operation as a left/right pair and the latest storage version
+    # (Gatekeeper's own serialization, 2.0's json_serialize_sql) as a children list; both shapes are validated.
+    serialized = ast("SELECT 1 UNION ALL SELECT 2")
+    if "children" in serialized["statements"][0]["node"]:
+        latest, pair = serialized, copy.deepcopy(serialized)
+        node = pair["statements"][0]["node"]
+        node["left"], node["right"] = node.pop("children")
+    else:
+        pair, latest = serialized, copy.deepcopy(serialized)
+        node = latest["statements"][0]["node"]
+        node["children"] = [node.pop("left"), node.pop("right")]
     assert native_validator(pair) == "ok"
-    latest = copy.deepcopy(pair)
     node = latest["statements"][0]["node"]
-    node["children"] = [node.pop("left"), node.pop("right")]
     assert native_validator(latest) == "ok"
     node["children"].append(ast("SELECT md5('x')")["statements"][0]["node"])
     assert native_validator(latest) == "forbidden"
@@ -54,19 +63,29 @@ def test_set_operation_representations_and_all_branches(db, native_validator):
     assert native_validator(latest) == "unsupported"
 
 
+def cast(child, type_name, parameters):
+    """A CAST node as the engine under test serializes one: DuckDB 1.5 writes the target as a bound LogicalType
+    whose unbound form carries the type expression, 2.0 writes the type expression itself."""
+    target = {"class": "TYPE", "type": "TYPE", "type_name": type_name, "children": parameters}
+    node = {"class": "CAST", "type": "OPERATOR_CAST", "child": child}
+    if ENGINE_MAJOR >= 2:
+        node["type_expr"] = target
+    else:
+        node["cast_type"] = {"id": "UNBOUND", "type_info": {"expr": target}}
+    return node
+
+
 def test_serialized_bind_time_sites(db, native_validator):
     # Exercise serializer-only shapes independently of SQL parser restrictions.
     ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT 1', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])
     computation = json.loads(db.execute("SELECT json_serialize_sql('SELECT abs(1)', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])["statements"][0]["node"]["select_list"][0]
-    for modifier in ["LIMIT_MODIFIER", "LIMIT_PERCENT_MODIFIER"]:
+    for modifier in ["LIMIT_MODIFIER", by_engine(v1="LIMIT_PERCENT_MODIFIER", v2="LEGACY_LIMIT_PERCENT_MODIFIER")]:
         candidate = copy.deepcopy(ast)
         candidate["statements"][0]["node"]["modifiers"] = [{"type": modifier, "limit": computation}]
         assert native_validator(candidate) == "forbidden"
     candidate = copy.deepcopy(ast)
-    candidate["statements"][0]["node"]["select_list"] = [{
-        "class": "CAST", "type": "OPERATOR_CAST", "child": ast["statements"][0]["node"]["select_list"][0],
-        "cast_type": {"id": "UNBOUND", "type_info": {"expr": {
-            "class": "TYPE", "type": "TYPE", "type_name": "decimal", "children": [computation]}}}}]
+    candidate["statements"][0]["node"]["select_list"] = [
+        cast(ast["statements"][0]["node"]["select_list"][0], "decimal", [computation])]
     assert native_validator(candidate) == "forbidden"
 
 
@@ -75,10 +94,7 @@ def test_serialized_type_collation_is_host_trusted(db, native_validator):
     literal = json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
                                    ["SELECT 'de'"]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
     literal["alias"] = "collation"
-    ast["statements"][0]["node"]["select_list"] = [{
-        "class": "CAST", "type": "OPERATOR_CAST", "child": literal,
-        "cast_type": {"id": "UNBOUND", "type_info": {"expr": {
-            "class": "TYPE", "type": "TYPE", "type_name": "varchar", "children": [literal]}}}}]
+    ast["statements"][0]["node"]["select_list"] = [cast(literal, "varchar", [literal])]
     assert native_validator(ast) == "ok"
 
 
@@ -92,15 +108,15 @@ def test_function_position_is_the_earliest_location_however_the_name_was_reached
     """One rule for a denied function's position: the smallest query_location among every occurrence, whether
     the name was written (list_value(1)) or implied by syntax (ARRAY[1] is list_value too).
 
-    The pinned engine's serializer stamps no query_location on operator nodes, so through SQL the implied
+    DuckDB 1.5's default parser stamps no query_location on operator nodes, so through SQL the implied
     occurrence never has a position and the rule cannot be told from "first occurrence encountered". These ASTs
-    give the operator node one, as another serializer version may.
+    give the operator node one, as the PEG parser (2.0's only parser) does.
     """
     ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT 1', skip_default:=true, skip_empty:=true, skip_null:=true)").fetchone()[0])
     written = expression(db, "SELECT list_value(1)")
     written["query_location"] = 10
     implied = expression(db, "SELECT ARRAY[1]")
-    assert implied["class"] == "OPERATOR" and "query_location" not in implied
+    assert implied["class"] == "OPERATOR"
     implied["query_location"] = 3
     later = copy.deepcopy(implied)
     later["query_location"] = 7

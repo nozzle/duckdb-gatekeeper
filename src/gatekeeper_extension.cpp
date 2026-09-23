@@ -6,11 +6,12 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "enforcement.hpp"
+#include "engine_api.hpp"
 #include "fuzz_checks.hpp"
 #include "options.hpp"
 #include "policy_setting.hpp"
@@ -55,15 +56,15 @@ bool GatekeeperBindingsEqualForFuzz(const Value &left, const Value &right, bool 
 #endif
 
 static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
-                                             vector<string> &names) {
+                                             engine::NameList &names) {
 	// DuckDB overwrites duplicate named parameters before calling bind.
 	if (input.ref.function &&
-	    input.ref.function->Cast<FunctionExpression>().children.size() != input.named_parameters.size() + 1)
+	    engine::ArgumentCount(input.ref.function->Cast<FunctionExpression>()) != input.named_parameters.size() + 1)
 		throw BinderException("duplicate Gatekeeper option");
 	auto result = make_uniq<ValidateBinding>();
 	result->sql = input.inputs[0];
 	for (const auto &option : input.named_parameters) {
-		auto &name = option.first;
+		auto &name = engine::Str(option.first);
 		auto value = option.second;
 		// ANY preserves nested field sets rather than silently coercing away unknown fields.
 		result->options.emplace_back(name, std::move(value));
@@ -137,8 +138,10 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 // Distributed loadables statically link their own copy of DuckDB (EXTENSION_STATIC_BUILD), so inside this
 // file DuckDB::LibraryVersion() and DuckDB::SourceID() report the build engine, never the host. The host's
 // identity comes from its catalog: pragma_version() is bound to the host's implementation. A statically
-// linked Gatekeeper is compiled into its host, so the check only exists in the loadable.
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+// linked Gatekeeper is compiled into its host, so the check only exists in the loadable. GATEKEEPER_LOADABLE
+// is Gatekeeper's own marker for that target (CMakeLists.txt); it does not depend on which build defines
+// the engine happens to emit.
+#ifdef GATEKEEPER_LOADABLE
 struct BuildEngine {
 	string version;
 	string source_id;
@@ -193,7 +196,7 @@ static void CheckBuildEngine(DatabaseInstance &db) {
 #endif
 
 static void LoadInternal(ExtensionLoader &loader) {
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#ifdef GATEKEEPER_LOADABLE
 	CheckBuildEngine(loader.GetDatabaseInstance());
 #endif
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
@@ -203,7 +206,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, GatekeeperValidate, BindValidate,
 	                       InitSingleRow);
 	for (const auto &name : gatekeeper::OptionNames())
-		validate.named_parameters[name] = LogicalType::ANY;
+		validate.named_parameters[engine::ToName(name)] = LogicalType::ANY;
 	validate.named_parameters["json"] = LogicalType::ANY;
 	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
 	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.

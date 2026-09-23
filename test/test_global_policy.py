@@ -184,6 +184,8 @@ def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
     db.execute("EXPLAIN CALL gatekeeper_configure(blocked_functions := ['lower'])").fetchall()
     db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(blocked_functions := ['upper'])")
     assert policy(db) == before
+    # Unread on purpose: a configure runs when its statement runs, however spelled, on either engine (2.0
+    # would otherwise produce a SELECT's rows, and so this effect, only when the client reads them).
     db.execute("EXECUTE cfg(['md5'])")
     assert policy(db)["blocked_functions"] == ["md5"]
     db.execute("EXECUTE cfg(['lower'])")

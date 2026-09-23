@@ -117,7 +117,8 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     assert expected["code"] == by_parser(postgres="parser", peg="binding"), expected
     assert "Max expression depth" in expected["error_message"], expected
     unsupported, record = decisions(catalog, "mode = 'log_only'")
-    assert unsupported["code"] == "unsupported" and unsupported["statement"] == "SET max_expression_depth = 8"
+    # The engine hands each statement of a batch over with its own text; DuckDB 2.0 keeps the separator.
+    assert unsupported["code"] == "unsupported" and unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
     assert record["boundary"] == by_parser(postgres="binding", peg="authorize"), record
     assert record["statement"].strip() == nested
     assert [record[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], record
