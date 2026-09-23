@@ -11,9 +11,13 @@
 --
 -- "host" is the connection the driver configures and reads the log from; "agent" is a second connection to
 -- the same database that latches itself with gatekeeper_enforce(). A host with one connection cannot run this
--- file (scripts/smoke_cli.sh covers the same ground in separate processes). The agent's statements stay plain
--- SELECTs after a denial: on DuckDB 2.0 a denial at the text boundary leaves the auto-commit transaction open
--- until the next plain statement ends it (test/support/enforcement.py, settle()).
+-- file (scripts/smoke_cli.sh covers the same ground in separate processes). One ordering constraint, from
+-- DuckDB 2.0: a denial at the text boundary leaves the agent's auto-commit transaction open and invalid until
+-- the next statement's initial cleanup ends it, so the statement directly after a denial must not be one the
+-- engine preprocesses inside the transaction first (a rewritten PRAGMA, a dynamic PIVOT, a relation-API
+-- statement), or it fails as "Current transaction is aborted" (test/support/enforcement.py, settle()). Any
+-- other statement is fine there, including further refused ones: the CREATE TABLE, SET, and CALL below follow
+-- a denial on purpose, to cover the non-read refusals.
 
 -- @host
 CREATE SCHEMA reporting;

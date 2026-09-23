@@ -157,7 +157,8 @@ or minor release. To change our release build defaults, update together:
   release asset and follows `versions.cmake` without an edit, but the CRAN `duckdb` package that
   loads the MinGW artifact is pinned through `R_CRAN_SNAPSHOT`, a dated Posit Package Manager
   snapshot, which must move to a date after CRAN published the R package of the new engine
-  version (with `R_VERSION` still one the snapshot has Windows binaries for). Both legs assert the
+  version, with `R_VERSION` set to an R release for which that snapshot serves Windows binaries
+  (Posit Package Manager builds them per R minor version). Both legs assert the
   host's engine version, so a stale snapshot fails rather than tests the wrong engine. The CLI
   smoke (`scripts/smoke_cli.sh`) reads audit records from the engine's `stdout` log storage and
   matches its rendering of the record; check those patterns on the new engine;

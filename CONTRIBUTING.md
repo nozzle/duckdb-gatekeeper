@@ -224,9 +224,11 @@ paragraph): the form the hosts without a Python package run, `scripts/smoke_cli.
 engine's musl CLI and `scripts/smoke_loadable.R` through the CRAN package for MinGW.
 `smoke_loadable.py` runs those files too, and `test/test_smoke_sql.py` runs them against the
 local build, so a change to them is exercised here before it reaches those hosts; keep every
-statement of `loadable.sql` runnable as one stdin script (the CLI reads it under `-bail`) and
-keep the agent's statements in `enforced.sql` plain `SELECT`s after a denial (DuckDB 2.0,
-`test/support/enforcement.py`). `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
+statement of `loadable.sql` runnable as one stdin script (the CLI reads it under `-bail`), and in
+`enforced.sql` do not follow a denial directly with a statement the engine preprocesses inside a
+transaction (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement), which fails on
+DuckDB 2.0 until a plain statement has ended the denied one (`test/support/enforcement.py`,
+`settle()`); any other statement, refused or not, may follow a denial. `scripts/check_engine_stamp.py` verifies the engine identity DuckDB
 and Gatekeeper stamped into an artifact against the engine checkout it was built from,
 independently of any shell built alongside it.
 
