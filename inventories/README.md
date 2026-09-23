@@ -159,7 +159,14 @@ or minor release. To change our release build defaults, update together:
   see [CONTRIBUTING.md](../CONTRIBUTING.md#testing)): every `by_parser(...)` site, the
   `PEG_DEEP_NESTING_CRASH` skips, and the enablement path in `test/support/artifact.py` state
   facts about the pinned engine's PEG parser and are re-derived, not carried. The checklist is
-  [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90).
+  [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90);
+- when the pin crosses into DuckDB 2.0, the 1.5 side of the dual-engine build: every
+  `#if GATEKEEPER_DUCKDB_MAJOR` branch in `src/`, every `by_engine(...)` and `ENGINE_MAJOR` site in
+  the Python suite, the 1.5 label derivation in `scripts/check_engine_stamp.py`, the 1.5 row of
+  `compatibility.yml`'s matrix, and the `code IN ('parser', 'unsupported')` assertions in
+  `test/sql/statements.test` that hold on both engines. Each is deleted or tightened to the 2.0
+  fact, not carried. The checklist is
+  [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99).
 
 Historical inventory source references and baselines need not change with the build pin.
 

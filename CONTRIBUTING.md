@@ -171,7 +171,10 @@ GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extens
 On 2.0 the suite has one parser leg (`peg`); `test_inventory_tooling.py` tests the pin tooling
 against the submodule and stays on the pinned engine. Engine behavior a test pins that 2.0
 changed is named on both sides with `by_engine(v1=..., v2=...)` from `support.artifact`, under
-the same rule as `by_parser`: never a policy decision.
+the same rule as `by_parser`: never a policy decision. The 1.5 side of every such site, and of
+the `#if GATEKEEPER_DUCKDB_MAJOR` branches in `src/`, is removed by the repin that moves the
+engine to 2.0; [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99) is that repin's
+checklist.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable
