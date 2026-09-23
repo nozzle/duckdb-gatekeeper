@@ -50,8 +50,11 @@ tests to pass; it does not require reclassifying existing function names. See
 past the pinned release on its line and one on the next major's branch (`v2.0-cyanoptera`,
 the engine the community repository builds a descriptor's `ref_next` against), through both
 the direct CMake path and the community `make release` path; it checks the stamped engine
-identity against what the candidate checkout labels itself, runs `test/sql`, and loads the
-resulting artifact into that engine's shell.
+identity against what the candidate checkout labels itself, runs `test/sql`, and runs
+`scripts/check_engine_guard.py`, which loads the resulting artifact into that engine's
+`unittest` runner and proves the load-time guard refuses a copy stamped for another engine.
+(A shell with Gatekeeper linked in cannot do that: `LOAD` of a file by that name answers
+"already loaded" without opening it.)
 
 The community-extension build path also works and runs on CI:
 
@@ -158,6 +161,7 @@ cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release 
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON
 cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension
 build/v2/test/unittest 'test/sql/*'
+python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
 GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \
   <venv with that wheel>/bin/python -m pytest test -q --ignore test/test_inventory_tooling.py

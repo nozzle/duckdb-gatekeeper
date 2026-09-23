@@ -55,6 +55,7 @@ struct ConfigureBinding : FunctionData {
 
 static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBindInput &input,
                                               vector<LogicalType> &types, engine::NameList &names) {
+	engine::RunAtOnce(input);
 	try {
 		// DuckDB overwrites duplicate named parameters in its map before calling bind.
 		if (input.ref.function &&

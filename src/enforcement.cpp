@@ -336,8 +336,11 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	// DuckDB 2.0's Prepare() and Execute() statements (see the top of this file). The text boundary admitted
 	// the prepared text; a caller's own PREPARE or EXECUTE never reaches here enforcing.
 	if (input.binder.GetBindingMode() == BindingMode::PREPARE && !state->executing_prepared) {
-		// The statement a Prepare() prepares. Its parameter values are not known yet, so as under 1.5 only the
-		// plan's structure is decided here; each execution is authorized with its values when it rebinds.
+		// The statement a Prepare() prepares. The binding mode alone does not identify it: an EXECUTE's rebind
+		// also plans through Planner::PrepareSQLStatement, in PREPARE mode (bind_execute.cpp), so it is the flag
+		// the rebind hook set beforehand that keeps the plan that will execute out of this branch. Parameter
+		// values are not known yet here, so as under 1.5 only the plan's structure is decided; each execution is
+		// authorized with its values when it rebinds.
 		if (!state->admitted) {
 			state->result = gatekeeper::NotAdmitted();
 			state->Record(context, Boundary::PREPARE, &state->policy, &context.GetCurrentQuery());
@@ -434,8 +437,9 @@ struct EnforceBinding : FunctionData {
 	bool Equals(const FunctionData &) const override { return true; }
 };
 
-static unique_ptr<FunctionData> BindEnforce(ClientContext &, TableFunctionBindInput &, vector<LogicalType> &types,
+static unique_ptr<FunctionData> BindEnforce(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
                                             engine::NameList &names) {
+	engine::RunAtOnce(input);
 	types = {LogicalType::BOOLEAN, LogicalType::LIST(LogicalType::VARCHAR)};
 	names = {"enforced", "warnings"};
 	return make_uniq<EnforceBinding>();

@@ -72,23 +72,19 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
           -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
-          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON
-      - run: cmake --build build/candidate --target unittest shell gatekeeper_loadable_extension --parallel 4
+          -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF
+      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension --parallel 4
       - name: SQL contract on the candidate engine
         run: build/candidate/test/unittest 'test/sql/*'
-      - name: Loadable artifact loads into the candidate engine
-        # The static unittest link above cannot prove the distributable artifact is usable: its
-        # footer and Gatekeeper's own engine guard must both accept the candidate engine.
-        run: |
-          build/candidate/duckdb -unsigned -bail <<'EOF'
-          PRAGMA version;
-          LOAD 'build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension';
-          SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'gatekeeper';
-          SELECT CASE WHEN allowed THEN 'ok' ELSE error('loadable did not validate') END FROM gatekeeper_validate('SELECT 1');
-          SELECT CASE WHEN allowed THEN error('loadable did not enforce') ELSE 'ok' END FROM gatekeeper_validate('DROP TABLE t');
-          EOF
+      - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
+        # The static unittest link above cannot prove the distributable artifact is usable, and a shell with
+        # Gatekeeper linked in answers LOAD of the file with "already loaded" without opening it. The probe
+        # loads the file into the unittest runner, which loads no linked extension on its own: an intact copy
+        # must load and validate, a copy stamped for another engine must be refused by the guard even with
+        # DuckDB's footer check disabled. A build that lost the guard fails here, not at a customer's.
+        run: python scripts/check_engine_guard.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/candidate/test/unittest
       - name: Stamped engine identity matches the candidate checkout
-        # Independent of the co-built shell, which would carry the same label if the build were mislabeled.
+        # Independent of the co-built runner, which would carry the same label if the build were mislabeled.
         run: python scripts/check_engine_stamp.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source build/candidate-source
 
   community-makefile:
@@ -140,11 +136,5 @@ jobs:
       - run: make test_release
       - name: Stamped engine identity matches the candidate checkout
         run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb
-      - name: Loadable artifact loads into the candidate engine
-        run: |
-          build/release/duckdb -unsigned -bail <<'EOF'
-          PRAGMA version;
-          LOAD 'build/release/extension/gatekeeper/gatekeeper.duckdb_extension';
-          SELECT CASE WHEN allowed THEN 'ok' ELSE error('loadable did not validate') END FROM gatekeeper_validate('SELECT 1');
-          SELECT CASE WHEN allowed THEN error('loadable did not enforce') ELSE 'ok' END FROM gatekeeper_validate('DROP TABLE t');
-          EOF
+      - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
+        run: python scripts/check_engine_guard.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/release/test/unittest

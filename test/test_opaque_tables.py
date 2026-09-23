@@ -10,6 +10,7 @@ import pytest
 
 from support.audit import decisions, enable
 from support.enforcement import DENIED, attempt, settle
+from support.artifact import literal
 from support.typed_helpers import configure, rule, validate
 
 
@@ -303,9 +304,9 @@ def test_enforced_connections_execute_what_the_policy_allows(catalog, agent):
 
 def test_prepared_statements_are_decided_when_they_execute(catalog, agent):
     enable(catalog)
-    # Prepare() binds before any hook and outside any statement. The pre-screen there has neither text nor a
-    # private bind, so it decides plan structure only; table policy is decided at each execution's own
-    # authorization, under the policy in force then.
+    # Prepare() only pre-screens plan structure (on DuckDB 1.5 it binds before any hook and outside any
+    # statement, with neither text nor a private bind on record); table policy is decided at each execution's
+    # own authorization, under the policy in force then.
     agent.executemany("SELECT * FROM reporting.leak WHERE amount > ?", [[0], [0]])
     assert agent.fetchall() == [("x", 1.0)]
     with pytest.raises(duckdb.PermissionException, match=DENIED):
@@ -322,6 +323,29 @@ def test_prepared_statements_are_decided_when_they_execute(catalog, agent):
         agent.execute(sql, [0])
     configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}]})
     assert agent.execute(sql, [0]).fetchall() == [("x", 1.0)]
+
+
+def test_parameterless_prepared_statements_are_decided_under_the_policy_in_force_when_they_run(catalog, agent):
+    """A prepared statement with no parameters (executemany over an empty parameter set: one Prepare(), one
+    Execute()) is decided under the policy in force when it runs, on either engine. On DuckDB 2.0 the prepare
+    is a statement carrying the text, so a parameterless statement the policy denies is refused already at
+    the prepare (its text is authorized at QueryBegin, as any parameterless statement's is); the execution is
+    authorized again under the policy in force then, so a policy change between the two decides the execution.
+    executemany couples the two calls, so the observable outcome is the same on both engines."""
+    enable(catalog, "debug")
+    sql = "SELECT * FROM reporting.leak"
+    agent.executemany(sql, [[]])
+    assert agent.fetchall() == [("x", 1.0)]
+    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "orders"}]})
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.executemany(sql, [[]])
+    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}]})
+    agent.executemany(sql, [[]])
+    assert agent.fetchall() == [("x", 1.0)]
+    # Every execution, and no prepare, is recorded as allowed; the refusal is recorded once, at authorization.
+    found = decisions(catalog, f"statement = {literal(sql)}")
+    assert [(r["boundary"], r["allowed"]) for r in found] == [
+        ("execution", True), ("authorize", False), ("execution", True)], found
 
 
 def test_log_only_records_the_same_decisions_and_refuses_nothing(catalog, agent):

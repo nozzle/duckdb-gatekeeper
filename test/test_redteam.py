@@ -221,6 +221,20 @@ def test_write_smuggling(db, sql, code):
         assert result["violations"][0]["rule"] == "limit"
 
 
+@pytest.mark.parametrize("sql", ["SELECT * FROM a.b.c.d", "SELECT a.b.c.f(1)", "SELECT max(x) OVER () FROM a.b.c.d"])
+def test_nested_schema_paths_are_unsupported(db, sql):
+    """DuckDB 2.0 parses a name qualified by a nested schema path and writes it next to catalog/schema/name
+    views that are lossy for it (the catalog is the first component, the schema the one before the name).
+    The grammar refuses the path until the name-based checks are reviewed for it, before anything binds;
+    DuckDB 1.5's parser refuses the spelling itself."""
+    db.execute("CREATE TABLE t(x INTEGER)")
+    result = validate(db, sql)
+    assert not result["allowed"]
+    assert result["code"] == by_engine(v1="parser", v2="unsupported"), result
+    if result["code"] == "unsupported":
+        assert result["violations"][0]["message"] == "nested schema paths are unsupported", result
+
+
 @pytest.mark.parametrize("sql", [
     "SELECT * FROM main.query('SELECT * FROM secret.t')",
     "SELECT * FROM query_table('secret.t')",

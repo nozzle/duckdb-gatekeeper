@@ -356,6 +356,19 @@ def test_explain_and_prepare_of_enforce_do_not_latch(db):
         db.execute("CREATE TABLE now_enforced(x INTEGER)")
 
 
+@pytest.mark.parametrize("spelling", ["CALL gatekeeper_enforce()", "SELECT enforced FROM gatekeeper_enforce()",
+                                      "EXECUTE latch"])
+def test_enforce_latches_when_its_statement_runs_whether_or_not_the_row_is_read(db, spelling):
+    """The latch is the statement's effect, not its row's: a host that never reads the result is enforced all
+    the same, under every spelling. DuckDB 2.0 produces a SELECT's rows only as the client reads them and
+    would otherwise leave the connection unenforced while the host believes it latched; gatekeeper_enforce's
+    bind marks its statement to run at once, as CALL does (engine::RunAtOnce)."""
+    db.execute("PREPARE latch AS SELECT enforced FROM gatekeeper_enforce()")
+    db.execute(spelling)  # unread on purpose
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        db.execute("CREATE TABLE never_created(x INTEGER)")
+
+
 def test_enforce_is_refused_inside_an_open_transaction(catalog):
     # An enforced connection cannot COMMIT or ROLLBACK (neither is a read statement), so a latch taken inside a
     # transaction the host opened would strand the connection in a transaction nothing can end. The refusal is a
@@ -390,7 +403,7 @@ def test_enforce_is_refused_inside_an_open_transaction(catalog):
         cursor.execute("EXPLAIN SELECT * FROM gatekeeper_enforce()").fetchall()
         cursor.execute("PREPARE latch AS SELECT * FROM gatekeeper_enforce()")
         with pytest.raises(duckdb.PermissionException, match="cannot run inside an open transaction"):
-            cursor.execute("EXECUTE latch").fetchall()  # read the row: 2.0 runs a SELECT's plan when it is read
+            cursor.execute("EXECUTE latch")
         cursor.execute("ROLLBACK")
         assert cursor.execute("EXECUTE latch").fetchone()[0] is True
 

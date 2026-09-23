@@ -955,9 +955,14 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   text. A prepare is pre-screened as under 1.5 (its parameter values are not known) and each
   execution is authorized with its values; unlike 1.5, the prepare's replacement gate knows
   the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare time.
-- 2.0 produces a `SELECT`'s rows only when the client reads them. `CALL gatekeeper_configure`
-  and `CALL gatekeeper_enforce` run at once; the `SELECT * FROM gatekeeper_configure(...)` and
-  prepared forms take effect when their row is read.
+- 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once by
+  marking the statement. `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from
+  their bind, so `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either
+  function, and `EXECUTE` of one run when the statement runs, whether or not the host reads the
+  row; an unread `SELECT ... FROM gatekeeper_enforce()` would otherwise have left the connection
+  unenforced while the host believed it latched.
+- 2.0 can qualify a name with a nested schema path (`a.b.c.name`); such paths are `unsupported`
+  until the name-based checks are reviewed for them.
 - 2.0's default transaction-invalidation policy aborts an open transaction on any error,
   including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
   connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`

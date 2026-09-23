@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -117,6 +118,20 @@ inline CatalogEntry &GetEntry(ClientContext &context, CatalogType type, const st
 	return Catalog::GetEntry(context, type, catalog, schema, name);
 }
 #endif
+
+// A table function whose execution is its point (gatekeeper_enforce latches, gatekeeper_configure writes the
+// policy) must run when its statement runs, however the statement is spelled. DuckDB 1.5 runs every statement
+// to completion; 2.0 produces a SELECT's rows only as the client reads them, and runs CALL at once by marking
+// the statement's result eagerness in Binder::Bind(CallStatement). The same mark from the function's bind makes
+// `SELECT ... FROM gatekeeper_enforce()`, a prepared statement over it, and EXECUTE of one run at once too.
+inline void RunAtOnce(TableFunctionBindInput &input) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	if (input.binder)
+		input.binder->GetStatementProperties().result_eagerness = ResultEagerness::FORCED;
+#else
+	(void)input;
+#endif
+}
 
 // The serializer settings that produce the shape the grammar was generated from: the latest storage version
 // of the engine being built.

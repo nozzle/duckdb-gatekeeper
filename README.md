@@ -587,7 +587,9 @@ SELECT enforced FROM gatekeeper_enforce();
 > [!NOTE]
 > The full row also carries `warnings`, naming host settings that weaken the sandbox
 > (`enable_external_access`, autoload, `lock_configuration`, log-only mode, and logging that
-> would not record a denial). Gatekeeper reports them; it never changes them.
+> would not record a denial). Gatekeeper reports them; it never changes them. The latch is the
+> statement's effect, not the row's: the connection is enforced once the statement has run,
+> whether or not you read the result, under either spelling (`CALL` or `SELECT ... FROM`).
 
 From then on, on that connection only, allowed reads work as before:
 
@@ -815,7 +817,8 @@ it **executes**. It does not:
 - enforce execution deadlines or memory budgets;
 - isolate the filesystem or network;
 - prevent binding from performing I/O through trusted views and macros before a denial,
-  or before a denial of a prepared statement, which DuckDB binds before Gatekeeper can decide it;
+  or before a denial of a prepared statement, which the engine binds before Gatekeeper's plan
+  check decides it (on DuckDB 1.5, before any Gatekeeper hook runs at all);
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
   parsing, before any extension hook, which can run any scalar function the connection can see,
   `write_log` into the audit log included;

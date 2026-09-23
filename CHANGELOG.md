@@ -13,9 +13,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   same on both engines; where the engine itself changed, Gatekeeper follows it, and
   [Compatibility and review](docs/security.md#compatibility-and-review) lists what a host on 2.0
   sees differently: `SHOW name` is unsupported there (it can read a setting at bind time), DML
-  inside a CTE is `unsupported` rather than a parser error, and the `SELECT * FROM
-  gatekeeper_configure(...)` and prepared forms take effect when their row is read, since 2.0
-  produces rows lazily (`CALL` runs at once). (#98)
+  inside a CTE and nested schema paths (`a.b.c.name`) are `unsupported` rather than parser errors,
+  and 2.0's lazy `SELECT` results are accounted for: `gatekeeper_enforce` and
+  `gatekeeper_configure` run when their statement runs under every spelling, read or not. (#98)
 
 ### Fixed
 

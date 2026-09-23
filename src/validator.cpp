@@ -366,6 +366,14 @@ struct Walker {
 		                   Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		// DuckDB 2.0 can qualify a name with a nested schema path (a.b.c.name) and writes it as qualified_name
+		// next to the catalog/schema/name properties, which are lossy views of such a path: the catalog is its
+		// first component, the schema the one before the name. The name-based checks below read those views
+		// and were written for three-part names; the bound entry is still checked in full at authorization,
+		// but a text-level view that disagrees with it is not one to reason from. Refused until reviewed.
+		auto qualified = yyjson_obj_get(value, "qualified_name");
+		if (qualified && yyjson_arr_size(yyjson_obj_get(qualified, "path")) > 3)
+			throw Stop{"nested schema paths are unsupported"};
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
 		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
 		// which names are which and treats the rest as trusted. The same names, as written components, are what

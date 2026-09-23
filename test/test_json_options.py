@@ -192,15 +192,15 @@ def test_prepared_json_configuration_only_mutates_on_execution_and_obeys_lock(db
     db.execute("PREPARE fixed AS SELECT * FROM gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
     db.execute("EXPLAIN CALL gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
     assert policy(db) == before
-    # Read the row: DuckDB 2.0 produces a SELECT's rows, and so this configure's effect, only when they are read.
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')").fetchall()
+    # Unread on purpose: the configure runs when its statement runs, on either engine.
+    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')")
     assert policy(db)["blocked_functions"] == ["md5"]
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"lower\"]}}')").fetchall()
+    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"lower\"]}}')")
     assert policy(db)["blocked_functions"] == ["lower"]
     db.execute("SET lock_configuration = true")
     for sql in ["EXECUTE cfg('{\"version\":1,\"options\":{}}')", "EXECUTE fixed"]:
         with pytest.raises(duckdb.Error, match="locked"):
-            db.execute(sql).fetchall()
+            db.execute(sql)
     assert policy(db)["blocked_functions"] == ["lower"]
 
 
