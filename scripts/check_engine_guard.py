@@ -12,8 +12,10 @@ untouched copy made the same way must load and validate.
 
 The host is the ``unittest`` runner rather than the shell because it opens databases without loading the
 statically linked extensions (``load_extensions = false``): a shell built with Gatekeeper linked in answers
-``LOAD`` of a file by that name with "already loaded" and never opens the file. The probe also points
-``extension_directory`` at a scratch directory so no installed extension of the same name can be picked up.
+``LOAD`` of a file by that name with "already loaded" and never opens the file. The runner also opens them
+with ``allow_unsigned_extensions`` on, which a locally built artifact needs and which cannot be changed once a
+database is open; the probe asserts that before loading anything. It also points ``extension_directory`` at
+a scratch directory so no installed extension of the same name can be picked up.
 
 The stamp array is NUL padded (scripts/generate.py STAMP_WIDTH), so a rewritten stamp of a different
 length keeps the byte count. On macOS the copy is re-signed ad hoc after the rewrite (the kernel kills a
@@ -77,7 +79,8 @@ def check(extension: Path, unittest: Path) -> list:
     problems = []
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        settings = (f"statement ok\nSET extension_directory = '{root / 'extensions'}';\n\n"
+        settings = ("query I\nSELECT current_setting('allow_unsigned_extensions');\n----\ntrue\n\n"
+                    f"statement ok\nSET extension_directory = '{root / 'extensions'}';\n\n"
                     "statement ok\nSET allow_extensions_metadata_mismatch = true;\n\n")
         tampered = root / "tampered" / extension.name
         tampered.parent.mkdir()
