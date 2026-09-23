@@ -818,7 +818,8 @@ it **executes**. It does not:
 - isolate the filesystem or network;
 - prevent binding from performing I/O through trusted views and macros before a denial,
   or before a denial of a prepared statement, which the engine binds before Gatekeeper's plan
-  check decides it (on DuckDB 1.5, before any Gatekeeper hook runs at all);
+  check decides it (on DuckDB 1.5, before any Gatekeeper hook runs at all; see
+  [Compatibility and review](docs/security.md#compatibility-and-review) for the 2.0 prepare);
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
   parsing, before any extension hook, which can run any scalar function the connection can see,
   `write_log` into the audit log included;

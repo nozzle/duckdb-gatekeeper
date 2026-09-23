@@ -952,9 +952,13 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   the supported spelling. `SHOW TABLES` and the other catalog-wide forms still bind to
   never-bind readers and are refused as before.
 - 2.0 runs `Prepare()` and `Execute()` from client APIs as statements carrying the prepared
-  text. A prepare is pre-screened as under 1.5 (its parameter values are not known) and each
-  execution is authorized with its values; unlike 1.5, the prepare's replacement gate knows
-  the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare time.
+  text. A prepare's plan is pre-screened as under 1.5 (its parameter values are not known) and
+  each execution is authorized with its values under the policy in force then. Because the
+  prepare carries the text, the text boundary applies to it: parameterless text is authorized
+  privately at the prepare, as any parameterless statement is, so a statement the policy denies
+  is refused at `Prepare()` rather than at its first `Execute()`; and the prepare's replacement
+  gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
+  time as it is on 1.5.
 - 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once by
   marking the statement. `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from
   their bind, so `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either
