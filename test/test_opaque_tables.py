@@ -9,7 +9,7 @@ import duckdb
 import pytest
 
 from support.audit import decisions, enable
-from support.enforcement import DENIED, attempt
+from support.enforcement import DENIED, attempt, settle
 from support.typed_helpers import configure, rule, validate
 
 
@@ -290,8 +290,10 @@ def test_enforced_connections_execute_what_the_policy_allows(catalog, agent):
     for sql in ["SELECT * FROM secret.salaries", "SELECT * FROM reporting.leak, secret.salaries",
                 "SELECT * FROM reporting.leak WHERE who IN (SELECT who FROM secret.salaries)"]:
         assert attempt(agent, sql).kind == "denied", sql
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.table("secret.salaries").fetchall()
+    settle(agent)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.sql("SELECT * FROM reporting.leak").join(agent.table("secret.salaries"), "who").fetchall()
     # Parameters: authorized after the engine binds, with the same outcome.

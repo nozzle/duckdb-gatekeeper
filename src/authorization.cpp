@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "engine_api.hpp"
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
 #include <map>
@@ -56,33 +57,34 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 
 static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                                    CatalogEntry &entry, gatekeeper::Result &result, bool attributable) {
+	auto &name = engine::EntryName(entry);
 	if (auto kind = FunctionKind(entry.type)) {
-		AuthorizeFunction(policy, binding, entry.name, attributable, result);
+		AuthorizeFunction(policy, binding, name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();
-		auto catalog = function.schema.catalog.GetName(), schema = function.schema.name;
+		auto catalog = engine::CatalogName(function.schema.catalog), schema = engine::EntryName(function.schema);
 		bool builtin = SystemBuiltin(catalog, schema);
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
-		    binding.runtime_table_functions.count(gatekeeper::Lower(entry.name)) &&
+		    binding.runtime_table_functions.count(gatekeeper::Lower(name)) &&
 		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || !builtin)) {
 			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
 			                          "runtime arguments require a system table-in-out function", catalog, schema, "",
-			                          entry.name);
+			                          name);
 			throw PermissionException("untrusted table-in-out function");
 		}
-		if (binding.literal_constructors.count(gatekeeper::Lower(entry.name)) &&
+		if (binding.literal_constructors.count(gatekeeper::Lower(name)) &&
 		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || !builtin)) {
 			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
 			                          "literal constructor must resolve to a system builtin", catalog, schema, "",
-			                          entry.name);
+			                          name);
 			throw PermissionException("untrusted bind-time constructor");
 		}
-		result.functions.insert({catalog, schema, entry.name, kind});
+		result.functions.insert({catalog, schema, name, kind});
 		return;
 	}
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
 		return;
 	auto &object = entry.Cast<StandardEntry>();
-	auto catalog = object.schema.catalog.GetName(), schema = object.schema.name, name = object.name;
+	auto catalog = engine::CatalogName(object.schema.catalog), schema = engine::EntryName(object.schema);
 	// Table policy, the internal-object rule included, holds for objects attributable to the caller. An object
 	// a trusted definition's body retrieved is that definition's own: recorded as evidence, outside policy.
 	if (attributable && !gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
@@ -111,31 +113,38 @@ void AuthorizeObject(const gatekeeper::Layers &layers, const gatekeeper::Binding
 // ListAggregatesBindData is private to core_functions. Its reviewed serialization callback exposes
 // the actual bound aggregate without unsafe layout casts, evaluating arguments, or rebinding names.
 // Inspect only this documented shape, never arbitrary JSON payloads that can resemble expressions.
-static string ListAggregateImplementation(BoundFunctionExpression &expression) {
+static string ListAggregateImplementation(const BoundFunctionExpression &expression) {
+	auto &function = engine::Function(expression);
+	auto &name = engine::FunctionName(function);
 	// Name-selected dispatchers plus the builtins with a fixed histogram implementation.
 	static const gatekeeper::Names fixed = {"list_distinct", "list_unique", "array_distinct", "array_unique"};
-	if (!gatekeeper::DispatchingAggregators().count(expression.function.name) && !fixed.count(expression.function.name))
+	if (!gatekeeper::DispatchingAggregators().count(name) && !fixed.count(name))
 		return {};
 	// Catalog construction stamps this provenance onto each overload and binding preserves it.
 	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
-	if (!SystemBuiltin(expression.function.catalog_name, expression.function.schema_name))
+	if (!SystemBuiltin(engine::CatalogName(function), engine::SchemaName(function)))
 		throw BinderException("List aggregate implementation is not the pinned builtin");
-	auto null_input =
-	    !expression.children.empty() && expression.children[0]->return_type.id() == LogicalTypeId::SQLNULL;
+	auto &children = engine::Children(expression);
+	auto bind_info = engine::BindInfo(expression);
+	auto null_input = !children.empty() && engine::ReturnType(*children[0]).id() == LogicalTypeId::SQLNULL;
 	// These builtins use the fixed histogram implementation and have no serialization callbacks.
-	if (fixed.count(expression.function.name))
+	if (fixed.count(name))
 		return null_input ? "" : "histogram";
-	if (!expression.bind_info)
+	if (!bind_info) {
+		// A NULL-list input carries no executable aggregate: DuckDB 1.5 binds it with a VariableReturnBindData
+		// whose serialization holds no bind data (handled below), 2.0 with no bind data at all. Any other
+		// missing bind data is a parameter whose type never resolved.
+		if (null_input)
+			return {};
 		throw BinderException("List aggregate requires resolved parameter types");
-	if (!expression.function.HasSerializationCallbacks())
+	}
+	if (!function.HasSerializationCallbacks())
 		throw BinderException("Cannot inspect list aggregate implementation");
 	unique_ptr<yyjson_mut_doc, decltype(&yyjson_mut_doc_free)> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
 	if (!doc)
 		throw std::bad_alloc();
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-	JsonSerializer serializer(doc.get(), false, false, false, options);
-	expression.function.GetSerializeCallback()(serializer, expression.bind_info.get(), expression.function);
+	JsonSerializer serializer(doc.get(), false, false, false, engine::LatestSerialization());
+	function.GetSerializeCallback()(serializer, bind_info, function);
 	auto data = yyjson_mut_obj_get(serializer.GetRootObject(), "bind_data");
 	// A NULL-list input uses VariableReturnBindData and carries no executable aggregate.
 	if (!data || yyjson_mut_is_null(data)) {
@@ -145,11 +154,18 @@ static string ListAggregateImplementation(BoundFunctionExpression &expression) {
 	}
 	auto aggregate = yyjson_mut_obj_get(data, "aggr_expr");
 	auto kind = yyjson_mut_obj_get(aggregate, "expression_class");
-	auto name = yyjson_mut_obj_get(aggregate, "name");
-	if (!yyjson_mut_is_str(kind) || string(yyjson_mut_get_str(kind)) != "BOUND_AGGREGATE" || !yyjson_mut_is_str(name) ||
-	    !yyjson_mut_get_len(name))
+	// The bound aggregate's name (FunctionSerializer::Serialize): DuckDB 1.5 writes `name`; 2.0 writes the
+	// qualified name as `qname.path`, whose last component is the name.
+	auto target = yyjson_mut_obj_get(aggregate, "name");
+	if (!target) {
+		auto path = yyjson_mut_obj_get(yyjson_mut_obj_get(aggregate, "qname"), "path");
+		if (yyjson_mut_is_arr(path) && yyjson_mut_arr_size(path))
+			target = yyjson_mut_arr_get_last(path);
+	}
+	if (!yyjson_mut_is_str(kind) || string(yyjson_mut_get_str(kind)) != "BOUND_AGGREGATE" ||
+	    !yyjson_mut_is_str(target) || !yyjson_mut_get_len(target))
 		throw BinderException("Unsupported list aggregate bind data");
-	return string(yyjson_mut_get_str(name), yyjson_mut_get_len(name));
+	return string(yyjson_mut_get_str(target), yyjson_mut_get_len(target));
 }
 
 static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
@@ -173,10 +189,11 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			operators.push_back(child.get());
 		if (op->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op->Cast<LogicalGet>();
+			auto &scan = engine::FunctionName(get.function);
 			// A scan with a table entry is an attached catalog reading a table the policy allowed: the reader it
 			// uses internally (iceberg_scan, ducklake_scan) is that catalog's, never the caller's.
-			if (get.function.name != "seq_scan")
-				function(get.function.name, "table", !get.GetTable() && attributable(get.function.name));
+			if (scan != "seq_scan")
+				function(scan, "table", !get.GetTable() && attributable(scan));
 		}
 		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
 			if (*expr)
@@ -191,13 +208,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			function("unnest", "scalar", attributable("unnest"));
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &bound = child.Cast<BoundFunctionExpression>();
-			function(bound.function.name, "scalar", attributable(bound.function.name));
-			auto lambda = dynamic_cast<ListLambdaBindData *>(bound.bind_info.get());
+			auto &implementation = engine::Function(bound);
+			auto &name = engine::FunctionName(implementation);
+			function(name, "scalar", attributable(name));
+			auto lambda = dynamic_cast<ListLambdaBindData *>(engine::BindInfo(bound).get());
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
 			// host/extension boundary; if it ever fails there, refuse rather than silently skip the body.
-			if (!lambda && gatekeeper::ListLambdaFunctions().count(bound.function.name) &&
-			    SystemBuiltin(bound.function.catalog_name, bound.function.schema_name))
+			if (!lambda && gatekeeper::ListLambdaFunctions().count(name) &&
+			    SystemBuiltin(engine::CatalogName(implementation), engine::SchemaName(implementation)))
 				throw BinderException("Cannot inspect list lambda implementation");
 			if (lambda && lambda->lambda_expr)
 				expressions.push_back(lambda->lambda_expr.get());
@@ -207,8 +226,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				// must be allowed, not merely unblocked. Fixed implementations (list_distinct's histogram) and
 				// dispatchers introduced only by trusted views or macros keep the block-only treatment. Any
 				// caller-written dispatcher triggers the check query-wide, like other ambiguous caller syntax.
-				if (!binding.caller_dispatchers.empty() &&
-				    gatekeeper::DispatchingAggregators().count(bound.function.name) &&
+				if (!binding.caller_dispatchers.empty() && gatekeeper::DispatchingAggregators().count(name) &&
 				    !gatekeeper::FunctionAllowed(policy, aggregate)) {
 					auto canonical = gatekeeper::CanonicalFunction(aggregate);
 					result.violations.emplace(gatekeeper::rules::FUNCTION,
@@ -217,18 +235,19 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
 				// The dispatched aggregate is the dispatcher's: the caller's when the dispatcher is.
-				function(aggregate, "aggregate", attributable(bound.function.name) || attributable(aggregate));
+				function(aggregate, "aggregate", attributable(name) || attributable(aggregate));
 			}
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
-			auto &name = child.Cast<BoundAggregateExpression>().function.name;
+			auto &name = engine::FunctionName(child.Cast<BoundAggregateExpression>());
 			function(name, "aggregate", attributable(name));
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = child.Cast<BoundWindowExpression>();
-			if (window.aggregate)
-				function(window.aggregate->name, "aggregate", attributable(window.aggregate->name));
-			else {
+			if (auto aggregate = engine::WindowAggregate(window)) {
+				auto &name = engine::FunctionName(*aggregate);
+				function(name, "aggregate", attributable(name));
+			} else {
 				static const std::map<ExpressionType, string> windows = {
 				    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
 				    {ExpressionType::WINDOW_RANK, "rank"},

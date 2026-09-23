@@ -28,7 +28,9 @@ def test_schema_is_valid_and_covers_the_sql_options(db):
     Draft202012Validator.check_schema(SCHEMA)
     for name, parameters in db.execute("""SELECT function_name, parameters FROM duckdb_functions()
             WHERE function_name IN ('gatekeeper_configure', 'gatekeeper_validate')""").fetchall():
-        assert set(SCHEMA["properties"]["options"]["properties"]) == set(parameters) - {"sql", "json"}, name
+        # DuckDB 2.0 names a table function's positional parameters col0.. in duckdb_functions() ahead of the
+        # description's names (GetParameterNames); 1.5 used the description's.
+        assert set(SCHEMA["properties"]["options"]["properties"]) == set(parameters) - {"sql", "col0", "json"}, name
 
 
 VALID_OPTIONS = [
@@ -190,14 +192,15 @@ def test_prepared_json_configuration_only_mutates_on_execution_and_obeys_lock(db
     db.execute("PREPARE fixed AS SELECT * FROM gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
     db.execute("EXPLAIN CALL gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
     assert policy(db) == before
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')")
+    # Read the row: DuckDB 2.0 produces a SELECT's rows, and so this configure's effect, only when they are read.
+    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')").fetchall()
     assert policy(db)["blocked_functions"] == ["md5"]
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"lower\"]}}')")
+    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"lower\"]}}')").fetchall()
     assert policy(db)["blocked_functions"] == ["lower"]
     db.execute("SET lock_configuration = true")
     for sql in ["EXECUTE cfg('{\"version\":1,\"options\":{}}')", "EXECUTE fixed"]:
         with pytest.raises(duckdb.Error, match="locked"):
-            db.execute(sql)
+            db.execute(sql).fetchall()
     assert policy(db)["blocked_functions"] == ["lower"]
 
 

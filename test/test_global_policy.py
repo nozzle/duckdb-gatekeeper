@@ -184,14 +184,16 @@ def test_prepare_and_explain_do_not_mutate_and_execution_rechecks_lock(db):
     db.execute("EXPLAIN CALL gatekeeper_configure(blocked_functions := ['lower'])").fetchall()
     db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(blocked_functions := ['upper'])")
     assert policy(db) == before
-    db.execute("EXECUTE cfg(['md5'])")
+    # A configure spelled as a SELECT (EXECUTE of one, here) takes effect when its row is produced; DuckDB 2.0
+    # produces a SELECT's rows only when they are read, so read them. CALL runs at once on both engines.
+    db.execute("EXECUTE cfg(['md5'])").fetchall()
     assert policy(db)["blocked_functions"] == ["md5"]
-    db.execute("EXECUTE cfg(['lower'])")
+    db.execute("EXECUTE cfg(['lower'])").fetchall()
     assert policy(db)["blocked_functions"] == ["lower"]
     db.execute("SET lock_configuration = true")
     for sql in ["EXECUTE cfg([])", "EXECUTE literal_cfg", "SELECT * FROM cfg_view"]:
         with pytest.raises(duckdb.Error, match="locked"):
-            db.execute(sql)
+            db.execute(sql).fetchall()
 
 
 @pytest.mark.parametrize("statement", [

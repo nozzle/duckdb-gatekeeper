@@ -9,7 +9,7 @@ import sys
 import duckdb
 import pytest
 
-from support.artifact import EXTENSION, ROOT, literal, select_parser
+from support.artifact import ENGINE_SOURCE, EXTENSION, ROOT, literal, select_parser
 from support.toolchain import repository
 from versions import (BASELINE_FILENAME, EXTENSION_VERSION, REVIEWED_DUCKDB, SUPPORTED_DUCKDB,
                       SUPPORTED_DUCKDB_REVISION, load_versions, reviewed_duckdb)
@@ -177,8 +177,8 @@ def test_check_engine_stamp_script():
     from engine import checkout_revision
     version, source_id = _stamp(EXTENSION.read_bytes())
     arguments = ["--extension", str(EXTENSION)]
-    if checkout_revision(ROOT / "duckdb"):
-        arguments += ["--engine-source", str(ROOT / "duckdb")]
+    if checkout_revision(ENGINE_SOURCE):
+        arguments += ["--engine-source", str(ENGINE_SOURCE)]
     assert check_engine_stamp.main(arguments + ["--expect-version", version]) == 0
     assert check_engine_stamp.main(arguments + ["--expect-version", version + "x"]) == 1
     with pytest.raises(SystemExit):

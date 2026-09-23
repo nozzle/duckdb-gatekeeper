@@ -1,5 +1,6 @@
 #include "options.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "engine_api.hpp"
 #include <memory>
 #include <stdexcept>
 
@@ -227,9 +228,9 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			if (entry_type.id() == LogicalTypeId::STRUCT) {
 				Names fields;
 				for (const auto &field : duckdb::StructType::GetChildTypes(entry_type)) {
-					if (!fields.insert(field.first).second ||
-					    (field.first != "catalog" && field.first != "schema" && field.first != leaf))
-						throw std::invalid_argument("unknown " + leaf + " field: " + field.first);
+					auto &key = duckdb::engine::Str(field.first);
+					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != leaf))
+						throw std::invalid_argument("unknown " + leaf + " field: " + key);
 				}
 				if (!fields.count("schema") || !fields.count(leaf))
 					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
@@ -246,7 +247,7 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				Names fields;
 				Table table;
 				for (size_t i = 0; i < types.size(); i++) {
-					auto key = types[i].first;
+					auto &key = duckdb::engine::Str(types[i].first);
 					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != leaf))
 						throw std::invalid_argument("unknown " + leaf + " field: " + key);
 					if (values[i].IsNull() && key == "catalog")
@@ -280,8 +281,9 @@ Value PolicyValue(const Policy &policy) {
 		return Value::LIST(LogicalType::VARCHAR, values);
 	};
 	auto identities = [](const std::set<Table> &entries, const std::string &leaf) {
-		auto type = LogicalType::STRUCT(
-		    {{"catalog", LogicalType::VARCHAR}, {"schema", LogicalType::VARCHAR}, {leaf, LogicalType::VARCHAR}});
+		auto type = LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
+		                                 {"schema", LogicalType::VARCHAR},
+		                                 {duckdb::engine::ToName(leaf), LogicalType::VARCHAR}});
 		duckdb::vector<Value> values;
 		// The canonical setting is NULL-free at every depth: an empty catalog means any catalog. A NULL
 		// produced by DuckDB's lossy STRUCT cast (for example a misspelled catalog key on direct SET) is
@@ -309,10 +311,11 @@ static Value CanonicalIdentities(const std::string &name, const Value &value) {
 		auto &fields = duckdb::StructType::GetChildTypes(entry.type());
 		auto values = duckdb::StructValue::GetChildren(entry);
 		for (size_t i = 0; i < fields.size(); i++) {
+			auto &field = duckdb::engine::Str(fields[i].first);
 			if (values[i].IsNull())
-				throw std::invalid_argument("NULL policy field: " + name + "." + fields[i].first);
+				throw std::invalid_argument("NULL policy field: " + name + "." + field);
 			// The canonical any-catalog spelling is '', which request decoding expresses as NULL.
-			if (fields[i].first == "catalog" && values[i].GetValue<std::string>().empty())
+			if (field == "catalog" && values[i].GetValue<std::string>().empty())
 				values[i] = Value(LogicalType::VARCHAR);
 		}
 		entries.push_back(Value::STRUCT(entry_type, values));
@@ -330,7 +333,7 @@ Policy ReadPolicy(const Value &value) {
 	std::vector<std::pair<std::string, Value>> options;
 	bool tables = false;
 	for (size_t i = 0; i < fields.size(); i++) {
-		auto &name = fields[i].first;
+		auto &name = duckdb::engine::Str(fields[i].first);
 		if (values[i].IsNull())
 			throw std::invalid_argument("NULL policy field: " + name);
 		if (name == "restrict_tables")

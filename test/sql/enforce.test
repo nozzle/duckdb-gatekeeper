@@ -37,7 +37,9 @@ statement ok
 CREATE TABLE still_unenforced(x INTEGER);
 
 # Inside a transaction the host opened, the latch is refused: an enforced connection could never COMMIT or
-# ROLLBACK it. The refusal leaves the transaction usable and the connection unenforced.
+# ROLLBACK it. The refusal latches nothing: the host can still end the transaction and the connection stays
+# unenforced. (Whether the transaction remains usable after the error is the engine's
+# transaction-invalidation policy: DuckDB 1.5 keeps it open after a Permission Error, 2.0 aborts it by default.)
 
 statement ok
 BEGIN TRANSACTION;
@@ -48,10 +50,10 @@ SELECT enforced FROM gatekeeper_enforce();
 Permission Error: gatekeeper_enforce() cannot run inside an open transaction
 
 statement ok
-CREATE TABLE still_unenforced_in_transaction(x INTEGER);
+ROLLBACK;
 
 statement ok
-COMMIT;
+CREATE TABLE still_unenforced_after_refusal(x INTEGER);
 
 query I
 SELECT enforced FROM gatekeeper_enforce();

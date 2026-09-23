@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "engine_api.hpp"
 #include "policy_setting.hpp"
 #include "single_row.hpp"
 
@@ -40,10 +41,19 @@ static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG
 //
 // Two entry points reach execution. Query(): QueryBegin sees the statement text, admits it, and binds it
 // privately with catalog authorization when it has no parameters; the engine then binds and PostBind
-// re-checks that plan. Prepare() then Execute(): Prepare binds before any hook runs (PostBind only
-// pre-screens that plan); at execution QueryBegin admits the text, OnExecutePrepared forces a rebind
+// re-checks that plan. Prepare() then Execute(): Prepare only pre-screens the plan's structure, since its
+// parameter values are not known; at execution QueryBegin admits the text, the rebind hook forces a rebind
 // inside the query, and PostBind authorizes and re-checks the plan that will execute. Parameter values
 // are known only to the engine's binder, so parameterized statements are authorized in PostBind.
+//
+// Where those two run differs by engine. DuckDB 1.5 binds Prepare() before any hook and outside any
+// statement, and asks OnExecutePrepared before running the prepared plan. DuckDB 2.0 runs both as internal
+// statements carrying the prepared text (ClientContext::PrepareInternal, PreparedStatement::Execute): a
+// PREPARE whose nested plan is bound in BindingMode::PREPARE, and an EXECUTE that asks
+// OnRebindPreparedStatement before rebinding. Each reaches PostBind twice, the statement's own plan first and
+// the wrapper (LOGICAL_PREPARE, LOGICAL_EXECUTE) after; the wrapper runs nothing of its own and is accepted
+// exactly when its plan was decided under this statement. The text boundary admits that text as the SELECT it
+// is; a caller's own PREPARE or EXECUTE is refused there as an unsupported statement.
 //
 // One result accumulates across the boundaries and is recorded exactly once per statement: at the boundary
 // that denies it, or as allowed once the plan the engine will execute has passed.
@@ -63,16 +73,21 @@ static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG
 //   - prepare_decided is meaningful only outside a statement (!in_statement): it marks a Prepare() bind the
 //     replacement gate already recorded, is consumed by the pre-screen or cleared when the prepare attempt
 //     ends (OnFinalizePrepare, OnPlanningError), and is never set inside a statement.
+//   - executing_prepared and prescreened (DuckDB 2.0) are set inside a statement only: the first by the rebind
+//     hook, marking the nested plan that follows as the one that will execute; the second by the pre-screen
+//     of a Prepare()'s nested plan, which its PREPARE wrapper then consumes.
 struct EnforcementState : ClientContextState {
-	gatekeeper::Policy policy;    // one snapshot for the whole statement
-	gatekeeper::Result result;    // the decision in progress
-	bool log_only = false;        // this statement is recorded and never refused
-	bool in_statement = false;    // QueryBegin has run: the snapshots describe the statement in progress
-	bool decided = false;         // the statement's record has been written
-	bool prepare_decided = false; // a Prepare() outside any statement was decided at the replacement gate
-	bool admitted = false;        // text passed the binding boundary
-	bool authorized = false;      // private bind with catalog authorization passed
-	TextCheck::Unit unit;         // the admitted statement, awaiting parameter values when it has any
+	gatekeeper::Policy policy;       // one snapshot for the whole statement
+	gatekeeper::Result result;       // the decision in progress
+	bool log_only = false;           // this statement is recorded and never refused
+	bool in_statement = false;       // QueryBegin has run: the snapshots describe the statement in progress
+	bool decided = false;            // the statement's record has been written
+	bool prepare_decided = false;    // a Prepare() outside any statement was decided at the replacement gate
+	bool admitted = false;           // text passed the binding boundary
+	bool authorized = false;         // private bind with catalog authorization passed
+	bool executing_prepared = false; // 2.0: this statement is an EXECUTE whose rebind the hook forced
+	bool prescreened = false;        // 2.0: this statement is a PREPARE whose nested plan passed the pre-screen
+	TextCheck::Unit unit;            // the admitted statement, awaiting parameter values when it has any
 
 	// An enforced connection has no request layer: the statement's snapshot stands in both positions, and every
 	// check runs as gatekeeper_validate runs it with no options.
@@ -86,6 +101,8 @@ struct EnforcementState : ClientContextState {
 		prepare_decided = false;
 		admitted = false;
 		authorized = false;
+		executing_prepared = false;
+		prescreened = false;
 		unit = TextCheck::Unit();
 	}
 	// The statement's record, and in ENFORCE mode its refusal. Marked before Decide can throw.
@@ -99,7 +116,7 @@ struct EnforcementState : ClientContextState {
 	// is the outcome. Log-only, nothing from the private path may surface: the statement is recorded as
 	// gatekeeper_validate would report it, and the engine's own bind raises the error, carrying the query
 	// location a hook cannot attach, or runs the statement if it binds after all.
-	void Authorize(ClientContext &context, optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters) {
+	void Authorize(ClientContext &context, optional_ptr<const engine::ParameterMap> parameters) {
 		try {
 			duckdb::Authorize(context, Snapshot(), unit, parameters, result);
 		} catch (const PermissionException &) {
@@ -196,16 +213,31 @@ struct EnforcementState : ClientContextState {
 			prepare_decided = false;
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
-	                                  RebindQueryInfo) override {
+	// A prepared statement executed through the client API: its plan was built before this query began, so
+	// rebinding inside the query means the plan that executes is the one PostBind authorizes under this
+	// statement's policy snapshot. DuckDB 1.5 runs the prepared plan directly and asks here first; 2.0 runs an
+	// internal EXECUTE statement carrying the prepared text (PreparedStatement::CreateExecuteStatement) and
+	// asks while binding it, the same hook a caller's own EXECUTE reaches, which the text boundary has already
+	// refused as an unsupported statement.
+	RebindQueryInfo ForceRebind(ClientContext &context) {
 		if (!admitted && !decided) {
 			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
-		// The prepared plan was built before this query began. Rebinding inside the query means the plan
-		// that executes is the one PostBind authorizes under this statement's policy snapshot.
+		executing_prepared = true;
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	RebindQueryInfo OnRebindPreparedStatement(ClientContext &context, BindPreparedStatementCallbackInfo &,
+	                                          RebindQueryInfo) override {
+		return ForceRebind(context);
+	}
+#else
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &,
+	                                  RebindQueryInfo) override {
+		return ForceRebind(context);
+	}
+#endif
 };
 
 static shared_ptr<EnforcementState> StateOf(ClientContext &context) {
@@ -268,8 +300,8 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		return;
 	auto &context = input.context;
 	if (!state->in_statement) {
-		// Prepare(): no query is active and the text has not been seen. This plan cannot execute before
-		// OnExecutePrepared forces a rebind inside a query, so only pre-screen it here.
+		// DuckDB 1.5's Prepare(): no query is active and the text has not been seen. This plan cannot execute
+		// before OnExecutePrepared forces a rebind inside a query, so only pre-screen it here.
 		if (state->prepare_decided) {
 			// The replacement gate already recorded this bind's denial (log-only) and let it continue.
 			state->prepare_decided = false;
@@ -300,6 +332,44 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 		// record stands; nothing is decided twice.
 		return;
 	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	// DuckDB 2.0's Prepare() and Execute() statements (see the top of this file). The text boundary admitted
+	// the prepared text; a caller's own PREPARE or EXECUTE never reaches here enforcing.
+	if (input.binder.GetBindingMode() == BindingMode::PREPARE && !state->executing_prepared) {
+		// The statement a Prepare() prepares. Its parameter values are not known yet, so as under 1.5 only the
+		// plan's structure is decided here; each execution is authorized with its values when it rebinds.
+		if (!state->admitted) {
+			state->result = gatekeeper::NotAdmitted();
+			state->Record(context, Boundary::PREPARE, &state->policy, &context.GetCurrentQuery());
+			return;
+		}
+		try {
+			auto unattributed = TextCheck::Unit::Unattributed();
+			CheckPlan(state->Snapshot(), unattributed, PlanOrigin::PRESCREEN, input.binder.GetStatementProperties(),
+			          *statement.plan, state->result);
+		} catch (const PermissionException &) {
+			MarkDenied(state->result);
+			state->Record(context, Boundary::PREPARE, &state->policy, &context.GetCurrentQuery());
+			return;
+		}
+		state->prescreened = true;
+		return;
+	}
+	if (statement.plan->type == LogicalOperatorType::LOGICAL_PREPARE ||
+	    statement.plan->type == LogicalOperatorType::LOGICAL_EXECUTE) {
+		// The wrapper, planned after the statement it wraps reached this hook: a PREPARE whose plan passed
+		// the pre-screen, or an EXECUTE whose rebound plan was authorized and recorded under this statement's
+		// snapshot. Either runs nothing of its own and is accepted exactly when that decision exists; a wrapper
+		// with none behind it would run a plan this statement never saw, and is refused.
+		bool prepare = statement.plan->type == LogicalOperatorType::LOGICAL_PREPARE;
+		if (prepare ? state->prescreened : (state->decided && state->result.allowed))
+			return;
+		state->result = gatekeeper::NotAdmitted();
+		state->Record(context, prepare ? Boundary::PREPARE : Boundary::EXECUTION, &state->policy,
+		              &context.GetCurrentQuery());
+		return;
+	}
+#endif
 	if (!state->admitted) {
 		// In ENFORCE mode the binding-boundary denial refused the statement before the engine could plan it;
 		// should a plan arrive regardless, fail closed rather than authorize what was never admitted.
@@ -310,7 +380,7 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	if (!state->authorized) {
 		// The engine's binder holds the values this statement's parameters were bound with (it binds them as
 		// constants); authorize the admitted statement privately with exactly those values.
-		case_insensitive_map_t<BoundParameterData> values;
+		engine::ParameterMap values;
 		if (auto parameters = input.binder.GetParameters())
 			values = parameters->GetParameterData();
 		state->Authorize(context, &values);
@@ -365,7 +435,7 @@ struct EnforceBinding : FunctionData {
 };
 
 static unique_ptr<FunctionData> BindEnforce(ClientContext &, TableFunctionBindInput &, vector<LogicalType> &types,
-                                            vector<string> &names) {
+                                            engine::NameList &names) {
 	types = {LogicalType::BOOLEAN, LogicalType::LIST(LogicalType::VARCHAR)};
 	names = {"enforced", "warnings"};
 	return make_uniq<EnforceBinding>();
@@ -377,8 +447,9 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 		return;
 	// An enforced connection cannot end a transaction (COMMIT and ROLLBACK are not read statements), so latching
 	// inside one the host opened would leave the connection in a transaction nothing can close. Refuse before
-	// latching, with an exception that leaves the host's transaction usable; the host commits or rolls back
-	// first, or enforces on a connection that has not begun one.
+	// latching, with a Permission Error, which the engine's default transaction-invalidation policy lets the
+	// transaction survive on DuckDB 1.5 (2.0 aborts it); either way the host ends the transaction first, or
+	// enforces on a connection that has not begun one.
 	if (!context.transaction.IsAutoCommit())
 		throw PermissionException("gatekeeper_enforce() cannot run inside an open transaction: an enforced "
 		                          "connection cannot COMMIT or ROLLBACK, so end the transaction first");

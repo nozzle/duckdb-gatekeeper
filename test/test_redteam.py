@@ -2,6 +2,7 @@
 
 import pytest
 
+from support.artifact import by_engine
 from support.typed_helpers import configure, validate
 
 
@@ -143,7 +144,7 @@ def test_catalog_changes_rechecked(split):
     # Every validation binds against the catalog as it is: the definition behind a name is read again, so the
     # evidence follows a replaced view and the decision follows a dropped one.
     split.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    split.execute("PREPARE validation AS SELECT allowed, list_transform(objects, o -> o.schema || '.' || o.\"table\") "
+    split.execute("PREPARE validation AS SELECT allowed, list_transform(objects, lambda o: o.schema || '.' || o.\"table\") "
                   "FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
     assert split.execute("EXECUTE validation").fetchone() == (True, ["allowed.changing", "allowed.t"])
     split.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
@@ -200,12 +201,17 @@ def test_mixed_batch_rejected_before_binding(split):
     assert split.execute("SELECT * FROM allowed.t").fetchone() == (1,)
 
 
+# DuckDB 1.5's parser rejects data-modifying CTEs; 2.0 parses them into query nodes of their own
+# (DELETE_QUERY_NODE, ...), which the grammar does not know and refuses as unsupported.
+DML_CTE = by_engine(v1="parser", v2="unsupported")
+
+
 @pytest.mark.parametrize("sql,code", [
     ("SELECT 1; /* harmless */ DELETE FROM t RETURNING *", "forbidden"),
     ("SELECT 1; -- comment\n COPY t TO 'out.csv'", "forbidden"),
-    ("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", "parser"),
-    ("WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d", "parser"),
-    ("WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d", "parser"),
+    ("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", DML_CTE),
+    ("WITH d AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM d", DML_CTE),
+    ("WITH d AS (UPDATE t SET x=1 RETURNING *) SELECT * FROM d", DML_CTE),
 ])
 def test_write_smuggling(db, sql, code):
     result = validate(db, sql)

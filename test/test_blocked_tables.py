@@ -4,6 +4,7 @@ import itertools
 import duckdb
 import pytest
 
+from support.artifact import ENGINE_MAJOR
 from support.typed_helpers import configure, policy, rule, validate
 
 
@@ -101,6 +102,13 @@ def test_table_description_checks_resolved_blocks(db, statement):
     db.execute("CREATE TABLE secret(x INT); CREATE TABLE other(x INT)")
     options = {"blocked_tables": [rule("memory", "main", "secret")]}
     result = validate(db, f"{statement} secret", options)
+    if statement == "SHOW" and ENGINE_MAJOR >= 2:
+        # DuckDB 2.0's `SHOW name` may read a setting's value at bind time when no such table exists, with no
+        # function for the never-bind list to see, so the grammar refuses that kind whatever the name resolves
+        # to; DESCRIBE name is the supported spelling.
+        assert result["code"] == "unsupported" and result["violations"][0]["message"] == "unsupported SHOW kind"
+        assert not validate(db, f"{statement} other", options)["allowed"]
+        return
     assert result["code"] == "forbidden", result
     violation = result["violations"][0]
     assert violation["message"] == "object is blocked"

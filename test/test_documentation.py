@@ -7,7 +7,7 @@ import pytest
 import benchmark
 from descriptor import block_scalar
 from inventory import load
-from support.artifact import EXTENSION, ROOT
+from support.artifact import EXTENSION, ROOT, by_engine
 from support.headers import control_plane_names, never_bind_names
 from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB
 
@@ -211,7 +211,9 @@ def test_function_metadata_for_generated_docs(db):
         if name == "gatekeeper_enforce":
             assert parameters == [] and parameter_types == []
         else:
-            positional = ["sql"] if name == "gatekeeper_validate" else []
+            # duckdb_functions() reports the positional parameter under the description's name on DuckDB 1.5 and
+            # as col0 on 2.0, which lists a table function's signature names ahead of the description's.
+            positional = [by_engine(v1="sql", v2="col0")] if name == "gatekeeper_validate" else []
             assert sorted(parameters) == sorted(options + positional), name
             assert parameter_types == ["VARCHAR"] * len(positional) + ["ANY"] * len(options), name
         assert db.extract_statements(examples[0])[0].type in RESPONSE_TYPES

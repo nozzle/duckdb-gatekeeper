@@ -5,6 +5,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "engine_api.hpp"
 #include "validator.hpp"
 
 namespace duckdb {
@@ -77,7 +78,7 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 // when supplied, bind exactly as the engine would bind them. Fills unit.provenance. Records violations in
 // result and throws PermissionException at the first denial; engine exceptions propagate unchanged.
 void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
-               optional_ptr<const case_insensitive_map_t<BoundParameterData>> parameters, gatekeeper::Result &result);
+               optional_ptr<const engine::ParameterMap> parameters, gatekeeper::Result &result);
 
 // gatekeeper_validate: CheckText, then Authorize, with every outcome mapped to a structured result.
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,

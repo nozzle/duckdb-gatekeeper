@@ -414,7 +414,9 @@ enforced state and the policy are unreachable from SQL. `gatekeeper_enforce` is 
 never-bind list so validated SQL cannot name it either. Inside a transaction the host has
 opened, the call is refused with a `Permission Error` and latches nothing: `COMMIT` and
 `ROLLBACK` are not read statements, so an enforced connection could never end that
-transaction. The refusal leaves the transaction usable; enforce after ending it.
+transaction. End the transaction, then enforce. (Whether the refused statement also aborts the
+transaction is the engine's transaction-invalidation policy: DuckDB 1.5 leaves it usable after a
+`Permission Error`; DuckDB 2.0 aborts it by default, so `ROLLBACK` first.)
 
 There is deliberately no instance-wide enforcement setting. One would have to choose between enforcing the
 host's own connections (leaving no in-process reader for the audit log and no way to change
@@ -912,8 +914,8 @@ Release binaries target DuckDB 1.5.5. Source builds may use another engine check
 the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
 `allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
-from (the version tag for releases, the source id for dev builds, mirroring DuckDB's own
-footer identity) and refuses to load into any other engine. The stamp is a single string
+from (the version tag for releases and prereleases such as `v2.0.0-alphaN`, the source id for
+`-dev` builds, mirroring DuckDB's own footer identity) and refuses to load into any other engine. The stamp is a single string
 (`strings gatekeeper.duckdb_extension | grep GATEKEEPER_BUILD_ENGINE`). The host's identity
 is read from its catalog (`pragma_version()`) rather than `DuckDB::LibraryVersion()`:
 distributed loadables statically link their own DuckDB copy, so the latter only ever
@@ -930,6 +932,38 @@ need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
+
+The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`); `src/include/engine_api.hpp`
+adapts the engine APIs that differ, and `scripts/generate.py` reads either release's
+serialization schema. The decisions are the same on both engines. Where 2.0 changed what the
+engine itself does, Gatekeeper follows the engine, and these differences are worth knowing:
+
+- 2.0 has only the PEG parser; the 1.5 `postgres` leg does not exist there.
+- 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
+  grammar does not know their query nodes and refuses them as `unsupported`.
+- 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
+  no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
+  the supported spelling. `SHOW TABLES` and the other catalog-wide forms still bind to
+  never-bind readers and are refused as before.
+- 2.0 runs `Prepare()` and `Execute()` from client APIs as statements carrying the prepared
+  text. A prepare is pre-screened as under 1.5 (its parameter values are not known) and each
+  execution is authorized with its values; unlike 1.5, the prepare's replacement gate knows
+  the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare time.
+- 2.0 produces a `SELECT`'s rows only when the client reads them. `CALL gatekeeper_configure`
+  and `CALL gatekeeper_enforce` run at once; the `SELECT * FROM gatekeeper_configure(...)` and
+  prepared forms take effect when their row is read.
+- 2.0's default transaction-invalidation policy aborts an open transaction on any error,
+  including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
+  connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`
+  inside their own transaction, which then `ROLLBACK`.
+- A refusal at the text boundary is thrown from DuckDB's `QueryBegin` hook, after the engine
+  began the statement's auto-commit transaction and before it can end the query. On 2.0 that
+  leftover transaction is invalid, and a statement the engine preprocesses inside a transaction
+  before the next cleanup (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement)
+  fails with "Current transaction is aborted" if it directly follows a refusal on the same
+  connection; any plain statement in between clears it. This is engine sequencing in
+  `ClientContext::BeginQueryInternal`'s caller, to be reported upstream; it does not weaken a
+  refusal, it changes the error the following statement reports.
 Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
 2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ

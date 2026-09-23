@@ -25,9 +25,42 @@ def grammar(duckdb_source=ROOT / "duckdb"):
         "qualified_column_map_t<string>": "opaque", "case_insensitive_map_t<idx_t>": "opaque",
         "case_insensitive_map_t<ParsedExpression*>": "replacement[]",
         "InsertionOrderPreservingMap<CommonTableExpressionInfo*>": "cte_entry[]",
+        # DuckDB 2.0. An Identifier is written exactly like a plain string (Serializer::WriteValue(const
+        # Identifier &)), so every identifier-keyed container keeps the shape of its string-keyed predecessor.
+        "Identifier": "string", "duckdb::Identifier": "string", "uint32_t": "number", "double": "number",
+        "identifier_set_t": "opaque", "identifier_map_t<idx_t>": "opaque",
+        "qualified_column_map_t<Identifier>": "opaque",
+        "identifier_map_t<ParsedExpression*>": "replacement[]",
+        "InsertionOrderPreservingMap<CommonTableExpressionInfo*, Identifier, identifier_map_t<idx_t>>": "cte_entry[]",
+        # Structured 2.0 values with rules of their own below. A literal is the token text with no expression
+        # inside; a qualified name is a path of identifiers; a function argument wraps an expression the walk
+        # must reach.
+        "Literal": "literal", "QualifiedName": "qualified_name", "FunctionArgument": "function_argument",
     }
-    enums = set("QueryNodeType AggregateHandling SetOperationType CTEMaterialize TableReferenceType JoinType JoinRefType OrdinalityType ShowType ResultModifierType OrderType OrderByNullType SampleMethod ExpressionClass ExpressionType LambdaSyntaxType SubqueryType WindowBoundary WindowExcludeMode".split())
-    allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression TypeExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier".split())
+    enums = set("QueryNodeType AggregateHandling SetOperationType CTEMaterialize TableReferenceType JoinType JoinRefType OrdinalityType ShowType ResultModifierType OrderType OrderByNullType SampleMethod ExpressionClass ExpressionType LambdaSyntaxType SubqueryType WindowBoundary WindowExcludeMode LimitValueType".split())
+    allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression TypeExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier LegacyLimitPercentModifier".split())
+    # Classes DuckDB 2.0 serializes by hand (custom_implementation). Their schema entries describe the C++
+    # members, not the properties written, so the properties come from the implementation instead
+    # (src/parser/expression/{cast,function,window}_expression.cpp at the latest storage version, which is what
+    # Gatekeeper serializes with). Reviewed against the same engine as the schema files; a hand-serialized class
+    # without an entry here is refused rather than guessed.
+    latest = {
+        "CastExpression": {"child": "ParsedExpression*", "try_cast": "bool", "type_expr": "ParsedExpression*"},
+        "FunctionExpression": {
+            "function_name": "Identifier", "schema": "Identifier", "filter": "ParsedExpression*",
+            "order_bys": "OrderModifier*", "distinct": "bool", "is_operator": "bool", "export_state": "bool",
+            "catalog": "Identifier", "arguments": "vector<FunctionArgument>", "qualified_name": "QualifiedName",
+        },
+        "WindowExpression": {
+            "function_name": "Identifier", "schema": "Identifier", "catalog": "Identifier",
+            "partitions": "vector<ParsedExpression*>", "orders": "vector<OrderByNode>",
+            "start": "WindowBoundary", "end": "WindowBoundary", "start_expr": "ParsedExpression*",
+            "end_expr": "ParsedExpression*", "offset_expr": "ParsedExpression*", "default_expr": "ParsedExpression*",
+            "ignore_nulls": "bool", "filter_expr": "ParsedExpression*", "exclude_clause": "WindowExcludeMode",
+            "distinct": "bool", "arg_orders": "vector<OrderByNode>", "has_ignore_nulls": "bool",
+            "arguments": "vector<FunctionArgument>", "qualified_name": "QualifiedName",
+        },
+    }
     entries = {}
     for name in ["statement", "query_node", "tableref", "parsed_expression", "result_modifier", "nodes"]:
         for entry in json.loads((source / (name + ".json")).read_text()):
@@ -70,12 +103,21 @@ def grammar(duckdb_source=ROOT / "duckdb"):
         "PositionalReferenceExpression": ["index"],
         "TypeExpression": ["type_name"],
     }
+    # DuckDB 2.0 moves each of these into a new property and stops writing the old one at the latest storage
+    # version; the requirement follows the property the engine being built actually writes.
+    successors = {"value": "literal", "cast_type": "type_expr", "query": "query_node"}
     rules, dispatch = {}, {}
     for name, entry in entries.items():
         members = entries[entry["base"]]["members"] if "base" in entry else []
-        members = members + entry["members"]
+        if entry.get("custom_implementation"):
+            if name not in latest:
+                raise ValueError("Unreviewed hand-serialized class: " + name)
+            members = members + [{"name": field, "type": typ} for field, typ in latest[name].items()]
+        else:
+            members = members + entry["members"]
         fields = {m["name"]: resolve(m["type"]) for m in members if m.get("status") != "deleted"}
-        rule = {"fields": fields, "required": required.get(name, []).copy()}
+        rule = {"fields": fields, "required": [successors.get(f) if successors.get(f) in fields else f
+                                               for f in required.get(name, [])]}
         if entry.get("base") == "ParsedExpression":
             rule["required"] += ["class", "type"]
         rules[name] = rule
@@ -85,6 +127,11 @@ def grammar(duckdb_source=ROOT / "duckdb"):
     rules["root"] = {"fields": {"error": "boolean", "statements": "SelectStatement[]"}, "required": ["error", "statements"]}
     rules["cte_entry"] = {"fields": {"key": "string", "value": "CommonTableExpressionInfo"}, "required": ["key", "value"]}
     rules["replacement"] = {"fields": {"key": "string", "value": "ParsedExpression"}, "required": ["key", "value"]}
+    # DuckDB 2.0 (Literal::Serialize, QualifiedName::Serialize, FunctionArgument::Serialize). Only the argument
+    # holds an expression; empty names, paths and texts are omitted as defaults.
+    rules["literal"] = {"fields": {"kind": "string", "text": "string"}, "required": ["kind"]}
+    rules["qualified_name"] = {"fields": {"path": "string[]"}, "required": []}
+    rules["function_argument"] = {"fields": {"name": "string", "expression": "ParsedExpression"}, "required": ["expression"]}
     return {"rules": rules, "dispatch": dispatch}
 
 
