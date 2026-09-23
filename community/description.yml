@@ -1,6 +1,6 @@
 # Prepared for extensions/gatekeeper/description.yml in duckdb/community-extensions.
-# Submit an update only after the tag named in repo.ref exists and its full distribution
-# workflow succeeds.
+# Submit an update only after the tag named in repo.ref (and repo.ref_next, the same tag while one
+# source tree builds both engines) exists and its full distribution workflow succeeds.
 #
 # duckdb.org renders `description` under the title, adds its own "Installing and Loading"
 # block, shows `hello_world` as one SQL code block, renders `extended_description` as
@@ -23,6 +23,7 @@ extension:
 repo:
   github: nozzle/duckdb-gatekeeper
   ref: v0.3.0
+  ref_next: v0.3.0
 
 docs:
   hello_world: |
@@ -248,6 +249,11 @@ docs:
     - **Native:** release binaries target DuckDB 1.5.5, source revision
       `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa`. Each binary requires its matching engine.
       Community builds can target other engines; builds and regression tests establish compatibility.
+    - **DuckDB 2.0:** the same source builds against `v2.0-cyanoptera` (this descriptor's
+      `ref_next`), and the community repository's 2.0 builds come from it; there are no GitHub
+      assets for 2.0. Decisions are the same on both engines;
+      [Compatibility and review](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/security.md#compatibility-and-review)
+      lists what a host on 2.0 sees differently.
     - **Wasm:** EH only, browser-tested with `@duckdb/duckdb-wasm@1.33.1-dev64.0`
       embedding DuckDB 1.5.5. MVP and threads/COI are excluded.
     - **API stability:** Gatekeeper is in early development (0.x); options and result schemas

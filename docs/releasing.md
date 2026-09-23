@@ -12,9 +12,11 @@ must exist and pass CI before it is submitted.
 1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
    the generated C++ constants consume) and a set of coupled edits the package gate and the
    tests refuse to release without:
-   - `community/description.yml`: `extension.version`, `repo.ref`, the preamble comment, and
-     every `blob/vX.Y.Z/` documentation link (the gate requires all of them to name the
-     release; `grep -n 'blob/v' community/description.yml` lists them).
+   - `community/description.yml`: `extension.version`, `repo.ref`, `repo.ref_next` (the same
+     tag: one source tree builds the stable engine and the next one, and the community
+     repository builds the next DuckDB from `ref_next`), the preamble comment, and every
+     `blob/vX.Y.Z/` documentation link (the gate requires all of them to name the release;
+     `grep -n 'blob/v' community/description.yml` lists them).
    - `CHANGELOG.md`: rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` and add a fresh, empty
      `## Unreleased` above it. The gate requires the release's section to have content and
      Unreleased to be empty when a tag is packaged; that section becomes the top of the
@@ -105,11 +107,14 @@ silently overwritten. Do not move a published version tag.
    of [duckdb/community-extensions](https://github.com/duckdb/community-extensions),
    dropping the comment preamble. Recheck its current descriptor conventions before
    submission. The prepared descriptor pins a version tag; never replace it with a
-   floating branch ref. The community repository pins the full commit SHA in `repo.ref`:
-   substitute the SHA the tag points at (`git rev-parse vX.Y.Z^{}`) in the submitted copy
-   only; the in-repo descriptor keeps the tag because it cannot name the commit that
-   contains it.
-2. State which engine the GitHub assets target, and link compatibility validation.
+   floating branch ref. The community repository pins the full commit SHA in `repo.ref` and
+   `repo.ref_next`: substitute the SHA the tag points at (`git rev-parse vX.Y.Z^{}`) for both
+   in the submitted copy only; the in-repo descriptor keeps the tag because it cannot name
+   the commit that contains it. The community repository's `test_against_latest` builds
+   `ref_next` against the next DuckDB branch with `extension-ci-tools@main`, both of which
+   move; a failure there is first a question about that drift, then about the source.
+2. State which engine the GitHub assets target (there are none for the next DuckDB; the
+   community repository builds those from `ref_next`), and link compatibility validation.
    The community repository can rebuild the source against another engine; the source
    has no fixed release allowlist. Each binary still loads only into the engine it was
    built from, and Gatekeeper enforces that itself when DuckDB's footer check is disabled.

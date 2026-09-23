@@ -45,6 +45,15 @@ def release_version(tag):
     if descriptor_version != version or descriptor_ref != f"v{version}":
         raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
                          f"and release v{version} must agree")
+    # The community repository builds the next DuckDB from repo.ref_next when the descriptor has one. One source
+    # tree builds both engines, so it names the same tag as repo.ref; a descriptor without it is only built for
+    # the stable engine.
+    try:
+        descriptor_ref_next = community.scalar("repo", "ref_next", descriptor)
+    except community.DescriptorError:
+        descriptor_ref_next = None
+    if descriptor_ref_next is not None and descriptor_ref_next != f"v{version}":
+        raise ValueError(f"Community descriptor ref_next {descriptor_ref_next} and release v{version} must agree")
     # The descriptor's documentation links pin the release they describe; one left at the previous tag would
     # show duckdb.org readers documentation for a binary that does not have the feature, or the reverse.
     stale = sorted(set(re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/([^/]+)/", descriptor)) - {f"v{version}"})

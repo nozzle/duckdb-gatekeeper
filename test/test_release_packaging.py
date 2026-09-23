@@ -139,6 +139,7 @@ def test_output_file_is_not_overwritten(released, artifacts, tmp_path):
     ("versions.cmake", f'GATEKEEPER_VERSION "{EXTENSION_VERSION}"', 'GATEKEEPER_VERSION "garbage"', "Invalid version"),
     ("community/description.yml", f"version: {EXTENSION_VERSION}", "version: 0.0.9", "Community descriptor.*must agree"),
     ("community/description.yml", f"ref: {TAG}", "ref: v0.0.9", "Community descriptor.*must agree"),
+    ("community/description.yml", f"ref_next: {TAG}", "ref_next: v0.0.9", "Community descriptor ref_next.*must agree"),
     ("community/description.yml", f"version: {EXTENSION_VERSION}", f"other_version: {EXTENSION_VERSION}",
      "extension.version"),
     ("community/description.yml", f"ref: {TAG}", f"other_ref: {TAG}", "repo.ref"),
@@ -153,6 +154,13 @@ def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old
     checkout(tmp_path, monkeypatch, RELEASED + ((filename, old, new),))
     with pytest.raises(ValueError, match=message):
         release.release_version(TAG)
+
+
+def test_descriptor_without_ref_next_is_built_for_the_stable_engine_only(tmp_path, monkeypatch):
+    """ref_next is what the community repository builds the next DuckDB from; a descriptor that omits it is
+    complete, just not built there. Present, it names the release tag like ref (one source tree, both engines)."""
+    checkout(tmp_path, monkeypatch, RELEASED + (("community/description.yml", f"  ref_next: {TAG}\n", ""),))
+    assert release.release_version(TAG) == EXTENSION_VERSION
 
 
 @pytest.mark.parametrize("tag,edits,message", [
