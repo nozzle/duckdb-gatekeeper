@@ -132,7 +132,8 @@ The suite has two layers with different reach:
   the stage that refused the text. The one thing a leg may skip is a case that crashes the
   engine under that parser (`test_robustness.py`'s deep nesting under PEG, duckdb#24618, see
   [Compatibility and review](docs/security.md#compatibility-and-review)); the skip names the
-  engine defect, and removing it is part of the repin that carries the fix.
+  engine defect, and removing it is part of the repin that carries the fix
+  ([#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90) is that repin's checklist).
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable
