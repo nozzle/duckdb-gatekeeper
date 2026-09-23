@@ -31,8 +31,9 @@ must exist and pass CI before it is submitted.
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
 3. Require the full distribution matrix: Linux amd64/arm64 glibc and musl, macOS
-   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every artifact is
-   tested in two ways, and the checklist is only what actually runs:
+   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native artifact
+   is tested in two ways and Wasm EH in the browser, and the checklist is only what actually
+   runs:
    - The reusable pipeline runs the SQL contract suite against a statically linked
      `unittest` on every native target except `linux_arm64` and the cross-compiled
      `osx_amd64` (an upstream skip; those two get the full Python suite below instead).

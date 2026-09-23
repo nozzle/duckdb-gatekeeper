@@ -6,6 +6,7 @@ package for MinGW (scripts/smoke_loadable.R). Running them here keeps the files 
 suite covers before a change reaches those hosts, and checks the paragraph conventions the drivers rely on.
 """
 from pathlib import Path
+import re
 
 import pytest
 
@@ -33,13 +34,17 @@ def test_loadable_half_needs_one_connection():
 
 
 def test_enforced_half_names_every_connection():
-    """Every paragraph of enforced.sql carries a directive, and the agent latches before anything it runs."""
+    """Every paragraph of enforced.sql carries exactly one directive, and the agent latches before anything it
+    runs. Checked per paragraph: statements() defaults a paragraph without a directive to the host, so a
+    global count could be balanced by a duplicate elsewhere (the parser rejects duplicates, see below)."""
     seen_enforce = False
     text = (SMOKE_DIR / "enforced.sql").read_text()
-    directives = [line for line in text.splitlines() if line.startswith("-- @")]
+    paragraphs = [p for p in re.split(r"\n\s*\n", text) if any(not l.lstrip().startswith("--") for l in p.splitlines() if l.strip())]
+    for paragraph in paragraphs:
+        directives = [l for l in paragraph.splitlines() if l.startswith("-- @")]
+        assert len(directives) == 1 and DIRECTIVE.match(directives[0]), f"one directive per paragraph:\n{paragraph}"
     parsed = statements(SMOKE_DIR / "enforced.sql")
-    assert len(directives) == len(parsed), "one directive per statement"
-    assert all(DIRECTIVE.match(line) for line in directives)
+    assert len(parsed) == len(paragraphs)
     for statement in parsed:
         if statement.connection == "agent":
             if "gatekeeper_enforce()" in statement.sql:
@@ -47,6 +52,13 @@ def test_enforced_half_names_every_connection():
             assert seen_enforce, f"agent statement before gatekeeper_enforce(): {statement.sql}"
     assert {s.connection for s in parsed} == {"host", "agent"}
     assert any(s.error for s in parsed), "the file exercises expected errors"
+
+
+def test_two_directives_in_one_paragraph_are_rejected(tmp_path):
+    path = tmp_path / "sample.sql"
+    path.write_text("-- @host\n-- @agent\nSELECT 1;\n")
+    with pytest.raises(ValueError, match="2 directives in one paragraph"):
+        statements(path)
 
 
 def test_statement_parsing_conventions(tmp_path):

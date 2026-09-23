@@ -54,11 +54,13 @@ def statements(path):
             continue
         if not paragraph:
             continue
-        connection, error = "host", None
+        connection, error, directives = "host", None, 0
         for comment in (l for l in paragraph if l.lstrip().startswith("--")):
             match = DIRECTIVE.match(comment.strip())
             if match:
-                connection, error = match.group(1), match.group(2)
+                connection, error, directives = match.group(1), match.group(2), directives + 1
+        if directives > 1:
+            raise ValueError(f"{Path(path).name}:{first_line}: {directives} directives in one paragraph")
         sql = "\n".join(l for l in paragraph if not l.lstrip().startswith("--")).strip().rstrip(";").strip()
         if sql:
             result.append(Statement(connection, sql, error, first_line))
