@@ -9,8 +9,10 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -614,10 +616,44 @@ struct LookupCallback {
 	}
 };
 
+void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &layers,
+                             const gatekeeper::BindingPolicy &binding,
+                             optional_ptr<const engine::ParameterMap> supplied, bool provenance_known,
+                             gatekeeper::Result &result) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto &variables = ClientConfig::GetConfig(context).user_variables;
+	// Trusted views can introduce fallback reads absent from the caller AST. Without a read hook, conservatively
+	// suppress engine binding details whenever variables exist; errors can contain paths, regexes or cast inputs.
+	result.suppress_binding_details |= !variables.empty();
+	for (const auto &parameter : binding.caller_parameters) {
+		auto name = engine::ToName(parameter.first);
+		if (provenance_known && supplied && supplied->count(name))
+			continue; // Explicit NULL is an input too.
+		if (!PreparedStatement::AllowsUserVariableFallback(name) || !variables.count(name))
+			continue;
+		auto deny = [&](const string &message) {
+			result.violations.emplace(gatekeeper::rules::FUNCTION, message, "system", gatekeeper::NamePath{"main"}, "",
+			                          "getvariable", parameter.second);
+			throw PermissionException("named parameter fallback is not allowed");
+		};
+		if (!provenance_known)
+			deny("named parameter collides with a session variable; supplied-value provenance is unavailable before "
+			     "binding on enforced connections");
+		// This is a fixed engine capability, not an unqualified function lookup that a host macro can shadow.
+		layers.Each([&](const gatekeeper::Policy &policy) {
+			if (!gatekeeper::FunctionAllowed(policy, "getvariable"))
+				deny("session-variable fallback requires system.main.getvariable permission");
+		});
+		result.functions.insert({"system", {"main"}, "getvariable", "scalar"});
+	}
+#endif
+}
+
 // Binds statement, the unit's own or a copy of it, against the unit's text record; fills the unit's provenance.
 static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers &layers, SQLStatement &statement,
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
+	CheckParameterFallbacks(context, layers, unit.binding, parameters, true, result);
 	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
@@ -774,7 +810,7 @@ void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextChe
 	}
 }
 
-bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
+static bool DescribeEngineError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
 	switch (data.Type()) {
 	case ExceptionType::PARSER: {
 		result.code = gatekeeper::codes::PARSER;
@@ -808,10 +844,24 @@ bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &resu
 	return true;
 }
 
+static void SuppressBindingDetails(bool binding, gatekeeper::Result &result) {
+	if (binding && result.suppress_binding_details)
+		result.error_message =
+		    "Binding failed; details suppressed because session variables may contain sensitive values";
+}
+
+bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
+	auto described = DescribeEngineError(data, binding, result);
+	if (described)
+		SuppressBindingDetails(binding, result);
+	return described;
+}
+
 bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
 	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
 		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_message = invalid->what();
+		SuppressBindingDetails(binding, result);
 		return true;
 	}
 	if (dynamic_cast<const std::bad_alloc *>(&error))

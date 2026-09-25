@@ -151,8 +151,10 @@ The suite has two layers with different reach:
   Python package's `executemany` materializes its parameter sets before the first execution, so
   it cannot hold one). They link against the engine with Gatekeeper built in, under
   `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
-  each candidate engine. Their expectations hold on both engines; add one here when a guarantee
-  is made to a client API rather than to SQL text.
+  each candidate engine. The parameter-fallback leg on 2.0 also retains handles across session-variable
+  changes and counts table-function binds to prove collision refusals precede bind-time work (see
+  [the fallback decision](docs/parameter-fallback.md)). Add a probe here when a guarantee is made to a
+  client API rather than to SQL text.
 
 ### Running the suite on DuckDB 2.0
 

@@ -106,6 +106,9 @@ struct Result {
 	// Resolved catalog tables/views attributed to the caller, a subset of objects. Replacement scans are
 	// reader capabilities, not catalog identities. Like all evidence, exposed only for an allowed result.
 	std::set<Identity> caller_objects;
+	// Internal only: engine binding diagnostics can interpolate session-variable values, including values
+	// introduced by trusted bodies. Never serialize this flag or those diagnostics into a decision.
+	bool suppress_binding_details = false;
 };
 // Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";
@@ -124,6 +127,9 @@ inline Result FixedLimitExceeded(std::string message) {
 }
 inline Result InvalidInput(std::string message) { return {false, codes::INVALID_INPUT, "", std::move(message)}; }
 struct BindingPolicy {
+	// Caller-written parameter identifiers and their earliest known position. Collect before binding so
+	// parameters in AT, COLUMNS and PIVOT IN are covered too; trusted definitions are not part of this walk.
+	std::map<std::string, int64_t> caller_parameters;
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
 	Names literal_constructors;

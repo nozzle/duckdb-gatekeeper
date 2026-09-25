@@ -60,6 +60,27 @@ bind the submitted SQL again; preparing a call does not cache an authorization d
 Validation also rejects non-null placeholder plans with unresolved parameter types;
 otherwise execution could rebind to an implementation the validator never authorized.
 
+On DuckDB 2.0, caller-written `$name` references with a same-named session variable require the
+fixed `system.main.getvariable` capability before validation binds anything. Both policy layers
+must allow it; blocks win. Successful validation includes `{catalog: 'system', schema_path: ['main'],
+name: 'getvariable', type: 'scalar'}` in `functions`, without variable values. A present NULL variable
+is still a fallback input. Positional `$1` never falls back. References introduced only by trusted
+views remain the definition's own, outside caller policy.
+
+Enforcement is deliberately stricter: **caller named-parameter/session-variable collisions are
+refused before binding, even with explicit arguments or permission for `getvariable`**. QueryBegin
+cannot see arguments; the 2.0 prepared-rebind hook sees arguments after implicit defaults were merged.
+Preparing colliding text on an enforced connection is also refused because the early hook cannot
+distinguish that operation. Retained handles are checked on every execution. Noncolliding explicit
+inputs and DuckDB 1.5 retain their existing behavior. Log-only records one collision refusal per statement and
+lets the engine proceed, so it does not promise validation/enforcement parity for this case.
+See [the feasibility decision](parameter-fallback.md) for the missing hook and deferred value-input API.
+
+Binding errors recorded by Gatekeeper on 2.0 omit engine message details whenever the connection
+has session variables: regex, path and cast diagnostics can interpolate values, including ones a
+trusted body reads. The error class/code remains available. This does not redact DuckDB's own error
+stream, logs, SQL literals the host submitted, or query results intentionally exposed by trusted views.
+
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
 Empty option lists are accepted regardless of element type, since DuckDB resolves

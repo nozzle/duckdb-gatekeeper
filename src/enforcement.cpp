@@ -170,8 +170,22 @@ struct EnforcementState : ClientContextState {
 		}
 		admitted = true;
 		unit = std::move(text.units[0]);
+		if (!CheckParameters(context))
+			return;
 		if (unit.statement->named_param_map.empty())
 			Authorize(context, nullptr);
+	}
+	bool CheckParameters(ClientContext &context) {
+		try {
+			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
+			// Neither hook can establish explicit-value precedence. Refuse collisions before the engine binds.
+			CheckParameterFallbacks(context, Snapshot(), unit.binding, nullptr, false, result);
+		} catch (const PermissionException &) {
+			MarkDenied(result);
+			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
+			return false;
+		}
+		return true;
 	}
 	void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) override {
 		if (in_statement && log_only && !decided && error && error->HasError()) {
@@ -224,6 +238,10 @@ struct EnforcementState : ClientContextState {
 			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
+		// A retained native handle gets the same conservative gate on every execution. Do not infer supplied
+		// provenance from the callback's merged map. In log-only mode an earlier decision already stands.
+		if (admitted && !decided)
+			CheckParameters(context);
 		executing_prepared = true;
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}

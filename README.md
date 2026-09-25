@@ -762,6 +762,13 @@ execute. A failure at any step raises; nothing executes.
 
 - Objects are authorized by their **resolved** identity. Views and the tables behind them
   must both pass.
+- On DuckDB 2.0, validation of `$name` falling back to a session variable requires
+  `getvariable` permission in both policy layers. Enforced connections refuse a caller-written
+  named parameter colliding with a session variable **even when an explicit value is supplied or
+  `getvariable` is allowed**, including at prepare time. The engine's early hook cannot distinguish
+  supplied inputs from fallback; use a noncolliding name or positional `$1` instead. DuckDB 1.5
+  has no implicit fallback and keeps explicit-value precedence. See the
+  [fallback decision](docs/parameter-fallback.md) for the upstream hook needed to lift this restriction.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
   Deferred function binds (`list_sum($1)`) and incompatible uses of one parameter

@@ -8,6 +8,13 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
+  named parameters read session variables, and reports that fixed capability as function evidence.
+  Enforced 2.0 connections conservatively refuse named-parameter/session-variable collisions before
+  binding, including explicitly supplied arguments and prepares: current engine hooks cannot establish
+  supplied-value precedence. Use a noncolliding name or positional parameter. Log-only records this
+  refusal and lets DuckDB proceed. Binding diagnostics in Gatekeeper decisions are suppressed when
+  session variables exist, since engine errors can contain their values. DuckDB 1.5 is unchanged. (#107)
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace
