@@ -65,17 +65,28 @@ static Value Decision(QueryResult &result) {
 		const auto &entries = ListValue::GetChildren(fields[i]);
 		if (!fields[0].GetValue<bool>() && !entries.empty())
 			std::abort();
-		std::vector<std::string> previous;
+		gatekeeper::Identity previous;
+		bool have_previous = false;
 		for (const auto &entry : entries) {
-			std::vector<std::string> current;
-			for (const auto &part : StructValue::GetChildren(entry)) {
+			auto &parts = StructValue::GetChildren(entry);
+			if (parts.size() != 4)
+				std::abort();
+			for (const auto &part : parts) {
 				if (part.IsNull())
 					std::abort();
-				current.push_back(part.GetValue<std::string>());
 			}
-			if (current.size() != 4 || (!previous.empty() && !(previous < current)))
+			gatekeeper::NamePath path;
+			for (const auto &component : ListValue::GetChildren(parts[1])) {
+				if (component.IsNull() || component.type() != LogicalType::VARCHAR)
+					std::abort();
+				path.push_back(component.GetValue<std::string>());
+			}
+			gatekeeper::Identity current{parts[0].GetValue<std::string>(), std::move(path),
+			                             parts[2].GetValue<std::string>(), parts[3].GetValue<std::string>()};
+			if (have_previous && !(previous < current))
 				std::abort();
 			previous = current;
+			have_previous = true;
 		}
 	}
 	const auto code = fields[1].GetValue<std::string>();
@@ -883,6 +894,21 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckFuzzLimits(connection);
 		CheckEnforcedLatch(database);
 		CheckHostileRelation(database);
+		// Exercise nonempty evidence and component ordering before random inputs. Stringifying a LIST
+		// changes its ordering (e.g. [a] versus [a!]) and must not stand in for schema-path comparison.
+		{
+			DuckDB evidence_db(nullptr);
+			Connection evidence(evidence_db);
+			auto setup = evidence.Query("CREATE SCHEMA a; CREATE SCHEMA \"a!\"; "
+			                            "CREATE TABLE a.t(i INT); CREATE TABLE \"a!\".t(i INT)");
+			for (QueryResult *current = setup.get(); current; current = current->next.get())
+				if (current->HasError())
+					std::abort();
+			auto result = evidence.Query("SELECT * FROM gatekeeper_validate('SELECT abs(x.i) FROM a.t x, \"a!\".t y')");
+			auto decision = Decision(*result);
+			if (!StructValue::GetChildren(decision)[0].GetValue<bool>())
+				std::abort();
+		}
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
