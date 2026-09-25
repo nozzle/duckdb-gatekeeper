@@ -147,7 +147,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
+| `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Exact leaf; `'*'` names multiplication. Defaults grant reviewed `system.main` identities only. See [matching and migration](docs/qualified-functions.md). |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
@@ -165,7 +165,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functio
 | false |
 
 ```sql
-SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']);
+SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := [{catalog:'system', schema_path:['main'], name:'+', type:'scalar'}]);
 ```
 
 | allowed |
@@ -328,6 +328,15 @@ their underlying tables, whether or not policy was applied to those (see
 [Table ACL](#table-acl)); CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
 
+Validation results and audit diagnostics are **privileged host information**, including
+`objects`, `functions`, `caller_objects`, violations, and engine errors. On DuckDB 2.0,
+secure views use the same table rules and `type = 'view'` identity as ordinary views;
+their transitive dependencies remain in host evidence. `caller_objects` is conservative
+query-wide attribution: a caller-written name can match a dependency inside a trusted
+body, so this list is neither exact lexical dependencies nor universally safe to expose
+to untrusted callers. Applications may expose a minimal decision or a separately reviewed
+projection. See [secure views and host-only evidence](docs/security.md#secure-views-and-host-only-evidence).
+
 ## Table ACL
 
 > [!IMPORTANT]
@@ -409,7 +418,7 @@ flowchart LR
 ```
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
-  `FROM read_parquet(...)`) all use the same policy, by leaf name.
+  `FROM read_parquet(...)`) all use the same qualified identity policy; blocks remain leaf-wide.
 - Trusted **views, macros, and attached tables** are opaque to function policy. What
   their definitions introduce is theirs, not the caller's: exempt from the allowlist,
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
@@ -436,7 +445,7 @@ text and must also be allowed in both layers, not merely unblocked.
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
 > `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
-> policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
+> policy: `allowed_functions := [{catalog:'system', schema_path:['main'], name:'current_schema'}]`. The clock (`current_date`, `now()`),
 > the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
 > compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
 > nothing about the host beyond the time and its `TimeZone`/`Calendar`, and `setseed` touches only
@@ -585,7 +594,17 @@ There is no instance-wide enforcement switch.
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
 | `SET gatekeeper_log_only = true`, while rolling out | Optional. Enforced connections record every decision and refuse nothing until you set it back; see [log-only mode](#log-only-mode). |
 | `SET lock_configuration = true` | Freezes the policy and the log-only switch. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
-| `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. Not inside an open transaction: an enforced connection cannot `COMMIT` or `ROLLBACK`, so the call is refused there. |
+| `CALL gatekeeper_enforce()` on each LOCAL connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. End any host transaction first: an enforced connection cannot `COMMIT` or `ROLLBACK`. On DuckDB 2.0, use a fresh local connection or `DISCONNECT` during trusted setup before submitting activation, and keep it local. |
+
+**DuckDB 2.0 CONNECT mode is unsupported for local enforcement.** Local enforced SQL cannot
+enter it: CONNECT is refused before binding. But an already-connected session dispatches SQL
+to the remote catalog before Gatekeeper's query hook, including the SQL activation call itself.
+The local latch refuses connected state when reached; it cannot protect that earlier callback.
+Native hosts must not connect an enforced session, and must restore LOCAL state or replace
+connections that entered CONNECT during log-only operation before resuming enforcement.
+Remote server-created connections need their own host setup; they are not automatically
+enforced. See [CONNECT mode and native host state](docs/security.md#connect-mode-and-native-host-state)
+for stale targets, trusted definitions, prepared/client APIs, and the required upstream hook.
 
 Enforce this connection:
 
@@ -713,7 +732,7 @@ SET lock_configuration = true;
 - **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
   are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
 - **`gatekeeper_validate` on the enforced connection**, when the policy allows it
-  (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
+  (`allowed_functions := [{catalog:'system', schema_path:['main'], name:'gatekeeper_validate', type:'table'}]`), for agents that want the decision as a row
   before they run the statement.
 - **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
   a rebind for prepared executions). Negligible next to model latency, measurable on hot paths
@@ -762,6 +781,13 @@ execute. A failure at any step raises; nothing executes.
 
 - Objects are authorized by their **resolved** identity. Views and the tables behind them
   must both pass.
+- On DuckDB 2.0, validation of `$name` falling back to a session variable requires
+  `getvariable` permission in both policy layers. Enforced connections refuse a caller-written
+  named parameter colliding with a session variable **even when an explicit value is supplied or
+  `getvariable` is allowed**, including at prepare time. The engine's early hook cannot distinguish
+  supplied inputs from fallback; use a noncolliding name or positional `$1` instead. DuckDB 1.5
+  has no implicit fallback and keeps explicit-value precedence. See the
+  [fallback decision](docs/parameter-fallback.md) for the upstream hook needed to lift this restriction.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
   Deferred function binds (`list_sum($1)`) and incompatible uses of one parameter

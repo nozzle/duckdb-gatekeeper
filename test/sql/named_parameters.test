@@ -1,0 +1,44 @@
+# name: test/sql/named_parameters.test
+# description: Named fallback is guarded before binding; 1.5 has no variable fallback
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+SET VARIABLE x = 42;
+
+query I
+SELECT CASE WHEN starts_with(version(), 'v2.') THEN code = 'forbidden' ELSE code = 'binding' END FROM gatekeeper_validate('SELECT $x');
+----
+true
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}]);
+
+query I
+SELECT CASE WHEN starts_with(version(), 'v2.') THEN allowed AND len(functions) = 1 AND functions[1].catalog = 'system' AND functions[1].schema_path = ['main'] AND functions[1].name = 'getvariable' AND functions[1].type = 'scalar' ELSE code = 'binding' END FROM gatekeeper_validate('SELECT $x, $X');
+----
+true
+
+query I
+SELECT CASE WHEN starts_with(version(), 'v2.') THEN code = 'forbidden' ELSE code = 'binding' END FROM gatekeeper_validate('SELECT $x', blocked_functions := ['getvariable']);
+----
+true
+
+statement ok
+SET VARIABLE "1" = 77;
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $1');
+----
+binding
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT $missing::INTEGER');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM range($missing)');
+----
+binding

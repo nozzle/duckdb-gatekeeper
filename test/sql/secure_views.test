@@ -1,0 +1,128 @@
+# name: test/sql/secure_views.test
+# description: Secure boundaries preserve trusted evidence, caller policy and executed scan accounting
+# group: [gatekeeper]
+
+require-env GATEKEEPER_TEST_SECURE_VIEWS 1
+
+require gatekeeper
+
+statement ok
+CREATE SCHEMA hidden;
+
+statement ok
+CREATE SCHEMA exposed;
+
+statement ok
+CREATE TABLE hidden.payload AS SELECT * FROM (VALUES (1, '12'), (2, 'secret')) t(i, s);
+
+statement ok
+CREATE SECURE VIEW exposed.direct AS SELECT i, s, md5(s) AS digest FROM hidden.payload WHERE i = 1;
+
+statement ok
+CREATE VIEW exposed.regular AS SELECT * FROM exposed.direct;
+
+statement ok
+CREATE SECURE VIEW exposed.nested AS SELECT * FROM exposed.regular;
+
+statement ok
+CREATE SECURE VIEW exposed.generated AS SELECT * FROM range(2);
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema_path: ['exposed'], 'table': '*'}], blocked_functions := ['md5', 'range']);
+
+query ITIII
+SELECT allowed, caller_objects[1].type, len(caller_objects), len(objects), len(list_filter(functions, lambda f: f.name = 'md5')) > 0 FROM gatekeeper_validate('SELECT * FROM exposed.nested');
+----
+true	view	1	4	true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM exposed.generated');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct', blocked_tables := [{schema_path: ['exposed'], 'table': 'direct'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct, hidden.payload');
+----
+forbidden
+
+# A CTE name that matches a hidden dependency still attributes it query-wide.
+query T
+SELECT code FROM gatekeeper_validate('WITH payload AS (SELECT 1) SELECT * FROM exposed.direct, payload');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct WHERE md5(s) = digest');
+----
+forbidden
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+statement ok
+SET logging_level = 'debug';
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+# Both private and executed plans traverse every occurrence underneath the wrappers.
+query II agent
+SELECT a.i, b.i FROM exposed.nested a, exposed.direct b WHERE a.i = b.i;
+----
+1	1
+
+query II agent
+SELECT * FROM exposed.generated a, exposed.generated b ORDER BY a.range, b.range;
+----
+0	0
+0	1
+1	0
+1	1
+
+# The engine must keep the throwing predicate away from the excluded 'secret' row.
+query I agent
+SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = 12;
+----
+1
+
+query II
+SELECT len(objects), len(caller_objects) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND statement = 'SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = 12;';
+----
+2	1
+
+statement error agent
+SELECT i FROM exposed.direct WHERE md5(s) = digest;
+----
+function is not allowed: md5
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I agent
+SELECT i FROM exposed.direct WHERE md5(s) = digest;
+----
+1
+
+query IT
+SELECT allowed, code FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only';
+----
+false	forbidden
+
+statement ok
+DROP TABLE hidden.payload;
+
+# Binding errors in the tested engine expose the missing hidden name. Evidence is host-only.
+query TIIII
+SELECT code, contains(error_message, 'payload'), len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
+----
+binding	true	0	0	0
+
+statement error agent
+SELECT * FROM exposed.direct;
+----
+payload

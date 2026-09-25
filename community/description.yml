@@ -121,7 +121,7 @@ docs:
     | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. Nonempty path, outermost first; `'*'` matches one component at exactly that depth, never recursively. Omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
     | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-    | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
+    | `allowed_functions` | STRUCT[] | `[]` | Resolved `{catalog?, schema_path, name, type?}` grants. Exact leaf; defaults cover reviewed system.main identities. |
     | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
     Only a whole-component `'*'` is a wildcard: `sales_*`, `?`, and `%` are literal names.
@@ -172,8 +172,12 @@ docs:
     - A caller's separate reference to an underlying table or function is still checked.
     - A macro forwarding a caller argument to `query_table(n)` delegates table selection;
       caller table restrictions do not constrain that selection.
-    - `objects` and `functions` still report the dependencies as binding evidence;
-      `caller_objects` lists only the tables and views the caller reached.
+    - `objects` and `functions` still report transitive dependencies as host binding evidence.
+      `caller_objects` is conservative query-wide attribution, not exact lexical dependencies:
+      a caller-written name can attribute a matching hidden object inside a trusted body.
+    - Validation results and audit diagnostics, including all evidence lists, violations and engine
+      errors, are privileged host information. `caller_objects` is not universally caller-safe.
+      Applications may expose a minimal decision or a separately reviewed projection.
 
     See the [trusted-definition rules](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/security.md#function-enforcement-and-trusted-expansion)
     for query-wide name overlaps and bound implementation checks.

@@ -44,7 +44,7 @@ def main():
         '{"version":2,"options":{"allowed_tables":[]}}',
         '{"version":2,"options":{"allowed_tables":[{"catalog":null,"schema_path":["main"],"table":"t"}]}}',
         '{"version":2,"options":{"allowed_tables":[{"schema_path":["finance","*"],"table":"t"}]}}',
-        '{"version":2,"options":{"use_default_functions":false,"allowed_functions":["abs"],"blocked_functions":["md5"]}}',
+        '{"version":2,"options":{"use_default_functions":false,"allowed_functions":[{"catalog":"system","schema_path":["main"],"name":"abs"}],"blocked_functions":["md5"]}}',
         '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
         '{"version":2,"options":{"blocked_tables":[{"schema_path":["main"],"table":"t","extra":1}]}}',
     ]):

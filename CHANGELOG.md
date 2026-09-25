@@ -16,6 +16,46 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   Load Quack before the first enforcement activation: activation refuses unfinished loads and
   seals later Quack loads, including aliases, before installing guarded catalog copies.
 
+- DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
+  preserving the engine's optimization boundary and transitive host evidence. Validation results
+  and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
+  its conservative query-wide attribution can include hidden dependencies whose names match
+  caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
+- **Breaking (#108):** `allowed_functions` is now a list of qualified grants
+  `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
+  String grants are rejected with migration guidance. Catalog/schema wildcards follow table rules;
+  the leaf is exact (`*` is multiplication). Optional kinds are scalar, aggregate, table, macro,
+  table_macro, and window. Both policy layers authorize resolved entries before callbacks on the
+  private binder's catalog path. Defaults grant reviewed `system.main` identities only; host shadows
+  and `system.pg_catalog` compatibility macros need explicit grants. Reviewed grant aliases apply
+  only to their system implementations; blocks remain alias-canonicalized leaf-wide denies.
+- Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
+  caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
+  an unambiguous system definition recorded by the same authorizing bind; see
+  [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+- Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
+  `system.main` aggregate after resolving the system scalar dispatcher, before its bind callbacks.
+  Computed/parameterized targets and dotted/method dispatcher calls are refused; unrelated host
+  functions/macros with dispatcher-like names retain their own argument contracts. IN-list,
+  SIMILAR TO and canonicalized JSON arrow helpers cannot select explicitly granted host shadows.
+  Caller `COLLATE` is refused on 1.5 because its direct-bound scalar implementation has no reliable
+  catalog provenance. Trusted macro/view bodies retain their existing trust. Replacement readers
+  are resolved and pinned before reader binding; implicit helper shadows are refused even if granted.
+
+- DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
+  named parameters read session variables, and reports that fixed capability as function evidence.
+  Enforced 2.0 connections conservatively refuse named-parameter/session-variable collisions before
+  binding, including explicitly supplied arguments and prepares: current engine hooks cannot establish
+  supplied-value precedence. Use a noncolliding name or positional parameter. Log-only records this
+  refusal and lets DuckDB proceed. Binding diagnostics in Gatekeeper decisions are suppressed when
+  session variables exist, since engine errors can contain their values. DuckDB 1.5 is unchanged. (#107)
+- DuckDB 2.0 local enforcement activation now refuses CONNECT-ed state, including stale targets,
+  when the local latch is reached. Native callback-counter regressions verify that CONNECT on a
+  local enforced connection is refused before remote dispatch. Hosts must activate and keep
+  enforced connections LOCAL: already-connected SQL activation and native routing-state changes
+  can dispatch before Gatekeeper's hook, and switching off log-only does not undo CONNECT.
+  CONNECT-mode local enforcement and automatic enforcement of remote server sessions remain
+  unsupported; see [host requirements](docs/security.md#connect-mode-and-native-host-state). (#106)
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace

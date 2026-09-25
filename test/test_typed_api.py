@@ -157,7 +157,7 @@ def test_view_is_authorized_by_its_own_identity(db):
 
 def test_dynamic_table_lookup_keeps_object_policy(db):
     db.execute("CREATE TABLE secret(x INT)")
-    options={"allowed_functions":["query_table","query"],"allowed_tables":[]}
+    options={"allowed_functions":[{"schema_path": ["*"], "name": n} for n in ["query_table", "query"]],"allowed_tables":[]}
     for sql in ["SELECT * FROM query_table('secret')", "SELECT * FROM query('SELECT * FROM secret')"]:
         result=validate(db,sql,options)
         assert not result["allowed"], (sql,result)
@@ -230,7 +230,7 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
         violation = result["violations"][0]
         assert violation["rule"] == "function" and violation["table"] == name
         assert violation["function_name"] in {"read_parquet", "read_csv_auto"}
-    configure(db, {"allowed_functions": ["parquet_scan", "read_csv_auto"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["parquet_scan", "read_csv_auto"]]})
     for name, function in [("data.parquet", "parquet_scan"), ("data.csv", "read_csv_auto")]:
         result = validate(db, f"SELECT * FROM '{name}'")
         assert result["allowed"], (name, result)
@@ -244,10 +244,10 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     })["allowed"]
     assert not validate(db, "SELECT * FROM 'data.parquet'", {"blocked_functions": ["parquet_scan"]})["allowed"]
     configure(db)
-    result = validate(db, "SELECT * FROM 'data.parquet'", {"allowed_functions": ["read_parquet"]})
+    result = validate(db, "SELECT * FROM 'data.parquet'", {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # allowed_tables governs catalog objects, not reader capabilities, matching range().
-    configure(db, {"allowed_functions": ["parquet_scan"], "allowed_tables": [],
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "parquet_scan"}], "allowed_tables": [],
                    "blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "*"}]})
     assert validate(db, "SELECT * FROM 'data.parquet'")["allowed"]
 
@@ -273,7 +273,7 @@ def test_replacement_scan_inside_view_is_a_trusted_expansion(db, tmp_path, monke
     assert validate(db, "SELECT * FROM outer_v", {"blocked_functions": ["read_parquet"]})["allowed"]
     db.execute("CREATE MACRO m() AS TABLE SELECT * FROM 'data.parquet'")
     assert validate(db, "SELECT * FROM m()")["code"] == "forbidden"  # the macro itself is caller-written
-    configure(db, {"allowed_functions": ["m"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}]})
     assert validate(db, "SELECT * FROM m()")["allowed"]
     assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["read_parquet"]})["allowed"]
     assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["m"]})["code"] == "forbidden"
@@ -309,7 +309,7 @@ def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypat
     # Admitting the reader restores every spelling, and the collision case lists both objects. The upper-case
     # spelling is denied by name (provenance is case-folded) but names a file only case-insensitive filesystems
     # have, so once admitted its outcome is the filesystem's: a bind error there is not a denial.
-    configure(db, {"allowed_functions": ["parquet_scan"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "parquet_scan"}]})
     for sql in denied:
         result = validate(db, sql)
         assert result["allowed"] or (sql == "SELECT * FROM 'DATA.PARQUET'" and result["code"] == "binding"), (sql, result)
@@ -382,9 +382,9 @@ def test_object_identifiers_are_ascii_case_insensitive(db):
     assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_tables": [{"catalog": "*", "schema_path": ["reporting"], "table": "*"}]})["allowed"]
     assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_tables": [{"catalog": "memory", "schema_path": ["*"], "table": "*"}]})["allowed"]
     db.execute("CREATE MACRO local_abs(x) AS abs(x)")
-    configure(db, {"allowed_functions": ["local_abs"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "local_abs"}]})
     assert validate(db, "SELECT MEMORY.main.local_abs(-1)", {
-        "allowed_tables": [], "allowed_functions": ["local_abs"]
+        "allowed_tables": [], "allowed_functions": [{"schema_path": ["*"], "name": "local_abs"}]
     })["allowed"]
     for catalog in [None, "MeMoRy"]:
         options = {"allowed_tables": [{"catalog": catalog, "schema_path": ["REPORTING"], "table": "orders"}]}

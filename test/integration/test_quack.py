@@ -10,7 +10,7 @@ from support.audit import decisions, enable
 from support.enforcement import DENIED, enforce
 from support.quack import quack_fixture
 from support.quack_capi import CConnection
-from support.typed_helpers import configure, rule, validate
+from support.typed_helpers import configure, grants, rule, validate
 
 pytestmark = pytest.mark.skipif(os.getenv("GATEKEEPER_QUACK_TESTS") != "1", reason="opt-in Quack fixture")
 POLICY = {"allowed_tables": [rule("remote", ("main",), "orders"), rule("memory", ("main",), "local_orders")]}
@@ -79,7 +79,7 @@ def test_opaque_validation_refused_even_through_trusted_view(remote, body):
     # Host DDL itself can bind the remote query. Discard those setup observations explicitly.
     db.execute("CREATE VIEW trusted AS " + body)
     remote.clear()
-    policy = {"allowed_tables": [rule()], "allowed_functions": ["quack_query", "quack_query_by_name"]}
+    policy = {"allowed_tables": [rule()], "allowed_functions": grants("quack_query", "quack_query_by_name", catalog="system", schema_path=("main",), type="table")}
     configure(db, policy)
     for sql in [body, "SELECT * FROM trusted"]:
         result = validate(db, sql, policy)
@@ -205,7 +205,7 @@ def test_held_prepared_handle_and_prepare_only_do_not_delegate_when_enforced(rem
 
 def test_parameterized_opaque_execution_and_log_only(remote):
     db = remote.client
-    configure(db, {"allowed_tables": [rule()], "allowed_functions": ["quack_query_by_name"]})
+    configure(db, {"allowed_tables": [rule()], "allowed_functions": grants("quack_query_by_name", catalog="system", schema_path=("main",), type="table")})
     enable(db, "debug")
     with db.cursor() as agent:
         if ENGINE_MAJOR >= 2:
@@ -229,7 +229,7 @@ def test_aliased_quack_load_is_guarded(remote):
         host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]) + " AS q")
         remote.attach(host)
         host.execute("SET disabled_optimizers='remote_pushdown'")
-        configure(host, {"allowed_tables": [rule()], "allowed_functions": ["quack_query_by_name"]})
+        configure(host, {"allowed_tables": [rule()], "allowed_functions": grants("quack_query_by_name", catalog="system", schema_path=("main",), type="table")})
         with host.cursor() as agent:
             enforce(agent)
             remote.clear()

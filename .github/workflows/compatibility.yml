@@ -50,6 +50,7 @@ jobs:
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
+      GATEKEEPER_TEST_SECURE_VIEWS: ${{ matrix.nested_schemas || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,12 +77,16 @@ jobs:
           -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
           -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
           -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF -DGATEKEEPER_NATIVE_PROBES=ON
-      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension gatekeeper_prepared_probe --parallel 4
+      - run: cmake --build build/candidate --target unittest gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_qualified_probe gatekeeper_remote_probe --parallel 4
       - name: SQL contract on the candidate engine
         run: build/candidate/test/unittest 'test/sql/*'
       - name: A prepared handle held across a policy change is decided at each execution
         # Client-API behavior sqllogictest cannot express; the same expectations on both engines.
         run: build/candidate/extension/gatekeeper/gatekeeper_prepared_probe
+      - name: Qualified function callback counters
+        run: build/candidate/extension/gatekeeper/gatekeeper_qualified_probe
+      - name: Local enforcement refuses CONNECT before remote dispatch; probe unsupported state transitions
+        run: build/candidate/extension/gatekeeper/gatekeeper_remote_probe
       - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
         # The static unittest link above cannot prove the distributable artifact is usable, and a shell with
         # Gatekeeper linked in answers LOAD of the file with "already loaded" without opening it. The probe
@@ -115,6 +120,7 @@ jobs:
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
+      GATEKEEPER_TEST_SECURE_VIEWS: ${{ matrix.nested_schemas || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

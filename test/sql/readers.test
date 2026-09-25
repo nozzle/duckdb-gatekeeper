@@ -35,7 +35,7 @@ forbidden	function	read_parquet
 
 # Granting the reader in the global policy admits the path; it appears as a replacement object.
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['read_parquet', 'read_csv_auto']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'read_parquet'}, {'schema_path':['main'],'name':'read_csv_auto'}]);
 
 query TT
 SELECT code, objects[1].type FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
@@ -60,7 +60,7 @@ binding	IO
 
 # The request layer can take the grant away again; allowed_tables never governs file paths.
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''', use_default_functions := false, allowed_functions := ['read_csv']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'read_csv'}]);
 ----
 forbidden	function	read_csv_auto
 
@@ -71,7 +71,7 @@ true
 
 # read_parquet and parquet_scan share one permission; read_csv alone does not cover the CSV shorthand.
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['parquet_scan', 'read_csv']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'parquet_scan'}, {'schema_path':['main'],'name':'read_csv'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
@@ -145,12 +145,12 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	by_macro
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', allowed_functions := ['by_macro']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', allowed_functions := [{'schema_path':['main'],'name':'by_macro'}]);
 ----
 forbidden
 
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['by_macro']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'by_macro'}]);
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()');

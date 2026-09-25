@@ -15,6 +15,13 @@ Gatekeeper allowlist or mandatory inventory audit.
 
 ## Adjusting defaults
 
+All compiled default names grant only `system.main` identities, including reviewed extension
+functions registered there. This is one shared runtime matcher invariant, not a change to the
+historical implementation classifications. Host shadows and `system.pg_catalog` macros require
+explicit grants. Runtime discovery remains a maintenance report and never creates permissions.
+The audit reports `default_namespace` alongside the reviewed-name count; that count is not a
+count of functions currently admitted across all schemas.
+
 Move exact normalized names between `compute` and `elevated` after source review.
 Only compute names are compiled into defaults. If a core function moves, update
 its descriptive `groups` membership too. `unreviewed` records baseline names without

@@ -134,6 +134,10 @@ struct EnforcementState : ClientContextState {
 		authorized = true;
 	}
 	void QueryBegin(ClientContext &context) override {
+		// On DuckDB 2.0 this is AFTER SubmitStatement's connected-session RemoteExecute callback.
+		// Safety on normal SQL routes comes from refusing CONNECT below (CheckText's non-SELECT
+		// rejection) while still local, not from inspecting connected state here. Native hosts must
+		// keep enforced connections local; see docs/security.md#connect-mode-and-native-host-state.
 		Reset();
 		in_statement = true;
 		log_only = LogOnlySetting(context);
@@ -176,8 +180,22 @@ struct EnforcementState : ClientContextState {
 		}
 		admitted = true;
 		unit = std::move(text.units[0]);
+		if (!CheckParameters(context))
+			return;
 		if (unit.statement->named_param_map.empty())
 			Authorize(context, nullptr);
+	}
+	bool CheckParameters(ClientContext &context) {
+		try {
+			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
+			// Neither hook can establish explicit-value precedence. Refuse collisions before the engine binds.
+			CheckParameterFallbacks(context, Snapshot(), unit.binding, nullptr, false, result);
+		} catch (const PermissionException &) {
+			MarkDenied(result);
+			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
+			return false;
+		}
+		return true;
 	}
 	void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) override {
 		if (in_statement && log_only && !decided && error && error->HasError()) {
@@ -230,6 +248,10 @@ struct EnforcementState : ClientContextState {
 			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
+		// A retained native handle gets the same conservative gate on every execution. Do not infer supplied
+		// provenance from the callback's merged map. In log-only mode an earlier decision already stands.
+		if (admitted && !decided)
+			CheckParameters(context);
 		executing_prepared = true;
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -455,6 +477,15 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 	auto &state = input.global_state->Cast<SingleRowState>();
 	if (state.finished)
 		return;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	// IsConnected remains true when the weak target has expired: checking only the live catalog
+	// would admit stale routing state. This protects the local activation body only. SQL submitted
+	// on an already-connected session may have reached RemoteExecute before this body (or may
+	// never reach it at all); the host must establish LOCAL state before submitting activation.
+	if (context.IsConnected())
+		throw PermissionException("gatekeeper_enforce() cannot run on a CONNECT-ed connection: DISCONNECT "
+		                          "during trusted setup before activating local enforcement");
+#endif
 	// An enforced connection cannot end a transaction (COMMIT and ROLLBACK are not read statements), so latching
 	// inside one the host opened would leave the connection in a transaction nothing can close. Refuse before
 	// latching, with a Permission Error, which the engine's default transaction-invalidation policy lets the

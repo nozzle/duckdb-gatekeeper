@@ -64,6 +64,27 @@ bind the submitted SQL again; preparing a call does not cache an authorization d
 Validation also rejects non-null placeholder plans with unresolved parameter types;
 otherwise execution could rebind to an implementation the validator never authorized.
 
+On DuckDB 2.0, caller-written `$name` references with a same-named session variable require the
+fixed `system.main.getvariable` capability before validation binds anything. Both policy layers
+must allow it; blocks win. Successful validation includes `{catalog: 'system', schema_path: ['main'],
+name: 'getvariable', type: 'scalar'}` in `functions`, without variable values. A present NULL variable
+is still a fallback input. Positional `$1` never falls back. References introduced only by trusted
+views remain the definition's own, outside caller policy.
+
+Enforcement is deliberately stricter: **caller named-parameter/session-variable collisions are
+refused before binding, even with explicit arguments or permission for `getvariable`**. QueryBegin
+cannot see arguments; the 2.0 prepared-rebind hook sees arguments after implicit defaults were merged.
+Preparing colliding text on an enforced connection is also refused because the early hook cannot
+distinguish that operation. Retained handles are checked on every execution. Noncolliding explicit
+inputs and DuckDB 1.5 retain their existing behavior. Log-only records one collision refusal per statement and
+lets the engine proceed, so it does not promise validation/enforcement parity for this case.
+See [the feasibility decision](parameter-fallback.md) for the missing hook and deferred value-input API.
+
+Binding errors recorded by Gatekeeper on 2.0 omit engine message details whenever the connection
+has session variables: regex, path and cast diagnostics can interpolate values, including ones a
+trusted body reads. The error class/code remains available. This does not redact DuckDB's own error
+stream, logs, SQL literals the host submitted, or query results intentionally exposed by trusted views.
+
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
 Empty option lists are accepted regardless of element type, since DuckDB resolves
@@ -188,6 +209,40 @@ the equality comparison additionally detects unused declarations. Select named c
   resolved. A successful empty list means no caller-attributable catalog objects were retrieved.
   No diagnostic collection mode or continued binding after denial is introduced.
 
+### Secure views and host-only evidence
+
+On DuckDB 2.0, a host-created `CREATE SECURE VIEW` is authorized by the existing
+`catalog`/`schema_path`/`table` rules and reported as `type = 'view'`. Its body binds in
+the same trusted child scope as an ordinary host view, including nested regular/secure
+views and hidden readers. A caller's separate reference to an object or function still
+receives caller policy; query-wide name collisions have the conservative behavior above.
+
+Gatekeeper admits `LogicalSecureView` as a read-only wrapper and traverses its child for
+authorization, transitive binding evidence, and private-bind/executed-plan scan accounting.
+It does not remove or rewrite the wrapper. Both checks run before optimization: caller
+predicates are checked while still caller-attributable, even when DuckDB later pushes them
+beneath the boundary. DuckDB retains control of its predicate, plan-display, and statistics
+barriers; admitting a secure view does not disable them.
+
+**Validation results and audit diagnostics are privileged host information.** This includes
+`objects`, `functions`, `caller_objects`, violation messages, and engine errors. Secure views
+do not redact these lists: host evidence retains transitive dependencies under the same
+binding-evidence limits as ordinary views. There is no new identity kind, redaction field,
+or claim of completeness after redaction.
+
+`caller_objects` is not a confidentiality-safe public projection or an exact lexical
+dependency list. It can include a hidden object retrieved inside a trusted body when a
+caller-written name also matches it, even if that name resolves to a CTE in the caller's
+scope. A refusal can also name that hidden object in `violations`. The tested 2.0 engine
+does not sanitize missing-dependency binding errors inside secure views: dropping a backing
+table can reveal its name in the engine error. Gatekeeper preserves the engine diagnostic,
+including in log-only mode; failed decisions retain the usual empty evidence lists.
+
+Applications may deliberately expose a minimal decision or a separately reviewed projection
+and should mediate execution errors as well as validation output if names must stay hidden.
+A confidentiality-safe public diagnostics interface is a separate design, not a guarantee
+of `SECURE VIEW` support or of `caller_objects`.
+
 ## Enforced connections
 
 ### Threat model
@@ -199,10 +254,60 @@ connection object itself (Python's `DuckDBPyConnection` methods other than execu
 the C++ `Connection`) are out of scope: a caller holding them can open a new, unenforced
 connection. Hand out the ability to execute SQL, not the object.
 
+### CONNECT mode and native host state
+
+**Local enforcement requires a LOCAL connection throughout its use.** DuckDB 2.0's
+`ClientContext::SubmitStatement` checks `IsConnected()` and calls
+`Catalog::RemoteExecute(context, original_sql)` **before** `BeginQueryInternal` and Gatekeeper's
+`QueryBegin`. The returned table reference replaces the statement. Whether that callback
+transmits or executes SQL immediately belongs to the catalog implementation; Gatekeeper
+cannot authorize text before that callback on an already-connected session.
+
+The supported host setup is to create a fresh local connection (or explicitly `DISCONNECT`
+during trusted setup), end any host transaction, and execute `CALL gatekeeper_enforce()`
+locally before accepting untrusted SQL. Keep it local afterward. Attaching a catalog is
+different from entering CONNECT mode; local queries over attached tables continue to use the
+normal authorization path. CONNECT-mode local enforcement and automatic enforcement of
+connections created by a remote server are unsupported. Loading Gatekeeper on a client does
+not latch the server's sessions: a server must perform its own trusted setup on each local
+connection that executes untrusted SQL.
+
+The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counted
+`DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
+trace covers the CI 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
+(`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
+
+| Route | Boundary and result |
+| --- | --- |
+| `CONNECT name`, connection-string CONNECT, or CONNECT in a batch on a local enforced connection | The existing non-SELECT text check refuses before binding/execution can change state or attach a target. Zero remote callbacks. `DISCONNECT` is also non-SELECT and refused. |
+| Client `Prepare("CONNECT ...")` after latching, or execution of a CONNECT handle prepared before latching | Refused at the local text boundary; zero remote callbacks. SQL `PREPARE ... AS CONNECT` is rejected by the engine parser. Normal local parameterized SELECT handles remain supported. |
+| A host macro selecting `gatekeeper_enforce()`, directly or via `query('SELECT ...')` | Control-plane catalog authorization refuses even inside trusted definitions. A macro does not grant SQL the right to change enforcement state. `query()` itself accepts only a single SELECT, not CONNECT. |
+| Local activation body reached while `IsConnected()` is true | The latch throws a Permission Error and installs no enforcement state, even in log-only mode. It tests the flag, not just the live target, so stale/expired targets are refused too. |
+| SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
+| SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
+| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. In the tested engine, client Prepare also dispatches before failing to register a local handle; bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
+| Log-only permits CONNECT, then the host disables log-only | Log-only deliberately allows state changes and remote dispatch. Turning it off does not restore LOCAL state; a subsequent denial can follow a remote callback. Retire such connections or restore LOCAL state through trusted native setup before resuming enforcement. |
+
+Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
+are trusted code. Do not install or expose implementations that change an enforced
+connection's routing state, including through an otherwise admitted view or macro. SQL
+control-plane name checks cannot constrain an arbitrary native implementation calling
+`ConnectToCatalog`, executing SQL on a fresh connection, or changing registered hook state.
+The host must also keep state stable between prepare and execute. Public client entry points
+that reach `SubmitStatement` share its early dispatch ordering; host APIs are not a separate
+pre-callback authorization boundary.
+
+Supporting already-connected enforcement requires an upstream veto/authorization hook
+**before any remote dispatch**, covering direct submissions and prepared/client entry points,
+plus a guard on connection-state transitions (including native `ConnectToCatalog`). A
+`QueryBegin` connected-state check cannot supply either guarantee. These restrictions are
+separate from the pre-hook PRAGMA-processing limitation in [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
+DuckDB 1.5 has no CONNECT routing API; its local enforcement behavior is unchanged.
+
 ### Two boundaries
 
-Gatekeeper decides at two points in DuckDB's query lifecycle. Each owns a guarantee that can
-be stated and tested independently.
+Gatekeeper decides at two points in DuckDB's local query lifecycle, subject to the LOCAL-state
+host requirements above. Each owns a guarantee that can be stated and tested independently.
 
 **Binding boundary** (`ClientContextState::QueryBegin`, before the engine binds). The
 statement text is parsed with the connection's parser options, serialized, and walked
@@ -410,7 +515,8 @@ under residuals.
 - **Errors are informative.** Engine errors keep DuckDB's wording, which can name objects and
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
   and the denied function or object, and the [audit record](#audit-log) holds the caller's
-  text. Treat all of them as sensitive when relaying to untrusted callers or storing the log.
+  text. These are privileged host diagnostics, including errors inside secure-view bodies;
+  see [host-only evidence](#secure-views-and-host-only-evidence) before relaying any projection.
   One engine error reads differently on an enforced connection: the engine binds a copy of the
   statement when a connection state can request a rebind, as Gatekeeper's does, and DuckDB's
   `PivotRef::Copy` drops the query location, so a binder error raised at a `PIVOT` (a value
@@ -592,11 +698,12 @@ implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
 treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
 
-Function allowlisting cannot be disabled. Each policy layer admits its explicit
+Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
 explicit blocks and the never-bind list take precedence for what the caller writes.
 
-The Parquet reader names `read_parquet` and `parquet_scan` share allow/block
+The system.main Parquet readers `read_parquet` and `parquet_scan` share grant permission;
+their leaf names share block
 permission. This explicit pair is source-reviewed in
 `duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
 `ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
@@ -673,18 +780,17 @@ a constant.
 Name-selected aggregate dispatch (`list_aggregate`, `list_aggr`, `aggregate`,
 `array_aggregate`, `array_aggr`) is elevated, and admitting a dispatcher does not admit
 every aggregate it can reach: when the caller writes one, the aggregate DuckDB resolves
-from the caller's (foldable) name argument must pass both allowlists, and like other
+from the caller's literal name argument must pass both qualified allowlists before private binding, and like other
 ambiguous caller syntax the check applies query-wide, so a trusted view's own dispatch in
 the same plan is checked too. Dispatchers used only inside trusted definitions, and the
 fixed `histogram` behind `list_distinct`/`list_unique`, are those definitions' own.
 
-Defaults are admitted by leaf name, so a host-created macro or function that shadows a
-default name is a trusted definition: `CREATE MACRO ltrim(x) AS ...` in a schema ahead of
-`system` on the search path is admitted whenever `ltrim` is, and its body is checked
-against Gatekeeper's control plane only. The same holds for views, types, casts, and
-collations. Gatekeeper assumes catalog integrity; letting untrusted users create
-definitions in a shared catalog is outside its model, and restricting defaults to
-`system.main` would not by itself make such DDL safe.
+Defaults authorize reviewed identities in `system.main` only. A host-created macro or function
+shadowing a default needs an explicit qualified grant; once authorized, a host macro's body
+retains the trust described above. Types, casts, and host default collations remain trusted
+configuration. Catalog integrity remains a prerequisite; namespace pinning does not make
+untrusted DDL safe. See [qualified grants and feasibility](qualified-functions.md) for the
+exact kind/alias matching contract, migration, intrinsic provenance, and direct-binding limits.
 Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
@@ -751,7 +857,9 @@ execution time, outside this validation.
 
 ### Callback bypasses
 
-Gatekeeper does not restrict type or collation names, or authorize cast implementations.
+Gatekeeper does not authorize type names or cast implementations. Caller COLLATE is refused
+on 1.5 because its directly bound scalar has no reliable namespace; 2.0 checks the scalar
+implementations that survive binding. This is not a collation-name allowlist.
 The database owner controls extension loading and definitions. Table/view catalog
 and schema restrictions do not restrict type lookup. There is no mandatory type audit.
 Type resolution can autoload or autoinstall extensions when enabled; hosts must
@@ -791,19 +899,23 @@ example a runtime-type mismatch across the host/loadable boundary on an untested
 platform), validation fails closed with a `binding` error rather than skipping the body.
 Both list-aggregate serialization and fixed histogram inspection require the bound
 function's `system.main` provenance. Same-named scalar implementations from other
-catalogs/schemas fail closed before their serialization callbacks can run.
+catalogs/schemas are opaque host functions: their private bind data is never inspected or serialized
+as a system dispatcher. Caller use still requires its own qualified grant.
 `list_distinct`/`list_unique` and their `array_*` aliases use the source-reviewed fixed
 `histogram` implementation.
 These implementations obey blocks in both layers and appear in successful function
-evidence. Their catalog is `''` and schema path is `[]` when the bound representation supplies no
-reliable provenance. Arbitrary extension bind data is not introspected.
+evidence. Known identities retain catalog/schema; source-backed intrinsics have explicit system
+identities. Unknown caller implementations refuse rather than satisfying a grant by leaf. Unknown
+trusted-body dependencies can still appear with empty namespace. See the narrowly scoped 1.5
+definition recovery in [qualified-function feasibility](qualified-functions.md). Arbitrary extension
+bind data is not introspected.
 
 ## Remaining boundaries
 
 - Validation always binds on the calling connection and authorizes the retrieved table
   and view identities attributable to the caller; what a trusted view or macro reads is
   recorded, not authorized, so a host definition is the host's decision to expose what it
-  reads. No public syntax-only mode exists. Function matching remains name-based, not a
+  reads. No public syntax-only mode exists. Function matching uses qualified identity, not a
   proof of a macro/UDF's implementation; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
@@ -983,6 +1095,9 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   have the same array type on 1.5, whose schemas have one component.
   The tested 2.0 snapshot does not allow nested schemas in `USE`/`search_path`; qualify nested
   names explicitly. Text-level refusals have no resolved catalog/schema identity (`''`/`[]`).
+- 2.0 secure views are admitted with ordinary view identity and trusted attribution while
+  preserving DuckDB's optimization boundary. Their transitive evidence and diagnostics remain
+  [host-only](#secure-views-and-host-only-evidence).
 - 2.0's default transaction-invalidation policy aborts an open transaction on any error,
   including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
   connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`

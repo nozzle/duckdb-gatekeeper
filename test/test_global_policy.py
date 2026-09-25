@@ -257,10 +257,10 @@ def test_prepare_validation_reads_global_at_execution(db):
 @pytest.mark.parametrize("global_options,overrides,sql,rule", [
     ({"blocked_functions": ["md5"]}, {"blocked_functions": []}, "SELECT md5('x')", "function"),
     ({"use_default_functions": False}, {"use_default_functions": True}, "SELECT abs(1)", "function"),
-    ({"use_default_functions": False}, {"allowed_functions": ["abs"]}, "SELECT abs(1)", "function"),
+    ({"use_default_functions": False}, {"allowed_functions": [{"schema_path": ["*"], "name": "abs"}]}, "SELECT abs(1)", "function"),
     ({"blocked_functions": ["range"]}, {"blocked_functions": []}, "SELECT * FROM range(3)", "function"),
-    ({}, {"allowed_functions": ["read_csv_auto"]}, "SELECT * FROM 'missing.csv'", "function"),
-    ({}, {"allowed_functions": ["json_serialize_plan"]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
+    ({}, {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv_auto"}]}, "SELECT * FROM 'missing.csv'", "function"),
+    ({}, {"allowed_functions": [{"schema_path": ["*"], "name": "json_serialize_plan"}]}, "SELECT json_serialize_plan('SELECT 1')", "dynamic_sql"),
 ])
 def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, rule):
     configure(db, global_options)
@@ -295,7 +295,7 @@ def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):
     # A global block reaches what the caller writes, whether the request repeats it or not; a host macro's or
     # view's own use of the blocked function is the definition's and is not reached in either layer.
     db.execute("CREATE MACRO m(x) AS abs(x); CREATE VIEW v AS SELECT abs(1) x")
-    configure(db, {"allowed_functions": ["m"], "blocked_functions": ["abs"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_functions": ["abs"]})
     for sql in ["SELECT m(1)", "SELECT * FROM v"]:
         result = validate(db, sql, {"blocked_functions": []})
         assert result["allowed"], (sql, result)
@@ -313,7 +313,7 @@ def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):
 def test_configuration_is_never_admitted_as_submitted_sql(db, sql):
     db.execute("CREATE VIEW cfg_view AS SELECT * FROM gatekeeper_configure(); "
                "CREATE MACRO cfg_macro() AS TABLE SELECT * FROM gatekeeper_configure()")
-    options = {"allowed_functions": ["gatekeeper_configure", "cfg_macro"], "blocked_functions": ["md5"]}
+    options = {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["gatekeeper_configure", "cfg_macro"]], "blocked_functions": ["md5"]}
     configure(db, options)
     before = policy(db)
     result = validate(db, sql, options)

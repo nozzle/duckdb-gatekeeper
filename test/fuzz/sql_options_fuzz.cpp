@@ -159,6 +159,11 @@ static std::string Argument(uint8_t selector) {
 	    "[$1]",
 	    "[NULL]",
 	    "[1]",
+	    "[{catalog:'system', schema_path:['main'], name:$1}]",
+	    "[{catalog:NULL, schema_path:['*'], name:$1, type:'scalar'}]",
+	    "[{schema_path:['main'], name:'range', type:'table'}]",
+	    "[{schema_path:['main'], name:'*', type:NULL}]",
+	    "[{schema_path:['main'], name:$1, type:'unsupported'}]",
 	    "[{schema_path:['main'], 'table':$1}]",
 	    "[{catalog:'memory', schema_path:['main'], 'table':$1}]",
 	    "[{catalog:NULL, schema_path:['main'], 'table':$1}]",
@@ -662,8 +667,10 @@ static int64_t GateRecords(Connection &connection) {
 // The same decision under a request layer that admits no reader: defaults off and the inherited global
 // allowed_functions (range, above) overridden, so only the deny layer can pass a replacement.
 static std::string StrictCode(Connection &connection, const std::string &sql, const char *blocked = nullptr) {
-	auto options = std::string(", use_default_functions := false, allowed_functions := ['count']") +
-	               (blocked ? std::string(", blocked_functions := ['") + blocked + "']" : "");
+	auto options =
+	    std::string(
+	        ", use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'count'}]") +
+	    (blocked ? std::string(", blocked_functions := ['") + blocked + "']" : "");
 	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1" + options + ")", Value(sql));
 	if (result->HasError())
 		std::abort();
@@ -679,7 +686,8 @@ static void CheckReplacementCallbacks() {
 	auto &probe = *data;
 	probe.other = &other;
 	config.replacement_scans.emplace_back(ProbeCallback, std::move(data));
-	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'])")->HasError())
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'range'}])")
+	        ->HasError())
 		std::abort();
 	// A stateful callback cannot be reached a second time outside authorization.
 	probe.calls = 0;
@@ -774,14 +782,17 @@ static void CheckReplacementCallbacks() {
 		Fail("trusted probe: a block reached the view's replacement reader");
 	if (Code(connection, "SELECT * FROM probe_view, trusted_probe") != "ok")
 		Fail("trusted probe: the admitted caller reader next to the view was refused");
-	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'], blocked_functions := ['range'])")
+	if (connection
+	        .Query("CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'range'}], "
+	               "blocked_functions := ['range'])")
 	        ->HasError())
 		std::abort();
 	if (Code(connection, "SELECT * FROM probe_view") != "ok")
 		Fail("trusted probe: a global block reached the view's replacement reader");
 	if (Code(connection, "SELECT * FROM trusted_probe") != "forbidden")
 		Fail("trusted probe: a global block did not reach the caller's replacement reader");
-	if (connection.Query("CALL gatekeeper_configure(allowed_functions := ['range'])")->HasError())
+	if (connection.Query("CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'range'}])")
+	        ->HasError())
 		std::abort();
 	if (connection.Query("DROP VIEW probe_view")->HasError())
 		std::abort();
@@ -855,12 +866,17 @@ static void CheckForeignAggregateProvenance() {
 				LogicalProjection plan(0, std::move(expressions));
 				gatekeeper::Result result;
 				gatekeeper::Policy policy;
+				gatekeeper::BindingPolicy binding;
+				binding.caller_functions.insert(name);
+				// A host same-leaf function is opaque, not a system dispatcher's private bind-data shape.
+				// Caller use still requires a known qualified grant; unknown provenance cannot satisfy it.
+				policy.allowed_functions.insert({identity.first, {identity.second}, name, "scalar"});
 				try {
-					AuthorizePlan({policy, policy}, gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
-					              result);
-					std::abort();
-				} catch (const BinderException &error) {
-					if (ErrorData(error).RawMessage().find("not the pinned builtin") == string::npos)
+					AuthorizePlan({policy, policy}, binding, gatekeeper::Provenance(), plan, result);
+					if (identity.first.empty())
+						std::abort();
+				} catch (const PermissionException &) {
+					if (!identity.first.empty())
 						std::abort();
 				}
 			}
@@ -921,12 +937,15 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	Value text(bytes);
 	// Valid combinations reach all policy layers instead of spending the entire run on type errors.
 	if (data[0] % 16 == 13) {
-		auto options = string("use_default_functions := ") + (data[1] & 1 ? "true" : "false") +
-		               ", allowed_functions := ['sum','list_sum','unnest','list_value','list_transform'], "
-		               "blocked_functions := " +
-		               (data[1] & 2 ? "['sum','lower','unnest']" : "[]") +
-		               ", allowed_tables := " + (data[1] & 4 ? "[]" : "[{schema_path:['main'], 'table':'*'}]") +
-		               ", blocked_tables := " + (data[1] & 8 ? "[{schema_path:['main'], 'table':'t'}]" : "[]");
+		auto options =
+		    string("use_default_functions := ") + (data[1] & 1 ? "true" : "false") +
+		    ", allowed_functions := [{'schema_path':['main'],'name':'sum'}, "
+		    "{'schema_path':['main'],'name':'list_sum'}, {'schema_path':['main'],'name':'unnest'}, "
+		    "{'schema_path':['main'],'name':'list_value'}, {'schema_path':['main'],'name':'list_transform'}], "
+		    "blocked_functions := " +
+		    (data[1] & 2 ? "['sum','lower','unnest']" : "[]") +
+		    ", allowed_tables := " + (data[1] & 4 ? "[]" : "[{schema_path:['main'], 'table':'*'}]") +
+		    ", blocked_tables := " + (data[1] & 8 ? "[{schema_path:['main'], 'table':'t'}]" : "[]");
 		auto query = "SELECT * FROM gatekeeper_validate($1, " + options + ")";
 		if (Run(connection, query, text, data[3]) != Run(connection, query, text, data[3]))
 			std::abort();

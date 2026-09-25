@@ -42,13 +42,13 @@ def test_blocks_do_not_reach_into_trusted_definitions(db):
     # block on the table behind v reaches neither v nor the macro over v, and a block on v reaches the caller's
     # v but not the macro whose body reads it. Every object read is still evidence.
     db.execute("CREATE TABLE t(x INT); CREATE VIEW v AS SELECT * FROM t; CREATE MACRO m() AS TABLE SELECT * FROM v")
-    configure(db, {"allowed_functions": ["m"], "blocked_tables": [rule(table="t")]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_tables": [rule(table="t")]})
     for sql in ["SELECT * FROM v", "SELECT * FROM m()"]:
         result = validate(db, sql)
         assert result["allowed"] and {o["table"] for o in result["objects"]} >= {"t", "v"}, (sql, result)
     denied = validate(db, "SELECT * FROM v, t")
     assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "t", denied
-    configure(db, {"allowed_functions": ["m"], "blocked_tables": [rule(table="v")]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_tables": [rule(table="v")]})
     denied = validate(db, "SELECT * FROM v")
     assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "v", denied
     assert validate(db, "SELECT * FROM m()")["allowed"]

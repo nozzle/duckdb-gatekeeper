@@ -73,6 +73,14 @@ try {
       const rejects = (sql, message) => rejectsOn(con, sql, message);
       let d = await decision('SELECT 1');
       check('simple query', d.allowed && d.code === 'ok');
+      d = await decision('SELECT abs(-1)', ", use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'abs',type:'scalar'}]");
+      check('qualified scalar grant', d.allowed);
+      d = await decision('SELECT abs(-1)', ", use_default_functions := false, allowed_functions := [{catalog:'memory',schema_path:['main'],name:'abs'}]");
+      check('namespace mismatch refused', d.code === 'forbidden');
+      check('legacy function grants rejected', await rejects("CALL gatekeeper_configure(allowed_functions := ['abs'])", 'migrate'));
+      await con.query('CREATE MACRO main.abs(x) AS x');
+      check('default shadow refused', !(await decision('SELECT main.abs(-1)')).allowed);
+      await con.query('DROP MACRO main.abs');
       d = await decision('DROP TABLE t');
       check('write denied', !d.allowed && d.code === 'unsupported');
       d = await decision("SELECT * FROM read_parquet('/missing.parquet')");

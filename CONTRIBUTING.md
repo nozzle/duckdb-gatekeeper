@@ -149,10 +149,23 @@ The suite has two layers with different reach:
 - `test/native/*.cpp` are **client-API probes** for behavior neither layer can express: a
   prepared statement handle held across a policy change (`prepared_handle_probe.cpp`; the
   Python package's `executemany` materializes its parameter sets before the first execution, so
-  it cannot hold one). They link against the engine with Gatekeeper built in, under
+  it cannot hold one), and a counted native remote catalog (`remote_catalog_probe.cpp`) that
+  proves local CONNECT refusals precede remote dispatch and exercises the documented
+  already-connected/native-state limitations on 2.0 (local trusted-control-plane cases on both).
+  They link against the engine with Gatekeeper built in, under
   `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
-  each candidate engine. Their expectations hold on both engines; add one here when a guarantee
-  is made to a client API rather than to SQL text.
+  each candidate engine. The parameter-fallback leg on 2.0 also retains handles across session-variable
+  changes and counts table-function binds to prove collision refusals precede bind-time work (see
+  [the fallback decision](docs/parameter-fallback.md)). Add a probe here when a guarantee is made to a
+  client API rather than to SQL text.
+
+Native probes also accept `GATEKEEPER_EXTENSION=/absolute/path/to/gatekeeper.duckdb_extension`.
+In this mode they disable automatic linked-extension loading, load core functions, and explicitly
+load the named artifact; they refuse to proceed if Gatekeeper was already loaded. This permits
+linking a probe against an existing matching engine library while testing a newly built loadable,
+without silently exercising the engine library's older linked Gatekeeper. Without the environment
+variable, the normal CI probes still test the statically linked extension. All probes share this
+setup in `test/native/probe_database.hpp`.
 
 ### Running the suite on DuckDB 2.0
 
@@ -170,9 +183,11 @@ cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release 
   -DOVERRIDE_GIT_DESCRIBE=<library_version from PRAGMA version> \
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
-cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe
-GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/v2/test/unittest 'test/sql/*'
+cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe gatekeeper_qualified_probe
+GATEKEEPER_TEST_NESTED_SCHEMAS=1 GATEKEEPER_TEST_SECURE_VIEWS=1 build/v2/test/unittest 'test/sql/*'
 build/v2/extension/gatekeeper/gatekeeper_prepared_probe
+build/v2/extension/gatekeeper/gatekeeper_remote_probe
+build/v2/extension/gatekeeper/gatekeeper_qualified_probe
 python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
 GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \
@@ -190,6 +205,11 @@ checklist.
 `test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
 create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises
 the explicit path API on every engine; `test_schema_paths.py` adds deeper 2.0 coverage.
+`test/sql/secure_views.test` likewise requires `GATEKEEPER_TEST_SECURE_VIEWS=1`, set by both
+2.0 jobs; `test_secure_views.py` covers host evidence, engine diagnostics and predicate barriers,
+and the native prepared-handle probe includes secure views on 2.0.
+`test/sql/connect.test` uses the same 2.0 feature marker for CONNECT syntax; the native
+remote-catalog probe additionally verifies callback ordering with an actual routing target.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable

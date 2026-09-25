@@ -33,6 +33,8 @@ def test_complete_default_inventory(db):
         quoted = '"' + name.replace('"', '""') + '"'
         sql = f"SELECT {quoted}" + PARSER_OWNED_ARGUMENTS.get(name, "(1)")
         result = validate(db, sql)
+        if result["code"] == "forbidden" and result["violations"][0]["catalog"] == "system" and result["violations"][0]["schema_path"] == ["pg_catalog"]:
+            continue  # Reviewed historical names outside system.main are not default grants.
         assert result["code"] in {"ok", "binding"}, (name, result)
         assert not validate(db, sql, {"blocked_functions": [name]})["allowed"]
 
@@ -90,6 +92,9 @@ def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
     """Each default is blockable and disappears with use_default_functions=false."""
     db.execute("CREATE TABLE t AS SELECT 1 x")
     db.execute(sql).fetchall()
+    if name in {"has_table_privilege", "pg_typeof"}:
+        assert validate(db, sql)["code"] == "forbidden"
+        return  # Reviewed system.pg_catalog implementations are not system.main defaults.
     assert validate(db, sql)["allowed"], (name, validate(db, sql))
     for options in [{"blocked_functions": [name]}, {"use_default_functions": False}]:
         result = validate(db, sql, options)

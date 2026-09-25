@@ -80,6 +80,14 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
                optional_ptr<const engine::ParameterMap> parameters, gatekeeper::Result &result);
 
+// Before binding: known inputs (validation/private bind) authorize actual caller fallback reads. When
+// supplied provenance is unavailable (enforcement hooks), refuse every caller parameter/variable collision,
+// even if getvariable is allowed: an explicit value and an implicit read cannot be distinguished there.
+void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &layers,
+                             const gatekeeper::BindingPolicy &binding,
+                             optional_ptr<const engine::ParameterMap> supplied, bool provenance_known,
+                             gatekeeper::Result &result);
+
 // gatekeeper_validate: CheckText, then Authorize, with every outcome mapped to a structured result.
 gatekeeper::Result Check(ClientContext &context, const gatekeeper::Layers &layers, const string &sql,
                          const gatekeeper::Limits &limits = gatekeeper::Limits());

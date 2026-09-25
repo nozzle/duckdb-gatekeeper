@@ -37,7 +37,7 @@ def chain(db):
         CREATE MACRO twice_secret() AS secret_count() * 2;
         CREATE MACRO view_count() AS (SELECT count(*) FROM v);
         CREATE MACRO peek(n) AS TABLE SELECT * FROM query_table(n)""")
-    configure(db, {"allowed_functions": ["m", "secret_count", "secret_plus", "twice_secret", "view_count", "peek"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "secret_count", "secret_plus", "twice_secret", "view_count", "peek"]]})
     return db
 
 
@@ -85,10 +85,10 @@ def test_blocks_apply_to_what_the_caller_names(chain):
     assert denied["code"] == "forbidden" and denied["violations"][0]["message"] == "object is blocked", denied
     assert validate(chain, "SELECT * FROM b", {"blocked_tables": tables("b")})["code"] == "forbidden"
     # Both layers: a ceiling block on c does not reach the view either; a ceiling block on b does.
-    configure(chain, {"allowed_functions": ["m"], "blocked_tables": tables("c")})
+    configure(chain, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_tables": tables("c")})
     assert validate(chain, "SELECT * FROM b")["allowed"]
     assert not validate(chain, "SELECT * FROM c")["allowed"]
-    configure(chain, {"allowed_functions": ["m"], "blocked_tables": tables("b")})
+    configure(chain, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_tables": tables("b")})
     assert not validate(chain, "SELECT * FROM b")["allowed"]
     assert validate(chain, "SELECT * FROM c")["allowed"]
 
@@ -134,7 +134,7 @@ def test_table_macro_arguments_cannot_carry_table_references(chain):
 
 def test_caller_ctes_stay_the_callers(chain):
     chain.execute("CREATE MACRO consume() AS TABLE SELECT * FROM x")
-    configure(chain, {"allowed_functions": ["consume"]})
+    configure(chain, {"allowed_functions": [{"schema_path": ["*"], "name": "consume"}]})
     # A caller CTE the table macro's body inherits binds in the caller's scope: the table it reads is the caller's.
     denied = validate(chain, "WITH x AS (SELECT * FROM secret) SELECT * FROM consume()", {"allowed_tables": tables("x")})
     assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "secret", denied
@@ -176,7 +176,7 @@ def test_scalar_macros_carry_trust_into_what_their_table_functions_bind(chain):
     # subquery it replaces itself with is the macro's whatever table it selects, exactly as a table macro's is.
     chain.execute("CREATE MACRO scalar_peek(n) AS (SELECT count(*) FROM query_table(n)); "
                   "CREATE MACRO scalar_fixed() AS (SELECT count(*) FROM query_table('secret'))")
-    configure(chain, {"allowed_functions": ["scalar_peek", "scalar_fixed", "peek"]})
+    configure(chain, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["scalar_peek", "scalar_fixed", "peek"]]})
     denied_secret = {"allowed_tables": [], "blocked_tables": tables("secret")}
     for sql in ["SELECT scalar_peek('secret')", "SELECT scalar_fixed()", "SELECT * FROM peek('secret')"]:
         result = validate(chain, sql, denied_secret)
@@ -197,7 +197,7 @@ def test_scalar_macros_over_internal_views_own_their_readers(db):
     # caller's never-bind list, whatever table rules the caller holds.
     db.execute("CREATE MACRO metadata_count() AS (SELECT count(*) FROM information_schema.tables); "
                "CREATE VIEW my_tables AS SELECT table_name FROM information_schema.tables")
-    configure(db, {"allowed_functions": ["metadata_count"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "metadata_count"}]})
     for sql in ["SELECT metadata_count()", "SELECT * FROM my_tables", "SELECT metadata_count() FROM my_tables"]:
         result = validate(db, sql, {"allowed_tables": tables("my_tables")})
         assert result["allowed"] and any(f["name"] == "duckdb_tables" for f in result["functions"]), (sql, result)
