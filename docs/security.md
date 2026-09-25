@@ -1,8 +1,9 @@
 # Security model
 
-For Quack, see the [remote authorization support matrix](quack.md): evidence is checked local
-binding scope, opaque delegation is refused, and server-created connections are not automatically
-enforced. Trusted definitions do not override these remote-scope restrictions.
+For Quack, see the [remote authorization support matrix](quack.md): evidence is host-only checked
+local binding scope, caller-written delegation is never-bind, and server-created connections are
+not automatically enforced. Opaque trusted definitions are unsupported: deferred binding can
+execute remotely before a later refusal. The matrix also identifies the native 1.5 preparation limit.
 
 Gatekeeper decides whether one SQL statement conforms to the selected syntax, caller-function
 and resolved-deny/object policies on the build engine's parser and binder. It offers that decision two ways:
@@ -805,7 +806,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
-query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
+query query_table quack_query quack_query_by_name json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
 enable_logging disable_logging truncate_duckdb_logs write_log
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample

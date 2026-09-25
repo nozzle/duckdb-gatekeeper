@@ -2,7 +2,8 @@
 
 Gatekeeper evidence (`objects`, `caller_objects`, `functions`, and the same audit fields)
 describes the **checked local binding**, not recursively complete remote lineage. There is
-no allow-remote override and no evidence-completeness field.
+no allow-remote override and no evidence-completeness field. Decisions and audit evidence are
+host-only; they may disclose trusted definitions and must not be forwarded to untrusted callers.
 
 ## Support matrix
 
@@ -10,8 +11,10 @@ no allow-remote override and no evidence-completeness field.
 | --- | --- | --- |
 | Attached base table | Explicit refusal | Local-binding route, with `remote_pushdown` disabled and table bind identity present |
 | Local trusted view over attached base table | Explicit refusal | Same requirements; view is caller object, attached table is local dependency evidence |
-| Remote view | Explicit refusal, including inside trusted definitions | Explicit refusal: opaque server definition |
-| Explicit `quack_query`, `quack_query_by_name`, attachment `.query()` | Explicit refusal, even if function name is allowed | Same |
+| Caller-written `quack_query`, `quack_query_by_name`, `.query()` in submitted SQL | Never-bind refusal, even if granted | Same |
+| Remote view or trusted body containing remote SQL | Private validation/nonparameterized submission refuses before transmission; deferred bind is unsupported (see below) | Same |
+| Native Prepare with constant opaque remote SQL | Unsupported: preparation may transmit before any text hook | Text gate refuses caller-written delegation |
+| Parameterized native handle with caller-written remote function and unresolved SQL argument | Execution refuses before transmission | Same |
 | Whole-query / partial SQL pushdown | Feature absent | Refused before planning when any remote-capable catalog is attached and remote pushdown is enabled |
 | CONNECT | Feature absent | Unsupported local enforcement deployment; see #106's pre-callback boundary |
 | Server-created connections | No automatic enforcement | No automatic enforcement |
@@ -29,25 +32,23 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
 * The engine's pre-bind `RemotePushdownOptimizer` rewrites whole queries and subqueries into
   `quack_query_by_name`. The resulting operator is an ordinary `LogicalGet`; post-bind
   operator allowlisting or divergence detection alone is too late.
-* Gatekeeper checks the private catalog lookup and wraps the two registered Quack bind
-  callbacks, covering loads observed after Gatekeeper (including `LOAD ... AS q` and `AS http`), Prepare without
-  QueryBegin, and parameters that defer binding. Ordinary unenforced connections and log-only
-  continue using the original callbacks. The first enforcement activation seals **all new extension
-  loads** for the database, even on the unenforced host and in log-only mode. Load Gatekeeper first,
-  then all optional extensions, then activate enforcement. Loads already complete before Gatekeeper
-  are conservatively refused at activation (except linked core_functions/icu/json/parquet and the
-  upstream SQL runner's debug filesystem, identified by its owned implementation cache marker).
-  Arbitrary linked extensions are not exempt. A failed load poisons setup permanently: recreate the database. An observed unfinished
-  load can finish before retrying activation. Native catalog mutation/replacement after setup is trusted host activity.
-  Installation copies overloads and uses catalog replacement, never mutating function slots live.
-  A database-local setup mutex coordinates concurrent activations and begin/finish/failure callbacks.
-  Tracking owns copied literal names, never normalizes aliases and never borrows removable 2.0
-  ExtensionInfo pointers. The registry snapshot contains owned strings only. An unobserved start
-  cannot be redeemed by a finish notification; a pre-existing in-flight load is refused, even if
-  it later finishes. Loads inserted after the snapshot must pass the begin callback and see the seal.
-  On 1.5 only, registry entries are never removed and have database lifetime; their lock-protected
-  install mode identifies the host's completed statically linked startup extensions. No such pointer
-  inspection is used on 2.0, where failed aliased loads erase their entries.
+* Both Quack SQL functions are on the caller's never-bind list, like `query`/`query_table`.
+  Qualified grants cannot override that refusal. Private catalog authorization additionally
+  refuses opaque Quack functions and remote views reached through trusted definitions.
+* **Deferred trusted-body binding is unsupported.** For example, a host view containing
+  `quack_query_by_name(...)`, a remote view, or the attachment's `.query()` macro can execute
+  remotely when a parameterized statement binds it before Gatekeeper's private check. The final
+  Permission Error does not undo that execution. The fixture proves the residual with server
+  request logs and sequence increments. It is the same bind-time trust limitation as dynamic
+  `query()` inside host definitions: hosts must not expose opaque remote SQL through those
+  definitions and must not treat a later denial as proof of zero I/O.
+* DuckDB 1.5 native Prepare has no QueryBegin text gate. Preparing constant remote SQL can
+  transmit even though executing the handle is refused. Use submitted SQL/text preflight for
+  untrusted text; do not expose this raw preparation route as a protected remote API.
+* Gatekeeper does not control the host's extension loading lifecycle or wrap extension bind
+  callbacks. Unrelated extensions can load before Gatekeeper or after enforcement on a host
+  connection. Opaque delegation remains unsupported rather than broadening the sandbox to
+  manage all extension loads.
 * The 1.5 pin sends only a base table's leaf name, discarding schema qualification, and exposes
   no `get_bind_info` table identity. The executable schema-collision regression demonstrates a
   read of `other.orders` returning `main.orders`. All its Quack objects are therefore refused
@@ -58,7 +59,7 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
   stable server definitions: the host owns the remote schema, attachment snapshot, and any
   server authorization callback that can rewrite SQL.
 * `ClientContext::SubmitStatement` calls CONNECT's `RemoteExecute` **before QueryBegin**.
-  These Quack bind guards do not turn that generic callback into an authorized boundary.
+  Local statement checks do not turn that generic callback into an authorized boundary.
   Do not CONNECT an enforced connection via native host APIs, nor try to activate local
   enforcement by sending `CALL gatekeeper_enforce()` while CONNECT-ed: it may install on
   the server instead. #106 owns the engine-routing/native-host restrictions.
@@ -80,11 +81,9 @@ outside SQL query hooks. Server-side enforcement of the entire protocol remains 
 
 ## Running the disposable fixture
 
-Build Gatekeeper and the test-only barrier, then:
+Build Gatekeeper normally, then:
 
 ```sh
-cmake -S duckdb -B build/release -DGATEKEEPER_REMOTE_PROBES=ON
-cmake --build build/release --target gatekeeper_loadable_extension quack_load_barrier_loadable_extension --parallel 4
 .venv/bin/python scripts/test_quack.py
 ```
 
@@ -99,13 +98,9 @@ Server-side `Quack` logs prove whether a PREPARE request arrived. A sequence-bac
 view proves execution independently of transactional rollback. Setup/metadata requests are
 excluded by an explicit observation baseline. Held C API prepared handles use the same engine
 library as the Python host, testing preparation separately from execution and policy changes.
-The runner fails on a bad download checksum or missing/incompatible explicit artifact. The
-barrier artifact defaults to the directory containing Gatekeeper; override with
-`GATEKEEPER_QUACK_BARRIER`. Barrier tests park a real loader before extension initialization,
-then assert enforcement cannot activate until that loader finishes. Both callback-registration
-orders are exercised; the missed-start order remains refused after completion. `AS http` is tested
-both after sealing and while loading, and a failed aliased load is held at a barrier before its
-real failure/registry erasure. The barrier extension is test-only and never installed in production.
+The runner fails on a bad download checksum or missing/incompatible explicit artifact. Tests
+include successful host extension loads, pre-transmission refusals, and positive demonstrations
+of the unsupported deferred-bind residual. A passing suite does not mean those residuals are protected.
 
 ```sh
 GATEKEEPER_EXTENSION=/absolute/gatekeeper.duckdb_extension \
@@ -140,9 +135,9 @@ cmake -G Ninja -S /path/to/pinned-engine -B build/quack-candidate \
   -DDUCKDB_EXTENSION_CONFIGS="$PWD/extension_config.cmake" \
   '-DBUILD_EXTENSIONS=quack;httpfs;json;autocomplete' \
   -DBUILD_SHELL=ON -DBUILD_UNITTESTS=ON -DENABLE_UNITTEST_CPP_TESTS=OFF \
-  -DUNITTEST_ROOT_DIRECTORY="$PWD" -DGATEKEEPER_NATIVE_PROBES=ON -DGATEKEEPER_REMOTE_PROBES=ON
+  -DUNITTEST_ROOT_DIRECTORY="$PWD" -DGATEKEEPER_NATIVE_PROBES=ON
 cmake --build build/quack-candidate --parallel 4 --target shell unittest \
-  gatekeeper_loadable_extension quack_load_barrier_loadable_extension quack_loadable_extension httpfs_loadable_extension
+  gatekeeper_loadable_extension quack_loadable_extension httpfs_loadable_extension
 ```
 
 For release source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v1.5.5`.
@@ -172,10 +167,10 @@ any selected test skips. Both platform/version URLs can change,
 so the checksum, not the URL alone, is the artifact pin. Candidate errors can surface while
 fetching results; server-denial tests drain the result before asserting the error.
 The dedicated `Quack candidate integration` workflow pins the Linux CPython 3.13 wheel by
-SHA256, checks out the exact engine commit, builds Gatekeeper and the barrier, downloads the
+SHA256, checks out the exact engine commit, builds Gatekeeper, downloads the
 hash-pinned matching protocol-3 extensions, and executes the entire suite with zero skips.
-Existing compatibility and release pins are unchanged. Release tests skip alias loading,
-full/partial pushdown and CONNECT only on 1.5, where those features do not exist.
+Existing compatibility and release pins are unchanged. Release tests skip full/partial pushdown
+and CONNECT only on 1.5, where those features do not exist.
 The candidate test executes positive transport controls before checking refusals.
 
 Quack currently disables scan-level filter pushdown and rejects multiple streaming scans of

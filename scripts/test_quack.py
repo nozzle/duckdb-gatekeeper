@@ -86,9 +86,6 @@ def main():
     paths = {"quack": args.quack, "httpfs": args.httpfs} if args.quack else artifacts(args.cache, args.candidate)
     env = os.environ.copy()
     env["GATEKEEPER_QUACK_TESTS"] = "1"
-    extension = Path(env.get("GATEKEEPER_EXTENSION", ROOT / "build/release/extension/gatekeeper/gatekeeper.duckdb_extension"))
-    if "GATEKEEPER_QUACK_BARRIER" not in env:
-        env["GATEKEEPER_QUACK_BARRIER"] = str(extension.with_name("quack_load_barrier.duckdb_extension").resolve(strict=True))
     if args.candidate:
         env["GATEKEEPER_QUACK_CANDIDATE"] = "1"
     for name, path in paths.items():

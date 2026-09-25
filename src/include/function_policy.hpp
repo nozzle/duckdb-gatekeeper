@@ -49,6 +49,8 @@ inline const Names &NeverBindFunctions() {
 	                            "pragma_storage_info",
 	                            "pragma_table_info",
 	                            "pragma_table_sample",
+	                            "quack_query",
+	                            "quack_query_by_name",
 	                            "query",
 	                            "query_table",
 	                            "read_duckdb",

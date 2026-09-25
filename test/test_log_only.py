@@ -57,10 +57,6 @@ def test_log_only_connection_behaves_like_an_unenforced_one_and_records_what_val
     # unenforced connection shows (rows, or DuckDB's own error, never a Gatekeeper denial), and the one record
     # the statement leaves is the gatekeeper_validate row for it.
     with fresh_catalog(True) as plain_host, fresh_catalog(True) as host:
-        # The load seal is a database setup boundary, independent of statement log-only mode.
-        # Compare statement outcomes with the same extension availability on both databases.
-        for connection in (plain_host, host):
-            connection.execute("SET autoload_known_extensions=false; SET autoinstall_known_extensions=false")
         expected = validate(host, sql)
         with host.cursor() as observed:
             enforce(observed)

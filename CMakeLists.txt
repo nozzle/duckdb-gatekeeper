@@ -32,7 +32,7 @@ include_directories(src/include ${GATEKEEPER_GENERATED_DIR}
                     "${DuckDB_SOURCE_DIR}/extension/json/include"
                     "${DuckDB_SOURCE_DIR}/third_party/yyjson/include")
 set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/audit.cpp src/authorization.cpp src/check.cpp
-    src/enforcement.cpp src/options.cpp src/policy_setting.cpp src/result_value.cpp src/validator.cpp src/remote_scope.cpp
+    src/enforcement.cpp src/options.cpp src/policy_setting.cpp src/result_value.cpp src/validator.cpp
     "${DuckDB_SOURCE_DIR}/extension/json/json_serializer.cpp")
 build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
@@ -77,11 +77,6 @@ endif()
 # handle held across a policy change); linked against the engine with Gatekeeper built in, like the fuzz
 # target, and run by the compatibility workflow against each candidate engine.
 option(GATEKEEPER_NATIVE_PROBES "Build the native client-API probes (test/native)" OFF)
-option(GATEKEEPER_REMOTE_PROBES "Build the test-only Quack load barrier extension" OFF)
-if(GATEKEEPER_REMOTE_PROBES)
-  build_loadable_extension(quack_load_barrier "" test/native/quack_load_barrier.cpp)
-  target_compile_definitions(quack_load_barrier_loadable_extension PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
-endif()
 if(GATEKEEPER_NATIVE_PROBES)
   add_executable(gatekeeper_prepared_probe test/native/prepared_handle_probe.cpp)
   target_compile_definitions(gatekeeper_prepared_probe PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})

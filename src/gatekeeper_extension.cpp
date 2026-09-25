@@ -15,7 +15,6 @@
 #include "fuzz_checks.hpp"
 #include "options.hpp"
 #include "policy_setting.hpp"
-#include "remote_scope.hpp"
 #include "result_value.hpp"
 #include "single_row.hpp"
 #include "version.hpp"
@@ -231,7 +230,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(std::move(info));
 	RegisterAudit(loader);
 	RegisterEnforcement(loader);
-	RegisterRemoteScope(loader);
 }
 void GatekeeperExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
 std::string GatekeeperExtension::Name() { return "gatekeeper"; }

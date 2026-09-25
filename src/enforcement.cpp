@@ -495,7 +495,6 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 		throw PermissionException("gatekeeper_enforce() cannot run inside an open transaction: an enforced "
 		                          "connection cannot COMMIT or ROLLBACK, so end the transaction first");
 	// Latch at execution, never at bind: EXPLAIN and PREPARE must not enforce.
-	SealRemoteScope(context);
 	Latch(context);
 	vector<Value> warnings;
 	for (const auto &warning : PostureWarnings(context))
