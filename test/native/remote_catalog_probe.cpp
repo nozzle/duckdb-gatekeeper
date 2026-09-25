@@ -135,7 +135,7 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	Require(!connect_handle->HasError(), "CONNECT prepare before enforcement failed");
 	Run(agent, "CALL gatekeeper_enforce()");
 	for (const auto &sql : {"CONNECT remote", "CONNECT 'remote_probe::memory:'", "CONNECT LOCAL", "CONNECT",
-	                        "DISCONNECT", "EXECUTE c", "CONNECT remote; SELECT 123"}) {
+	                        "DISCONNECT", "CONNECT remote; SELECT 123"}) {
 		Denied(agent.Query(sql));
 		Require(!agent.context->IsConnected(), string(sql) + " changed connection state");
 		Require(state.calls.empty(), string(sql) + " reached RemoteExecute");
@@ -233,17 +233,31 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	Run(connected, "CALL gatekeeper_enforce()");
 	Denied(connected.Query("CREATE TABLE denied(i INTEGER)"));
 
-	// Log-only deliberately permits CONNECT and subsequent pre-hook remote dispatch. Turning it
-	// off does not restore LOCAL state or retroactively protect the callback.
+	// Log-only previews policy decisions, but cannot change the routing state. Retained handles
+	// and comments/case variations must obey the same AST-based exception as ordinary SQL.
 	Run(host, "ATTACH ':memory:' AS remote (TYPE remote_probe)");
 	Run(host, "SET gatekeeper_log_only = true");
-	Run(agent, "CONNECT remote");
+	before = state.calls.size();
+	auto attaches = state.attaches;
+	for (const auto &sql : {"CONNECT remote", "/* routing */ CoNnEcT remote", "CONNECT 'remote_probe::memory:'",
+	                        "-- routing\n DiScOnNeCt", "CONNECT remote; SELECT 123"})
+		Denied(agent.Query(sql));
+	// The size-limit denial normally becomes advisory in log-only. Routing must be recognized
+	// before that early return, even when a long comment pushes the statement over the limit.
+	Denied(agent.Query("CONNECT /*" + string(8388608, 'x') + "*/ remote"));
+	Denied(connect_handle->Execute());
+	auto log_only_prepare = agent.Prepare("CONNECT remote");
+	Require(log_only_prepare->HasError() &&
+	            log_only_prepare->GetError().find("Gatekeeper denied this statement") != string::npos,
+	        "log-only CONNECT prepare was not refused");
+	Require(!agent.context->IsConnected() && state.calls.size() == before && state.attaches == attaches,
+	        "log-only routing control changed state or reached a remote callback");
 	Run(agent, "CREATE TABLE log_only_text(i INTEGER)");
-	Require(state.calls.size() == before + 1, "log-only remote execution was blocked");
+	Run(agent, "SELECT 'CONNECT remote' AS text");
 	Run(host, "SET gatekeeper_log_only = false");
 	Denied(agent.Query("CREATE TABLE after_log_only(i INTEGER)"));
-	Require(state.calls.size() == before + 2, "log-only exit incorrectly assumed to restore local state");
-	agent.context->DisconnectFromCatalog();
+	Require(state.calls.size() == before, "log-only rollout failed to preserve local routing");
+	std::printf("remote-catalog probe: log-only routing refusals and rollout switch: zero remote callbacks\n");
 	std::printf("remote-catalog probe: local live/stale latch checks and documented pre-hook limitations: ok\n");
 }
 #endif

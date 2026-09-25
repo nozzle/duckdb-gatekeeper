@@ -9,7 +9,7 @@ class ExtensionLoader;
 class Value;
 
 // How a decision applies to the statement it describes. An enforced statement is refused when denied; a
-// log-only statement (an enforced connection while gatekeeper_log_only is true) is recorded and executes
+// log-only statement (a policy decision with gatekeeper_log_only true; routing controls stay ENFORCE) executes
 // regardless; a validated statement is reported to the caller of gatekeeper_validate, never refused here.
 enum class DecisionMode : uint8_t { ENFORCE, LOG_ONLY, VALIDATE };
 
