@@ -15,6 +15,10 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   one-element paths. Path wildcards match one component at exactly the specified depth, never
   recursively. Migrate `schema: 'reporting'` to `schema_path: ['reporting']`; `['*']` covers only
   top-level schemas.
+- Replacement-scan violations now report the full written path in `table` (for example,
+  `s.file.csv`), rather than only its leaf name, with `catalog = ''` and `schema_path = []`.
+  Written qualifiers are not resolved catalog identities; pre-bind refusals likewise leave
+  catalog/schema identity empty.
 
 - Every distributed artifact is now loaded, as the loadable it is, into an official DuckDB host
   of the pinned engine and exercised across the host/loadable ABI boundary before a release is

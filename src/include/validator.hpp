@@ -1,4 +1,5 @@
 #pragma once
+#include "name_path.hpp"
 #include "yyjson.hpp"
 #include <cstdint>
 #include <map>
@@ -11,7 +12,6 @@
 namespace gatekeeper {
 using Json = duckdb_yyjson::yyjson_val;
 using Names = std::set<std::string>;
-using NamePath = std::vector<std::string>;
 using WrittenNames = std::set<NamePath>;
 // Fixed validation guardrails, independent of authorization policy.
 constexpr uint64_t MAX_STATEMENTS = 1;
@@ -197,7 +197,6 @@ struct Provenance {
 };
 // A resolved identity as the provenance sets hold it: every component case-folded.
 Table ObjectKey(const std::string &catalog, const NamePath &schema_path, const std::string &table);
-NamePath FoldPath(NamePath path);
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);

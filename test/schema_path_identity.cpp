@@ -28,6 +28,9 @@ int main() {
 	Check(NamesObject(names, "finance", {"reports"}, "orders"));
 	Check(NamesObject({{"orders"}}, "memory", {"finance", "reports"}, "orders"));
 	Check(NamesObject({{"memory", "orders"}}, "memory", {"main"}, "orders"));
+	Check(NamesObject({{"memory", "", "orders"}}, "memory", {"main"}, "orders"));
+	Check(!NamesObject({{"lake", "", "orders"}}, "memory", {"main"}, "orders"));
+	Check(!NamesObject({{"a", "b", "c", "orders"}}, "memory", {"c"}, "orders"));
 	Check(!NamesObject({{"memory", "finance", "reports", "orders"}}, "lake", {"finance", "reports"}, "orders"));
 
 	Provenance provenance;

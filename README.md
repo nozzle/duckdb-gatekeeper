@@ -145,7 +145,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
-| `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
+| `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
@@ -247,7 +247,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |

@@ -111,7 +111,14 @@ def test_serialized_type_collation_is_host_trusted(db, native_validator):
 
 def expression(db, sql):
     return json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
-                                 [sql]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
+                                  [sql]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="qualified_name serialization requires DuckDB 2.0")
+def test_empty_written_path_is_unsupported(db, native_validator):
+    ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT * FROM main.t')").fetchone()[0])
+    ast["statements"][0]["node"]["from_table"]["qualified_name"]["path"] = []
+    assert native_validator(ast) == "unsupported"
 
 
 @pytest.mark.parametrize("order", ["explicit first", "implied first", "implied twice"])

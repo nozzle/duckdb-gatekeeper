@@ -19,7 +19,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "validator.hpp"
+#include "name_path.hpp"
 
 #ifndef GATEKEEPER_DUCKDB_MAJOR
 #error "GATEKEEPER_DUCKDB_MAJOR must be defined by the Gatekeeper build"

@@ -34,13 +34,15 @@ NamePath FoldPath(NamePath path) {
 	return path;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
-static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const NamePath &schema_path,
-                         const std::string &table, bool internal = false) {
-	auto key = ObjectKey(catalog, schema_path, table);
+static bool TableMatches(const std::set<Table> &rules, const Table &key, bool internal = false) {
 	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
 	if (internal &&
 	    (std::find(key.schema_path.begin(), key.schema_path.end(), "*") != key.schema_path.end() || key.table == "*"))
 		return false;
+	// Exact rules use the set index. Wildcard rules still require a linear scan; avoid enumerating
+	// the exponentially many wildcard combinations of an arbitrarily deep schema path.
+	if (rules.count(key))
+		return true;
 	for (const auto &rule : rules) {
 		if ((!rule.catalog.empty() && rule.catalog != "*" && rule.catalog != key.catalog) ||
 		    rule.schema_path.size() != key.schema_path.size() ||
@@ -58,14 +60,14 @@ static bool TableMatches(const std::set<Table> &rules, const std::string &catalo
 
 bool TableBlocked(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
                   const std::string &table) {
-	return TableMatches(policy.blocked_tables, catalog, schema_path, table);
+	return TableMatches(policy.blocked_tables, ObjectKey(catalog, schema_path, table));
 }
 
 bool TableAllowed(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
                   const std::string &table, bool internal) {
-	return !TableBlocked(policy, catalog, schema_path, table) &&
-	       ((!policy.tables && !internal) ||
-	        TableMatches(policy.allowed_tables, catalog, schema_path, table, internal));
+	auto key = ObjectKey(catalog, schema_path, table);
+	return !TableMatches(policy.blocked_tables, key) &&
+	       ((!policy.tables && !internal) || TableMatches(policy.allowed_tables, key, internal));
 }
 
 static Names Strings(Json *value, bool lower = false) {
@@ -223,6 +225,8 @@ static NamePath WrittenPath(Json *value, bool function = false) {
 				throw Stop{"invalid qualified name component"};
 			path.push_back(Text(part));
 		}
+		if (path.empty())
+			throw Stop{"empty qualified name path"};
 	} else {
 		auto catalog = Field(value, function ? "catalog" : "catalog_name");
 		auto schema = Field(value, function ? "schema" : "schema_name");
