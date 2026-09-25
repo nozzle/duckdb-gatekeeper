@@ -246,6 +246,11 @@ static bool ReadOperator(LogicalOperatorType type) {
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		// Read-only wrapper over the expanded view. Traverse its child for authorization and scan
+		// accounting; never remove or rewrite DuckDB's optimization/statistics boundary.
+#endif
 		return true;
 	default:
 		return false;
@@ -292,9 +297,9 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 		if (!ReadOperator(op->type) && !(pivot_enum && op == &plan))
 			deny("unsupported plan operator: " + LogicalOperatorToString(op->type));
 		// Every source the plan actually scans: base tables by resolved identity, table functions by name. Views
-		// are inlined by now, so who reached a table is what the private bind's catalog callback recorded: an
-		// identity the caller's binders retrieved or the caller's text names is authorized again here, one only
-		// trusted definitions retrieved is theirs. The engine's plan for an admitted statement may scan no source
+		// are expanded by now (secure views retain their wrapper). The private bind's callback recorded who
+		// reached each table: an identity the caller's binders retrieved or its text names is authorized again;
+		// one only trusted definitions retrieved is theirs. The engine's plan may scan no source
 		// the private bind did not, and none more often: a plan that does (a relation whose SQL rendering
 		// diverged from its query node) is refused rather than authorized. A Prepare() pre-screen has no private
 		// bind to compare against and defers.
@@ -578,7 +583,8 @@ struct LookupCallback {
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 			// A host view's body is trusted, and so is the body of any view a trusted definition reached: an
 			// internal metadata view a host scalar-macro body names is the macro's, readers included. The same
-			// internal view the caller names keeps its readers on the caller's never-bind list.
+			// internal view the caller names keeps its readers on the caller's never-bind list. Secure views use
+			// the same VIEW_ENTRY lookup and child binder; the engine wraps the plan only after binding the body.
 			if (!trusted && entry.type == CatalogType::VIEW_ENTRY && (!entry.internal || !attributable))
 				armed = true;
 			return;

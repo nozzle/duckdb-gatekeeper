@@ -8,6 +8,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
+  preserving the engine's optimization boundary and transitive host evidence. Validation results
+  and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
+  its conservative query-wide attribution can include hidden dependencies whose names match
+  caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace
