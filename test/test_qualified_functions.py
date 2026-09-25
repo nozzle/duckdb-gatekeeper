@@ -105,3 +105,39 @@ def test_all_overloads_and_literal_star(db):
     for sql in ["SELECT abs(-1::INTEGER)", "SELECT abs(-1::DOUBLE)", "SELECT abs(-1::DECIMAL(9,2))", "SELECT 2*3"]:
         assert validate(db, sql)["allowed"], sql
     assert not validate(db, "SELECT lower('X')")["allowed"]
+
+
+def test_dot_dispatch_cannot_shift_prechecked_target(db):
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants("list_aggregate", "list_value", "sum", catalog="system", schema_path=("main",))})
+    result = validate(db, "SELECT l.list_aggregate('string_agg', 'sum') FROM (VALUES (['a'])) t(l)")
+    assert result["code"] == "forbidden"
+    assert result["violations"][0]["rule"] == "bind_time_expression"
+
+
+@pytest.mark.parametrize("name,definition,sql", [
+    ("->>", "(x,y) AS 'captured'", "SELECT '{}'::JSON ->> 'x'"),
+    ("contains", "(x,y) AS true", "SELECT 1 IN [1,2]"),
+    ("regexp_full_match", "(x,y) AS true", "SELECT 'a' SIMILAR TO 'a'"),
+])
+def test_parser_helpers_cannot_use_granted_host_shadows(db, name, definition, sql):
+    db.execute(f'CREATE MACRO main."{name}"{definition}')
+    configure(db, {"allowed_functions": grants(name, catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, sql)["code"] == "forbidden"
+
+
+@pytest.mark.parametrize("name", ["mode", "entropy"])
+def test_specialized_default_aggregate_identity(db, name):
+    for sql in [f"SELECT {name}(x) FROM (VALUES (1),(1),(2)) t(x)",
+                f"SELECT {name}(x) OVER () FROM (VALUES (1),(2)) t(x)",
+                f"SELECT list_{name}([1,1,2])"]:
+        result = validate(db, sql)
+        assert result["allowed"], result
+        assert any(f["catalog"] == "system" and f["name"] == name for f in result["functions"])
+
+
+def test_host_dispatcher_leaf_is_not_a_dispatch_capability(db):
+    db.execute("CREATE MACRO main.aggregate(x) AS x")
+    configure(db, {"allowed_functions": grants("aggregate", catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, "SELECT aggregate(42)")["allowed"]
+    assert validate(db, "SELECT main.aggregate(42)")["allowed"]

@@ -637,6 +637,37 @@ struct LookupCallback {
 		} else
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		auto &function_entry = entry.Cast<StandardEntry>();
+		if (attributable && entry.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
+		    gatekeeper::DispatchingAggregators().count(canonical) && s.binding.caller_dispatchers.count(canonical) &&
+		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
+		    engine::SchemaPath(function_entry.schema) == gatekeeper::NamePath{"main"}) {
+			if (s.binding.unsupported_dispatchers.count(canonical)) {
+				s.result.violations.emplace(
+				    gatekeeper::rules::BIND_TIME_EXPRESSION,
+				    "aggregate dispatch requires an unqualified call and literal aggregate name", "system",
+				    gatekeeper::NamePath{"main"}, "", canonical);
+				throw PermissionException("unsupported aggregate dispatch");
+			}
+			auto targets = s.binding.dispatcher_targets_by_name.find(canonical);
+			if (targets == s.binding.dispatcher_targets_by_name.end())
+				throw BinderException("Missing aggregate dispatch targets");
+			for (const auto &name : targets->second) {
+				gatekeeper::Identity identity{"system", {"main"}, name, "aggregate"};
+				if (!s.layers.All(
+				        [&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
+					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
+					                            identity.catalog, identity.schema_path, "", identity.name);
+					throw PermissionException("dispatched aggregate is not allowed");
+				}
+				CheckAggregateDependency(s.context, name, s.result);
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				s.provenance.function_entries.insert(identity);
+			}
+			s.provenance.authorized_dispatchers.insert(canonical);
+		}
 		s.provenance.function_entries.insert({engine::CatalogName(function_entry.schema.catalog),
 		                                      engine::SchemaPath(function_entry.schema), engine::EntryName(entry),
 		                                      FunctionKind(entry.type)});
@@ -703,23 +734,6 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
 	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{context, layers, unit.binding, unit.provenance, result});
-	// Literal dispatch targets are resolved without binding/evaluating arguments. Both engines' dispatcher
-	// uses exactly system.main plus this leaf. Keep the entry evidence separately from the resulting plan.
-	for (const auto &name : unit.binding.dispatcher_targets) {
-		CheckAggregateDependency(context, name, result);
-		auto &entry = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
-		if (entry.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
-			throw BinderException("List aggregate target is not an aggregate");
-		auto &standard = entry.Cast<StandardEntry>();
-		gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema),
-		                              engine::EntryName(entry), FunctionKind(entry.type)};
-		if (!layers.All([&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
-			result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
-			                          identity.catalog, identity.schema_path, "", identity.name);
-			throw PermissionException("dispatched aggregate is not allowed");
-		}
-		unit.provenance.function_entries.insert(identity);
-	}
 	binder->SetCatalogLookupCallback(LookupCallback(bind));
 	ValidationScope scope{context, *bind, {}};
 	BoundStatement bound;

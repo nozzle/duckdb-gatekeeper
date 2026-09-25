@@ -397,7 +397,8 @@ struct Walker {
 	}
 	void Implied(const Names &names) {
 		if (binding)
-			binding->synthesized_functions.insert(names.begin(), names.end());
+			for (const auto &name : names)
+				binding->synthesized_functions.insert(CanonicalFunction(name));
 	}
 	// One occurrence of a function name, written or implied by syntax. The position reported for a denied name
 	// is the earliest query_location among all of its occurrences; nodes without one contribute nothing.
@@ -543,7 +544,8 @@ struct Walker {
 				Implied({name});
 			// The parsers also serialize literal constructors as ordinary calls. Until origin is exposed,
 			// treat an explicit same-name call conservatively as the corresponding builtin syntax.
-			if (name == "list_value" || name == "struct_pack" || name == "row")
+			if (name == "list_value" || name == "struct_pack" || name == "row" || name == "contains" ||
+			    name == "regexp_full_match")
 				Implied({name});
 			if (edge == "function") {
 				static const Names runtime_capable = {"unnest", "range", "generate_series"};
@@ -573,24 +575,21 @@ struct Walker {
 			}
 			Function(name, value);
 			// Only literal caller-selected aggregate names can be authorized before entering the dispatcher.
-			if (DispatchingAggregators().count(name)) {
-				if (binding)
-					binding->caller_dispatchers.insert(name);
+			if (binding && DispatchingAggregators().count(name)) {
+				binding->caller_dispatchers.insert(name);
 				// The engines resolve the argument as one leaf in system.main, never as SQL qualification.
 				// Do not evaluate a foldable expression to discover what permission it needs.
 				auto target = arguments.size() > 1 ? arguments[1] : nullptr;
 				auto constant = yyjson_obj_get(target, "value");
 				auto text = yyjson_obj_get(constant, "value");
-				if (Field(target, "class") != "CONSTANT" || !yyjson_is_str(text))
-					Reject(rules::BIND_TIME_EXPRESSION, "aggregate dispatch requires a literal aggregate name", value,
-					       name);
+				// A dotted spelling may be rewritten to a method call with a prepended receiver. Our catalog
+				// callback cannot identify that occurrence, so refuse it if it resolves to a system dispatcher.
+				// Merely sharing a dispatcher leaf does not impose its argument contract on a host macro/UDF.
+				if (WrittenPath(value, true).size() > 1 || Field(target, "class") != "CONSTANT" || !yyjson_is_str(text))
+					binding->unsupported_dispatchers.insert(name);
 				else {
-					Identity selected{"system", {"main"}, Text(text), "aggregate"};
-					if (binding)
-						binding->dispatcher_targets.insert(Lower(selected.name));
-					if (!layers.All([&](const Policy &p) { return FunctionAllowed(p, selected); }))
-						violations.emplace(rules::FUNCTION, "dispatched aggregate is not allowed", selected.catalog,
-						                   selected.schema_path, "", selected.name, Position(value));
+					binding->dispatcher_targets.insert(Lower(Text(text)));
+					binding->dispatcher_targets_by_name[name].insert(Lower(Text(text)));
 				}
 			}
 			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this

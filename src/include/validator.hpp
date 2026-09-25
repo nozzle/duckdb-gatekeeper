@@ -147,6 +147,8 @@ struct BindingPolicy {
 	// text, so the bound implementation must pass the allowlists like any other caller-written function.
 	Names caller_dispatchers;
 	Names dispatcher_targets;
+	std::map<std::string, Names> dispatcher_targets_by_name;
+	Names unsupported_dispatchers;
 	// Every function name the caller wrote, canonical: the names the text check decided, kept for the bind and
 	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
 	Names caller_functions;
@@ -176,6 +178,7 @@ struct Provenance {
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
 	Names replacement_functions;
+	Names authorized_dispatchers;
 	// Canonical function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
 	// Canonical function names the default macros the caller's text expands to introduce (list_count names

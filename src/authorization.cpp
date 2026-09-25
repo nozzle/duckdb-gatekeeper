@@ -135,7 +135,7 @@ static gatekeeper::Identity ListAggregateImplementation(const BoundFunctionExpre
 	// Catalog construction stamps this provenance onto each overload and binding preserves it.
 	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
 	if (!engine::SystemBuiltin(function))
-		throw BinderException("List aggregate implementation is not the pinned builtin");
+		return {}; // A host same-leaf function is opaque, not a system dispatcher whose bind data we can inspect.
 	auto &children = engine::Children(expression);
 	auto bind_info = engine::BindInfo(expression);
 	auto null_input = !children.empty() && engine::ReturnType(*children[0]).id() == LogicalTypeId::SQLNULL;
@@ -210,9 +210,9 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		// These reviewed aggregate binders replace their stamped overload with a factory specialization.
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
 		// policy leaf match, a runtime catalog lookup, or evidence inserted by this plan walk.
-		static const gatekeeper::Names specialized = {"sum",           "avg",           "min",       "max",
-		                                              "first",         "last",          "any_value", "quantile",
-		                                              "quantile_cont", "quantile_disc", "median"};
+		static const gatekeeper::Names specialized = {
+		    "sum",      "avg",           "min",           "max",    "first", "last",   "any_value",
+		    "quantile", "quantile_cont", "quantile_disc", "median", "mode",  "entropy"};
 		if (identity.catalog.empty() && identity.type == "aggregate" && specialized.count(identity.name)) {
 			const gatekeeper::Identity *definition = nullptr;
 			bool ambiguous = false;
@@ -280,8 +280,10 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				// The dispatched aggregate is the dispatcher's: the caller's when the dispatcher is.
 				function(aggregate,
 				         attributable(name) || attributable(aggregate.name) ||
-				             (!binding.caller_dispatchers.empty() && gatekeeper::DispatchingAggregators().count(name)),
-				         !binding.caller_dispatchers.empty() && gatekeeper::DispatchingAggregators().count(name));
+				             (!provenance.authorized_dispatchers.empty() &&
+				              gatekeeper::DispatchingAggregators().count(name)),
+				         !provenance.authorized_dispatchers.empty() &&
+				             gatekeeper::DispatchingAggregators().count(name));
 			}
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
