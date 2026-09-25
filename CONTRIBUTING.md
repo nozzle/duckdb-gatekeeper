@@ -159,6 +159,14 @@ The suite has two layers with different reach:
   [the fallback decision](docs/parameter-fallback.md)). Add a probe here when a guarantee is made to a
   client API rather than to SQL text.
 
+Native probes also accept `GATEKEEPER_EXTENSION=/absolute/path/to/gatekeeper.duckdb_extension`.
+In this mode they disable automatic linked-extension loading, load core functions, and explicitly
+load the named artifact; they refuse to proceed if Gatekeeper was already loaded. This permits
+linking a probe against an existing matching engine library while testing a newly built loadable,
+without silently exercising the engine library's older linked Gatekeeper. Without the environment
+variable, the normal CI probes still test the statically linked extension. Both probes share this
+setup in `test/native/probe_database.hpp`.
+
 ### Running the suite on DuckDB 2.0
 
 The same source builds against `v2.0-cyanoptera` (see

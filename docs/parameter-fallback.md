@@ -85,3 +85,19 @@ bind-time sites, trusted attribution, changes between validations, redaction, an
 retains a handle across host variable/policy changes and counts table-function bind invocations:
 denied fallback/collision paths must invoke it zero times. Rebuild and run these on both engines;
 source-only checks or runs against an older artifact do not verify the new guards.
+
+Validated after stacking the CONNECT guards (#106), using independently built loadables with
+`EXTENSION_STATIC_BUILD=OFF` against the two source revisions above:
+
+- Full Python suite: 1.5 default parser **1551 passed, 43 skipped, 2 xfailed**; 1.5 PEG
+  **1549 passed, 45 skipped, 2 xfailed**; 2.0 **1581 passed, 13 skipped, 2 xfailed**.
+- The 2.0 named-parameter module: **19 passed**, one 1.5-only case skipped.
+- Portable SQL suite with explicit LOAD of the new artifacts: 1.5 **743 assertions / 13 cases**
+  (two 2.0-only cases skipped); 2.0 **781 assertions / 15 cases**, nested schemas enabled.
+- Prepared-handle/bind-counter and remote-catalog native probes passed on both engines, using
+  `GATEKEEPER_EXTENSION` and shared matching engine libraries with linked Gatekeeper loading disabled.
+- Both loadables passed the positive/negative engine-identity guard probes. Formatting passed;
+  the pinned inventory audit reported no drift and 953 compiled defaults.
+
+The full Python runs include conditional integration skips when their external fixtures are absent;
+these results are not a fresh lakehouse-container, Wasm, or sanitizer/fuzz run.

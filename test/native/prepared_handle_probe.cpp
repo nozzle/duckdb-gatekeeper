@@ -16,6 +16,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "probe_database.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -169,7 +170,10 @@ void CheckParameterHandles(Connection &catalog) {
 } // namespace
 
 int main() {
-	DuckDB db(nullptr);
+	DBConfig config;
+	ConfigureProbeArtifact(config);
+	DuckDB db(nullptr, &config);
+	LoadProbeArtifact(db);
 	Connection catalog(db);
 	Run(catalog, "CREATE SCHEMA reporting; CREATE TABLE reporting.leak(x INTEGER); "
 	             "INSERT INTO reporting.leak VALUES (1), (2); CREATE TABLE reporting.orders(x INTEGER); "

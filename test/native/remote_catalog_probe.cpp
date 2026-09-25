@@ -5,6 +5,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
+#include "probe_database.hpp"
 
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -252,6 +253,7 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 
 int main() {
 	DBConfig config;
+	ConfigureProbeArtifact(config);
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	auto state = make_shared_ptr<RemoteState>();
 	auto extension = make_shared_ptr<StorageExtension>();
@@ -261,6 +263,7 @@ int main() {
 	StorageExtension::Register(config, "remote_probe", extension);
 #endif
 	DuckDB db(nullptr, &config);
+	LoadProbeArtifact(db);
 	LocalRoutes(db);
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	RemoteRoutes(db, *state);
