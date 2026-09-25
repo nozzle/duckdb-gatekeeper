@@ -2,9 +2,9 @@
 
 ## Decision
 
-Ship a validation preflight and a fail-closed enforced collision gate without changing engine pins.
-This is a restricted implementation of [#107](https://github.com/nozzle/duckdb-gatekeeper/issues/107),
-not completion of its explicit-value-precedence contract on enforced DuckDB 2.0 connections.
+Ship a validation preflight and a conservative enforced capability gate without changing engine pins.
+The remaining restriction in [#107](https://github.com/nozzle/duckdb-gatekeeper/issues/107) is that an
+explicit input colliding with a session variable requires fallback permission on enforced 2.0 connections.
 
 Validation has known inputs (currently none for the SQL being validated). Its preflight checks actual
 caller parameter references, skips known supplied entries, and authorizes existing variable fallbacks
@@ -12,10 +12,12 @@ against both layers as the fixed `system.main.getvariable` capability. No catalo
 value is needed to decide permission. Missing variables continue through ordinary complete binding;
 typed placeholders may still bind completely, whereas untyped or value-dependent ones fail.
 
-Enforcement has no trustworthy supplied-input provenance before binding. It refuses every caller
-named-parameter/variable collision, including present NULLs, explicit values, allowed getvariable,
-and client-API prepares. Log-only records the same refusal and continues with native engine behavior.
-Use noncolliding names or positional parameters to supply explicit values. Only caller AST references
+Enforcement has no trustworthy supplied-input provenance before binding. Every caller
+named-parameter/variable collision requires the capability, including present NULLs, explicit values,
+and client-API prepares. If granted, either source is authorized: DuckDB retains explicit precedence
+and Gatekeeper conservatively records the capability even when an explicit value supplies the input.
+If denied, refusal precedes binding; log-only records that denial and continues with native behavior.
+Without the grant, use noncolliding names or positional parameters for explicit values. Only caller AST references
 are gated: host views remain trusted. A caller argument passed into a trusted macro is still caller text.
 
 ## Source evidence and unavailable hooks
@@ -43,7 +45,10 @@ arguments before verification/planning/default merging. Direct queries would use
 internal EXECUTE statements carry `bound_values`; internal PREPARE could defer fallback policy.
 Alternatively a pre-bind callback must expose the original EXECUTE before its defaults are merged.
 Keep input provenance separate from effective rebind values and repeat authorization every execution.
-No proposed engine hook is assumed to exist by this implementation.
+No proposed engine hook is assumed to exist by this implementation. QueryBegin checks each execution
+under its policy snapshot, including retained native handles. The rebind hook does not duplicate the
+check: connection variables do not change between those hooks in an ordinary statement. Native host
+callbacks must not mutate connection inputs mid-statement.
 
 Do not use the general parsed-expression iterator to discover all caller references: the reviewed
 engine traversal omits AT and portions of PIVOT. The existing serialized grammar walker collects them.
@@ -60,10 +65,9 @@ Trusted views can retain `$x` and read the current value. SQL scalar macro bodie
 by the reviewed engine. The alpha also exhibited an internal error preparing/executing a view-only
 parameter query; this change does not claim to repair that engine path. Internal errors still propagate.
 
-Raw engine binding diagnostics can disclose values (e.g. an invalid COLUMNS regex). Gatekeeper
-conservatively suppresses their message details on 2.0 whenever session variables exist, including
-unrelated variables, because trusted-body reads lack a hook too. Error classes remain available;
-DuckDB's own errors/logs and intentionally returned data are outside this decision-log redaction.
+Raw validation/audit diagnostics are host-facing. They retain engine messages, including possible
+values in regex, path or cast errors; enforced engine errors also propagate unchanged. The no-values
+requirement applies to the fixed capability evidence, not a general diagnostic-redaction policy.
 
 ## Deferred value-bearing validation API
 
@@ -76,28 +80,3 @@ MAP/LIST homogenize types; JSON is lossy. A names-only list cannot establish com
 Defer that public API until exact typed-value versus client literal-typing semantics are documented
 and tested. Without it, value-dependent validation still reports binding failures. This API would
 not fix enforced collision provenance and is not a substitute for the upstream hook.
-
-## Verification
-
-`test/test_named_parameters.py` covers both engines, layers, evidence, NULL, positional parameters,
-bind-time sites, trusted attribution, changes between validations, redaction, and log-only decisions.
-`test/sql/named_parameters.test` carries the portable validation contract. The native prepared probe
-retains a handle across host variable/policy changes and counts table-function bind invocations:
-denied fallback/collision paths must invoke it zero times. Rebuild and run these on both engines;
-source-only checks or runs against an older artifact do not verify the new guards.
-
-Validated after stacking the CONNECT guards (#106), using independently built loadables with
-`EXTENSION_STATIC_BUILD=OFF` against the two source revisions above:
-
-- Full Python suite: 1.5 default parser **1551 passed, 43 skipped, 2 xfailed**; 1.5 PEG
-  **1549 passed, 45 skipped, 2 xfailed**; 2.0 **1581 passed, 13 skipped, 2 xfailed**.
-- The 2.0 named-parameter module: **19 passed**, one 1.5-only case skipped.
-- Portable SQL suite with explicit LOAD of the new artifacts: 1.5 **743 assertions / 13 cases**
-  (two 2.0-only cases skipped); 2.0 **781 assertions / 15 cases**, nested schemas enabled.
-- Prepared-handle/bind-counter and remote-catalog native probes passed on both engines, using
-  `GATEKEEPER_EXTENSION` and shared matching engine libraries with linked Gatekeeper loading disabled.
-- Both loadables passed the positive/negative engine-identity guard probes. Formatting passed;
-  the pinned inventory audit reported no drift and 953 compiled defaults.
-
-The full Python runs include conditional integration skips when their external fixtures are absent;
-these results are not a fresh lakehouse-container, Wasm, or sanitizer/fuzz run.

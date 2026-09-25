@@ -72,7 +72,7 @@ def test_fallback_guard_wins_before_bind_time_sites(db, sql):
     assert "DO_NOT_DISCLOSE" not in json.dumps(result)
     assert result["functions"] == result["objects"] == []
     enforce(db)
-    with pytest.raises(duckdb.Error, match="supplied-value provenance"):
+    with pytest.raises(duckdb.Error, match="session-variable fallback requires"):
         db.execute(sql)
 
 
@@ -88,15 +88,39 @@ def test_allowed_bind_time_fallbacks(db):
 
 
 @V2
-@pytest.mark.parametrize("allowed", [False, True])
 @pytest.mark.parametrize("explicit", [False, True])
-def test_enforcement_refuses_ambiguous_collision_even_when_allowed_or_explicit(db, allowed, explicit):
+def test_enforcement_refuses_ungranted_collision_even_when_explicit(db, explicit):
     db.execute("SET VARIABLE x = 42")
-    configure(db, {"allowed_functions": ["getvariable"]} if allowed else {})
     enforce(db)
-    with pytest.raises(duckdb.Error, match="supplied-value provenance"):
+    with pytest.raises(duckdb.Error, match="session-variable fallback requires"):
         db.execute("SELECT $X", {"X": 7} if explicit else None)
     assert db.execute("SELECT $other", {"other": 8}).fetchall() == [(8,)]
+
+
+@V2
+@pytest.mark.parametrize("parameters,expected", [(None, 42), ({"x": 7}, 7), ({"x": 42}, 42), ({"x": None}, None)])
+def test_granted_collision_preserves_values_and_records_conservative_evidence(db, parameters, expected):
+    configure(db, {"allowed_functions": ["getvariable"]})
+    enable(db, "debug")
+    with db.cursor() as agent:
+        agent.execute("SET VARIABLE x = 42")
+        validated = validate(agent, "SELECT $x")
+        assert validated["allowed"] and validated["functions"] == [CAPABILITY]
+        enforce(agent)
+        assert agent.execute("SELECT $x", parameters).fetchall() == [(expected,)]
+    found = decisions(db, "mode = 'enforce' AND statement = 'SELECT $x' AND boundary = 'execution'")
+    # Explicit typed inputs can also introduce cast evidence; the implied capability remains deduplicated.
+    assert found and all(r["allowed"] and r["functions"].count(CAPABILITY) == 1 for r in found), found
+    assert all(set(f) == {"catalog", "schema_path", "name", "type"} for r in found for f in r["functions"])
+
+
+@V2
+def test_present_null_variable_is_a_granted_fallback(db):
+    configure(db, {"allowed_functions": ["getvariable"]})
+    db.execute("SET VARIABLE x = NULL")
+    enforce(db)
+    assert db.execute("SELECT $x").fetchall() == [(None,)]
+    assert db.execute("SELECT $x", {"x": 7}).fetchall() == [(7,)]
 
 
 @V2
@@ -126,27 +150,10 @@ def test_variable_and_policy_changes_rechecked_in_validation(db):
     assert validate(db, "SELECT $x")["code"] == "binding"
 
 
-@V2
-def test_binding_errors_do_not_record_variable_values(db):
-    db.execute("CREATE TABLE t(x INT); SET VARIABLE regex = 'PRIVATE_SENTINEL['")
-    configure(db, {"allowed_functions": ["getvariable"]})
-    enable(db)
-    result = validate(db, "SELECT COLUMNS($regex) FROM t")
-    assert result["code"] == "binding" and "details suppressed" in result["error_message"]
-    assert "PRIVATE_SENTINEL" not in json.dumps(result)
-    assert "PRIVATE_SENTINEL" not in json.dumps(decisions(db))
-
-
-@V2
-def test_trusted_fallback_binding_error_is_also_redacted(db):
-    db.execute("CREATE TABLE t(x INT); SET VARIABLE regex = 'x'")
-    db.execute("CREATE VIEW v AS SELECT COLUMNS($regex) FROM t")
-    db.execute("SET VARIABLE regex = 'TRUSTED_SENTINEL['")
-    enable(db)
-    result = validate(db, "SELECT * FROM v")
-    assert result["code"] == "binding" and "details suppressed" in result["error_message"]
-    assert "TRUSTED_SENTINEL" not in json.dumps(result)
-    assert "TRUSTED_SENTINEL" not in json.dumps(decisions(db))
+def test_unrelated_variable_preserves_host_binding_diagnostics(db):
+    db.execute("SET VARIABLE tenant_id = 42")
+    result = validate(db, "SELECT * FROM nonexistent_table")
+    assert result["code"] == "binding" and "nonexistent_table" in result["error_message"]
 
 
 @V2
@@ -165,5 +172,5 @@ def test_log_only_records_ambiguity_once_per_statement_without_refusing(db, expl
         assert len(found) == 1, found
     for record in found:
         assert not record["allowed"] and record["boundary"] == "binding"
-        assert "supplied-value provenance" in record["violations"][0]["message"]
+        assert "session-variable fallback requires" in record["violations"][0]["message"]
         assert record["functions"] == []

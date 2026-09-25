@@ -622,9 +622,6 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
                              gatekeeper::Result &result) {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	auto &variables = ClientConfig::GetConfig(context).user_variables;
-	// Trusted views can introduce fallback reads absent from the caller AST. Without a read hook, conservatively
-	// suppress engine binding details whenever variables exist; errors can contain paths, regexes or cast inputs.
-	result.suppress_binding_details |= !variables.empty();
 	for (const auto &parameter : binding.caller_parameters) {
 		auto name = engine::ToName(parameter.first);
 		if (provenance_known && supplied && supplied->count(name))
@@ -636,10 +633,10 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 			                          "getvariable", parameter.second);
 			throw PermissionException("named parameter fallback is not allowed");
 		};
-		if (!provenance_known)
-			deny("named parameter collides with a session variable; supplied-value provenance is unavailable before "
-			     "binding on enforced connections");
 		// This is a fixed engine capability, not an unqualified function lookup that a host macro can shadow.
+		// Without supplied-input provenance, either source may supply the value. Requiring permission for the
+		// fallback authorizes both possibilities; evidence conservatively includes the capability even when the
+		// caller supplied an explicit value. DuckDB still chooses the value and preserves explicit precedence.
 		layers.Each([&](const gatekeeper::Policy &policy) {
 			if (!gatekeeper::FunctionAllowed(policy, "getvariable"))
 				deny("session-variable fallback requires system.main.getvariable permission");
@@ -810,7 +807,7 @@ void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextChe
 	}
 }
 
-static bool DescribeEngineError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
+bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
 	switch (data.Type()) {
 	case ExceptionType::PARSER: {
 		result.code = gatekeeper::codes::PARSER;
@@ -844,24 +841,10 @@ static bool DescribeEngineError(const ErrorData &data, bool binding, gatekeeper:
 	return true;
 }
 
-static void SuppressBindingDetails(bool binding, gatekeeper::Result &result) {
-	if (binding && result.suppress_binding_details)
-		result.error_message =
-		    "Binding failed; details suppressed because session variables may contain sensitive values";
-}
-
-bool DescribeError(const ErrorData &data, bool binding, gatekeeper::Result &result) {
-	auto described = DescribeEngineError(data, binding, result);
-	if (described)
-		SuppressBindingDetails(binding, result);
-	return described;
-}
-
 bool DescribeError(const std::exception &error, bool binding, gatekeeper::Result &result) {
 	if (auto invalid = dynamic_cast<const std::invalid_argument *>(&error)) {
 		result.code = gatekeeper::EngineErrorCode(binding);
 		result.error_message = invalid->what();
-		SuppressBindingDetails(binding, result);
 		return true;
 	}
 	if (dynamic_cast<const std::bad_alloc *>(&error))

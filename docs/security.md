@@ -67,19 +67,21 @@ name: 'getvariable', type: 'scalar'}` in `functions`, without variable values. A
 is still a fallback input. Positional `$1` never falls back. References introduced only by trusted
 views remain the definition's own, outside caller policy.
 
-Enforcement is deliberately stricter: **caller named-parameter/session-variable collisions are
-refused before binding, even with explicit arguments or permission for `getvariable`**. QueryBegin
+Enforcement is conservative: **caller named-parameter/session-variable collisions require
+`getvariable` permission before binding, even with explicit arguments**. QueryBegin
 cannot see arguments; the 2.0 prepared-rebind hook sees arguments after implicit defaults were merged.
-Preparing colliding text on an enforced connection is also refused because the early hook cannot
-distinguish that operation. Retained handles are checked on every execution. Noncolliding explicit
-inputs and DuckDB 1.5 retain their existing behavior. Log-only records one collision refusal per statement and
-lets the engine proceed, so it does not promise validation/enforcement parity for this case.
+When granted, both possible sources are authorized: DuckDB preserves explicit-value precedence and
+the decision conservatively includes the capability even when no fallback was actually read.
+Preparing colliding text also requires the grant because the early hook cannot distinguish that
+operation. Retained handles are checked at QueryBegin on every execution. Noncolliding explicit
+inputs and DuckDB 1.5 retain their existing behavior. Log-only records one denial per statement and
+lets the engine proceed. A colliding explicit input without the grant remains conservatively refused.
 See [the feasibility decision](parameter-fallback.md) for the missing hook and deferred value-input API.
 
-Binding errors recorded by Gatekeeper on 2.0 omit engine message details whenever the connection
-has session variables: regex, path and cast diagnostics can interpolate values, including ones a
-trusted body reads. The error class/code remains available. This does not redact DuckDB's own error
-stream, logs, SQL literals the host submitted, or query results intentionally exposed by trusted views.
+Capability evidence contains only the fixed identity, never variable values. Raw validation/audit
+diagnostics are host-facing and retain the engine's messages, which can include values in regex,
+path or cast errors. Enforcement engine errors likewise propagate unchanged; this is not a
+diagnostic-redaction boundary.
 
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.

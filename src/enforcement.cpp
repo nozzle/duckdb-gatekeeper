@@ -182,7 +182,7 @@ struct EnforcementState : ClientContextState {
 	bool CheckParameters(ClientContext &context) {
 		try {
 			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
-			// Neither hook can establish explicit-value precedence. Refuse collisions before the engine binds.
+			// Require fallback permission before the engine binds; with permission either input source is safe.
 			CheckParameterFallbacks(context, Snapshot(), unit.binding, nullptr, false, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
@@ -242,10 +242,6 @@ struct EnforcementState : ClientContextState {
 			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
-		// A retained native handle gets the same conservative gate on every execution. Do not infer supplied
-		// provenance from the callback's merged map. In log-only mode an earlier decision already stands.
-		if (admitted && !decided)
-			CheckParameters(context);
 		executing_prepared = true;
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
