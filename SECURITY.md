@@ -51,6 +51,9 @@ perform during binding, including the bind DuckDB performs for a prepared statem
 any extension hook runs; scalar functions and query pragmas DuckDB's statement preprocessor
 runs while parsing `PRAGMA` statements, before any extension hook runs (a documented, pinned
 residual, upstream [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875));
+pre-hook remote dispatch on already-CONNECT-ed or native-mutated sessions, which violate the
+[LOCAL-state host requirement](docs/security.md#connect-mode-and-native-host-state) (normal
+SQL entering CONNECT on a local enforced connection remains in scope);
 functions and readers that host-created views, macros, and attached tables use inside their
 own definitions, which are outside function policy by design (Gatekeeper's own control plane
 excepted); implementation behavior of explicitly granted host definitions,

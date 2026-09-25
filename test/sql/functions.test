@@ -288,7 +288,7 @@ forbidden	function	histogram
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''su'' || ''m'')', blocked_functions := ['sum']);
 ----
-forbidden	function	sum
+forbidden	bind_time_expression	list_aggregate
 
 statement ok
 CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'list_aggregate'}, {'schema_path':['main'],'name':'list_value'}]);
@@ -314,7 +314,7 @@ true
 statement ok
 RESET gatekeeper_policy;
 
-# Function policy is by leaf name: a table function and a scalar function sharing a name share the rule.
+# Blocks remain leaf-wide: a table function and scalar function sharing a name share a block.
 query T
 SELECT code FROM gatekeeper_validate('SELECT * FROM range(3)', blocked_functions := ['range']);
 ----

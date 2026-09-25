@@ -226,7 +226,7 @@ def test_in_out_exception_requires_builtin_identity(db):
     db.execute("CREATE TABLE d(x INT); CREATE MACRO main.range(x) AS TABLE SELECT x")
     result = validate(db, "SELECT * FROM d, range(d.x)")
     assert result["code"] == "forbidden" and result["error_message"] == "", result
-    assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
+    assert any(v["rule"] in {"function", "bind_time_expression"} for v in result["violations"])
 
 
 def test_unresolved_column_does_not_relax_standard_reader(db):

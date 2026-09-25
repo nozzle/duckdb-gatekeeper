@@ -1,6 +1,7 @@
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -211,8 +212,8 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
 		// policy leaf match, a runtime catalog lookup, or evidence inserted by this plan walk.
 		static const gatekeeper::Names specialized = {
-		    "sum",      "avg",           "min",           "max",    "first", "last",   "any_value",
-		    "quantile", "quantile_cont", "quantile_disc", "median", "mode",  "entropy"};
+		    "sum",      "avg",           "min",           "max",    "first", "last",    "any_value",
+		    "quantile", "quantile_cont", "quantile_disc", "median", "mode",  "entropy", "arbitrary"};
 		if (identity.catalog.empty() && identity.type == "aggregate" && specialized.count(identity.name)) {
 			const gatekeeper::Identity *definition = nullptr;
 			bool ambiguous = false;
@@ -288,8 +289,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &name = engine::FunctionName(child.Cast<BoundAggregateExpression>());
-			function(engine::AggregateIdentity(child.Cast<BoundAggregateExpression>()), attributable(name),
-			         binding.caller_functions.count(gatekeeper::CanonicalFunction(name)));
+			auto identity = engine::AggregateIdentity(child.Cast<BoundAggregateExpression>());
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+			// plan_subquery.cpp constructs count_star directly, without a catalog lookup. Recognize the
+			// actual builtin callbacks, not just a leaf that a foreign implementation could reuse.
+			if (identity.catalog.empty() && name == "count_star" &&
+			    child.Cast<BoundAggregateExpression>().function == CountStarFun::GetFunction())
+				identity = {"system", {"main"}, "count_star", "aggregate"};
+#endif
+			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::CanonicalFunction(name)));
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = child.Cast<BoundWindowExpression>();

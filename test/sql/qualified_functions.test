@@ -13,7 +13,7 @@ CREATE MACRO host.abs(x) AS x;
 query TTT
 SELECT code, violations[1].catalog, violations[1].schema_path[1] FROM gatekeeper_validate('SELECT host.abs(1)');
 ----
-forbidden memory host
+forbidden	memory	host
 
 statement ok
 CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['host'],name:'abs',type:'macro'}]);
@@ -28,11 +28,15 @@ SELECT code FROM gatekeeper_validate('SELECT host.abs(1)', allowed_functions := 
 ----
 forbidden
 
-statement error migrate
+statement error
 CALL gatekeeper_configure(allowed_functions := ['abs']);
+----
+migrate
 
-statement error unsupported function type
+statement error
 CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'abs',type:'pragma'}]);
+----
+unsupported function type
 
 statement ok
 CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'range',type:'scalar'}]);

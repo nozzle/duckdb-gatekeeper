@@ -101,7 +101,7 @@ def test_enforcement_and_log_only_use_resolved_grants(db):
 
 def test_all_overloads_and_literal_star(db):
     configure(db, {"use_default_functions": False,
-                   "allowed_functions": grants("abs", "*", catalog="system", schema_path=("main",), type="scalar")})
+                   "allowed_functions": grants("abs", "*", "-", catalog="system", schema_path=("main",), type="scalar")})
     for sql in ["SELECT abs(-1::INTEGER)", "SELECT abs(-1::DOUBLE)", "SELECT abs(-1::DECIMAL(9,2))", "SELECT 2*3"]:
         assert validate(db, sql)["allowed"], sql
     assert not validate(db, "SELECT lower('X')")["allowed"]

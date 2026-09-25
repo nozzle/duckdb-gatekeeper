@@ -39,17 +39,17 @@ def test_text_denials_are_all_reported_and_bind_denials_are_the_first_one(catalo
     "SELECT list_aggregate([1], 'max') FROM secret.salaries",
     "SELECT list_aggregate([1], 'max') FROM secret.salaries WHERE amount > 0",
 ])
-def test_literal_dispatch_denial_precedes_table_binding(catalog, agent, sql):
-    # Literal dispatch now has a qualified preflight check, before any table is bound.
+def test_table_binding_precedes_resolved_dispatcher_check(catalog, agent, sql):
+    # Target checks wait for the real system dispatcher entry; host same-leaf functions are opaque.
     enable(catalog)
     configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
                         "blocked_functions": ["max"]})
     expected = validate(catalog, sql)
-    assert first(expected) == ("function", "dispatched aggregate is not allowed", "", "max")
+    assert first(expected) == ("table", "object is not allowed", "salaries", "")
     seen = attempt(agent, sql)
-    assert seen.kind == "denied" and "dispatched aggregate is not allowed" in str(seen.error), seen
+    assert seen.kind == "denied" and "table: object is not allowed" in str(seen.error), seen
     [record] = decisions(catalog, "mode = 'enforce'")
-    assert record["boundary"] == "binding" and record["violations"] == expected["violations"]
+    assert record["boundary"] == "authorize" and record["violations"] == expected["violations"]
     # The same function, with the table allowed, is the plan's denial.
     allowed_table = sql.replace("secret.salaries", "reporting.orders")
     assert first(validate(catalog, allowed_table)) == ("function", "dispatched aggregate is not allowed", "", "max")

@@ -130,7 +130,7 @@ def test_function_position_is_the_earliest_occurrence(db, sql, position):
     ("SELECT * FROM db.s.t", {"allowed_tables": []}, False),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, True),
     ("SELECT * FROM other.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, False),
-    ("SELECT db.main.md5('x')", {"allowed_tables": []}, True),
+    ("SELECT db.main.md5('x')", {"allowed_tables": []}, False),
     ("SELECT * FROM s.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, True),
     ("SELECT * FROM t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, False),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, True),

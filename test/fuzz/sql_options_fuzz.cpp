@@ -866,12 +866,17 @@ static void CheckForeignAggregateProvenance() {
 				LogicalProjection plan(0, std::move(expressions));
 				gatekeeper::Result result;
 				gatekeeper::Policy policy;
+				gatekeeper::BindingPolicy binding;
+				binding.caller_functions.insert(name);
+				// A host same-leaf function is opaque, not a system dispatcher's private bind-data shape.
+				// Caller use still requires a known qualified grant; unknown provenance cannot satisfy it.
+				policy.allowed_functions.insert({identity.first, {identity.second}, name, "scalar"});
 				try {
-					AuthorizePlan({policy, policy}, gatekeeper::BindingPolicy(), gatekeeper::Provenance(), plan,
-					              result);
-					std::abort();
-				} catch (const BinderException &error) {
-					if (ErrorData(error).RawMessage().find("not the pinned builtin") == string::npos)
+					AuthorizePlan({policy, policy}, binding, gatekeeper::Provenance(), plan, result);
+					if (identity.first.empty())
+						std::abort();
+				} catch (const PermissionException &) {
+					if (!identity.first.empty())
 						std::abort();
 				}
 			}

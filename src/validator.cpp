@@ -448,6 +448,13 @@ struct Walker {
 		violations.emplace(rule, message, "", NamePath{}, Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		if (kind == "ParameterExpression" && binding) {
+			auto name = Lower(Field(value, "identifier"));
+			auto position = Position(value);
+			auto inserted = binding->caller_parameters.emplace(name, position);
+			if (!inserted.second && position >= 0 && (inserted.first->second < 0 || position < inserted.first->second))
+				inserted.first->second = position;
+		}
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
 		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
 		// which names are which and treats the rest as trusted. The same names, as written components, are what
@@ -582,6 +589,9 @@ struct Walker {
 				auto target = arguments.size() > 1 ? arguments[1] : nullptr;
 				auto constant = yyjson_obj_get(target, "value");
 				auto text = yyjson_obj_get(constant, "value");
+				auto literal = yyjson_obj_get(target, "literal");
+				if (Field(literal, "kind") == "STRING")
+					text = yyjson_obj_get(literal, "text");
 				// A dotted spelling may be rewritten to a method call with a prepended receiver. Our catalog
 				// callback cannot identify that occurrence, so refuse it if it resolves to a system dispatcher.
 				// Merely sharing a dispatcher leaf does not impose its argument contract on a host macro/UDF.

@@ -52,7 +52,7 @@ Source basis: DuckDB 1.5.5 d8cdaa33f and 2.0 candidate d4e72566a. Neither engine
 | Direct builtin helpers / optimizer | System lookups or factory functions, often no callback | More system-qualified builtin helpers, still direct binding | Trusted engine transformations; current authorization is pre-optimizer, not a universal execution/callback interceptor. |
 | Lambda bodies | ListLambdaBindData | Bind data and lambda nodes | Outer catalog identity checked; executable list body traversed explicitly. Nested direct routes retain their limits. |
 | Caller collations | Embedded unstamped ScalarFunction, direct bind | Direct system scalar lookup; nested list_transform | 1.5 explicit caller COLLATE refused before private bind. 2.0 surviving functions checked by actual identity after bind. Host default/type collations remain trusted configuration. |
-| Caller list aggregate dispatch | Direct system lookup; serialization may lose stamps | Direct system lookup and qualified serialization | Only literal target names: exact system aggregate resolved/authorized before private bind. Computed target refused; missing/unrecognized bind data refused. |
+| Caller list aggregate dispatch | Direct system lookup; serialization may lose stamps | Direct system lookup and qualified serialization | Only unqualified calls with literal target names: authorize targets after resolving the actual system scalar dispatcher but before its callbacks. Dotted/method and computed-target calls refused; unrelated host same-leaf functions keep their own contracts. |
 | Fixed list distinct/unique | Factory histogram | Factory histogram | Verified system dispatcher has source-backed histogram dependency, not discovered catalog selection. |
 | Replacement reader | Returned function expression then catalog lookup | Same with qualified names | Leaf screened, actual entry authorized and returned reference pinned before reader bind. Unsupported replacement shapes refused. |
 | Host macros | Full macro entry before expansion | Same, nested schemas | Macro authorized first, then existing body trust; control plane always denied. |
@@ -64,7 +64,7 @@ Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.
 
 ### 1.5 specialization scope
 
-Some reviewed binders (sum/avg/min/max/first/last/any_value/quantile/median) replace a catalog
+Some reviewed binders (sum/avg/min/max/first/last/any_value/arbitrary/quantile/median/mode/entropy) replace a catalog
 overload with a factory implementation, losing its namespace. Gatekeeper may retain a definition
 identity only when this same private authorization recorded exactly one matching aggregate entry,
 that entry is system.main, and no competing same-name namespace was observed. This is evidence of
@@ -75,6 +75,11 @@ same-leaf merge supplies provenance. Mixed same-name definitions conservatively 
 SELECT-list UNNEST and 1.5 intrinsic windows are source-defined engine operations with explicit
 system identities. Fixed histogram is likewise an intrinsic dependency. These are not claims that
 a catalog lookup selected those implementations. Arbitrary unknown functions never inherit them.
+The 1.5 scalar-subquery planner creates count_star directly; recovery requires equality with the
+builtin aggregate callbacks, not just that leaf. Parser-implied aliases are canonicalized before
+checking system origin. `contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
+constructors, are conservatively system-only even when explicitly called: the parsed AST does not
+reliably distinguish their syntactic origin. A host grant cannot redirect these helpers.
 
 ### Timing limits and unresolved engine hooks
 
@@ -109,3 +114,18 @@ grant while retaining the same prepared handle. The compatibility workflow runs 
 Portable SQL tests, Python namespace/type/alias tests, source-only matcher/schema checks, and Wasm
 EH smoke checks cover the policy cutover. Full native/loadable, browser and integration runs are
 still required after building; header-only syntax checks do not establish runtime compatibility.
+
+Validated stacked above #107 (59fb40b), preserving #106, with isolated `EXTENSION_STATIC_BUILD=OFF`
+loadables and explicit artifact loading (no shared-build configuration changes):
+
+- Full Python suite: 1.5 default parser **1576 passed, 43 skipped, 2 xfailed**; 1.5 PEG
+  **1574 passed, 45 skipped, 2 xfailed**; 2.0 **1606 passed, 13 skipped, 2 xfailed**.
+- Portable SQL: 1.5 **766 assertions / 14 cases** (two feature skips); 2.0 **804 assertions / 16 cases**.
+- Native qualified-function/shifted-dispatch callback, prepared-policy/parameter-fallback, and
+  remote-catalog probes pass against both shared engine libraries while loading the new artifact.
+- Both loadables pass the positive and negative engine guard checks. External integration fixtures,
+  browser, sanitizer and fuzz execution are not part of these runs.
+
+Parameter fallback uses the same matcher at fixed `system.main.getvariable` / `scalar` identity:
+host shadows, wrong kinds and wrong namespaces cannot grant that capability. #107's conservative
+enforced collision policy and #106's local CONNECT guards are retained.
