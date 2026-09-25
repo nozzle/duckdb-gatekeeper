@@ -94,9 +94,11 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		auto &function = entry.Cast<StandardEntry>();
 		auto catalog = engine::CatalogName(function.schema.catalog);
 		auto schema = engine::SchemaPath(function.schema);
-		// Default macro bodies retain deny checks but their fixed dependencies do not require a second
-		// explicit grant. A caller-written name always needs its own resolved permission.
-		bool selected = binding.caller_functions.count(gatekeeper::CanonicalFunction(name));
+		// Reviewed system dependencies are part of the default policy. Turning defaults off requires
+		// explicit qualified grants for the default macro's expansion too, unlike an opaque host body.
+		auto canonical = gatekeeper::CanonicalFunction(name);
+		bool selected = binding.caller_functions.count(canonical) ||
+		                (!policy.defaults && binding.system_functions.count(canonical));
 		AuthorizeFunction(policy, binding, {catalog, schema, name, kind}, attributable, result, selected);
 		bool builtin = catalog == "system" && schema == gatekeeper::NamePath{"main"};
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
@@ -231,6 +233,9 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
                                  gatekeeper::Result &result) {
 	auto attributable = [&](const string &name) { return provenance.Attributable(binding, name); };
 	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true) {
+		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::CanonicalFunction(identity.name)) ||
+		                         provenance.caller_expansion_targets.count(gatekeeper::Lower(identity.name))))
+			grant = true;
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 		// These reviewed aggregate binders replace their stamped overload with a factory specialization.
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
