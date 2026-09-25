@@ -818,7 +818,7 @@ db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 tables = [{"catalog": "memory", "schema_path": ["reporting"], "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("CALL enable_logging('Gatekeeper')")
-db.execute("SET gatekeeper_log_only = false")  # true while rolling out: record denials, refuse nothing
+db.execute("SET gatekeeper_log_only = false")  # true: observe policy denials; routing controls stay refused
 db.execute("SET lock_configuration = true")
 
 # Enforced connection: hand this cursor to the agent. Denials raise duckdb.PermissionException.

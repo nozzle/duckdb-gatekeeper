@@ -17,6 +17,8 @@ named-parameter/variable collision requires the capability, including present NU
 and client-API prepares. If granted, either source is authorized: DuckDB retains explicit precedence
 and Gatekeeper conservatively records the capability even when an explicit value supplies the input.
 If denied, refusal precedes binding; log-only records that denial and continues with native behavior.
+This waiver applies to parameter policy, not routing controls: parsed CONNECT/DISCONNECT remain
+refused during log-only rollout so the enforced connection stays LOCAL.
 Without the grant, use noncolliding names or positional parameters for explicit values. Only caller AST references
 are gated: host views remain trusted. A caller argument passed into a trusted macro is still caller text.
 
