@@ -127,6 +127,44 @@ int main() {
 	    Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT list_aggregate([1], ''dispatch_counter'')')");
 	if (!allowed.GetValue<bool>() || aggregate_binds == 0)
 		return 7;
+	for (const auto &name : {"min", "max"}) {
+		Query(connection, "BEGIN");
+		Query(connection, string("CREATE TABLE admitted.") + name + "_marker(i INTEGER)");
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		auto host = *CountFun::GetFunctions().GetFunctionByOffset(0);
+		host.SetName(name);
+#else
+		auto host = CountFun::GetFunctions().GetFunctionByOffset(0);
+		host.name = name;
+#endif
+		host.SetBindCallback(BindAggregateProbe);
+		CreateAggregateFunctionInfo info(host);
+		info.internal = false;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		info.SetQualifiedName(QualifiedName("memory", "admitted", name));
+#else
+		info.catalog = "memory";
+		info.schema = "admitted";
+#endif
+		Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, info);
+		Query(connection, "COMMIT");
+		Query(connection, string("CREATE MACRO main.arg_") + name + "(x,y) AS x");
+		Query(connection, string("CALL gatekeeper_configure(allowed_functions := ") +
+		                      "[{catalog:'memory',schema_path:['admitted'],name:'" + name + "',type:'aggregate'}])");
+		aggregate_binds = 0;
+		allowed = Cell(connection, string("SELECT allowed FROM gatekeeper_validate('SELECT admitted.") + name +
+		                               "(x) FROM (VALUES (1)) t(x)')");
+		if (!allowed.GetValue<bool>() || aggregate_binds == 0)
+			return 10;
+		// The system implementation and a default macro selecting it still reject that helper shadow.
+		for (const auto &sql :
+		     {string("SELECT system.main.") + name + "(1)", string("SELECT list_") + name + "([1])"}) {
+			denied = Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')");
+			if (denied.ToString() != "forbidden")
+				return 11;
+		}
+		Query(connection, string("DROP MACRO main.arg_") + name);
+	}
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 	// A same-name host aggregate observed in this bind must make stamp-loss recovery ambiguous.
 	Query(connection, "BEGIN");

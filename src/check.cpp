@@ -684,7 +684,9 @@ struct LookupCallback {
 			s.provenance.caller_lookups.insert(canonical);
 		// Collated min/max directly resolve these dependencies through the search path on both engines.
 		// Refuse a shadow before min/max can bind, even when an explicit grant would admit the shadow.
-		if (attributable && entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY)
+		if (attributable && entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY &&
+		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
+		    engine::SchemaPath(function_entry.schema) == gatekeeper::NamePath{"main"})
 			CheckAggregateDependency(s.context, canonical, s.result);
 		if (trusted)
 			return;
@@ -707,6 +709,15 @@ struct LookupCallback {
 			gatekeeper::Names targets;
 			MacroBodyNames(macro, s.provenance.caller_expansions, nullptr, &targets);
 			for (const auto &name : targets) {
+				gatekeeper::Identity selected{"system", {"main"}, name, "aggregate"};
+				if (!s.layers.All([&](const gatekeeper::Policy &p) {
+					    return p.defaults || gatekeeper::FunctionAllowed(p, selected);
+				    })) {
+					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "default macro aggregate is not allowed",
+					                            selected.catalog, selected.schema_path, "", selected.name);
+					throw PermissionException("default macro aggregate is not allowed");
+				}
+				s.provenance.caller_expansion_targets.insert(name);
 				CheckAggregateDependency(s.context, name, s.result);
 				auto &target =
 				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);

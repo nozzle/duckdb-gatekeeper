@@ -198,6 +198,8 @@ struct Provenance {
 	// list_aggr without the caller writing it). With the text's own names, these are the names the caller can
 	// produce; a trusted scalar-macro body sharing one of them does not make it the body's.
 	Names caller_expansions;
+	// Literal aggregate targets introduced by caller-attributable default macros.
+	Names caller_expansion_targets;
 	// Canonical function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
 	// so its names are recognized by name; a name the caller can also produce is checked as the caller's,
 	// query-wide.
