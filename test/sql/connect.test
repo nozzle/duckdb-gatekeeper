@@ -1,0 +1,41 @@
+# name: test/sql/connect.test
+# description: Local enforced connections reject CONNECT before binding, including implicit attach forms.
+# group: [gatekeeper]
+
+# CONNECT is DuckDB 2.0 syntax; both 2.0 compatibility jobs set this engine-feature marker.
+require-env GATEKEEPER_TEST_NESTED_SCHEMAS 1
+
+require gatekeeper
+
+statement ok
+CALL gatekeeper_enforce();
+
+statement error
+CONNECT missing_remote;
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT ':memory:';
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT LOCAL;
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT;
+----
+Gatekeeper denied this statement
+
+statement error
+DISCONNECT;
+----
+Gatekeeper denied this statement
+
+query I
+SELECT 42;
+----
+42

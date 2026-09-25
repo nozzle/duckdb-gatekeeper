@@ -585,7 +585,17 @@ There is no instance-wide enforcement switch.
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
 | `SET gatekeeper_log_only = true`, while rolling out | Optional. Enforced connections record every decision and refuse nothing until you set it back; see [log-only mode](#log-only-mode). |
 | `SET lock_configuration = true` | Freezes the policy and the log-only switch. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
-| `CALL gatekeeper_enforce()` on each connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. Not inside an open transaction: an enforced connection cannot `COMMIT` or `ROLLBACK`, so the call is refused there. |
+| `CALL gatekeeper_enforce()` on each LOCAL connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. End any host transaction first: an enforced connection cannot `COMMIT` or `ROLLBACK`. On DuckDB 2.0, use a fresh local connection or `DISCONNECT` during trusted setup before submitting activation, and keep it local. |
+
+**DuckDB 2.0 CONNECT mode is unsupported for local enforcement.** Local enforced SQL cannot
+enter it: CONNECT is refused before binding. But an already-connected session dispatches SQL
+to the remote catalog before Gatekeeper's query hook, including the SQL activation call itself.
+The local latch refuses connected state when reached; it cannot protect that earlier callback.
+Native hosts must not connect an enforced session, and must restore LOCAL state or replace
+connections that entered CONNECT during log-only operation before resuming enforcement.
+Remote server-created connections need their own host setup; they are not automatically
+enforced. See [CONNECT mode and native host state](docs/security.md#connect-mode-and-native-host-state)
+for stale targets, trusted definitions, prepared/client APIs, and the required upstream hook.
 
 Enforce this connection:
 
