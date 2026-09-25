@@ -195,10 +195,60 @@ connection object itself (Python's `DuckDBPyConnection` methods other than execu
 the C++ `Connection`) are out of scope: a caller holding them can open a new, unenforced
 connection. Hand out the ability to execute SQL, not the object.
 
+### CONNECT mode and native host state
+
+**Local enforcement requires a LOCAL connection throughout its use.** DuckDB 2.0's
+`ClientContext::SubmitStatement` checks `IsConnected()` and calls
+`Catalog::RemoteExecute(context, original_sql)` **before** `BeginQueryInternal` and Gatekeeper's
+`QueryBegin`. The returned table reference replaces the statement. Whether that callback
+transmits or executes SQL immediately belongs to the catalog implementation; Gatekeeper
+cannot authorize text before that callback on an already-connected session.
+
+The supported host setup is to create a fresh local connection (or explicitly `DISCONNECT`
+during trusted setup), end any host transaction, and execute `CALL gatekeeper_enforce()`
+locally before accepting untrusted SQL. Keep it local afterward. Attaching a catalog is
+different from entering CONNECT mode; local queries over attached tables continue to use the
+normal authorization path. CONNECT-mode local enforcement and automatic enforcement of
+connections created by a remote server are unsupported. Loading Gatekeeper on a client does
+not latch the server's sessions: a server must perform its own trusted setup on each local
+connection that executes untrusted SQL.
+
+The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counted
+`DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
+trace covers the CI 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
+(`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
+
+| Route | Boundary and result |
+| --- | --- |
+| `CONNECT name`, connection-string CONNECT, or CONNECT in a batch on a local enforced connection | The existing non-SELECT text check refuses before binding/execution can change state or attach a target. Zero remote callbacks. `DISCONNECT` is also non-SELECT and refused. |
+| Client `Prepare("CONNECT ...")` after latching, or execution of a CONNECT handle prepared before latching | Refused at the local text boundary; zero remote callbacks. SQL `PREPARE ... AS CONNECT` is rejected by the engine parser. Normal local parameterized SELECT handles remain supported. |
+| A host macro selecting `gatekeeper_enforce()`, directly or via `query('SELECT ...')` | Control-plane catalog authorization refuses even inside trusted definitions. A macro does not grant SQL the right to change enforcement state. `query()` itself accepts only a single SELECT, not CONNECT. |
+| Local activation body reached while `IsConnected()` is true | The latch throws a Permission Error and installs no enforcement state, even in log-only mode. It tests the flag, not just the live target, so stale/expired targets are refused too. |
+| SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
+| SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
+| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. In the tested engine, client Prepare also dispatches before failing to register a local handle; bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
+| Log-only permits CONNECT, then the host disables log-only | Log-only deliberately allows state changes and remote dispatch. Turning it off does not restore LOCAL state; a subsequent denial can follow a remote callback. Retire such connections or restore LOCAL state through trusted native setup before resuming enforcement. |
+
+Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
+are trusted code. Do not install or expose implementations that change an enforced
+connection's routing state, including through an otherwise admitted view or macro. SQL
+control-plane name checks cannot constrain an arbitrary native implementation calling
+`ConnectToCatalog`, executing SQL on a fresh connection, or changing registered hook state.
+The host must also keep state stable between prepare and execute. Public client entry points
+that reach `SubmitStatement` share its early dispatch ordering; host APIs are not a separate
+pre-callback authorization boundary.
+
+Supporting already-connected enforcement requires an upstream veto/authorization hook
+**before any remote dispatch**, covering direct submissions and prepared/client entry points,
+plus a guard on connection-state transitions (including native `ConnectToCatalog`). A
+`QueryBegin` connected-state check cannot supply either guarantee. These restrictions are
+separate from the pre-hook PRAGMA-processing limitation in [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
+DuckDB 1.5 has no CONNECT routing API; its local enforcement behavior is unchanged.
+
 ### Two boundaries
 
-Gatekeeper decides at two points in DuckDB's query lifecycle. Each owns a guarantee that can
-be stated and tested independently.
+Gatekeeper decides at two points in DuckDB's local query lifecycle, subject to the LOCAL-state
+host requirements above. Each owns a guarantee that can be stated and tested independently.
 
 **Binding boundary** (`ClientContextState::QueryBegin`, before the engine binds). The
 statement text is parsed with the connection's parser options, serialized, and walked

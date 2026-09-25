@@ -133,6 +133,10 @@ struct EnforcementState : ClientContextState {
 		authorized = true;
 	}
 	void QueryBegin(ClientContext &context) override {
+		// On DuckDB 2.0 this is AFTER SubmitStatement's connected-session RemoteExecute callback.
+		// Safety on normal SQL routes comes from refusing CONNECT below (CheckText's non-SELECT
+		// rejection) while still local, not from inspecting connected state here. Native hosts must
+		// keep enforced connections local; see docs/security.md#connect-mode-and-native-host-state.
 		Reset();
 		in_statement = true;
 		log_only = LogOnlySetting(context);
@@ -449,6 +453,15 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 	auto &state = input.global_state->Cast<SingleRowState>();
 	if (state.finished)
 		return;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	// IsConnected remains true when the weak target has expired: checking only the live catalog
+	// would admit stale routing state. This protects the local activation body only. SQL submitted
+	// on an already-connected session may have reached RemoteExecute before this body (or may
+	// never reach it at all); the host must establish LOCAL state before submitting activation.
+	if (context.IsConnected())
+		throw PermissionException("gatekeeper_enforce() cannot run on a CONNECT-ed connection: DISCONNECT "
+		                          "during trusted setup before activating local enforcement");
+#endif
 	// An enforced connection cannot end a transaction (COMMIT and ROLLBACK are not read statements), so latching
 	// inside one the host opened would leave the connection in a transaction nothing can close. Refuse before
 	// latching, with a Permission Error, which the engine's default transaction-invalidation policy lets the
