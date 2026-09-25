@@ -110,10 +110,12 @@ void SecureViews(Connection &catalog, Connection &agent) {
 
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 static idx_t parameter_bind_calls = 0;
+static Value last_parameter;
 
-unique_ptr<FunctionData> BindParameterProbe(ClientContext &, TableFunctionBindInput &, vector<LogicalType> &types,
+unique_ptr<FunctionData> BindParameterProbe(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
                                             vector<Identifier> &names) {
 	parameter_bind_calls++;
+	last_parameter = input.inputs[0];
 	types = {LogicalType::BIGINT};
 	names = {"n"};
 	return nullptr;
@@ -143,13 +145,33 @@ void CheckParameterHandles(Connection &catalog) {
 	auto &variables = ClientConfig::GetConfig(*agent.context).user_variables;
 	variables[Identifier("x")] = Value::BIGINT(42);
 	identifier_map_t<BoundParameterData> empty;
+	auto expect_value = [&](identifier_map_t<BoundParameterData> &values, const Value &expected) {
+		parameter_bind_calls = 0;
+		ExpectRows(Drain(handle->Execute(values)), 0, "granted collision on retained handle");
+		if (!parameter_bind_calls || !Value::NotDistinctFrom(last_parameter, expected))
+			Fail("granted collision did not preserve the expected bind-time value");
+	};
+	expect_value(empty, Value::BIGINT(42));
+	expect_value(explicit_values, Value::BIGINT(7));
+	identifier_map_t<BoundParameterData> equal_values;
+	equal_values.emplace(Identifier("x"), BoundParameterData(Value::BIGINT(42)));
+	expect_value(equal_values, Value::BIGINT(42));
+	identifier_map_t<BoundParameterData> null_values;
+	null_values.emplace(Identifier("x"), BoundParameterData(Value(LogicalType::BIGINT)));
+	expect_value(null_values, Value(LogicalType::BIGINT));
+	variables[Identifier("x")] = Value(LogicalType::BIGINT);
+	expect_value(empty, Value(LogicalType::BIGINT));
+	variables[Identifier("x")] = Value::BIGINT(99);
+	expect_value(empty, Value::BIGINT(99));
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
+	             "blocked_functions := ['getvariable'])");
 	parameter_bind_calls = 0;
 	ExpectRefused(Drain(handle->Execute(empty)), "native handle implicit fallback");
 	ExpectRefused(Drain(handle->Execute(explicit_values)), "native handle ambiguous explicit input");
 	ExpectRefused(Drain(agent.Query("SELECT * FROM parameter_probe($x)")), "direct fallback before table bind");
 	auto colliding_prepare = agent.Prepare("SELECT * FROM parameter_probe($x)");
 	if (!colliding_prepare->HasError() || colliding_prepare->GetErrorObject().Type() != ExceptionType::PERMISSION ||
-	    colliding_prepare->GetError().find("supplied-value provenance") == string::npos)
+	    colliding_prepare->GetError().find("session-variable fallback requires") == string::npos)
 		Fail("colliding prepare was not refused before binding");
 	QueryParameters direct_parameters;
 	direct_parameters.statement_args = explicit_values;
@@ -173,6 +195,12 @@ void CheckParameterHandles(Connection &catalog) {
 	ExpectRefused(Drain(handle->Execute(empty)), "native handle after variable change");
 	if (parameter_bind_calls != 0)
 		Fail("changed policy or variable reached the table function bind callback");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}, "
+	             "{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
+	expect_value(empty, Value::BIGINT(99));
+	expect_value(explicit_values, Value::BIGINT(7));
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
+	             "blocked_functions := ['getvariable'])");
 	variables.erase(Identifier("x"));
 	ExpectRows(Drain(handle->Execute(explicit_values)), 0, "same handle after collision removed");
 	ExpectRows(Drain(agent.context->Query("SELECT * FROM parameter_probe($x)", direct_parameters)), 0,

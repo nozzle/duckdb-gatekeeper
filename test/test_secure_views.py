@@ -138,18 +138,17 @@ def test_secure_boundary_does_not_hide_gatekeeper_control_plane(secure):
 def test_missing_dependency_diagnostics_remain_host_only(secure, log_only):
     secure.execute("DROP TABLE hidden.payload")
     sql = "SELECT * FROM exposed.direct"
-    # The tested engine does not sanitize binding errors from a secure body: it names the missing table.
-    with pytest.raises(duckdb.CatalogException, match="payload") as plain:
+    # Preserve the engine diagnostic, including any sanitization a future engine provides.
+    with pytest.raises(duckdb.Error) as plain:
         secure.execute(sql)
     result = validate(secure, sql)
     assert result["code"] == "binding", result
-    assert "payload" in result["error_message"]
     assert result["objects"] == result["functions"] == result["caller_objects"] == []
     enable(secure, "debug")
     secure.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
     with secure.cursor() as agent:
         enforce(agent)
-        with pytest.raises(duckdb.CatalogException) as logged:
+        with pytest.raises(duckdb.Error) as logged:
             agent.execute(sql)
     assert str(logged.value) == str(plain.value)
     if log_only:

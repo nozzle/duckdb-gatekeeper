@@ -14,6 +14,14 @@ using namespace duckdb;
 
 static idx_t binds = 0;
 static idx_t aggregate_binds = 0;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+static unique_ptr<FunctionData> LoseAggregateStamp(ClientContext &, AggregateFunction &function,
+                                                   vector<unique_ptr<Expression>> &) {
+	function.catalog_name.clear();
+	function.schema_name.clear();
+	return nullptr;
+}
+#endif
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 static unique_ptr<FunctionData> BindAggregateProbe(BindAggregateFunctionInput &) {
 #else
@@ -187,6 +195,22 @@ int main() {
 	                          "'SELECT admitted.mode(x), system.main.mode(x) FROM (VALUES (1)) t(x)')");
 	if (denied.ToString() != "forbidden")
 		return 9;
+	Query(connection, "BEGIN");
+	Query(connection, "CREATE TABLE admitted.unstamped_marker(i INTEGER)");
+	auto unstamped = CountFun::GetFunctions().GetFunctionByOffset(0);
+	unstamped.name = "unstamped_host";
+	unstamped.SetBindCallback(LoseAggregateStamp);
+	CreateAggregateFunctionInfo unstamped_info(unstamped);
+	unstamped_info.internal = false;
+	unstamped_info.catalog = "memory";
+	unstamped_info.schema = "admitted";
+	Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, unstamped_info);
+	Query(connection, "COMMIT");
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'}])");
+	denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
+	if (denied.ToString() != "forbidden")
+		return 12; // An authorized foreign definition does not turn its lost stamp into system provenance.
 #endif
 	return 0;
 }

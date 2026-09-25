@@ -3,16 +3,12 @@
 #include "yyjson.hpp"
 #include <cstdint>
 #include <map>
-#include <memory>
 #include <set>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
 
-namespace duckdb {
-class AggregateFunction;
-}
 namespace gatekeeper {
 using Json = duckdb_yyjson::yyjson_val;
 using Names = std::set<std::string>;
@@ -123,9 +119,6 @@ struct Result {
 	// Resolved catalog tables/views attributed to the caller, a subset of objects. Replacement scans are
 	// reader capabilities, not catalog identities. Like all evidence, exposed only for an allowed result.
 	std::set<Identity> caller_objects;
-	// Internal only: engine binding diagnostics can interpolate session-variable values, including values
-	// introduced by trusted bodies. Never serialize this flag or those diagnostics into a decision.
-	bool suppress_binding_details = false;
 };
 // Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";
@@ -165,6 +158,7 @@ struct BindingPolicy {
 	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
 	// though it never appears in the text.
 	bool caller_collates = false;
+	Names caller_collation_names;
 	// Caller-written table references as identifier components, case-folded. A
 	// replacement scan for one of them substitutes a reader the caller chose, so that reader must pass the
 	// allowlists like a caller-written table function. A replacement reached only through a trusted view or
@@ -185,9 +179,8 @@ bool NamesObject(const WrittenNames &written, const std::string &catalog, const 
 // Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
 // Everything else in the plan came from a trusted definition.
 struct Provenance {
-	// The host's count_star callbacks, distinct from a statically linked loadable's engine copy.
-	// Implementation fingerprint only: this is not caller evidence or an authorization grant.
-	std::shared_ptr<duckdb::AggregateFunction> host_count_star;
+	// Exact scalar capabilities carried by the caller's system collation entries (1.5 has no stamps).
+	Names collation_functions;
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
 	Names replacement_functions;

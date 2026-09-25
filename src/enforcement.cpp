@@ -10,6 +10,7 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "engine_api.hpp"
@@ -33,6 +34,28 @@ static bool LogOnlySetting(ClientContext &context) {
 }
 
 static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG_ONLY : DecisionMode::ENFORCE; }
+
+// Routing controls must preserve LOCAL state even during rollout. Inspect the parsed statements
+// before any policy/size-limit denial can be waived by log-only; a text prefix is not an AST.
+// This extra parse is needed only for log-only on engines with CONNECT. CheckText still owns
+// parser diagnostics and the ordinary non-SELECT denial (and its audit record).
+static bool RoutingControl(ClientContext &context, const string &sql) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	Parser parser(context.GetParserOptions());
+	try {
+		parser.ParseQuery(sql);
+	} catch (const ParserException &) {
+		return false;
+	} catch (const InvalidInputException &) {
+		return false;
+	}
+	for (const auto &statement : parser.statements)
+		if (statement->type == StatementType::CONNECT_STATEMENT ||
+		    statement->type == StatementType::DISCONNECT_STATEMENT)
+			return true;
+#endif
+	return false;
+}
 
 // The per-connection latch. Its presence in ClientContext::registered_state is what makes a connection
 // enforced; nothing removes it. A connection is enforced only because the host ran gatekeeper_enforce() on
@@ -60,9 +83,10 @@ static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG
 // that denies it, or as allowed once the plan the engine will execute has passed.
 //
 // gatekeeper_log_only is read once per statement next to the policy. In log-only mode the same checks run in
-// the same places and write the same record, and a denial refuses nothing: the engine goes on to bind and
+// the same places and write the same record, and policy denials refuse nothing: the engine goes on to bind and
 // execute the statement as it would on an unenforced connection. The record already stands, so the hooks the
-// engine then reaches for that statement do not decide it again.
+// engine then reaches for that statement do not decide it again. CONNECT/DISCONNECT are routing controls:
+// they retain ENFORCE mode even with the switch on, preserving the local route and truthful audit semantics.
 //
 // The flags are four separate dimensions, not one phase, and hold these invariants between the hooks:
 //   - authorized ⇒ admitted ⇒ in_statement: each is set only by the step after the one before it, and Reset
@@ -140,8 +164,8 @@ struct EnforcementState : ClientContextState {
 		// keep enforced connections local; see docs/security.md#connect-mode-and-native-host-state.
 		Reset();
 		in_statement = true;
-		log_only = LogOnlySetting(context);
 		const auto &sql = context.GetCurrentQuery();
+		log_only = LogOnlySetting(context) && !RoutingControl(context, sql);
 		if (!TryGlobalPolicy(context, policy, result)) {
 			Record(context, Boundary::BINDING, nullptr, &sql);
 			return;
@@ -188,7 +212,7 @@ struct EnforcementState : ClientContextState {
 	bool CheckParameters(ClientContext &context) {
 		try {
 			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
-			// Neither hook can establish explicit-value precedence. Refuse collisions before the engine binds.
+			// Require fallback permission before the engine binds; with permission either input source is safe.
 			CheckParameterFallbacks(context, Snapshot(), unit.binding, nullptr, false, result);
 		} catch (const PermissionException &) {
 			MarkDenied(result);
@@ -248,10 +272,6 @@ struct EnforcementState : ClientContextState {
 			result = gatekeeper::NotAdmitted();
 			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
 		}
-		// A retained native handle gets the same conservative gate on every execution. Do not infer supplied
-		// provenance from the callback's merged map. In log-only mode an earlier decision already stands.
-		if (admitted && !decided)
-			CheckParameters(context);
 		executing_prepared = true;
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -443,7 +463,8 @@ static vector<string> PostureWarnings(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<string> warnings;
 	if (LogOnlySetting(context))
-		warnings.push_back("gatekeeper_log_only is true: this connection records decisions and refuses nothing");
+		warnings.push_back("gatekeeper_log_only is true: this connection records policy decisions without refusing "
+		                   "them; CONNECT/DISCONNECT routing controls remain refused");
 	if (Settings::Get<EnableExternalAccessSetting>(config))
 		warnings.push_back("enable_external_access is true: readers reached through trusted views or macros can "
 		                   "open files and URLs while binding");
@@ -508,8 +529,8 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 void RegisterEnforcement(ExtensionLoader &loader) {
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	config.AddExtensionOption(LOG_ONLY_SETTING,
-	                          "Whether enforced connections record every decision without refusing anything, "
-	                          "instead of refusing what the policy denies",
+	                          "Whether enforced connections record policy decisions without refusing them; "
+	                          "CONNECT/DISCONNECT routing controls remain refused",
 	                          LogicalType::BOOLEAN, Value::BOOLEAN(false), SetLogOnly, SetScope::GLOBAL);
 	PlannerExtension planner;
 	planner.post_bind_function = PostBind;

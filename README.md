@@ -592,7 +592,7 @@ There is no instance-wide enforcement switch.
 | `CALL gatekeeper_configure(...)` | The policy every enforced connection follows. |
 | `SET enable_external_access = false`, autoload off | Where the deployment allows; `gatekeeper_enforce()` warns when these are loose. |
 | `CALL enable_logging('Gatekeeper')` | Denials go to the agent; the [audit log](#audit-log) is how the host sees them. |
-| `SET gatekeeper_log_only = true`, while rolling out | Optional. Enforced connections record every decision and refuse nothing until you set it back; see [log-only mode](#log-only-mode). |
+| `SET gatekeeper_log_only = true`, while rolling out | Optional. Policy denials are recorded without refusal; CONNECT/DISCONNECT routing controls remain refused. See [log-only mode](#log-only-mode). |
 | `SET lock_configuration = true` | Freezes the policy and the log-only switch. It does not freeze `CALL disable_logging()` on host connections; only the never-bind list keeps it from enforced ones. |
 | `CALL gatekeeper_enforce()` on each LOCAL connection you hand out | Put it where connections are created (a factory, a pool hook) so no code path can skip it. End any host transaction first: an enforced connection cannot `COMMIT` or `ROLLBACK`. On DuckDB 2.0, use a fresh local connection or `DISCONNECT` during trusted setup before submitting activation, and keep it local. |
 
@@ -600,8 +600,9 @@ There is no instance-wide enforcement switch.
 enter it: CONNECT is refused before binding. But an already-connected session dispatches SQL
 to the remote catalog before Gatekeeper's query hook, including the SQL activation call itself.
 The local latch refuses connected state when reached; it cannot protect that earlier callback.
-Native hosts must not connect an enforced session, and must restore LOCAL state or replace
-connections that entered CONNECT during log-only operation before resuming enforcement.
+CONNECT/DISCONNECT remain refused even in log-only mode, preserving LOCAL routing when the
+rollout switch changes. Native hosts must not connect an enforced session; if they do, restore
+LOCAL state through trusted native setup or replace the connection before accepting SQL.
 Remote server-created connections need their own host setup; they are not automatically
 enforced. See [CONNECT mode and native host state](docs/security.md#connect-mode-and-native-host-state)
 for stale targets, trusted definitions, prepared/client APIs, and the required upstream hook.
@@ -684,20 +685,26 @@ column, with what makes the record usable as evidence and the one path outside i
 
 ### Log-only mode
 
-To see what a policy would refuse before it refuses anything, turn refusals off for the whole
+To see what a policy would refuse before enforcing it, turn policy refusals off for the whole
 instance and leave everything else in place:
 
 ```text
 D SET gatekeeper_log_only = true;
 ```
 
-Enforced connections keep making and recording every decision exactly as before; a denial is
+Enforced connections keep making and recording policy decisions as before; a policy denial is
 written to the log with `mode = 'log_only'` and the statement then runs as it would on an
 unenforced connection. Set it back to `false` (or `RESET` it) and the next statement on every
 enforced connection is refused again. The switch is global, frozen by `lock_configuration`, and
 on the record as `log_only_changed`; the full semantics (one record per statement, what the
-caller sees, which records count) are in [log-only mode](docs/security.md#log-only-mode). The
-rollout, end to end:
+caller sees, which records count) are in [log-only mode](docs/security.md#log-only-mode).
+
+**Routing exception:** DuckDB 2.0 `CONNECT` and `DISCONNECT` remain refused before binding,
+with audit `mode = 'enforce'`, even while the switch is true. These controls must not change the
+local execution route that the rollout depends on. This exception does not extend to other
+control-plane statements such as `CALL gatekeeper_configure()` or `SET`.
+
+The rollout, end to end:
 
 ```text
 CALL enable_logging('Gatekeeper', storage := 'file', storage_path := 'gatekeeper.csv');
@@ -713,7 +720,8 @@ SET lock_configuration = true;
 ```
 
 > [!WARNING]
-> Log-only mode protects nothing while it is on, Gatekeeper's own settings included: an agent's
+> Apart from refusing CONNECT/DISCONNECT, log-only provides no policy protection, Gatekeeper's
+> own settings included: an agent's
 > `CALL gatekeeper_configure()` or `SET gatekeeper_log_only = false` is recorded and then
 > executes. If the rollout is not supervised, lock before handing out connections, and leave
 > yourself the way back: `SET allowed_configs = ['gatekeeper_log_only']` first, then
@@ -782,10 +790,11 @@ execute. A failure at any step raises; nothing executes.
 - Objects are authorized by their **resolved** identity. Views and the tables behind them
   must both pass.
 - On DuckDB 2.0, validation of `$name` falling back to a session variable requires
-  `getvariable` permission in both policy layers. Enforced connections refuse a caller-written
-  named parameter colliding with a session variable **even when an explicit value is supplied or
-  `getvariable` is allowed**, including at prepare time. The engine's early hook cannot distinguish
-  supplied inputs from fallback; use a noncolliding name or positional `$1` instead. DuckDB 1.5
+  `getvariable` permission in both policy layers. Enforced connections require that grant for a
+  caller-written named parameter colliding with a session variable, **even when an explicit value is
+  supplied**, including at prepare time. With permission, explicit values still take precedence and
+  evidence conservatively includes the capability. Without permission, use a noncolliding name or
+  positional `$1` instead. The engine's early hook cannot distinguish supplied inputs. DuckDB 1.5
   has no implicit fallback and keeps explicit-value precedence. See the
   [fallback decision](docs/parameter-fallback.md) for the upstream hook needed to lift this restriction.
 - Prepared parameters validate only when DuckDB can finish binding without values
@@ -818,7 +827,7 @@ db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 tables = [{"catalog": "memory", "schema_path": ["reporting"], "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("CALL enable_logging('Gatekeeper')")
-db.execute("SET gatekeeper_log_only = false")  # true while rolling out: record denials, refuse nothing
+db.execute("SET gatekeeper_log_only = false")  # true: observe policy denials; routing controls stay refused
 db.execute("SET lock_configuration = true")
 
 # Enforced connection: hand this cursor to the agent. Denials raise duckdb.PermissionException.
