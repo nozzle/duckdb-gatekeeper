@@ -67,19 +67,21 @@ name: 'getvariable', type: 'scalar'}` in `functions`, without variable values. A
 is still a fallback input. Positional `$1` never falls back. References introduced only by trusted
 views remain the definition's own, outside caller policy.
 
-Enforcement is deliberately stricter: **caller named-parameter/session-variable collisions are
-refused before binding, even with explicit arguments or permission for `getvariable`**. QueryBegin
+Enforcement is conservative: **caller named-parameter/session-variable collisions require
+`getvariable` permission before binding, even with explicit arguments**. QueryBegin
 cannot see arguments; the 2.0 prepared-rebind hook sees arguments after implicit defaults were merged.
-Preparing colliding text on an enforced connection is also refused because the early hook cannot
-distinguish that operation. Retained handles are checked on every execution. Noncolliding explicit
-inputs and DuckDB 1.5 retain their existing behavior. Log-only records one collision refusal per statement and
-lets the engine proceed, so it does not promise validation/enforcement parity for this case.
+When granted, both possible sources are authorized: DuckDB preserves explicit-value precedence and
+the decision conservatively includes the capability even when no fallback was actually read.
+Preparing colliding text also requires the grant because the early hook cannot distinguish that
+operation. Retained handles are checked at QueryBegin on every execution. Noncolliding explicit
+inputs and DuckDB 1.5 retain their existing behavior. Log-only records one denial per statement and
+lets the engine proceed. A colliding explicit input without the grant remains conservatively refused.
 See [the feasibility decision](parameter-fallback.md) for the missing hook and deferred value-input API.
 
-Binding errors recorded by Gatekeeper on 2.0 omit engine message details whenever the connection
-has session variables: regex, path and cast diagnostics can interpolate values, including ones a
-trusted body reads. The error class/code remains available. This does not redact DuckDB's own error
-stream, logs, SQL literals the host submitted, or query results intentionally exposed by trusted views.
+Capability evidence contains only the fixed identity, never variable values. Raw validation/audit
+diagnostics are host-facing and retain the engine's messages, which can include values in regex,
+path or cast errors. Enforcement engine errors likewise propagate unchanged; this is not a
+diagnostic-redaction boundary.
 
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
@@ -282,7 +284,7 @@ trace covers the CI 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
 | SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
 | SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
 | Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. In the tested engine, client Prepare also dispatches before failing to register a local handle; bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
-| Log-only permits CONNECT, then the host disables log-only | Log-only deliberately allows state changes and remote dispatch. Turning it off does not restore LOCAL state; a subsequent denial can follow a remote callback. Retire such connections or restore LOCAL state through trusted native setup before resuming enforcement. |
+| CONNECT/DISCONNECT while log-only is on | Routing controls are identified by parsed statement type before log-only can waive a denial. They retain `mode = 'enforce'` and are refused before binding, with zero remote callbacks on local sessions. Turning log-only off therefore restores policy refusals on the same local route. Native-mutated connected state remains unsupported and must be restored through trusted native setup or the connection replaced. |
 
 Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
 are trusted code. Do not install or expose implementations that change an enforced
@@ -545,19 +547,27 @@ so on that connection, at that moment.
 
 `SET gatekeeper_log_only = true` is a global BOOLEAN setting, default `false`, reversible, and
 frozen by `lock_configuration`. While it is true, every enforced connection makes and records
-every decision exactly as it otherwise would, and refuses nothing: a denial is written to the
-log with `mode = 'log_only'` and the engine then binds and executes the statement as it would
+every policy decision as it otherwise would, without refusing policy denials: a denial is
+written to the log with `mode = 'log_only'` and the engine then binds and executes the statement as it would
 on an unenforced connection. It exists so a policy can be measured against real traffic (what
 would be refused, and what the traffic resolves to) before any of it is refused.
+
+**Routing exception:** CONNECT/DISCONNECT on DuckDB 2.0 always retain `mode = 'enforce'`
+and are refused at the text boundary, including client-prepared routes. Parsed statement
+types select this exception before policy or size-limit failures can be waived by log-only.
+Keeping the execution route LOCAL makes the rollout switch reversible and keeps audit
+records about locally authorized execution. This does not protect against trusted native
+state mutation or already-connected activation; the [host requirements](#connect-mode-and-native-host-state)
+still apply. Other control-plane statements remain subject to normal log-only semantics.
 
 Semantics that follow from "the same decision, without the refusal":
 
 - The switch is read once per statement, in `QueryBegin` next to the policy, and snapshotted
   with it, so every boundary of one statement agrees; a flip applies at the next statement on
   every enforced connection, in both directions.
-- Identical checks at identical cost: the text check, the private authorizing bind, the
-  rebind of prepared executions, and the plan check all run. What log-only measures, denials
-  and latency alike, is what enforcement will do.
+- The same policy checks: the text check, the private authorizing bind, the
+  rebind of prepared executions, and the plan check all run. Log-only measures what enforcement
+  would deny; 2.0 log-only additionally parses to identify routing controls.
 - Exactly one record per statement, at the boundary that decided it, in both modes. Once a
   log-only statement has been decided, the hooks the engine reaches while binding and
   executing it anyway do not decide it again. The replacement-scan gate lets the engine's own
@@ -578,14 +588,14 @@ Semantics that follow from "the same decision, without the refusal":
   connection shows; `test/test_log_only.py` asserts
   this over the enforcement parity corpus on identical fresh instances, and asserts the record
   equals the `gatekeeper_validate` row.
-- A `Prepare()` is pre-screened as before and a denial there is recorded with
+- Apart from routing controls, a `Prepare()` is pre-screened as before and a denial there is recorded with
   `mode = 'log_only'` (on 1.5 with no statement text, on 2.0 with the prepared text); each
   later execution is its own record.
-- **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
-  gatekeeper_policy`, `CALL gatekeeper_configure()`, and `SET gatekeeper_log_only` are
-  unsupported statements that are recorded and then execute, exactly like every other
-  statement. The connection stays enforced, so flipping the switch back restores refusals on
-  it, but until then the caller has the whole engine. `lock_configuration` is the mitigation,
+- **Log-only provides no policy protection, including for Gatekeeper.** Apart from the routing
+  exception, on a log-only connection `SET gatekeeper_policy`, `CALL gatekeeper_configure()`,
+  and `SET gatekeeper_log_only` are unsupported statements that are recorded and then execute.
+  The connection stays enforced and LOCAL, so flipping the switch back restores policy refusals
+  on it. `lock_configuration` is the mitigation,
   as for the policy; the `lock_configuration` posture warning names both settings, and
   `gatekeeper_enforce()` warns whenever the switch is on. Locking while the switch is on
   freezes it on: `SET allowed_configs = ['gatekeeper_log_only']` before locking keeps the way
@@ -615,7 +625,7 @@ the enforcement parity corpus. The rest of the record is:
 | column | meaning |
 | --- | --- |
 | `event` | `decision`, `policy_changed`, or `log_only_changed` |
-| `mode` | `enforce` (an enforced connection), `log_only` (an enforced connection while `gatekeeper_log_only` is true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
+| `mode` | `enforce` (an enforced decision, including CONNECT/DISCONNECT while log-only is on), `log_only` (a policy decision with `gatekeeper_log_only` true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
 | `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
 | `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
 | `policy_hash` | sixteen hex digits over the canonical `gatekeeper_policy` value in force for the decision; the same hash appears on the `policy_changed` record that installed it, whose `new_value` is the full policy |
@@ -853,9 +863,10 @@ execution time, outside this validation.
 
 ### Callback bypasses
 
-Gatekeeper does not authorize type names or cast implementations. Caller COLLATE is refused
-on 1.5 because its directly bound scalar has no reliable namespace; 2.0 checks the scalar
-implementations that survive binding. This is not a collation-name allowlist.
+Gatekeeper does not authorize type names or cast implementations. Caller COLLATE implementations
+that survive binding are authorized by qualified scalar identity: 1.5 recovers missing stamps only
+from the exact caller-selected system collation entries; 2.0 supplies qualified scalar implementations.
+This is not a collation-name allowlist or a pre-callback interception surface.
 The database owner controls extension loading and definitions. Table/view catalog
 and schema restrictions do not restrict type lookup. There is no mandatory type audit.
 Type resolution can autoload or autoinstall extensions when enabled; hosts must

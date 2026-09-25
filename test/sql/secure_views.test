@@ -2,7 +2,7 @@
 # description: Secure boundaries preserve trusted evidence, caller policy and executed scan accounting
 # group: [gatekeeper]
 
-require-env GATEKEEPER_TEST_SECURE_VIEWS 1
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
 
 require gatekeeper
 

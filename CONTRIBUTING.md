@@ -184,7 +184,7 @@ cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release 
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
 cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe gatekeeper_qualified_probe
-GATEKEEPER_TEST_NESTED_SCHEMAS=1 GATEKEEPER_TEST_SECURE_VIEWS=1 build/v2/test/unittest 'test/sql/*'
+GATEKEEPER_TEST_ENGINE_MAJOR=2 GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/v2/test/unittest 'test/sql/*'
 build/v2/extension/gatekeeper/gatekeeper_prepared_probe
 build/v2/extension/gatekeeper/gatekeeper_remote_probe
 build/v2/extension/gatekeeper/gatekeeper_qualified_probe
@@ -205,11 +205,11 @@ checklist.
 `test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
 create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises
 the explicit path API on every engine; `test_schema_paths.py` adds deeper 2.0 coverage.
-`test/sql/secure_views.test` likewise requires `GATEKEEPER_TEST_SECURE_VIEWS=1`, set by both
-2.0 jobs; `test_secure_views.py` covers host evidence, engine diagnostics and predicate barriers,
-and the native prepared-handle probe includes secure views on 2.0.
-`test/sql/connect.test` uses the same 2.0 feature marker for CONNECT syntax; the native
-remote-catalog probe additionally verifies callback ordering with an actual routing target.
+`test/sql/secure_views.test`, `connect.test`, and `parameter_fallback.test` require
+`GATEKEEPER_TEST_ENGINE_MAJOR=2`; both compatibility matrix jobs set the engine-major marker
+for engine-specific SQL tests. `test_secure_views.py` covers host evidence, engine diagnostics
+and predicate barriers, and the native prepared-handle probe includes secure views on 2.0.
+The native remote-catalog probe additionally verifies callback ordering with an actual routing target.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable

@@ -41,7 +41,8 @@ could cast lossily. JSON schema and typed decoding enforce the same shape.
 
 ## Feasibility matrix
 
-Source basis: DuckDB 1.5.5 d8cdaa33f and 2.0 candidate d4e72566a. Neither engine pin is changed.
+Source basis: DuckDB 1.5.5 d8cdaa33f and the inspected 2.0 candidate d4e72566a;
+the repository's compatibility workflow also pins 2.0 candidate 6844d1b. Neither engine pin is changed.
 
 | Route | 1.5 provenance | 2.0 provenance | Enforcement and absent-provenance behavior |
 | --- | --- | --- | --- |
@@ -51,7 +52,7 @@ Source basis: DuckDB 1.5.5 d8cdaa33f and 2.0 candidate d4e72566a. Neither engine
 | Implicit operators/constructors | Often unqualified calls | Still uses search path plus callback | Require system implementation even if host shadow is explicitly granted. Ambiguity can conservatively refuse mixed queries. |
 | Direct builtin helpers / optimizer | System lookups or factory functions, often no callback | More system-qualified builtin helpers, still direct binding | Trusted engine transformations; current authorization is pre-optimizer, not a universal execution/callback interceptor. |
 | Lambda bodies | ListLambdaBindData | Bind data and lambda nodes | Outer catalog identity checked; executable list body traversed explicitly. Nested direct routes retain their limits. |
-| Caller collations | Embedded unstamped ScalarFunction, direct bind | Direct system scalar lookup; nested list_transform | 1.5 explicit caller COLLATE refused before private bind. 2.0 surviving functions checked by actual identity after bind. Host default/type collations remain trusted configuration. |
+| Caller collations | Embedded unstamped ScalarFunction in system.main collation entry | Direct system scalar lookup; nested list_transform | 1.5 records exact embedded scalar names from the caller's system collation entries; absent stamps recover only those capabilities, without competing host scalar evidence. Surviving implementations pass qualified grants/blocks. Host default/type collations remain trusted configuration. |
 | Caller list aggregate dispatch | Direct system lookup; serialization may lose stamps | Direct system lookup and qualified serialization | Only unqualified calls with literal target names: authorize targets after resolving the actual system scalar dispatcher but before its callbacks. Dotted/method and computed-target calls refused; unrelated host same-leaf functions keep their own contracts. |
 | Fixed list distinct/unique | Factory histogram | Factory histogram | Verified system dispatcher has source-backed histogram dependency, not discovered catalog selection. |
 | Replacement reader | Returned function expression then catalog lookup | Same with qualified names | Leaf screened, actual entry authorized and returned reference pinned before reader bind. Unsupported replacement shapes refused. |
@@ -64,8 +65,8 @@ Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.
 
 ### 1.5 specialization scope
 
-Some reviewed binders (sum/avg/min/max/first/last/any_value/arbitrary/quantile/median/mode/entropy) replace a catalog
-overload with a factory implementation, losing its namespace. Gatekeeper may retain a definition
+Engine aggregate binders can replace a catalog overload with a factory implementation, losing its
+namespace. Gatekeeper may retain an aggregate definition
 identity only when this same private authorization recorded exactly one matching aggregate entry,
 that entry is system.main, and no competing same-name namespace was observed. This is evidence of
 the admitted definition under the trusted-engine model, not pointer-level proof of every specialized
@@ -75,14 +76,24 @@ same-leaf merge supplies provenance. Mixed same-name definitions conservatively 
 SELECT-list UNNEST and 1.5 intrinsic windows are source-defined engine operations with explicit
 system identities. Fixed histogram is likewise an intrinsic dependency. These are not claims that
 a catalog lookup selected those implementations. Arbitrary unknown functions never inherit them.
-The 1.5 scalar-subquery planner creates count_star directly; recovery requires equality with the
-builtin aggregate callbacks, not just that leaf. A statically linked loadable has its own engine
-copy, so recognition accepts either its factory callbacks or the host's fixed, internal
-`system.main.count_star` overload captured without binding. That fingerprint is not a grant or
-caller dependency; normal policy still applies to every recognized intrinsic. Parser-implied aliases are canonicalized before
+The 1.5 scalar-subquery planner creates count_star directly. When attributable to a caller's count,
+the same observed-definition rule applies; a helper with no caller origin remains an engine
+dependency and may retain unknown namespace in evidence. There are no callback-pointer fingerprints,
+per-name specialization lists, or stored engine objects. Parser-implied aliases are canonicalized before
 checking system origin. `contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
 constructors, are conservatively system-only even when explicitly called: the parsed AST does not
 reliably distinguish their syntactic origin. A host grant cannot redirect these helpers.
+
+For 1.5 COLLATE, `PushVarcharCollation` resolves each dot-separated collation component exclusively
+in `system.main` and binds the entry's embedded scalar. Gatekeeper reads those exact entries before
+private binding (without invoking scalar callbacks), records their implementation names, and uses
+that source-backed capability identity only for unstamped matching bound scalars. It does not turn
+every `lower` or `icu_collate_*` into a builtin. Explicit scalar shadows are catalog-authorized first;
+a competing host scalar observed in the bind prevents unstamped collation recovery. Native collation
+registration and implementation code remain host-trusted. Exact entry-name recording also attributes
+renamed 2.0 ICU scalars, without assuming a prefix. New names require explicit grants until reviewed
+into defaults. Grant checks still apply after binding,
+so this is not a pre-callback interception guarantee for collation code.
 
 ### Timing limits and unresolved engine hooks
 
@@ -120,25 +131,7 @@ Portable SQL tests, Python namespace/type/alias tests, source-only matcher/schem
 EH smoke checks cover the policy cutover. Full native/loadable, browser and integration runs are
 still required after building; header-only syntax checks do not establish runtime compatibility.
 
-Validated stacked above #107 (59fb40b), preserving #106, with isolated `EXTENSION_STATIC_BUILD=OFF`
-loadables and explicit artifact loading (no shared-build configuration changes):
-
-- Full Python suite: 1.5 default parser **1576 passed, 43 skipped, 2 xfailed**; 1.5 PEG
-  **1574 passed, 45 skipped, 2 xfailed**; 2.0 **1606 passed, 13 skipped, 2 xfailed**.
-- Portable SQL: 1.5 **766 assertions / 14 cases** (two feature skips); 2.0 **804 assertions / 16 cases**.
-- Native qualified-function/shifted-dispatch callback, prepared-policy/parameter-fallback, and
-  remote-catalog probes pass against both shared engine libraries while loading the new artifact.
-- Both loadables pass the positive and negative engine guard checks. External integration fixtures,
-  browser, sanitizer and fuzz execution are not part of these runs.
-
 Parameter fallback uses the same matcher at fixed `system.main.getvariable` / `scalar` identity:
-host shadows, wrong kinds and wrong namespaces cannot grant that capability. #107's conservative
-enforced collision policy and #106's local CONNECT guards are retained.
-
-CI's statically linked loadables require an additional cross-library check: the host and extension
-have separate engine callback addresses. Relinking against the read-only 1.5 engine archive reproduced
-all four PR #113 count_star parity failures. After recognizing both engine-owned callback sets, that
-artifact passed the full 1.5 Python suite (**1576 passed, 47 skipped, 2 xfailed**), the PEG qualified/
-audit/enforcement/log-only modules (**411 passed, 5 skipped, 2 xfailed**), the native qualified probe,
-and the engine guard. The affected 2.0 modules passed (**416 passed, 2 xfailed**). These checks use no
-leaf-only intrinsic authorization and do not replace a sanitizer CI rerun.
+host shadows, wrong kinds and wrong namespaces cannot grant that capability. Granted collisions
+retain DuckDB's explicit-value precedence and conservatively report fallback capability evidence;
+ungranted collisions refuse. CONNECT routing stays refused even in log-only mode.

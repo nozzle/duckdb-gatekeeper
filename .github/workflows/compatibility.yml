@@ -42,15 +42,17 @@ jobs:
           - name: DuckDB 1.5 candidate (a3cd0de)
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+            engine_major: '1'
           # v2.0-cyanoptera snapshot: the next major, which labels itself v2.0.0-devN.
           - name: DuckDB 2.0 candidate (6844d1b)
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
             nested_schemas: '1'
+            engine_major: '2'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
-      GATEKEEPER_TEST_SECURE_VIEWS: ${{ matrix.nested_schemas || '0' }}
+      GATEKEEPER_TEST_ENGINE_MAJOR: ${{ matrix.engine_major }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,14 +115,16 @@ jobs:
           - name: DuckDB 1.5 candidate (a3cd0de)
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+            engine_major: '1'
           - name: DuckDB 2.0 candidate (6844d1b)
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
             nested_schemas: '1'
+            engine_major: '2'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
-      GATEKEEPER_TEST_SECURE_VIEWS: ${{ matrix.nested_schemas || '0' }}
+      GATEKEEPER_TEST_ENGINE_MAJOR: ${{ matrix.engine_major }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
