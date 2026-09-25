@@ -22,7 +22,6 @@ inline void LoadProbeArtifact(duckdb::DuckDB &db) {
 		return;
 	if (db.ExtensionIsLoaded("gatekeeper"))
 		throw std::runtime_error("probe must not use a previously linked Gatekeeper");
-	duckdb::ExtensionHelper::LoadExtension(db, "core_functions");
 	duckdb::Connection connection(db);
 	std::string escaped;
 	for (char c : std::string(artifact)) {
@@ -33,4 +32,5 @@ inline void LoadProbeArtifact(duckdb::DuckDB &db) {
 	auto result = connection.Query("LOAD '" + escaped + "'");
 	if (result->HasError())
 		throw std::runtime_error(result->GetError());
+	duckdb::ExtensionHelper::LoadExtension(db, "core_functions");
 }

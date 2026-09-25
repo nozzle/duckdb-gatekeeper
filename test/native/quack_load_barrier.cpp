@@ -14,7 +14,7 @@ struct LoadBarrier : ExtensionCallback {
 	bool entered = false;
 	bool released = false;
 	void OnBeginExtensionLoad(DatabaseInstance &, const string &name) override {
-		if (name != "quack" && name != "q")
+		if (name != "quack" && name != "q" && name != "http")
 			return;
 		std::unique_lock<std::mutex> guard(mutex);
 		entered = true;

@@ -168,13 +168,9 @@ def test_server_connections_are_independent_and_explicit_session_installation(re
 def test_held_prepared_handle_and_prepare_only_do_not_delegate_when_enforced(remote, parameterized):
     db = CConnection()
     try:
-        # Exercise both load orders; the callback also wraps Quack loaded after Gatekeeper.
-        if parameterized:
-            db.query("LOAD " + literal(EXTENSION))
+        db.query("LOAD " + literal(EXTENSION))
         for name in ("httpfs", "quack"):
             db.query("LOAD " + literal(os.environ["GATEKEEPER_" + name.upper() + "_EXTENSION"]))
-        if not parameterized:
-            db.query("LOAD " + literal(EXTENSION))
         db.query(f"ATTACH {literal(remote.uri)} AS remote (TYPE quack, TOKEN {literal(remote.token)})")
         if ENGINE_MAJOR >= 2:
             db.query("SET disabled_optimizers='remote_pushdown'")
@@ -243,7 +239,7 @@ def test_enforcement_seals_future_quack_loads():
         host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
         with host.cursor() as agent:
             enforce(agent)
-            suffixes = [""] + ([" AS q"] if ENGINE_MAJOR >= 2 else [])
+            suffixes = [""] + ([" AS q", " AS http"] if ENGINE_MAJOR >= 2 else [])
             for suffix in suffixes:
                 with pytest.raises(duckdb.Error, match="remote setup is sealed"):
                     host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]) + suffix)
@@ -275,24 +271,78 @@ def test_concurrent_load_barrier(remote, gatekeeper_first):
         pytest.fail("Set GATEKEEPER_QUACK_BARRIER to the GATEKEEPER_REMOTE_PROBES artifact")
     with duckdb.connect(config={"allow_unsigned_extensions": True, "autoload_known_extensions": False,
                                 "autoinstall_known_extensions": False}) as host:
-        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
-        host.execute("LOAD " + literal(barrier))
         if gatekeeper_first:
             host.execute("LOAD " + literal(EXTENSION))
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        host.execute("LOAD " + literal(barrier))
         with host.cursor() as loader, host.cursor() as agent, ThreadPoolExecutor(1) as pool:
             future = pool.submit(loader.execute, "LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]))
             try:
                 host.execute("SELECT quack_load_barrier(false)").fetchall()
                 if not gatekeeper_first:
                     host.execute("LOAD " + literal(EXTENSION))
-                with pytest.raises(duckdb.PermissionException, match="Quack load is unfinished"):
+                with pytest.raises(duckdb.PermissionException, match="Extension setup"):
+                    enforce(agent)
+            finally:
+                host.execute("SELECT quack_load_barrier(true)").fetchall()
+            future.result(timeout=30)
+            if not gatekeeper_first:
+                with pytest.raises(duckdb.PermissionException, match="Extension setup"):
+                    enforce(agent)
+                return
+            remote.attach(host)
+            if ENGINE_MAJOR >= 2:
+                host.execute("SET disabled_optimizers='remote_pushdown'")
+            enforce(agent)
+            remote.clear()
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute("SELECT * FROM quack_query_by_name('remote', ?)", ["SELECT * FROM ticking"]).fetchall()
+            assert remote.requests == [] and remote.executions == []
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="LOAD AS is a 2.0 feature")
+@pytest.mark.parametrize("gatekeeper_first", [False, True])
+def test_failed_alias_load_poisoned_setup(remote, tmp_path, gatekeeper_first):
+    # Real LoadFail (including registry erasure), after a begin callback barrier. The missing
+    # extension's literal alias is http, which must never be normalized into loaded httpfs.
+    with duckdb.connect(config={"allow_unsigned_extensions": True, "autoload_known_extensions": False,
+                                "autoinstall_known_extensions": False}) as host:
+        if gatekeeper_first:
+            host.execute("LOAD " + literal(EXTENSION))
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_BARRIER"]))
+        with host.cursor() as loader, host.cursor() as agent, ThreadPoolExecutor(1) as pool:
+            future = pool.submit(loader.execute, "LOAD " + literal(tmp_path / "missing.duckdb_extension") + " AS http")
+            try:
+                host.execute("SELECT quack_load_barrier(false)").fetchall()
+                if not gatekeeper_first:
+                    host.execute("LOAD " + literal(EXTENSION))
+                with pytest.raises(duckdb.PermissionException, match="Extension setup"):
+                    enforce(agent)
+            finally:
+                host.execute("SELECT quack_load_barrier(true)").fetchall()
+            with pytest.raises(duckdb.Error):
+                future.result(timeout=30)
+            with pytest.raises(duckdb.PermissionException, match="Extension setup is incomplete or failed"):
+                enforce(agent)
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="LOAD AS is a 2.0 feature")
+def test_inflight_http_alias_is_not_httpfs(remote):
+    with connect(autoinstall_known_extensions=False, autoload_known_extensions=False) as host:
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_BARRIER"]))
+        with host.cursor() as loader, host.cursor() as agent, ThreadPoolExecutor(1) as pool:
+            future = pool.submit(loader.execute, "LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]) + " AS http")
+            try:
+                host.execute("SELECT quack_load_barrier(false)").fetchall()
+                with pytest.raises(duckdb.PermissionException, match="Extension setup"):
                     enforce(agent)
             finally:
                 host.execute("SELECT quack_load_barrier(true)").fetchall()
             future.result(timeout=30)
             remote.attach(host)
-            if ENGINE_MAJOR >= 2:
-                host.execute("SET disabled_optimizers='remote_pushdown'")
+            host.execute("SET disabled_optimizers='remote_pushdown'")
             enforce(agent)
             remote.clear()
             with pytest.raises(duckdb.PermissionException, match=DENIED):

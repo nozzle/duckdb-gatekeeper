@@ -30,16 +30,24 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
   `quack_query_by_name`. The resulting operator is an ordinary `LogicalGet`; post-bind
   operator allowlisting or divergence detection alone is too late.
 * Gatekeeper checks the private catalog lookup and wraps the two registered Quack bind
-  callbacks, covering either extension load order (including `LOAD ... AS q`), Prepare without
+  callbacks, covering loads observed after Gatekeeper (including `LOAD ... AS q` and `AS http`), Prepare without
   QueryBegin, and parameters that defer binding. Ordinary unenforced connections and log-only
-  continue using the original callbacks. The first enforcement activation seals Quack loading
-  for the database. An in-flight/failed Quack load refuses activation; subsequent new Quack loads
-  are refused before extension initialization, even on the unenforced host. Load Quack before
-  activating enforcement. Native catalog mutation/replacement after setup is trusted host activity.
+  continue using the original callbacks. The first enforcement activation seals **all new extension
+  loads** for the database, even on the unenforced host and in log-only mode. Load Gatekeeper first,
+  then all optional extensions, then activate enforcement. Loads already complete before Gatekeeper
+  are conservatively refused at activation (except linked core_functions/icu/json/parquet and the
+  upstream SQL runner's debug filesystem, identified by its owned implementation cache marker).
+  Arbitrary linked extensions are not exempt. A failed load poisons setup permanently: recreate the database. An observed unfinished
+  load can finish before retrying activation. Native catalog mutation/replacement after setup is trusted host activity.
   Installation copies overloads and uses catalog replacement, never mutating function slots live.
-  A database-local setup mutex coordinates concurrent activations and begin-load callbacks;
-  existing per-extension load locks are acquired nonblocking to catch loads that began before
-  callback registration. The seal closes the new-load race before publishing the guarded entries.
+  A database-local setup mutex coordinates concurrent activations and begin/finish/failure callbacks.
+  Tracking owns copied literal names, never normalizes aliases and never borrows removable 2.0
+  ExtensionInfo pointers. The registry snapshot contains owned strings only. An unobserved start
+  cannot be redeemed by a finish notification; a pre-existing in-flight load is refused, even if
+  it later finishes. Loads inserted after the snapshot must pass the begin callback and see the seal.
+  On 1.5 only, registry entries are never removed and have database lifetime; their lock-protected
+  install mode identifies the host's completed statically linked startup extensions. No such pointer
+  inspection is used on 2.0, where failed aliased loads erase their entries.
 * The 1.5 pin sends only a base table's leaf name, discarding schema qualification, and exposes
   no `get_bind_info` table identity. The executable schema-collision regression demonstrates a
   read of `other.orders` returning `main.orders`. All its Quack objects are therefore refused
@@ -95,7 +103,9 @@ The runner fails on a bad download checksum or missing/incompatible explicit art
 barrier artifact defaults to the directory containing Gatekeeper; override with
 `GATEKEEPER_QUACK_BARRIER`. Barrier tests park a real loader before extension initialization,
 then assert enforcement cannot activate until that loader finishes. Both callback-registration
-orders are exercised. The barrier extension is test-only and never installed in production.
+orders are exercised; the missed-start order remains refused after completion. `AS http` is tested
+both after sealing and while loading, and a failed aliased load is held at a barrier before its
+real failure/registry erasure. The barrier extension is test-only and never installed in production.
 
 ```sh
 GATEKEEPER_EXTENSION=/absolute/gatekeeper.duckdb_extension \

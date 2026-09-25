@@ -13,8 +13,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   server schema qualification; 2.0 local-binding reads require remote SQL pushdown disabled and
   table provenance. Evidence remains local binding scope, not complete remote lineage. See
   [Quack support](docs/quack.md), including server-connection and CONNECT restrictions.
-  Load Quack before the first enforcement activation: activation refuses unfinished loads and
-  seals later Quack loads, including aliases, before installing guarded catalog copies.
+  Load Gatekeeper before optional extensions, then complete setup before the first enforcement
+  activation. Activation seals all new extension loads (also in log-only mode), refuses unobserved
+  or unfinished loads, and publishes guarded catalog copies. Failed setup requires a fresh database.
 
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
   preserving the engine's optimization boundary and transitive host evidence. Validation results

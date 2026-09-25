@@ -3,12 +3,17 @@
 #include "check.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "enforcement.hpp"
 #include "engine_api.hpp"
 #include "policy_setting.hpp"
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/object_cache.hpp"
+#endif
 
 namespace duckdb {
 // Prepare() and parameterized execution can bind before the private authorization pass. Guard the
@@ -82,42 +87,48 @@ static void InstallQuackGuards(ExtensionLoader &loader) {
 struct QuackLoadCallback : ExtensionCallback {
 	mutex lock;
 	bool sealed = false;
+	bool failed = false;
+	set<string> pending, completed, startup;
+	set<string> unobserved;
 
-	static bool IsQuack(DatabaseInstance &db, const string &name) {
-#if GATEKEEPER_DUCKDB_MAJOR >= 2
-		auto info = ExtensionManager::Get(db).GetExtensionInfo(name);
-		return info && info->orig_ext_name == "quack";
-#else
-		return name == "quack";
-#endif
-	}
-
-	void OnBeginExtensionLoad(DatabaseInstance &db, const string &name) override {
-		if (!IsQuack(db, name))
-			return;
+	void OnBeginExtensionLoad(DatabaseInstance &, const string &name) override {
 		lock_guard<mutex> guard(lock);
 		if (sealed)
-			throw PermissionException("Load Quack before activating Gatekeeper enforcement; remote setup is sealed");
+			throw PermissionException(
+			    "Load extensions before activating Gatekeeper enforcement; remote setup is sealed");
+		pending.insert(name);
+	}
+	void OnExtensionLoaded(DatabaseInstance &, const string &name) override {
+		lock_guard<mutex> guard(lock);
+		// Even an observed finish cannot redeem a load whose start we missed: its earlier callbacks
+		// were outside our setup protocol. The engine reports literal aliases here, without normalization.
+		if (pending.erase(name) || name == "gatekeeper")
+			completed.insert(name);
+		else
+			unobserved.insert(name);
+	}
+	void OnExtensionLoadFail(DatabaseInstance &, const string &, const ErrorData &) override {
+		lock_guard<mutex> guard(lock);
+		// Failure notifications may use the original name instead of the alias. Do not guess which
+		// attempt ended; poison this setup. All state is ours, never borrowed from ExtensionManager.
+		failed = true;
 	}
 
 	void Seal(ClientContext &context) {
 		lock_guard<mutex> guard(lock);
 		if (sealed)
 			return;
-		auto &manager = ExtensionManager::Get(context);
-		vector<unique_lock<mutex>> loads;
-		// BeginLoad inserts ExtensionInfo before notifying callbacks. Holding this lock blocks new
-		// Quack loads at OnBegin; try-locking existing entries catches loads that began before our
-		// callback was registered as well. Never wait: a loader may itself be waiting for this lock.
-		for (const auto &name : manager.GetExtensions()) {
-			if (!IsQuack(*context.db, name))
-				continue;
-			auto info = manager.GetExtensionInfo(name);
-			unique_lock<mutex> loading(info->lock, std::try_to_lock);
-			if (!loading.owns_lock() || !info->is_loaded)
-				throw PermissionException("Quack load is unfinished; complete extension setup before enforcement");
-			loads.push_back(std::move(loading));
-		}
+		if (failed || !pending.empty() || !unobserved.empty())
+			throw PermissionException(
+			    "Extension setup is incomplete or failed; recreate the database with Gatekeeper loaded first");
+		// GetExtensions returns owned strings under the registry mutex. Never dereference the
+		// registry's removable ExtensionInfo entries. A load inserted after this snapshot still
+		// must pass our begin callback, which takes this same lock and will see the seal.
+		for (const auto &name : ExtensionManager::Get(context).GetExtensions())
+			if (!completed.count(name) && !startup.count(name))
+				throw PermissionException(
+				    "Extension setup predates Gatekeeper (%s); recreate the database with Gatekeeper loaded first",
+				    name);
 		ExtensionLoader loader(*context.db, "gatekeeper");
 		InstallQuackGuards(loader);
 		sealed = true;
@@ -125,8 +136,34 @@ struct QuackLoadCallback : ExtensionCallback {
 };
 
 void RegisterRemoteScope(ExtensionLoader &loader) {
-	ExtensionCallback::Register(DBConfig::GetConfig(loader.GetDatabaseInstance()),
-	                            make_shared_ptr<QuackLoadCallback>());
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	auto state = make_shared_ptr<QuackLoadCallback>();
+	// Core startup libraries cannot register Quack delegation. Exempt only these known engine
+	// libraries, never arbitrary linked extensions (a custom binary may itself link Quack).
+	const set<string> core = {"core_functions", "icu", "json", "parquet"};
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	for (const auto &extension : config.linked_extensions)
+		if (core.count(extension.name))
+			state->startup.insert(extension.name);
+	// The upstream SQL runner installs its fixed debug filesystem before any test LOAD. Its
+	// owned cache marker distinguishes that implementation from an arbitrary LOAD AS debug_fs.
+	auto debug_fs = loader.GetDatabaseInstance().GetObjectCache().GetObject("debug_fs_instance-instance");
+	if (debug_fs && debug_fs->GetObjectType() == "debug_fs_instance")
+		state->startup.insert("debug_fs");
+#else
+	// 1.5 has no aliases or registry removal: its entries live for the database lifetime.
+	// Inspect only this release's stable entries, under their load lock, to identify completed
+	// statically linked startup loads. The loadable's compile-time linked list is not the host's.
+	auto &manager = ExtensionManager::Get(loader.GetDatabaseInstance());
+	for (const auto &name : manager.GetExtensions()) {
+		auto info = manager.GetExtensionInfo(name);
+		unique_lock<mutex> loading(info->lock, std::try_to_lock);
+		if (core.count(name) && loading.owns_lock() && info->is_loaded && info->install_info &&
+		    info->install_info->mode == ExtensionInstallMode::STATICALLY_LINKED)
+			state->startup.insert(name);
+	}
+#endif
+	ExtensionCallback::Register(config, state);
 }
 
 void SealRemoteScope(ClientContext &context) {
