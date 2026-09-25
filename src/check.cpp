@@ -2,6 +2,7 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -759,6 +760,19 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
 	CheckParameterFallbacks(context, layers, unit.binding, parameters, true, result);
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+	// The host catalog owns callbacks from the running engine, even when our binder/factories are
+	// statically linked into a separate loadable. Resolve only the fixed builtin, without binding it.
+	if (!unit.provenance.host_count_star) {
+		auto &entry = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", "count_star");
+		if (entry.type != CatalogType::AGGREGATE_FUNCTION_ENTRY || !entry.internal)
+			throw BinderException("Cannot identify host count_star builtin");
+		auto &functions = entry.Cast<AggregateFunctionCatalogEntry>().functions;
+		if (functions.Size() != 1)
+			throw BinderException("Unexpected host count_star overloads");
+		unit.provenance.host_count_star = std::make_shared<AggregateFunction>(functions.GetFunctionByOffset(0));
+	}
+#endif
 	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
