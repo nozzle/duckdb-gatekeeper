@@ -76,7 +76,10 @@ SELECT-list UNNEST and 1.5 intrinsic windows are source-defined engine operation
 system identities. Fixed histogram is likewise an intrinsic dependency. These are not claims that
 a catalog lookup selected those implementations. Arbitrary unknown functions never inherit them.
 The 1.5 scalar-subquery planner creates count_star directly; recovery requires equality with the
-builtin aggregate callbacks, not just that leaf. Parser-implied aliases are canonicalized before
+builtin aggregate callbacks, not just that leaf. A statically linked loadable has its own engine
+copy, so recognition accepts either its factory callbacks or the host's fixed, internal
+`system.main.count_star` overload captured without binding. That fingerprint is not a grant or
+caller dependency; normal policy still applies to every recognized intrinsic. Parser-implied aliases are canonicalized before
 checking system origin. `contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
 constructors, are conservatively system-only even when explicitly called: the parsed AST does not
 reliably distinguish their syntactic origin. A host grant cannot redirect these helpers.
@@ -129,3 +132,11 @@ loadables and explicit artifact loading (no shared-build configuration changes):
 Parameter fallback uses the same matcher at fixed `system.main.getvariable` / `scalar` identity:
 host shadows, wrong kinds and wrong namespaces cannot grant that capability. #107's conservative
 enforced collision policy and #106's local CONNECT guards are retained.
+
+CI's statically linked loadables require an additional cross-library check: the host and extension
+have separate engine callback addresses. Relinking against the read-only 1.5 engine archive reproduced
+all four PR #113 count_star parity failures. After recognizing both engine-owned callback sets, that
+artifact passed the full 1.5 Python suite (**1576 passed, 47 skipped, 2 xfailed**), the PEG qualified/
+audit/enforcement/log-only modules (**411 passed, 5 skipped, 2 xfailed**), the native qualified probe,
+and the engine guard. The affected 2.0 modules passed (**416 passed, 2 xfailed**). These checks use no
+leaf-only intrinsic authorization and do not replace a sanitizer CI rerun.

@@ -292,9 +292,13 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			auto identity = engine::AggregateIdentity(child.Cast<BoundAggregateExpression>());
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 			// plan_subquery.cpp constructs count_star directly, without a catalog lookup. Recognize the
-			// actual builtin callbacks, not just a leaf that a foreign implementation could reuse.
+			// actual builtin callbacks, not just a leaf that a foreign implementation could reuse. A
+			// statically linked loadable has its own engine copy: accept either its factory or the host's
+			// fixed system catalog implementation, captured without running a bind callback.
 			if (identity.catalog.empty() && name == "count_star" &&
-			    child.Cast<BoundAggregateExpression>().function == CountStarFun::GetFunction())
+			    (child.Cast<BoundAggregateExpression>().function == CountStarFun::GetFunction() ||
+			     (provenance.host_count_star &&
+			      child.Cast<BoundAggregateExpression>().function == *provenance.host_count_star)))
 				identity = {"system", {"main"}, "count_star", "aggregate"};
 #endif
 			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::CanonicalFunction(name)));
