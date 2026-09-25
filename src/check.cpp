@@ -302,8 +302,8 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 			auto &get = op->Cast<LogicalGet>();
 			auto table = get.GetTable();
 			if (table) {
-				auto catalog = engine::CatalogName(table->schema.catalog), schema = engine::EntryName(table->schema),
-				     name = engine::EntryName(*table);
+				auto catalog = engine::CatalogName(table->schema.catalog), name = engine::EntryName(*table);
+				auto schema = engine::SchemaPath(table->schema);
 				account(provenance.validated_scans, remaining, gatekeeper::ObjectKey(catalog, schema, name),
 				        {gatekeeper::rules::STATEMENT,
 				         "plan scans an object more often than the validated statement did", catalog, schema, name});
@@ -313,7 +313,11 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 				auto &scan = engine::FunctionName(get.function);
 				account(provenance.validated_function_scans, remaining_functions, scan,
 				        {gatekeeper::rules::STATEMENT,
-				         "plan scans a source more often than the validated statement did", "", "", "", scan});
+				         "plan scans a source more often than the validated statement did",
+				         "",
+				         {},
+				         "",
+				         scan});
 			}
 		}
 		for (auto &child : op->children)
@@ -374,7 +378,7 @@ struct Resolution {
 static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScanInput &input) {
 	// The name as asked, taken before any callback runs. (input's names are const references, so a callback
 	// cannot change them; this keeps the message independent of that guarantee.)
-	auto path = ReplacementScan::GetFullPath(input);
+	auto path = engine::ReplacementPath(input);
 	auto &config = DBConfig::GetConfig(context);
 	for (auto &scan : config.replacement_scans) {
 		if (scan.function == GatekeeperReplacementScan)
@@ -404,7 +408,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	auto gate = scope ? GateMode::ENFORCE : ReplacementGate(context);
 	if (gate == GateMode::OPEN)
 		return nullptr; // Ordinary connections, and log-only statements already decided, bind as the engine would.
-	auto path = ReplacementScan::GetFullPath(input);
+	auto path = engine::ReplacementPath(input);
 	// An enforced connection binding outside Authorize has no request layer and no result in progress: the
 	// denial is decided and recorded here, against the statement the connection is executing when there is one.
 	// That statement's policy snapshot is the one every check of it must use; only a Prepare() bind, which has
@@ -443,18 +447,16 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// function. A name reachable only through a trusted view or macro body is that definition's reader and is
 	// outside function policy, exactly as the readers such bodies name explicitly are. The callback cannot see
 	// which binder asked: a name the caller also wrote is the caller's, query-wide.
-	bool caller_written = !binding || binding->caller_table_refs.count(gatekeeper::TableRefPath(
-	                                      input.catalog_name, input.schema_name, input.table_name));
+	bool caller_written = !binding || binding->caller_table_names.count(engine::ReplacementName(input));
 	// Returns true when the engine should go on to bind the replacement as produced (log-only); refuses otherwise.
 	auto deny = [&](const string &rule, const string &message, const string &function = "") {
 		if (!scope) {
 			gatekeeper::Result result;
-			result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name, function);
+			result.violations.emplace(rule, message, "", gatekeeper::NamePath{}, path, function);
 			MarkDenied(result);
 			return record(result, enforced);
 		}
-		scope->bind.result.violations.emplace(rule, message, input.catalog_name, input.schema_name, input.table_name,
-		                                      function);
+		scope->bind.result.violations.emplace(rule, message, "", gatekeeper::NamePath{}, path, function);
 		throw PermissionException("replacement scan is not allowed");
 	};
 	auto resolution = ResolveHostReplacement(context, input);
@@ -480,7 +482,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		}
 		if (scope) {
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
-			scope->bind.result.objects.insert({"", "", path, "replacement"});
+			scope->bind.result.objects.insert({"", {}, path, "replacement"});
 		}
 		return std::move(resolution.ref);
 	}
@@ -497,8 +499,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 	// are asked a second time, which is the one place log-only departs from once-per-lookup.
 	if (mode == DecisionMode::LOG_ONLY)
 		return nullptr;
-	engine::GetEntry(context, CatalogType::TABLE_ENTRY, engine::Str(input.catalog_name), engine::Str(input.schema_name),
-	                 engine::Str(input.table_name));
+	engine::MissingReplacement(context, input);
 	throw BinderException("Table \"%s\" appeared during binding; retry the statement", path);
 }
 
@@ -517,7 +518,7 @@ void InstallReplacementScan(DBConfig &config) {
 // by the same walk, for the same reason: the body binds in the caller's binder, so the objects it reads can
 // only be recognized by name.
 static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names,
-                           std::set<gatekeeper::Table> *tables = nullptr) {
+                           gatekeeper::WrittenNames *tables = nullptr) {
 	auto node = make_uniq<SelectNode>();
 	for (auto &overload : macro.macros) {
 		node->select_list.push_back(overload->Cast<ScalarMacroFunction>().expression->Copy());
@@ -566,7 +567,8 @@ struct LookupCallback {
 			// An object the caller names is the caller's, whichever binder retrieved it. Otherwise it is the
 			// caller's when the caller's own binder retrieved it and no host scalar-macro body names it.
 			auto &object = entry.Cast<StandardEntry>();
-			auto catalog = engine::CatalogName(object.schema.catalog), schema = engine::EntryName(object.schema);
+			auto catalog = engine::CatalogName(object.schema.catalog);
+			auto schema = engine::SchemaPath(object.schema);
 			auto &name = engine::EntryName(entry);
 			bool attributable =
 			    s.provenance.CallerNamesObject(s.binding, catalog, schema, name) ||
@@ -647,7 +649,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 		auto &path = engine::Str(entry.first);
 		if (!scope.authorized.count(gatekeeper::Lower(path)))
 			result.violations.emplace(gatekeeper::rules::REPLACEMENT_SCAN,
-			                          "replacement scan was not authorized: " + path, "", "", path);
+			                          "replacement scan was not authorized: " + path, "", gatekeeper::NamePath{}, path);
 	}
 	if (!result.violations.empty())
 		throw PermissionException("unauthorized replacement scan");

@@ -8,7 +8,7 @@ statement ok
 CREATE VIEW caller_b AS SELECT * FROM caller_c;
 
 query TT
-SELECT list_transform(caller_objects, lambda o: o."table"), list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT * FROM caller_b', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
+SELECT list_transform(caller_objects, lambda o: o."table"), list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT * FROM caller_b', allowed_tables := [{schema_path: ['main'], 'table': 'caller_b'}]);
 ----
 [caller_b]	[caller_b, caller_c]
 
@@ -18,7 +18,7 @@ SELECT list_transform(caller_objects, lambda o: o."table") FROM gatekeeper_valid
 [caller_b, caller_c]
 
 query TT
-SELECT code, caller_objects FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c', allowed_tables := [{schema: 'main', 'table': 'caller_b'}]);
+SELECT code, caller_objects FROM gatekeeper_validate('SELECT * FROM caller_b, caller_c', allowed_tables := [{schema_path: ['main'], 'table': 'caller_b'}]);
 ----
 forbidden	[]
 

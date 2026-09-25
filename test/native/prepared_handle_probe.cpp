@@ -68,7 +68,8 @@ Outcome Execute(PreparedStatement &handle, vector<Value> values) {
 }
 
 void Allow(Connection &catalog, const string &table) {
-	Run(catalog, "CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': '" + table + "'}])");
+	Run(catalog,
+	    "CALL gatekeeper_configure(allowed_tables := [{schema_path: ['reporting'], 'table': '" + table + "'}])");
 }
 
 void ExpectRows(const Outcome &outcome, idx_t rows, const string &what) {

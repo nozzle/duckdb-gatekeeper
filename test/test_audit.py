@@ -183,7 +183,7 @@ def test_allowed_statements_are_debug_records_with_resolved_objects(catalog, age
     [record] = decisions(catalog)
     assert record["log_level"] == "DEBUG" and record["boundary"] == "execution" and record["code"] == "ok"
     # The view and the base table it expands to, by resolved identity, and every resolved function.
-    assert {(o["schema"], o["table"], o["type"]) for o in record["objects"]} == {
+    assert {(o["schema_path"][0], o["table"], o["type"]) for o in record["objects"]} == {
         ("reporting", "orders", "table"), ("reporting", "totals", "view")}
     assert {(f["name"], f["type"]) for f in record["functions"]} >= {("twice", "macro"), ("sum", "aggregate")}
 
@@ -228,7 +228,7 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
     enable(catalog)
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT * FROM secret.salaries")
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}, {"schema": "secret", "table": "*"}],
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}, {"schema_path": ["secret"], "table": "*"}],
                         "blocked_functions": ["md5"]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT md5(who) FROM secret.salaries")
@@ -306,7 +306,7 @@ def test_write_log_forgery_is_refused_even_when_allowlisted(catalog, agent):
     # Gatekeeper-typed entry that forges a decision or that duckdb_logs_parsed cannot cast, which would
     # break the reader for the host. Never-bind keeps it unreachable whatever the policy says.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}], "allowed_functions": ["write_log"]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "allowed_functions": ["write_log"]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT write_log('not-a-struct', log_type := 'Gatekeeper', level := 'info')").fetchall()
     assert all(r["event"] in {"decision", "policy_changed"} for r in records(catalog))
@@ -362,7 +362,7 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
     # snapshot, every denial is the gate's, and the hash on each record agrees with the decision.
     path = tmp_path / "flip.parquet"
     catalog.execute("COPY (SELECT range AS x FROM range(3)) TO ? (FORMAT parquet)", [str(path)])
-    tables = [{"schema": "reporting", "table": "*"}]
+    tables = [{"schema_path": ["reporting"], "table": "*"}]
     reader_allowed = {"allowed_tables": tables, "allowed_functions": ["read_parquet"]}
     reader_denied = {"allowed_tables": tables}
     enable(catalog, "debug")

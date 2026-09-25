@@ -6,7 +6,9 @@
 // GATEKEEPER_DUCKDB_MAJOR is set in CMakeLists.txt from DuckDB's own DUCKDB_MAJOR_VERSION.
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -17,6 +19,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "validator.hpp"
 
 #ifndef GATEKEEPER_DUCKDB_MAJOR
 #error "GATEKEEPER_DUCKDB_MAJOR must be defined by the Gatekeeper build"
@@ -62,8 +65,10 @@ template <class FUNCTION> inline const string &FunctionName(const FUNCTION &func
 template <class FUNCTION> inline const string &CatalogName(const FUNCTION &function) {
 	return Str(function.GetCatalogName());
 }
-template <class FUNCTION> inline const string &SchemaName(const FUNCTION &function) {
-	return Str(function.GetSchemaName());
+template <class FUNCTION> inline bool SystemBuiltin(const FUNCTION &function) {
+	auto qualified = function.GetQualifiedName();
+	auto &path = qualified.Path();
+	return path.size() == 3 && Str(path[0]) == "system" && Str(path[1]) == "main";
 }
 inline const LogicalType &ReturnType(const Expression &expression) { return expression.GetReturnType(); }
 #else
@@ -81,7 +86,9 @@ inline optional_ptr<const AggregateFunction> WindowAggregate(const BoundWindowEx
 }
 template <class FUNCTION> inline const string &FunctionName(const FUNCTION &function) { return function.name; }
 template <class FUNCTION> inline const string &CatalogName(const FUNCTION &function) { return function.catalog_name; }
-template <class FUNCTION> inline const string &SchemaName(const FUNCTION &function) { return function.schema_name; }
+template <class FUNCTION> inline bool SystemBuiltin(const FUNCTION &function) {
+	return function.catalog_name == "system" && function.schema_name == "main";
+}
 inline const LogicalType &ReturnType(const Expression &expression) { return expression.return_type; }
 #endif
 
@@ -100,6 +107,53 @@ inline const SelectStatement &Subquery(const SubqueryExpression &expression) { r
 
 // Catalog entries and CREATE payloads.
 inline const string &EntryName(const CatalogEntry &entry) { return Str(entry.name); }
+inline gatekeeper::NamePath SchemaPath(const SchemaCatalogEntry &schema) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	gatekeeper::NamePath path;
+	for (const auto &part : schema.GetSchemaPath())
+		path.push_back(Str(part));
+	return path;
+#else
+	return {EntryName(schema)};
+#endif
+}
+inline gatekeeper::NamePath ReplacementName(const ReplacementScanInput &input) {
+	gatekeeper::NamePath path;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	for (const auto &part : input.name.Path())
+		path.push_back(Str(part));
+#else
+	if (!input.catalog_name.empty()) {
+		path.push_back(input.catalog_name);
+		path.push_back(input.schema_name);
+	} else if (!input.schema_name.empty())
+		path.push_back(input.schema_name);
+	path.push_back(input.table_name);
+#endif
+	return gatekeeper::FoldPath(std::move(path));
+}
+inline string ReplacementPath(ReplacementScanInput &input) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	string path;
+	for (const auto &part : input.name.Path()) {
+		if (part.empty())
+			continue;
+		if (!path.empty())
+			path += ".";
+		path += Str(part);
+	}
+	return path;
+#else
+	return ReplacementScan::GetFullPath(input);
+#endif
+}
+inline void MissingReplacement(ClientContext &context, const ReplacementScanInput &input) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.name);
+#else
+	Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, input.catalog_name, input.schema_name, input.table_name);
+#endif
+}
 inline const string &CatalogName(const Catalog &catalog) { return Str(catalog.GetName()); }
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 inline const string &InfoCatalog(const CreateInfo &info) { return Str(info.GetQualifiedName().Catalog()); }

@@ -337,7 +337,7 @@ forbidden	bind_time_expression
 
 # Successful validations list resolved functions with provenance; denials list nothing.
 query TTT
-SELECT f.catalog, f.schema, f.name FROM gatekeeper_validate('SELECT md5(s) FROM t'), unnest(functions) AS u(f);
+SELECT f.catalog, f.schema_path[1], f.name FROM gatekeeper_validate('SELECT md5(s) FROM t'), unnest(functions) AS u(f);
 ----
 system	main	md5
 

@@ -35,7 +35,7 @@ false
 
 # An empty allowlist denies every table and view; a rule grants by resolved identity.
 query TTTTT
-SELECT code, violations[1].rule, violations[1].catalog, violations[1].schema, violations[1]."table" FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := []);
+SELECT code, violations[1].rule, violations[1].catalog, violations[1].schema_path[1], violations[1]."table" FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := []);
 ----
 forbidden	table	memory	main	secrets
 
@@ -45,84 +45,84 @@ SELECT allowed FROM gatekeeper_validate('SELECT 1', allowed_tables := []);
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
 # Rules match the resolved identity, not how the query spelled it.
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM memory.reporting.ORDERS AS o', allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM memory.reporting.ORDERS AS o', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 forbidden
 
 # Only a whole-component '*' is a wildcard; partial patterns are literal names.
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': 'sensitive_%'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'sensitive_%'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': '*_orders'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': '*_orders'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{catalog: '*', schema: '*', 'table': '*'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{catalog: '*', schema_path: ['*'], 'table': '*'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{catalog: 'warehouse', schema: '*', 'table': '*'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{catalog: 'warehouse', schema_path: ['*'], 'table': '*'}]);
 ----
 forbidden
 
 # Entries do not form a cross-product: each rule pairs its own catalog and schema.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema: 'main', 'table': '*'}, {schema: 'reporting', 'table': 'totals'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema_path: ['main'], 'table': '*'}, {schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 forbidden
 
 # A trusted view is opaque to table policy: the view the caller names must pass, and the tables its body reads
 # are the view's own. They still appear as evidence.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema: 'reporting', 'table': 'totals'}, {schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}, {schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
 query TTT
-SELECT o.schema, o."table", o.type FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]), unnest(objects) AS u(o) ORDER BY o."table";
+SELECT o.schema_path[1], o."table", o.type FROM gatekeeper_validate('SELECT * FROM reporting.totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]), unnest(objects) AS u(o) ORDER BY o."table";
 ----
 reporting	orders	table
 reporting	totals	view
 
 # The caller's own reference to a table the view reads is the caller's, next to the view or anywhere else.
 query TTTT
-SELECT code, violations[1].rule, violations[1].schema, violations[1]."table" FROM gatekeeper_validate('SELECT * FROM reporting.totals t JOIN reporting.orders o USING (customer_id)', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]);
+SELECT code, violations[1].rule, violations[1].schema_path[1], violations[1]."table" FROM gatekeeper_validate('SELECT * FROM reporting.totals t JOIN reporting.orders o USING (customer_id)', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 forbidden	table	reporting	orders
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.totals t JOIN reporting.orders o USING (customer_id)', allowed_tables := [{schema: 'reporting', 'table': 'totals'}, {schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.totals t JOIN reporting.orders o USING (customer_id)', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}, {schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
@@ -131,12 +131,12 @@ statement ok
 CREATE VIEW reporting.nested_totals AS SELECT * FROM reporting.totals;
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.nested_totals', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.nested_totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 forbidden
 
 query TTT
-SELECT o.schema, o."table", o.type FROM gatekeeper_validate('SELECT * FROM reporting.nested_totals', allowed_tables := [{schema: 'reporting', 'table': 'nested_totals'}]), unnest(objects) AS u(o) ORDER BY o."table";
+SELECT o.schema_path[1], o."table", o.type FROM gatekeeper_validate('SELECT * FROM reporting.nested_totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'nested_totals'}]), unnest(objects) AS u(o) ORDER BY o."table";
 ----
 reporting	nested_totals	view
 reporting	orders	table
@@ -145,32 +145,32 @@ reporting	totals	view
 # Blocks win over allows and apply without any allowlist, to the objects the caller names. What a trusted view
 # or macro reads is its own: a block on it reaches the caller's reference, not the definition's.
 query TTT
-SELECT code, violations[1].rule, violations[1].message FROM gatekeeper_validate('SELECT * FROM secrets', blocked_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT code, violations[1].rule, violations[1].message FROM gatekeeper_validate('SELECT * FROM secrets', blocked_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 forbidden	table	object is blocked
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM exposed', blocked_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM exposed', blocked_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM exposed, secrets', blocked_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed, secrets', blocked_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM exposed', blocked_tables := [{schema: 'main', 'table': 'exposed'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed', blocked_tables := [{schema_path: ['main'], 'table': 'exposed'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': '*'}], blocked_tables := [{schema: 'reporting', 'table': 'sensitive_orders'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}], blocked_tables := [{schema_path: ['reporting'], 'table': 'sensitive_orders'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema: 'reporting', 'table': '*'}], blocked_tables := [{schema: 'reporting', 'table': 'sensitive_orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}], blocked_tables := [{schema_path: ['reporting'], 'table': 'sensitive_orders'}]);
 ----
 true
 
@@ -192,27 +192,27 @@ true
 # objects it reads are recognized from its definition. Either way they are the macro's, unless the caller
 # names them too.
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()', blocked_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()', blocked_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 true
 
 query TT
-SELECT allowed, list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT secret_count()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT allowed, list_transform(objects, lambda o: o."table") FROM gatekeeper_validate('SELECT secret_count()', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 true	[secrets]
 
 query TTT
-SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('SELECT secret_count() FROM secrets', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('SELECT secret_count() FROM secrets', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 forbidden	table	secrets
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM peek(), secrets', blocked_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM peek(), secrets', blocked_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 forbidden
 
@@ -224,12 +224,12 @@ statement ok
 CALL gatekeeper_configure(allowed_functions := ['peek', 'secret_count', 'consume']);
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM consume()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM consume()', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('WITH exposed AS (SELECT * FROM secrets) SELECT * FROM consume()', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('WITH exposed AS (SELECT * FROM secrets) SELECT * FROM consume()', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 forbidden	table	secrets
 
@@ -239,49 +239,49 @@ RESET gatekeeper_policy;
 # CTE names are not objects; the tables they read are. A CTE named like a table a view reads is not a
 # reference to that table; the caller's own FROM of that name is, wherever the name resolves.
 query T
-SELECT code FROM gatekeeper_validate('WITH orders AS (SELECT * FROM secrets) SELECT * FROM orders', allowed_tables := [{schema: 'main', 'table': 'orders'}]);
+SELECT code FROM gatekeeper_validate('WITH orders AS (SELECT * FROM secrets) SELECT * FROM orders', allowed_tables := [{schema_path: ['main'], 'table': 'orders'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('WITH s AS (SELECT * FROM secrets) SELECT * FROM s', allowed_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT allowed FROM gatekeeper_validate('WITH s AS (SELECT * FROM secrets) SELECT * FROM s', allowed_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]);
+SELECT allowed FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals t, orders', allowed_tables := [{schema: 'reporting', 'table': 'totals'}]);
+SELECT code, violations[1].rule, violations[1]."table" FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals t, orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}]);
 ----
 forbidden	table	orders
 
 query I
-SELECT allowed FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals t, orders', allowed_tables := [{schema: 'reporting', 'table': 'totals'}, {schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('WITH orders AS (SELECT 1 AS customer_id) SELECT * FROM reporting.totals t, orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'totals'}, {schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
 # Subqueries, joins, and set operations are all authorized.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders WHERE customer_id IN (SELECT length(token) FROM secrets)', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders WHERE customer_id IN (SELECT length(token) FROM secrets)', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders o JOIN secrets s ON o.customer_id = length(s.token)', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.orders o JOIN secrets s ON o.customer_id = length(s.token)', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT customer_id FROM reporting.orders UNION ALL SELECT length(token) FROM secrets', allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+SELECT code FROM gatekeeper_validate('SELECT customer_id FROM reporting.orders UNION ALL SELECT length(token) FROM secrets', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 ----
 forbidden
 
 # The global policy is a ceiling: the request can narrow it but never widen it.
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': '*'}]);
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders');
@@ -289,17 +289,17 @@ SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders');
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{schema: 'main', 'table': 'secrets'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM secrets', allowed_tables := [{schema_path: ['main'], 'table': 'secrets'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM reporting.sensitive_orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
 ----
 true
 
@@ -337,12 +337,12 @@ SELECT o.catalog, o."table" FROM gatekeeper_validate('SELECT * FROM orders'), un
 temp	orders
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM orders', allowed_tables := [{catalog: 'memory', schema: '*', 'table': '*'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM orders', allowed_tables := [{catalog: 'memory', schema_path: ['*'], 'table': '*'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM orders', allowed_tables := [{catalog: '*', schema: '*', 'table': 'orders'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM orders', allowed_tables := [{catalog: '*', schema_path: ['*'], 'table': 'orders'}]);
 ----
 true
 

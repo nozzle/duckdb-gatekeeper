@@ -6,12 +6,12 @@ from support.enforcement import enforce
 from support.typed_helpers import configure, validate
 
 
-def identity(name, kind="table", catalog="memory", schema="main"):
-    return {"catalog": catalog, "schema": schema, "table": name, "type": kind}
+def identity(name, kind="table", catalog="memory", schema_path=("main",)):
+    return {"catalog": catalog, "schema_path": list(schema_path), "table": name, "type": kind}
 
 
 def rules(*names):
-    return [{"catalog": "memory", "schema": "main", "table": name} for name in names]
+    return [{"catalog": "memory", "schema_path": ["main"], "table": name} for name in names]
 
 
 @pytest.fixture
@@ -72,7 +72,7 @@ def test_resolved_identity_preserves_case_qualification_and_shadowing(db):
         CREATE TABLE lake."a.b"."T.X"(id INTEGER);
         CREATE TABLE t(id INTEGER); CREATE TEMP TABLE t(id INTEGER)''')
     result = validate(db, 'SELECT * FROM lake."a.b"."t.x" a, LAKE."a.b"."T.X" b')
-    assert result["allowed"] and result["caller_objects"] == [identity("T.X", catalog="lake", schema="a.b")]
+    assert result["allowed"] and result["caller_objects"] == [identity("T.X", catalog="lake", schema_path=["a.b"])]
     assert validate(db, "SELECT * FROM t")["caller_objects"] == [identity("t", catalog="temp")]
     assert validate(db, "SELECT * FROM memory.main.t")["caller_objects"] == [identity("t")]
 

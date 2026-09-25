@@ -10,12 +10,12 @@ from support.typed_helpers import configure, policy, rule, validate
 @pytest.mark.parametrize("catalog,schema,table", list(itertools.product(["memory", "*"], ["reporting", "*"], ["orders", "*"])))
 def test_every_wildcard_combination(db, catalog, schema, table):
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders(x INT)")
-    options = {"allowed_tables": [rule(catalog, schema, table)]}
+    options = {"allowed_tables": [rule(catalog, [schema], table)]}
     result = validate(db, "SELECT * FROM reporting.orders", options)
     assert result["allowed"], result
-    assert result["objects"] == [{"catalog": "memory", "schema": "reporting", "table": "orders", "type": "table"}]
-    for field in ["catalog", "schema", "table"]:
-        denied = {"allowed_tables": [{**options["allowed_tables"][0], field: "other"}]}
+    assert result["objects"] == [{"catalog": "memory", "schema_path": ["reporting"], "table": "orders", "type": "table"}]
+    for field in ["catalog", "schema_path", "table"]:
+        denied = {"allowed_tables": [{**options["allowed_tables"][0], field: ["other"] if field == "schema_path" else "other"}]}
         assert not validate(db, "SELECT * FROM reporting.orders", denied)["allowed"]
 
 
@@ -23,7 +23,7 @@ def test_rules_do_not_form_a_cross_product(db):
     db.execute("ATTACH ':memory:' AS lake; CREATE SCHEMA reporting; CREATE SCHEMA lake.reporting; "
                "CREATE TABLE main.t(x INT); CREATE TABLE reporting.t(x INT); "
                "CREATE TABLE lake.main.t(x INT); CREATE TABLE lake.reporting.t(x INT)")
-    options = {"allowed_tables": [rule("memory", "main"), rule("lake", "reporting")]}
+    options = {"allowed_tables": [rule("memory", ["main"]), rule("lake", ["reporting"])]}
     for catalog, schema in itertools.product(["memory", "lake"], ["main", "reporting"]):
         assert validate(db, f"SELECT * FROM {catalog}.{schema}.t", options)["allowed"] == (
             (catalog, schema) in [("memory", "main"), ("lake", "reporting")])
@@ -34,7 +34,7 @@ def test_wildcard_layers_intersect_at_the_resolved_object(db):
                "CREATE TABLE main.orders(x INT); CREATE TABLE reporting.orders(x INT); "
                "CREATE TABLE lake.reporting.orders(x INT)")
     configure(db, {"allowed_tables": [rule("memory")]})
-    request = {"allowed_tables": [rule(schema="reporting")]}
+    request = {"allowed_tables": [rule(schema_path=["reporting"])]}
     assert validate(db, "SELECT * FROM memory.reporting.orders", request)["allowed"]
     assert not validate(db, "SELECT * FROM memory.main.orders", request)["allowed"]
     assert not validate(db, "SELECT * FROM lake.reporting.orders", request)["allowed"]
@@ -43,10 +43,10 @@ def test_wildcard_layers_intersect_at_the_resolved_object(db):
 
 
 def test_wildcards_round_trip_and_cover_future_objects(db):
-    configure(db, {"allowed_tables": [rule("MeMoRy", "RePoRtInG"), rule("MeMoRy", "RePoRtInG")]})
+    configure(db, {"allowed_tables": [rule("MeMoRy", ["RePoRtInG"]), rule("MeMoRy", ["RePoRtInG"])]})
     db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
     canonical = policy(db)
-    assert canonical["allowed_tables"] == [rule("memory", "reporting")]
+    assert canonical["allowed_tables"] == [rule("memory", ["reporting"])]
     assert canonical["restrict_tables"]
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.future(x INT)")
     assert validate(db, "SELECT * FROM reporting.future")["allowed"]
@@ -56,7 +56,7 @@ def test_wildcards_round_trip_and_cover_future_objects(db):
     assert validate(db, "SELECT * FROM future")["allowed"]
     db.execute("CREATE TEMP TABLE future(x INT)")
     assert not validate(db, "SELECT * FROM future")["allowed"]
-    configure(db, {"allowed_tables": [rule(schema="main", table="future")]})
+    configure(db, {"allowed_tables": [rule(schema_path=["main"], table="future")]})
     assert validate(db, "SELECT * FROM future")["objects"][0]["catalog"] == "temp"
 
 
@@ -68,10 +68,10 @@ def test_only_whole_component_star_is_special(db, name):
     assert not validate(db, "SELECT * FROM sales_a", options)["allowed"]
 
 
-@pytest.mark.parametrize("entry", [rule(), rule(schema="main"), rule(table="duckdb_tables"),
-                                   rule("system", "*", "duckdb_tables"), rule("system", "main")])
+@pytest.mark.parametrize("entry", [rule(), rule(schema_path=["main"]), rule(table="duckdb_tables"),
+                                   rule("system", ["*"], "duckdb_tables"), rule("system", ["main"])])
 def test_internal_objects_need_exact_schema_and_table_in_each_layer(db, entry):
-    exact = rule("system", "main", "duckdb_tables")
+    exact = rule("system", ["main"], "duckdb_tables")
     for ceiling, request in [(entry, exact), (exact, entry)]:
         configure(db, {"allowed_tables": [ceiling]})
         result = validate(db, "SELECT * FROM duckdb_tables", {"allowed_tables": [request]})
@@ -81,7 +81,7 @@ def test_internal_objects_need_exact_schema_and_table_in_each_layer(db, entry):
 
 @pytest.mark.parametrize("catalog", ["*", None, "system"])
 def test_exact_internal_permission_still_cannot_admit_metadata_readers(db, catalog):
-    options = {"allowed_tables": [rule(catalog, "main", "duckdb_tables")]}
+    options = {"allowed_tables": [rule(catalog, ["main"], "duckdb_tables")]}
     configure(db, options)
     result = validate(db, "SELECT * FROM duckdb_tables", options)
     assert not result["allowed"]

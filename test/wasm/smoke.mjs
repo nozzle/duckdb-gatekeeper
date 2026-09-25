@@ -105,13 +105,13 @@ try {
       const prepared = await con.prepare('SELECT * FROM gatekeeper_validate(?)');
       try {
         check('host prepared validation', (await prepared.query('SELECT 1')).toArray()[0].allowed);
-        await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'], allowed_tables := [{schema:'main', 'table':'t'}, {schema:'main', 'table':'v'}])");
+        await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'], allowed_tables := [{schema_path:['main'], 'table':'t'}, {schema_path:['main'], 'table':'v'}])");
         check('prepared validation observes new policy', !(await prepared.query("SELECT md5('x')")).toArray()[0].allowed);
       } finally {await prepared.close();}
       d = await decision("SELECT md5('x')", ', blocked_functions := []::VARCHAR[]');
       check('function ceiling', !d.allowed && d.code === 'forbidden');
       check('denial dependencies empty', d.objects.length === 0 && d.functions.length === 0 && d.caller_objects.length === 0);
-      d = await decision('SELECT * FROM secret', ", allowed_tables := [{schema:'main', 'table':'secret'}]");
+      d = await decision('SELECT * FROM secret', ", allowed_tables := [{schema_path:['main'], 'table':'secret'}]");
       check('object ceiling', !d.allowed && d.code === 'forbidden');
       check('authorized view under ceiling', (await decision('SELECT * FROM v')).allowed);
       check('request narrowing', !(await decision('SELECT * FROM t', ', allowed_tables := []')).allowed);
@@ -119,7 +119,7 @@ try {
       try {
         check('policy shared across connections', !(await second.query("SELECT * FROM gatekeeper_validate('SELECT md5(''x'')')")).toArray()[0].allowed);
       } finally {await second.close();}
-      check('malformed configuration rejected', await rejects("CALL gatekeeper_configure(allowed_tables := [{catlog:'x', schema:'main', 'table':'t'}])", 'unknown table field'));
+      check('malformed configuration rejected', await rejects("CALL gatekeeper_configure(allowed_tables := [{catlog:'x', schema_path:['main'], 'table':'t'}])", 'unknown table field'));
       check('invalid replacement atomic', !(await decision("SELECT md5('x')")).allowed);
       await con.query('RESET gatekeeper_policy');
       check('RESET restores defaults', (await decision("SELECT md5('x')")).allowed);
@@ -130,7 +130,7 @@ try {
       check('canonical SET round trip', (await decision('SELECT 1')).allowed);
       // Enforcement, the audit log, and log-only mode run through the engine's query hooks and log manager,
       // both compiled into this Wasm image; the host connection reads the log the agent connection cannot.
-      await con.query("CALL gatekeeper_configure(allowed_tables := [{schema:'main', 'table':'t'}, {schema:'main', 'table':'v'}])");
+      await con.query("CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'t'}, {schema_path:['main'], 'table':'v'}])");
       await con.query("CALL enable_logging('Gatekeeper')");
       const agent = await db.connect();
       try {

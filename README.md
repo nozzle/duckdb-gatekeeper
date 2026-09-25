@@ -59,7 +59,7 @@ Allowed table, default functions:
 ```sql
 SELECT allowed, code FROM gatekeeper_validate(
     'SELECT customer_id, sum(amount) FROM reporting.orders GROUP BY customer_id',
-    allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': 'orders'}]
+    allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': 'orders'}]
 );
 ```
 
@@ -144,7 +144,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
+| `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
@@ -184,20 +184,20 @@ when a typed option is empty or NULL.
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json",
-  "version": 1,
+  "$schema": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v2.schema.json",
+  "version": 2,
   "options": {
-    "allowed_tables": [{"schema": "reporting", "table": "*"}],
+    "allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
     "blocked_functions": ["md5"]
   }
 }
 ```
 
-The [version 1 JSON Schema](docs/policy-v1.schema.json) provides editor completion and
+The [version 2 JSON Schema](docs/policy-v2.schema.json) provides editor completion and
 document validation. `version` and `options` are required; `version` is the document
 format version, independent of the DuckDB or Gatekeeper release. `$schema` is optional
 and, when present, must be the schema URL above; Gatekeeper never fetches it. This exact
-match rejects documents labeled for another schema, even if they retain `version: 1`.
+match rejects documents labeled for another schema, even if they retain `version: 2`.
 For a vendored schema, use your editor's external schema association and omit `$schema`
 from the policy document. Unknown
 fields, duplicate object keys, unsupported versions, and incorrect types are rejected.
@@ -207,7 +207,7 @@ be enabled in your JSON parser when validating documents outside Gatekeeper.
 The decoder routes through the same typed option validation and policy application:
 
 - `gatekeeper_configure(json := ...)` replaces the global policy atomically; omitted
-  options take their built-in defaults. `{"version": 1, "options": {}}` resets it.
+  options take their built-in defaults. `{"version": 2, "options": {}}` resets it.
 - `gatekeeper_validate(sql, json := ...)` applies request options under the current
   global policy; omitted options inherit that policy and requests cannot widen it.
 - Omitted `allowed_tables` differs from `"allowed_tables": []`, which denies all tables
@@ -219,7 +219,7 @@ The decoder routes through the same typed option validation and policy applicati
 ```sql
 SELECT allowed FROM gatekeeper_validate(
     'SELECT md5(''hello'')',
-    json := '{"version": 1, "options": {"blocked_functions": ["md5"]}}'
+    json := '{"version": 2, "options": {"blocked_functions": ["md5"]}}'
 );
 ```
 
@@ -247,12 +247,12 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
-| `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`/`view`/`replacement`) the query bound to. Empty unless `ok`. |
-| `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
+| `objects` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `table`, `type` (`table`/`view`/`replacement`) the query bound to. Empty unless `ok`. |
+| `functions` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 | `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
 
 Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
@@ -280,13 +280,13 @@ error text. Project the first violation's fields to display them as columns:
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
        violations[1].message AS message, violations[1].catalog AS catalog,
-       violations[1].schema AS schema, violations[1]."table" AS "table"
+       violations[1].schema_path AS schema_path, violations[1]."table" AS "table"
 FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := []);
 ```
 
-| allowed | code | rule | message | catalog | schema | table |
+| allowed | code | rule | message | catalog | schema_path | table |
 | --- | --- | --- | --- | --- | --- | --- |
-| false | forbidden | table | object is not allowed | memory | reporting | orders |
+| false | forbidden | table | object is not allowed | memory | [reporting] | orders |
 
 **Function denied:** `md5` is a default, but `current_setting` (configuration inspection) is not.
 
@@ -340,7 +340,7 @@ case-insensitively. Any matching allow grants; any matching block wins.
 ```sql
 SELECT allowed FROM gatekeeper_validate(
     'SELECT * FROM reporting.orders',
-    allowed_tables := [{catalog: '*', schema: 'reporting', 'table': '*'}]
+    allowed_tables := [{catalog: '*', schema_path: ['reporting'], 'table': '*'}]
 );
 ```
 
@@ -350,13 +350,27 @@ SELECT allowed FROM gatekeeper_validate(
 
 | Intent | Rule |
 | --- | --- |
-| One table | `{catalog: 'memory', schema: 'reporting', 'table': 'orders'}` |
-| One schema | `{schema: 'reporting', 'table': '*'}` |
-| Whole catalog | `{catalog: 'warehouse', schema: '*', 'table': '*'}` |
-| Everything except one | allow `{catalog: 'warehouse', schema: 'reporting', 'table': '*'}`, block `{..., 'table': 'sensitive_orders'}` |
+| One table | `{catalog: 'memory', schema_path: ['reporting'], 'table': 'orders'}` |
+| One schema | `{schema_path: ['reporting'], 'table': '*'}` |
+| Top-level schemas in a catalog | `{catalog: 'warehouse', schema_path: ['*'], 'table': '*'}` |
+| One nested schema (DuckDB 2.0) | `{schema_path: ['finance', 'reports'], 'table': '*'}` |
+| Immediate child schemas (DuckDB 2.0) | `{schema_path: ['finance', '*'], 'table': '*'}` |
+| Everything except one | allow `{catalog: 'warehouse', schema_path: ['reporting'], 'table': '*'}`, block `{..., 'table': 'sensitive_orders'}` |
 | Nothing | `allowed_tables := []` |
 
 Multiple entries pair specific catalogs and schemas without granting their cross-product.
+
+`schema_path` is required and contains literal, nonempty identifier strings, outermost first.
+Paths match at exactly the specified depth: `['*']` matches top-level schemas only, and
+`['finance', '*']` does not match `finance.reports.monthly`. There is no recursive wildcard;
+`'**'` is a literal identifier. `['finance.reports']` names one schema containing a dot,
+not the two schemas named by `['finance', 'reports']`. DuckDB 1.5 returns one-element paths;
+DuckDB 2.0 supports nested schemas. Returned identities include the full path; an unavailable
+schema identity is `[]`.
+
+This is a breaking change: replace `schema: 's'` with `schema_path: ['s']` in typed policies,
+canonical settings, and result consumers. JSON documents require `version: 2` and the v2
+schema URL (if supplied); v1 documents and the old `schema` field are rejected.
 
 Table policy applies to what the caller names. Trusted **views, macros, and attached tables**
 are opaque to it, as they are to function policy: the caller must be allowed the view, table,
@@ -485,7 +499,7 @@ flowchart TB
 
 ```sql
 CALL gatekeeper_configure(
-    allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}],
+    allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': '*'}],
     blocked_functions := ['md5']
 );
 ```
@@ -673,7 +687,7 @@ SET gatekeeper_log_only = true;
 -- hand out enforced connections; run real traffic
 SELECT code, violations, statement FROM duckdb_logs_parsed('Gatekeeper')
  WHERE mode = 'log_only' AND NOT allowed AND code <> 'binding';  -- what enforcement would refuse
-SELECT DISTINCT o.schema, o."table" FROM duckdb_logs_parsed('Gatekeeper'), UNNEST(objects) AS t(o)
+SELECT DISTINCT o.schema_path, o."table" FROM duckdb_logs_parsed('Gatekeeper'), UNNEST(objects) AS t(o)
  WHERE allowed;                                                     -- a draft allowed_tables
 SET gatekeeper_log_only = false;
 SET lock_configuration = true;
@@ -775,7 +789,7 @@ db.execute("CREATE SCHEMA reporting")
 db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 
 # Trusted setup: install the ceiling, turn on the audit log, then lock it.
-tables = [{"catalog": "memory", "schema": "reporting", "table": "*"}]
+tables = [{"catalog": "memory", "schema_path": ["reporting"], "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("CALL enable_logging('Gatekeeper')")
 db.execute("SET gatekeeper_log_only = false")  # true while rolling out: record denials, refuse nothing

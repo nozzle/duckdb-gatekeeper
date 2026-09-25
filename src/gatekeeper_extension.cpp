@@ -220,7 +220,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	description.description = "Validates one untrusted read-only SQL statement against the global policy "
 	                          "and the request options without executing it.";
 	description.examples = {"SELECT allowed, code FROM gatekeeper_validate('SELECT sum(amount) FROM "
-	                        "reporting.orders', allowed_tables := [{schema: 'reporting', 'table': 'orders'}])"};
+	                        "reporting.orders', allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}])"};
 	for (const auto &name : gatekeeper::OptionNames())
 		description.parameter_names.push_back(name);
 	description.parameter_names.push_back("json");

@@ -57,7 +57,7 @@ const conn = await db.connect();
 await conn.query(`LOAD '${location.origin}/extensions/gatekeeper.duckdb_extension.wasm'`);
 await conn.query('CREATE TABLE orders(id INTEGER)');
 await conn.query(`CALL gatekeeper_configure(
-  allowed_tables := [{catalog: 'memory', schema: 'main', 'table': 'orders'}]
+  allowed_tables := [{catalog: 'memory', schema_path: ['main'], 'table': 'orders'}]
 )`);
 await conn.query('SET lock_configuration = true');
 const check = await conn.prepare('SELECT * FROM gatekeeper_validate(?)');

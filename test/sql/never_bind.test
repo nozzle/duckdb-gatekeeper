@@ -91,12 +91,12 @@ SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM informat
 forbidden	internal_object
 
 query TT
-SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM information_schema.columns', allowed_tables := [{catalog: '*', schema: '*', 'table': '*'}]);
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM information_schema.columns', allowed_tables := [{catalog: '*', schema_path: ['*'], 'table': '*'}]);
 ----
 forbidden	internal_object
 
 query TT
-SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM duckdb_tables', allowed_tables := [{schema: '*', 'table': '*'}]);
+SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM duckdb_tables', allowed_tables := [{schema_path: ['*'], 'table': '*'}]);
 ----
 forbidden	internal_object
 
@@ -106,7 +106,7 @@ SELECT code, violations[1].rule FROM gatekeeper_validate('SELECT * FROM pg_catal
 forbidden	internal_object
 
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{schema: 'information_schema', 'table': 'tables'}, {schema: 'main', 'table': 'duckdb_tables'}]);
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['information_schema'], 'table': 'tables'}, {schema_path: ['main'], 'table': 'duckdb_tables'}]);
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM information_schema.tables');

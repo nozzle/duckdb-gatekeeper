@@ -9,6 +9,17 @@ from support.artifact import ENGINE_MAJOR, ENGINE_SOURCE, ROOT, by_engine
 from support.toolchain import compile_cpp
 
 
+def test_schema_path_identity_and_attribution(tmp_path):
+    generated = tmp_path / "generated"
+    subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated),
+                    "--duckdb-source", str(ENGINE_SOURCE)], check=True)
+    binary = compile_cpp([ROOT / "test/schema_path_identity.cpp", ROOT / "src/validator.cpp",
+                          ENGINE_SOURCE / "third_party/yyjson/yyjson.cpp"], tmp_path / "paths", flags=["-O1"],
+                         includes=[generated, ROOT / "src/include", ENGINE_SOURCE / "src/include",
+                                   ENGINE_SOURCE / "third_party/yyjson/include"])
+    subprocess.run([str(binary)], check=True)
+
+
 @pytest.fixture(scope="module")
 def native_validator(tmp_path_factory):
     work = tmp_path_factory.mktemp("validator")

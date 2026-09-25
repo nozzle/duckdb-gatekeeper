@@ -29,33 +29,33 @@ statement ok
 CREATE VIEW permitted_view AS SELECT * FROM permitted;
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted', allowed_tables := [{schema:'main', 'table':'permitted'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted', allowed_tables := [{schema_path:['main'], 'table':'permitted'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM secret', allowed_tables := [{schema:'main', 'table':'permitted'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM secret', allowed_tables := [{schema_path:['main'], 'table':'permitted'}]);
 ----
 forbidden
 
 # A view is authorized by its own identity; the table its body reads is the view's own.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema:'main', 'table':'permitted_view'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema_path:['main'], 'table':'permitted_view'}]);
 ----
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema:'main', 'table':'permitted'}]);
+SELECT code FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema_path:['main'], 'table':'permitted'}]);
 ----
 forbidden
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema:'main', 'table':'permitted_view'}, {schema:'main', 'table':'permitted'}]);
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM permitted_view', allowed_tables := [{schema_path:['main'], 'table':'permitted_view'}, {schema_path:['main'], 'table':'permitted'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT 1', allowed_tables := [{schema:'main', 'table':'permitted', typo:'x'}]);
+SELECT code FROM gatekeeper_validate('SELECT 1', allowed_tables := [{schema_path:['main'], 'table':'permitted', typo:'x'}]);
 ----
 invalid_input
 

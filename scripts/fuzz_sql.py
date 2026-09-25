@@ -40,12 +40,13 @@ def main():
             for value in range(34):
                 (corpus / f"option-{mode}-{option}-{value}").write_bytes(bytes([mode, option, value, 10]) + b"t")
     for i, document in enumerate([
-        '{"version":1,"options":{}}',
-        '{"version":1,"options":{"allowed_tables":[]}}',
-        '{"version":1,"options":{"allowed_tables":[{"catalog":null,"schema":"main","table":"t"}]}}',
-        '{"version":1,"options":{"use_default_functions":false,"allowed_functions":["abs"],"blocked_functions":["md5"]}}',
-        '{"version":1,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
-        '{"version":1,"options":{"blocked_tables":[{"schema":"main","table":"t","extra":1}]}}',
+        '{"version":2,"options":{}}',
+        '{"version":2,"options":{"allowed_tables":[]}}',
+        '{"version":2,"options":{"allowed_tables":[{"catalog":null,"schema_path":["main"],"table":"t"}]}}',
+        '{"version":2,"options":{"allowed_tables":[{"schema_path":["finance","*"],"table":"t"}]}}',
+        '{"version":2,"options":{"use_default_functions":false,"allowed_functions":["abs"],"blocked_functions":["md5"]}}',
+        '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
+        '{"version":2,"options":{"blocked_tables":[{"schema_path":["main"],"table":"t","extra":1}]}}',
     ]):
         for mode in [1, 15]:
             (corpus / f"json-{mode}-{i}").write_bytes(bytes([mode, 5, 0, 10]) + document.encode())

@@ -8,6 +8,14 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- **Breaking:** table policies, canonical settings, validation results, and audit identities replace
+  `schema VARCHAR` with `schema_path VARCHAR[]`, outermost schema first. JSON policies now require
+  version 2 and use `docs/policy-v2.schema.json`; version 1 and the old `schema` field are rejected.
+  DuckDB 2.0 nested schemas are supported with full-path authorization and provenance; 1.5 uses
+  one-element paths. Path wildcards match one component at exactly the specified depth, never
+  recursively. Migrate `schema: 'reporting'` to `schema_path: ['reporting']`; `['*']` covers only
+  top-level schemas.
+
 - Every distributed artifact is now loaded, as the loadable it is, into an official DuckDB host
   of the pinned engine and exercised across the host/loadable ABI boundary before a release is
   published: the Python package on Linux, macOS, and Windows (both architectures each, now with
@@ -41,7 +49,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   alternative to typed options for shared policies. JSON and typed options are mutually
   exclusive; decoded options retain the same replacement, validation, and global-ceiling
   semantics. The versioned document has a published authoring schema at
-  [`docs/policy-v1.schema.json`](docs/policy-v1.schema.json). (#94)
+  [`docs/policy-v1.schema.json`](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/policy-v1.schema.json). (#94)
 - The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`) as well as the pinned 1.5.5, and
   the test suite runs on either engine. Release binaries still target 1.5.5. Decisions are the
   same on both engines; where the engine itself changed, Gatekeeper follows it, and

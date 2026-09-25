@@ -74,7 +74,7 @@ $load;
 CREATE SCHEMA reporting;
 CREATE TABLE reporting.orders AS SELECT 20.0 AS amount;
 CREATE TABLE secret AS SELECT 'x' AS token;
-CALL gatekeeper_configure(allowed_tables := [{'schema': 'reporting', 'table': '*'}]);
+CALL gatekeeper_configure(allowed_tables := [{'schema_path': ['reporting'], 'table': '*'}]);
 CALL enable_logging('Gatekeeper', storage = 'stdout');
 SET logging_level = 'debug';
 EOF

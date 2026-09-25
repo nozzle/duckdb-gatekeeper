@@ -1,0 +1,102 @@
+# name: test/sql/nested_schemas.test
+# description: DuckDB 2.0 nested paths retain identity through validation and enforcement
+# group: [gatekeeper]
+
+# Enabled by both 2.0 engine-rebuild jobs; 1.5 cannot create nested schemas.
+require-env GATEKEEPER_TEST_NESTED_SCHEMAS 1
+
+require gatekeeper
+
+statement ok
+CREATE SCHEMA finance;
+
+statement ok
+CREATE SCHEMA finance.reports;
+
+statement ok
+CREATE SCHEMA finance.reports.monthly;
+
+statement ok
+CREATE SCHEMA sales;
+
+statement ok
+CREATE SCHEMA sales.reports;
+
+statement ok
+CREATE TABLE finance.reports.orders AS SELECT 1 AS i;
+
+statement ok
+CREATE TABLE sales.reports.orders AS SELECT 2 AS i;
+
+statement ok
+CREATE TABLE finance.reports.monthly.orders AS SELECT 3 AS i;
+
+statement ok
+CREATE VIEW main.visible AS SELECT * FROM sales.reports.orders;
+
+query IT
+SELECT allowed, caller_objects[1].schema_path FROM gatekeeper_validate('SELECT * FROM finance.reports.orders', allowed_tables := [{schema_path: ['finance', 'reports'], 'table': 'orders'}]);
+----
+true	[finance, reports]
+
+query IT
+SELECT allowed, objects[1].schema_path FROM gatekeeper_validate('SELECT * FROM memory.finance.reports.orders', allowed_tables := [{schema_path: ['finance', '*'], 'table': '*'}]);
+----
+true	[finance, reports]
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM finance.reports.orders', allowed_tables := [{schema_path: ['*'], 'table': '*'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM finance.reports.monthly.orders', allowed_tables := [{schema_path: ['finance', '*'], 'table': '*'}]);
+----
+forbidden
+
+query TT
+SELECT code, violations[1].schema_path FROM gatekeeper_validate('SELECT * FROM sales.reports.orders', blocked_tables := [{schema_path: ['sales', '*'], 'table': '*'}]);
+----
+forbidden	[sales, reports]
+
+# Same leaf schema and table under a different parent must not merge provenance.
+query III
+SELECT allowed, len(objects), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM finance.reports.orders, visible', allowed_tables := [{schema_path: ['finance', 'reports'], 'table': 'orders'}, {schema_path: ['main'], 'table': 'visible'}]);
+----
+true	3	2
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM sales.reports.orders, visible', allowed_tables := [{schema_path: ['finance', 'reports'], 'table': 'orders'}, {schema_path: ['main'], 'table': 'visible'}]);
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['finance', 'reports'], 'table': 'orders'}, {schema_path: ['main'], 'table': 'visible'}]);
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+query I agent
+SELECT * FROM finance.reports.orders;
+----
+1
+
+query II agent
+SELECT * FROM memory.finance.reports.orders, visible;
+----
+1	2
+
+statement error agent
+SELECT * FROM sales.reports.orders;
+----
+object is not allowed
+
+query I agent
+SELECT * FROM finance.reports.orders;
+----
+1
+
+statement error agent
+SELECT * FROM finance.reports.monthly.orders;
+----
+object is not allowed

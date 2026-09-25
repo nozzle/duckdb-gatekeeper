@@ -6,10 +6,13 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 namespace gatekeeper {
 using Json = duckdb_yyjson::yyjson_val;
 using Names = std::set<std::string>;
+using NamePath = std::vector<std::string>;
+using WrittenNames = std::set<NamePath>;
 // Fixed validation guardrails, independent of authorization policy.
 constexpr uint64_t MAX_STATEMENTS = 1;
 constexpr uint64_t MAX_AST_BYTES = 8388608;
@@ -20,9 +23,11 @@ struct Limits {
 	uint64_t bytes = MAX_AST_BYTES, nodes = MAX_AST_NODES, depth = MAX_AST_DEPTH;
 };
 struct Table {
-	std::string catalog, schema, table;
+	std::string catalog;
+	NamePath schema_path;
+	std::string table;
 	bool operator<(const Table &other) const {
-		return std::tie(catalog, schema, table) < std::tie(other.catalog, other.schema, other.table);
+		return std::tie(catalog, schema_path, table) < std::tie(other.catalog, other.schema_path, other.table);
 	}
 };
 struct Policy {
@@ -68,22 +73,28 @@ inline constexpr const char *REPLACEMENT_SCAN = "replacement_scan";
 inline constexpr const char *UNSUPPORTED_STRUCTURE = "unsupported_structure";
 } // namespace rules
 struct Violation {
-	std::string rule, message, catalog, schema, table, function_name;
+	std::string rule, message, catalog;
+	NamePath schema_path;
+	std::string table, function_name;
 	int64_t position = -1;
-	Violation(std::string rule, std::string message, std::string catalog = {}, std::string schema = {},
+	Violation(std::string rule, std::string message, std::string catalog = {}, NamePath schema_path = {},
 	          std::string table = {}, std::string function_name = {}, int64_t position = -1)
-	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)), schema(std::move(schema)),
-	      table(std::move(table)), function_name(std::move(function_name)), position(position) {}
+	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)),
+	      schema_path(std::move(schema_path)), table(std::move(table)), function_name(std::move(function_name)),
+	      position(position) {}
 	bool operator<(const Violation &other) const {
-		return std::tie(rule, message, catalog, schema, table, function_name, position) <
-		       std::tie(other.rule, other.message, other.catalog, other.schema, other.table, other.function_name,
+		return std::tie(rule, message, catalog, schema_path, table, function_name, position) <
+		       std::tie(other.rule, other.message, other.catalog, other.schema_path, other.table, other.function_name,
 		                other.position);
 	}
 };
 struct Identity {
-	std::string catalog, schema, name, type;
+	std::string catalog;
+	NamePath schema_path;
+	std::string name, type;
 	bool operator<(const Identity &other) const {
-		return std::tie(catalog, schema, name, type) < std::tie(other.catalog, other.schema, other.name, other.type);
+		return std::tie(catalog, schema_path, name, type) <
+		       std::tie(other.catalog, other.schema_path, other.name, other.type);
 	}
 };
 struct Result {
@@ -126,23 +137,17 @@ struct BindingPolicy {
 	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
 	// though it never appears in the text.
 	bool caller_collates = false;
-	// Caller-written table references by qualified name (catalog.schema.table as written, case-folded). A
+	// Caller-written table references as identifier components, case-folded. A
 	// replacement scan for one of them substitutes a reader the caller chose, so that reader must pass the
 	// allowlists like a caller-written table function. A replacement reached only through a trusted view or
 	// macro body is that definition's own reader and is not subject to function policy, exactly like the
 	// readers such bodies name explicitly. The replacement callback sees no origin, so a name both sides use
 	// is checked as the caller's, query-wide, like other ambiguous caller syntax.
-	Names caller_table_refs;
-	// The same references as written components (catalog, schema, table; empty where the caller wrote none),
-	// case-folded: the table names the caller can produce. A resolved object one of them names is the caller's
-	// wherever it binds, so a trusted definition reading the same object does not make it the definition's.
-	std::set<Table> caller_table_names;
+	WrittenNames caller_table_names;
 };
-// A written reference (catalog, schema, table; empty parts unwritten) names a resolved object when the table
-// names agree and every written qualifier agrees with the object's. A two-part name is schema.table or
-// catalog.table, as DuckDB resolves it. An unqualified name matches the same table name in any schema of any
-// catalog: conservative on purpose, since a written name is attributed to the caller wherever it resolves.
-bool NamesObject(const std::set<Table> &written, const std::string &catalog, const std::string &schema,
+// Written qualifiers can be a schema-path suffix, a catalog plus that path, or a catalog with its default
+// schema omitted. Attribution is conservative: a written name belongs to the caller wherever it can resolve.
+bool NamesObject(const WrittenNames &written, const std::string &catalog, const NamePath &schema_path,
                  const std::string &table);
 // What the private bind learned about origin, for the execution boundary. Trusted definitions (host views,
 // macros, attached tables) are opaque to policy: what their bodies introduce is exempt from function policy
@@ -165,7 +170,7 @@ struct Provenance {
 	// Table references host scalar-macro bodies write (default arguments included), as written components. A
 	// scalar macro body binds in the caller's own binder, so the objects its subqueries read are recognized by
 	// name, exactly as its functions are; an object the caller also names is the caller's, query-wide.
-	std::set<Table> trusted_table_names;
+	WrittenNames trusted_table_names;
 	// Resolved table and view identities (case-folded) by attribution: retrieved by the caller's own binders
 	// or named in the caller's text, and retrieved only by trusted definitions. An identity in both is the
 	// caller's.
@@ -182,25 +187,23 @@ struct Provenance {
 	bool CallerCanName(const BindingPolicy &binding, const std::string &name) const;
 	bool Attributable(const BindingPolicy &binding, const std::string &name) const;
 	// The caller's text names this object.
-	bool CallerNamesObject(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+	bool CallerNamesObject(const BindingPolicy &binding, const std::string &catalog, const NamePath &schema_path,
 	                       const std::string &table) const;
 	// A resolved object a plan scans is the caller's: the caller's binders retrieved it or the caller's text
 	// names it. An identity only trusted definitions retrieved is theirs. One the private bind never retrieved
 	// at all is the caller's too: it can only have come from a plan that diverged from the validated statement.
-	bool ObjectAttributable(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
+	bool ObjectAttributable(const BindingPolicy &binding, const std::string &catalog, const NamePath &schema_path,
 	                        const std::string &table) const;
 };
 // A resolved identity as the provenance sets hold it: every component case-folded.
-Table ObjectKey(const std::string &catalog, const std::string &schema, const std::string &table);
-// The qualified name DuckDB hands its replacement-scan callbacks (ReplacementScan::GetFullPath): the non-empty
-// parts joined with dots. Case-folded here because caller_table_refs is matched by name, never by file identity.
-std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table);
+Table ObjectKey(const std::string &catalog, const NamePath &schema_path, const std::string &table);
+NamePath FoldPath(NamePath path);
 std::string Text(Json *value);
 std::string Field(Json *value, const char *key);
 std::string Lower(std::string value);
-bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
-                  bool internal = false);
-bool TableBlocked(const Policy &policy, const std::string &catalog, const std::string &schema,
+bool TableAllowed(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
+                  const std::string &table, bool internal = false);
+bool TableBlocked(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
                   const std::string &table);
 Result Validate(Json *root, const Policy &policy, BindingPolicy *binding = nullptr, const Policy *ceiling = nullptr,
                 const Limits &limits = Limits());

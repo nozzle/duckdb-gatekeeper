@@ -62,7 +62,7 @@ def test_blocks_do_not_reach_into_trusted_expansions(expressions, tmp_path):
     path = str(tmp_path / "trusted.parquet").replace("'", "''")
     expressions.execute(f"COPY (SELECT 1 x) TO '{path}' (FORMAT PARQUET)")
     expressions.execute(f"CREATE VIEW file_view AS SELECT * FROM read_parquet('{path}')")
-    options = {"allowed_tables": [{"schema": "main", "table": "file_view"}]}
+    options = {"allowed_tables": [{"schema_path": ["main"], "table": "file_view"}]}
     assert validate(expressions, "SELECT * FROM file_view", options)["allowed"]
     result = validate(expressions, "SELECT * FROM file_view", {**options, "blocked_functions": ["read_parquet"]})
     assert result["allowed"] and any(f["name"] == "read_parquet" for f in result["functions"]), result

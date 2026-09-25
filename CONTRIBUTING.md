@@ -115,7 +115,7 @@ The suite has two layers with different reach:
   the never-bind list, strict function allowlists, table allow/block/wildcard rules,
   replacement scans, trusted expansions, nested bound implementations, enforced
   connections, log-only mode, the audit log, and the refusals DuckDB 2.0 introduced that hold on both
-  engines (nested schema paths, DML inside a CTE). Add a case here whenever a behavior must hold
+  engines (DML inside a CTE), plus nested-schema coverage on 2.0. Add a case here whenever a behavior must hold
   everywhere the extension is distributed.
 - `test/*.py` is the **deep suite**: adversarial, tooling, packaging, and documentation
   tests that run against the loadable artifact on Linux and macOS here, and on every target
@@ -171,7 +171,7 @@ cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release 
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
 cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe
-build/v2/test/unittest 'test/sql/*'
+GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/v2/test/unittest 'test/sql/*'
 build/v2/extension/gatekeeper/gatekeeper_prepared_probe
 python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
 GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
@@ -186,6 +186,10 @@ the same rule as `by_parser`: never a policy decision. The 1.5 side of every suc
 the `#if GATEKEEPER_DUCKDB_MAJOR` branches in `src/`, is removed by the repin that moves the
 engine to 2.0; [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99) is that repin's
 checklist.
+
+`test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
+create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises
+the explicit path API on every engine; `test_schema_paths.py` adds deeper 2.0 coverage.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable
@@ -328,7 +332,7 @@ source notes and baselines remain independent of build-engine versions. Follow t
   checks, including executable lambda/list-aggregate bind data.
 - `src/validator.cpp`: fail-closed serialized AST grammar walk and syntax policy.
 - `src/options.cpp`: shared option specifications, JSON-to-typed decoding, typed validation,
-  and canonical global settings. `docs/policy-v1.schema.json` describes the JSON input;
+  and canonical global settings. `docs/policy-v2.schema.json` describes the JSON input;
   `test/test_json_options.py` checks schema/decoder agreement and typed API equivalence.
 - `versions.cmake`: canonical extension/engine metadata; generation emits `version.hpp`.
 

@@ -20,7 +20,7 @@ def test_generated_nested_reference_positions(db):
         for _ in range(rng.randrange(1, 7)):
             wrap = rng.choice(wrappers)
             allowed, denied = wrap(allowed), wrap(denied)
-        policy = {"allowed_tables": [{"catalog": "*", "schema": "visible", "table": "*"}]}
+        policy = {"allowed_tables": [{"catalog": "*", "schema_path": ["visible"], "table": "*"}]}
         assert validate(db, allowed, policy)["allowed"], allowed
         result = validate(db, denied, policy)
         assert not result["allowed"] and result["code"] == "forbidden", (denied, result)
@@ -62,6 +62,7 @@ def test_embedded_nul_policy_does_not_truncate(db):
         policy = {key: ["md5\0suffix"]}
         result = validate(db, "SELECT md5('x')", policy)
         assert result["code"] == "invalid_input"
-    for field in ["catalog", "schema", "table"]:
-        entry = {"catalog": "*", "schema": "main", "table": "*", field: "name\0suffix"}
+    for field in ["catalog", "schema_path", "table"]:
+        entry = {"catalog": "*", "schema_path": ["main"], "table": "*",
+                 field: ["name\0suffix"] if field == "schema_path" else "name\0suffix"}
         assert validate(db, "SELECT 1", {"allowed_tables": [entry]})["code"] == "invalid_input"

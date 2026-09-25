@@ -47,7 +47,7 @@ Each validation call takes one coherent snapshot at execution. Lock before expos
 Use strict parameterized `CALL` for authoring; direct STRUCT `SET` silently drops
 unknown extra keys at any depth during DuckDB casting. The canonical setting is
 NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled nested
-`catalog`, `schema`, or leaf) fails closed instead of widening catalog matching.
+`catalog`, `schema_path`, or leaf) fails closed instead of widening catalog matching.
 See [global policy](../README.md#global-policy) in the README.
 
 Validation returns one row with `allowed`, `code`, `violations`, `error_type`,
@@ -77,9 +77,11 @@ objects (`duckdb_*`, `information_schema.*`) need an explicit rule from the star
 table; `[]` denies all tables and views. The rules, which the README's
 [table ACL](../README.md#table-acl) section illustrates:
 
-- A rule names a `catalog`, `schema`, and `table`; all three are matched against the
+- A rule names a `catalog`, `schema_path`, and `table`; all three are matched against the
   **resolved** identity of a table or view, never the caller's spelling, a CTE name, a file
-  path, or a reader argument. Text is exact and ASCII case-folded.
+  path, or a reader argument. Text is exact and ASCII case-folded. The nonempty schema path
+  contains literal identifier components, outermost first, and matches at exactly its depth.
+  A dot inside a component is part of that identifier, never a path separator.
 - Rules apply to the objects attributable to the caller: those the caller's own text names,
   wherever the name binds, and those the caller's own binders retrieve. A trusted definition
   (a host view, scalar or table macro, or an attached catalog's table or view) is
@@ -90,7 +92,9 @@ table; `[]` denies all tables and views. The rules, which the README's
   [trusted definitions](#function-enforcement-and-trusted-expansion) for the mechanism.
 - Only a whole-component `*` is a wildcard (`sales_*`, `?`, and `%` are literal names). A
   wildcard also matches objects created or attached later, and `catalog: '*'` matches
-  temporary shadow tables. An omitted `catalog` is `*`.
+  temporary shadow tables. An omitted `catalog` is `*`. Each `'*'` in `schema_path` matches
+  one component: `['finance', '*']` matches an immediate child, not a descendant of that child.
+  There is no recursive wildcard; `'**'` is literal. `['*']` matches only top-level schemas.
 - Within a layer `allowed_tables` is a union: any matching rule grants. Between layers it is an
   intersection: both the ceiling and the request layer must grant. Multiple entries pair
   specific catalogs and schemas without granting their cross-product.
@@ -132,8 +136,8 @@ lakehouse. Nested views remain opaque; a separately referenced inner view become
 For example, after creating `reporting.source_b` over `lake.main.orders` on the connection:
 
 ```python
-declared = {("memory", "reporting", "source_b")}
-rules = [{"catalog": c, "schema": s, "table": t} for c, s, t in declared]
+declared = {("memory", ("reporting",), "source_b")}
+rules = [{"catalog": c, "schema_path": list(s), "table": t} for c, s, t in declared]
 row = con.execute("""
     SELECT allowed, code, caller_objects
     FROM gatekeeper_validate(?, allowed_tables := ?)
@@ -142,9 +146,10 @@ if row is None or not row[0] or row[1] != "ok":
     raise ValueError("Query does not satisfy its declared inputs")
 # Fold ASCII only, like DuckDB identifiers and Gatekeeper's rules, not Unicode casefold().
 fold = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
-actual = {(o["catalog"].translate(fold), o["schema"].translate(fold),
+actual = {(o["catalog"].translate(fold), tuple(s.translate(fold) for s in o["schema_path"]),
            o["table"].translate(fold)) for o in row[2]}
-expected = {tuple(part.translate(fold) for part in key) for key in declared}
+expected = {(c.translate(fold), tuple(part.translate(fold) for part in s), t.translate(fold))
+            for c, s, t in declared}
 if actual != expected:
     raise ValueError("Declared inputs differ from caller-attributable inputs")
 ```
@@ -157,7 +162,7 @@ the equality comparison additionally detects unused declarations. Select named c
 
 **Evidence contract:**
 
-- Entries have the same `{catalog, schema, table, type}` shape as `objects`, with `type`
+- Entries have the same `{catalog, schema_path, table, type}` shape as `objects`, with `type`
   `table` or `view`. They preserve resolved catalog spelling, are sorted and deduplicated
   by those four fields, and form a subset of `objects`. Compare identities as structured
   components, ASCII case-insensitively; dots within quoted names are not separators.
@@ -786,7 +791,7 @@ catalogs/schemas fail closed before their serialization callbacks can run.
 `list_distinct`/`list_unique` and their `array_*` aliases use the source-reviewed fixed
 `histogram` implementation.
 These implementations obey blocks in both layers and appear in successful function
-evidence. Their catalog/schema are empty when the bound representation supplies no
+evidence. Their catalog is `''` and schema path is `[]` when the bound representation supplies no
 reliable provenance. Arbitrary extension bind data is not introspected.
 
 ## Remaining boundaries
@@ -889,7 +894,7 @@ SET autoinstall_known_extensions=false;
 SET memory_limit='512MB';
 SET threads=1;
 SET search_path='memory.reporting';
-CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema: 'reporting', 'table': '*'}]);
+CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': '*'}]);
 SET lock_configuration=true;
 ```
 
@@ -967,8 +972,13 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   function, and `EXECUTE` of one run when the statement runs, whether or not the host reads the
   row; an unread `SELECT ... FROM gatekeeper_enforce()` would otherwise have left the connection
   unenforced while the host believed it latched.
-- 2.0 can qualify a name with a nested schema path (`a.b.c.name`); such paths are `unsupported`
-  until the name-based checks are reviewed for them.
+- 2.0 supports nested schemas. Gatekeeper preserves written identifier components until binding,
+  and uses the resolved full schema ancestry for authorization, provenance, scan accounting,
+  and evidence. Three-part names can denote a nested schema without a catalog qualifier;
+  they are not assumed to be `catalog.schema.table`. Policy and result `schema_path` fields
+  have the same array type on 1.5, whose schemas have one component.
+  The tested 2.0 snapshot does not allow nested schemas in `USE`/`search_path`; qualify nested
+  names explicitly. Text-level refusals have no resolved catalog/schema identity (`''`/`[]`).
 - 2.0's default transaction-invalidation policy aborts an open transaction on any error,
   including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
   connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`

@@ -1,0 +1,52 @@
+# name: test/sql/schema_paths.test
+# description: Explicit schema paths are the only identity spelling on both engines
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE SCHEMA "finance.reports";
+
+statement ok
+CREATE TABLE "finance.reports".orders(i INTEGER);
+
+query IT
+SELECT allowed, objects[1].schema_path FROM gatekeeper_validate('SELECT * FROM "finance.reports".orders', allowed_tables := [{schema_path: ['finance.reports'], 'table': 'orders'}]);
+----
+true	[finance.reports]
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM "finance.reports".orders', allowed_tables := [{schema_path: ['finance', 'reports'], 'table': 'orders'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', allowed_tables := [{schema: 'main', 'table': 'orders'}]);
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', allowed_tables := [{schema_path: [], 'table': 'orders'}]);
+----
+invalid_input
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT 1', blocked_tables := [{schema_path: ['main', NULL], 'table': 'orders'}]);
+----
+invalid_input
+
+statement ok
+CALL gatekeeper_configure(json := '{"version":2,"options":{"allowed_tables":[{"schema_path":["finance.reports"],"table":"orders"}]}}');
+
+query IT
+SELECT allowed, caller_objects[1].schema_path FROM gatekeeper_validate('SELECT * FROM "finance.reports".orders');
+----
+true	[finance.reports]
+
+statement ok
+SET gatekeeper_policy = current_setting('gatekeeper_policy');
+
+query T
+SELECT current_setting('gatekeeper_policy').allowed_tables[1].schema_path;
+----
+[finance.reports]

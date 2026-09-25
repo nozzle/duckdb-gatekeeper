@@ -88,7 +88,7 @@ def test_rejected_signatures(db,args):
 
 @pytest.mark.parametrize("options", [
     {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":[""]},
-    {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema":"main","table":"t","extra":"x"}]},
+    {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema_path":["main"],"table":"t","extra":"x"}]},
 ])
 def test_invalid_typed_values(db,options):
     result = validate(db,"SELECT 1", options)
@@ -106,7 +106,7 @@ def test_configure_replacement_and_independent_options(db):
 
 def test_struct_table_parameters(db):
     db.execute("CREATE TABLE t(x INT)")
-    for entries in [[{"schema":"main","table":"t"}], [{"catalog":"memory","schema":"main","table":"t"}]]:
+    for entries in [[{"schema_path":["main"],"table":"t"}], [{"catalog":"memory","schema_path":["main"],"table":"t"}]]:
         assert validate(db,"SELECT * FROM t",{"allowed_tables":entries})["allowed"]
     assert not validate(db,"SELECT * FROM t",{"allowed_tables":[]})["allowed"]
 
@@ -116,7 +116,7 @@ def test_structured_object_and_limit_diagnostics(db):
     result=validate(db,"SELECT * FROM secret.t",{"allowed_tables":[]})
     violation=result["violations"][0]
     assert violation["rule"]=="table"
-    assert (violation["catalog"],violation["schema"],violation["table"])==("memory","secret","t")
+    assert (violation["catalog"],violation["schema_path"],violation["table"])==("memory",["secret"],"t")
     assert violation["function_name"]==""
     result=validate(db,"SELECT 1;SELECT 2")
     assert result["code"]=="forbidden" and result["violations"][0]["rule"]=="limit"
@@ -133,7 +133,7 @@ def test_file_backed_view_requires_own_permission(db,tmp_path):
     db.execute(f"COPY (SELECT 42 AS x) TO '{path}' (FORMAT PARQUET)")
     db.execute(f"CREATE VIEW v AS SELECT * FROM read_parquet('{path}')")
     assert not validate(db,"SELECT * FROM v",{"allowed_tables":[]})["allowed"]
-    assert validate(db,"SELECT * FROM v",{"allowed_tables":[{"schema":"main","table":"v"}]})["allowed"]
+    assert validate(db,"SELECT * FROM v",{"allowed_tables":[{"schema_path":["main"],"table":"v"}]})["allowed"]
     result = validate(db, f"SELECT * FROM read_parquet('{path}')")
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # The view's reader is the view's: neither the allowlist nor a block on it reaches into the body.
@@ -144,8 +144,8 @@ def test_view_is_authorized_by_its_own_identity(db):
     # The view the caller names must pass; the table its body reads is the view's own and appears as evidence.
     # The caller's own reference to that table, next to the view, is still the caller's.
     db.execute("CREATE TABLE t(x INT); CREATE VIEW v AS SELECT * FROM t")
-    table={"schema":"main","table":"t"}
-    view={"schema":"main","table":"v"}
+    table={"schema_path":["main"],"table":"t"}
+    view={"schema_path":["main"],"table":"v"}
     result = validate(db,"SELECT * FROM v",{"allowed_tables":[view]})
     assert result["allowed"] and [(o["table"], o["type"]) for o in result["objects"]] == [("t", "table"), ("v", "view")]
     assert not validate(db,"SELECT * FROM v",{"allowed_tables":[table]})["allowed"]
@@ -212,7 +212,7 @@ def test_file_shaped_catalog_name_uses_table_policy(db, tmp_path, monkeypatch):
     assert result["allowed"] and result["objects"][0]["type"] == "table"
     assert not validate(db, 'SELECT * FROM "data.parquet"', {"allowed_tables": []})["allowed"]
     assert not validate(db, 'SELECT * FROM "data.parquet"', {
-        "blocked_tables": [{"schema": "main", "table": "data.parquet"}]
+        "blocked_tables": [{"schema_path": ["main"], "table": "data.parquet"}]
     })["allowed"]
     result = validate(db, "SELECT * FROM 'missing.duckdb'")
     assert not result["allowed"] and result["code"] == "forbidden"
@@ -234,7 +234,7 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     for name, function in [("data.parquet", "parquet_scan"), ("data.csv", "read_csv_auto")]:
         result = validate(db, f"SELECT * FROM '{name}'")
         assert result["allowed"], (name, result)
-        assert result["objects"] == [{"catalog": "", "schema": "", "table": name, "type": "replacement"}]
+        assert result["objects"] == [{"catalog": "", "schema_path": [], "table": name, "type": "replacement"}]
         assert [f["name"] for f in result["functions"]] == [function]
     # An admitted reader still surfaces real binding errors for missing files.
     assert validate(db, "SELECT * FROM '/does/not/exist.parquet'")["code"] == "binding"
@@ -248,7 +248,7 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # allowed_tables governs catalog objects, not reader capabilities, matching range().
     configure(db, {"allowed_functions": ["parquet_scan"], "allowed_tables": [],
-                   "blocked_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})
+                   "blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "*"}]})
     assert validate(db, "SELECT * FROM 'data.parquet'")["allowed"]
 
 
@@ -358,14 +358,14 @@ def test_unclaimed_file_names_return_missing_table_without_autoload(db, name):
 @pytest.mark.parametrize("name", ["duckdb_views", "duckdb_tables", "duckdb_columns", "duckdb_logs",
                                   "sqlite_master", "information_schema.tables"])
 def test_internal_views_require_explicit_permission(db, name):
-    for options in [{}, {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]}]:
+    for options in [{}, {"allowed_tables": [{"catalog": "*", "schema_path": ["*"], "table": "*"}]}]:
         result = validate(db, "SELECT * FROM " + name, options)
         assert result["code"] == "forbidden" and result["error_message"] == "", result
         assert "internal_object" in {v["rule"] for v in result["violations"]}
 
 
 def test_internal_view_explicit_permission_intersects_other_policies(db):
-    table = {"catalog": "SYSTEM", "schema": "MAIN", "table": "DuckDB_Tables"}
+    table = {"catalog": "SYSTEM", "schema_path": ["MAIN"], "table": "DuckDB_Tables"}
     options = {"allowed_tables": [table]}
     configure(db, options)
     result = validate(db, "SELECT * FROM duckdb_tables", options)
@@ -373,24 +373,24 @@ def test_internal_view_explicit_permission_intersects_other_policies(db):
     assert not validate(db, "SELECT * FROM duckdb_views", options)["allowed"]
     assert not validate(db, "SELECT * FROM duckdb_tables", {"allowed_tables": [{**table, "catalog": "memory"}]})["allowed"]
     assert not validate(db, "SELECT * FROM duckdb_tables", {
-        "allowed_tables": [{"schema": "main", "table": "duckdb_tables"}]
+        "allowed_tables": [{"schema_path": ["main"], "table": "duckdb_tables"}]
     })["allowed"]
 
 
 def test_object_identifiers_are_ascii_case_insensitive(db):
     db.execute("CREATE SCHEMA Reporting; CREATE TABLE Reporting.Orders(a INT); CREATE TABLE t(x INT)")
-    assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_tables": [{"catalog": "*", "schema": "reporting", "table": "*"}]})["allowed"]
-    assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_tables": [{"catalog": "memory", "schema": "*", "table": "*"}]})["allowed"]
+    assert validate(db, "SELECT * FROM REPORTING.ORDERS", {"allowed_tables": [{"catalog": "*", "schema_path": ["reporting"], "table": "*"}]})["allowed"]
+    assert validate(db, "SELECT * FROM MEMORY.main.t", {"allowed_tables": [{"catalog": "memory", "schema_path": ["*"], "table": "*"}]})["allowed"]
     db.execute("CREATE MACRO local_abs(x) AS abs(x)")
     configure(db, {"allowed_functions": ["local_abs"]})
     assert validate(db, "SELECT MEMORY.main.local_abs(-1)", {
         "allowed_tables": [], "allowed_functions": ["local_abs"]
     })["allowed"]
     for catalog in [None, "MeMoRy"]:
-        options = {"allowed_tables": [{"catalog": catalog, "schema": "REPORTING", "table": "orders"}]}
+        options = {"allowed_tables": [{"catalog": catalog, "schema_path": ["REPORTING"], "table": "orders"}]}
         assert validate(db, "SELECT * FROM reporting.orders", options)["allowed"]
     result = validate(db, "SELECT * FROM reporting.orders", {"allowed_tables": []})
-    assert result["violations"][0]["schema"] == "Reporting"
+    assert result["violations"][0]["schema_path"] == ["Reporting"]
     assert result["violations"][0]["table"] == "Orders"
 
 
@@ -439,11 +439,11 @@ def test_internal_dependency_of_trusted_view_is_the_views_own(db):
     db.execute("CREATE VIEW my_tables AS SELECT table_name FROM duckdb_tables")
     assert validate(db, "SELECT * FROM my_tables")["allowed"]
     assert validate(db, "SELECT * FROM duckdb_tables")["violations"][0]["rule"] == "internal_object"
-    options = {"allowed_tables": [{"schema": "main", "table": "my_tables"}]}
+    options = {"allowed_tables": [{"schema_path": ["main"], "table": "my_tables"}]}
     configure(db, options)
     result = validate(db, "SELECT * FROM my_tables", options)
     assert result["allowed"] and any(f["name"] == "duckdb_tables" for f in result["functions"]), result
-    assert {"catalog": "system", "schema": "main", "table": "duckdb_tables", "type": "view"} in result["objects"], result
+    assert {"catalog": "system", "schema_path": ["main"], "table": "duckdb_tables", "type": "view"} in result["objects"], result
     assert validate(db, "SELECT * FROM duckdb_tables", options)["violations"][0]["rule"] == "internal_object"
     assert validate(db, "SELECT * FROM my_tables, duckdb_tables", options)["violations"][0]["rule"] == "internal_object"
     assert validate(db, "SELECT * FROM duckdb_tables()", options)["code"] == "forbidden"

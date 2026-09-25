@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json",
-  "title": "Gatekeeper policy document, version 1",
+  "$id": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v2.schema.json",
+  "title": "Gatekeeper policy document, version 2",
   "description": "Input to gatekeeper_configure(json := ...) or gatekeeper_validate(sql, json := ...). Configure replaces the global policy with defaults plus these options; validation applies these request options under the current global ceiling. Duplicate object keys are rejected by the decoder before schema validation could represent them.",
   "type": "object",
   "additionalProperties": false,
@@ -9,12 +9,12 @@
   "properties": {
     "$schema": {
       "description": "Optional editor schema association; never fetched by Gatekeeper.",
-      "const": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json"
+      "const": "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v2.schema.json"
     },
     "version": {
       "description": "Document format version, independent of DuckDB and Gatekeeper releases.",
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "options": {
       "type": "object",
@@ -59,13 +59,13 @@
       "items": {"$ref": "#/$defs/table"}
     },
     "table": {
-      "description": "'*' matches any whole component. Omitted or null catalog matches any catalog.",
+      "description": "'*' matches one whole component at exactly the specified schema depth, never recursively. Omitted or null catalog matches any catalog.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema", "table"],
+      "required": ["schema_path", "table"],
       "properties": {
         "catalog": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
-        "schema": {"$ref": "#/$defs/name"},
+        "schema_path": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
         "table": {"$ref": "#/$defs/name"}
       }
     }

@@ -15,11 +15,11 @@ from support.typed_helpers import configure, rule, validate
 
 
 def tables(*names, schema="main"):
-    return [{"schema": schema, "table": name} for name in names]
+    return [{"schema_path": [schema], "table": name} for name in names]
 
 
 def objects(result):
-    return sorted((o["schema"], o["table"], o["type"]) for o in result["objects"])
+    return sorted((o["schema_path"][0], o["table"], o["type"]) for o in result["objects"])
 
 
 @pytest.fixture
@@ -210,8 +210,8 @@ def test_scalar_macros_over_internal_views_own_their_readers(db):
 def test_caller_named_metadata_views_keep_their_readers_never_bind(db):
     # Exact table rules for a caller-named internal metadata view are necessary and not sufficient: the reader
     # behind it is the caller's, and never-bind. Tenant introspection goes through a host definition.
-    exact = {"allowed_tables": [{"catalog": "system", "schema": "information_schema", "table": "tables"},
-                                {"catalog": "system", "schema": "main", "table": "duckdb_tables"}]}
+    exact = {"allowed_tables": [{"catalog": "system", "schema_path": ["information_schema"], "table": "tables"},
+                                {"catalog": "system", "schema_path": ["main"], "table": "duckdb_tables"}]}
     configure(db, exact)
     for sql in ["SELECT * FROM information_schema.tables", "SELECT * FROM duckdb_tables"]:
         denied = validate(db, sql, exact)
@@ -253,7 +253,7 @@ def test_written_names_match_resolved_identities_in_every_spelling(db):
     denied = validate(db, 'SELECT * FROM dotted_v, "a.b"."x.y"', {"allowed_tables": views})
     assert denied["code"] == "forbidden" and denied["violations"][0]["table"] == "x.y", denied
     # A name in another schema or catalog is the caller's own reference to that other table, not to the view's.
-    allowed_main = {"allowed_tables": views + [{"catalog": "memory", "schema": "main", "table": "orders"}]}
+    allowed_main = {"allowed_tables": views + [{"catalog": "memory", "schema_path": ["main"], "table": "orders"}]}
     assert validate(db, "SELECT * FROM v, main.orders", allowed_main)["allowed"]
     assert validate(db, "SELECT * FROM lake_v, main.orders", allowed_main)["allowed"]
     assert not validate(db, "SELECT * FROM lake_v, lake.main.orders", allowed_main)["allowed"]
@@ -269,14 +269,14 @@ def test_temp_shadow_tables_are_separate_identities(db):
     denied = validate(db, "SELECT * FROM v, t", {"allowed_tables": tables("v")})
     assert denied["code"] == "forbidden" and denied["violations"][0]["catalog"] == "temp", denied
     assert validate(db, "SELECT * FROM v", {"allowed_tables": tables("v")})["allowed"]
-    assert validate(db, "SELECT * FROM v, t", {"allowed_tables": tables("v") + [rule("temp", "main", "t"),
-                                                                                 rule("memory", "main", "t")]})["allowed"]
+    assert validate(db, "SELECT * FROM v, t", {"allowed_tables": tables("v") + [rule("temp", ["main"], "t"),
+                                                                                 rule("memory", ["main"], "t")]})["allowed"]
 
 
 def test_attached_catalog_views_are_trusted_definitions(db):
     db.execute("ATTACH ':memory:' AS lake; CREATE TABLE lake.main.orders(id INTEGER); "
                "CREATE VIEW lake.main.recent AS SELECT * FROM lake.main.orders WHERE id > 0")
-    recent = [{"catalog": "lake", "schema": "main", "table": "recent"}]
+    recent = [{"catalog": "lake", "schema_path": ["main"], "table": "recent"}]
     result = validate(db, "SELECT * FROM lake.main.recent", {"allowed_tables": recent})
     assert result["allowed"] and [(o["catalog"], o["table"], o["type"]) for o in result["objects"]] == [
         ("lake", "orders", "table"), ("lake", "recent", "view")], result
@@ -318,10 +318,10 @@ def test_prepared_statements_are_decided_when_they_execute(catalog, agent):
     # between, is refused, and admitted again once the view is allowed again.
     sql = "SELECT * FROM reporting.leak WHERE amount > ?"
     assert agent.execute(sql, [0]).fetchall() == [("x", 1.0)]
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "orders"}]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "orders"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute(sql, [0])
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}]})
     assert agent.execute(sql, [0]).fetchall() == [("x", 1.0)]
 
 
@@ -339,10 +339,10 @@ def test_parameterless_prepared_statements_are_decided_under_the_policy_in_force
     sql = "SELECT * FROM reporting.leak"
     agent.executemany(sql, [[]])
     assert agent.fetchall() == [("x", 1.0)]
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "orders"}]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "orders"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.executemany(sql, [[]])
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}]})
     agent.executemany(sql, [[]])
     assert agent.fetchall() == [("x", 1.0)]
     # Every execution, and no prepare, is recorded as allowed; the refusal is recorded once, at authorization.
@@ -361,4 +361,4 @@ def test_log_only_records_the_same_decisions_and_refuses_nothing(catalog, agent)
         ("SELECT * FROM reporting.leak", "log_only", True, "execution"),
         ("SELECT * FROM reporting.leak, secret.salaries", "log_only", False, "authorize")]
     assert found[1]["violations"][0]["table"] == "salaries" and found[1]["objects"] == []
-    assert sorted((o["schema"], o["table"]) for o in found[0]["objects"]) == [("reporting", "leak"), ("secret", "salaries")]
+    assert sorted((o["schema_path"], o["table"]) for o in found[0]["objects"]) == [(["reporting"], "leak"), (["secret"], "salaries")]

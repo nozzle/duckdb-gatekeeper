@@ -104,7 +104,7 @@ void RegisterPolicySetting(ExtensionLoader &loader) {
 	FunctionDescription description;
 	description.description =
 	    "Replaces the global Gatekeeper policy atomically; omitted options revert to the built-in defaults.";
-	description.examples = {"CALL gatekeeper_configure(allowed_tables := [{schema: 'reporting', 'table': "
+	description.examples = {"CALL gatekeeper_configure(allowed_tables := [{schema_path: ['reporting'], 'table': "
 	                        "'*'}], blocked_functions := ['md5'])"};
 	for (const auto &name : gatekeeper::OptionNames())
 		description.parameter_names.push_back(name);
