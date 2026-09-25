@@ -3,12 +3,16 @@
 #include "yyjson.hpp"
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
 
+namespace duckdb {
+class AggregateFunction;
+}
 namespace gatekeeper {
 using Json = duckdb_yyjson::yyjson_val;
 using Names = std::set<std::string>;
@@ -181,6 +185,9 @@ bool NamesObject(const WrittenNames &written, const std::string &catalog, const 
 // Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
 // Everything else in the plan came from a trusted definition.
 struct Provenance {
+	// The host's count_star callbacks, distinct from a statically linked loadable's engine copy.
+	// Implementation fingerprint only: this is not caller evidence or an authorization grant.
+	std::shared_ptr<duckdb::AggregateFunction> host_count_star;
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
 	Names replacement_functions;

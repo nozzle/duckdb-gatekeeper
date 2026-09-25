@@ -141,3 +141,24 @@ def test_host_dispatcher_leaf_is_not_a_dispatch_capability(db):
     configure(db, {"allowed_functions": grants("aggregate", catalog="memory", schema_path=("main",), type="macro")})
     assert validate(db, "SELECT aggregate(42)")["allowed"]
     assert validate(db, "SELECT main.aggregate(42)")["allowed"]
+
+
+def test_subquery_count_intrinsic_matches_host_and_loadable_evidence(db):
+    # A statically linked loadable has different function pointers from the Python host.
+    # Both plans must identify the factory count_star, without dropping its policy checks.
+    db.execute("CREATE TABLE t AS SELECT 1 x; CALL enable_logging('Gatekeeper'); SET logging_level='debug'")
+    sql = "SELECT (SELECT count(*) FROM t)"
+    expected = validate(db, sql)
+    assert expected["allowed"], expected
+    counts = [f for f in expected["functions"] if f["name"] == "count_star"]
+    assert counts == [{"catalog":"system", "schema_path":["main"], "name":"count_star", "type":"aggregate"}]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute(sql).fetchone() == (1,)
+        actual = db.execute("SELECT functions FROM duckdb_logs_parsed('Gatekeeper') "
+                            "WHERE mode='enforce' AND statement=?", [sql]).fetchone()[0]
+        assert actual == expected["functions"]
+        configure(db, {"blocked_functions":["count_star"]})
+        assert validate(db, sql)["code"] == "forbidden"
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql)
