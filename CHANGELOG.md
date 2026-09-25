@@ -28,8 +28,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   Computed/parameterized targets and dotted/method dispatcher calls are refused; unrelated host
   functions/macros with dispatcher-like names retain their own argument contracts. IN-list,
   SIMILAR TO and canonicalized JSON arrow helpers cannot select explicitly granted host shadows.
-  Caller `COLLATE` is refused on 1.5 because its direct-bound scalar implementation has no reliable
-  catalog provenance. Trusted macro/view bodies retain their existing trust. Replacement readers
+  Caller `COLLATE` on 1.5 uses exact system collation entries to identify its unstamped scalar
+  capabilities; qualified grants and blocks apply to surviving implementations. Trusted macro/view bodies retain their existing trust. Replacement readers
   are resolved and pinned before reader binding; implicit helper shadows are refused even if granted.
 
 - DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written

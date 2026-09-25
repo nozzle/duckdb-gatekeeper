@@ -121,11 +121,7 @@ def test_user_types_use_connection_search_path(db):
 
 @pytest.mark.parametrize("name", ["nocase", "noaccent", "nfc", "binary", "de", "nocase.noaccent"])
 def test_collations_need_no_name_permission(db, name):
-    from support.artifact import ENGINE_MAJOR
     sql = f"SELECT 'a' COLLATE \"{name}\""
-    if ENGINE_MAJOR < 2:
-        assert validate(db, sql)["code"] == "forbidden"
-        return
     assert validate(db, sql)["allowed"]
     result = validate(db, sql, {"blocked_functions": [name]})
     assert result["allowed"], result
@@ -134,23 +130,19 @@ def test_collations_need_no_name_permission(db, name):
 
 def test_host_collations_in_comparisons_sorting_and_types(db):
     from support.artifact import ENGINE_MAJOR
+    if ENGINE_MAJOR >= 2:
+        # The candidate renamed this ICU scalar; a new implementation name is not a reviewed default.
+        configure(db, {"allowed_functions":[{"catalog":"system","schema_path":["main"],"name":"collate_de","type":"scalar"}]})
     db.execute("CREATE TABLE collated(s VARCHAR COLLATE de); INSERT INTO collated VALUES ('b'), ('a')")
     for sql in ("SELECT s FROM collated ORDER BY s COLLATE de",
                 "SELECT s = 'a' COLLATE de FROM collated",
                 "SELECT CAST(s AS VARCHAR) COLLATE de FROM collated"):
-        if ENGINE_MAJOR < 2:
-            assert validate(db, sql)["code"] == "forbidden"
-        else:
-            assert validate(db, sql)["allowed"], validate(db, sql)
+        assert validate(db, sql)["allowed"], validate(db, sql)
         db.execute(sql).fetchall()
 
 
 @pytest.mark.parametrize("collation,function", [("nocase", "lower"), ("noaccent", "strip_accents"), ("nfc", "nfc_normalize")])
 def test_collation_does_not_infer_function_call(db, collation, function):
-    from support.artifact import ENGINE_MAJOR
-    if ENGINE_MAJOR < 2:
-        assert validate(db, f"SELECT 'a' COLLATE {collation}")["code"] == "forbidden"
-        return
     result = validate(db, f"SELECT 'a' COLLATE {collation}", {"blocked_functions": [function]})
     assert result["allowed"], result
     assert not validate(db, f"SELECT {function}('a')", {"blocked_functions": [function]})["allowed"]

@@ -1,7 +1,6 @@
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -177,7 +176,7 @@ static gatekeeper::Identity ListAggregateImplementation(const BoundFunctionExpre
 	auto schema = yyjson_mut_obj_get(aggregate, "schema_name");
 	if (yyjson_mut_is_str(catalog))
 		identity.catalog = yyjson_mut_get_str(catalog);
-	if (yyjson_mut_is_str(schema))
+	if (yyjson_mut_is_str(schema) && yyjson_mut_get_len(schema))
 		identity.schema_path = {yyjson_mut_get_str(schema)};
 	if (!target) {
 		auto path = yyjson_mut_obj_get(yyjson_mut_obj_get(aggregate, "qname"), "path");
@@ -207,19 +206,18 @@ static gatekeeper::Identity ListAggregateImplementation(const BoundFunctionExpre
 static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                                  const gatekeeper::Provenance &provenance, LogicalOperator &root,
                                  gatekeeper::Result &result) {
-	auto attributable = [&](const string &name) { return provenance.Attributable(binding, name); };
+	auto attributable = [&](const string &name) {
+		return provenance.Attributable(binding, name) || provenance.collation_functions.count(gatekeeper::Lower(name));
+	};
 	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true) {
 		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::CanonicalFunction(identity.name)) ||
 		                         provenance.caller_expansion_targets.count(gatekeeper::Lower(identity.name))))
 			grant = true;
 #if GATEKEEPER_DUCKDB_MAJOR < 2
-		// These reviewed aggregate binders replace their stamped overload with a factory specialization.
+		// Engine aggregate binders can replace a stamped overload with a factory specialization.
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
 		// policy leaf match, a runtime catalog lookup, or evidence inserted by this plan walk.
-		static const gatekeeper::Names specialized = {
-		    "sum",      "avg",           "min",           "max",    "first", "last",    "any_value",
-		    "quantile", "quantile_cont", "quantile_disc", "median", "mode",  "entropy", "arbitrary"};
-		if (identity.catalog.empty() && identity.type == "aggregate" && specialized.count(identity.name)) {
+		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "aggregate") {
 			const gatekeeper::Identity *definition = nullptr;
 			bool ambiguous = false;
 			for (const auto &entry : provenance.function_entries) {
@@ -231,6 +229,16 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			}
 			if (definition && !ambiguous)
 				identity = *definition;
+		}
+		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "scalar" &&
+		    provenance.collation_functions.count(gatekeeper::Lower(identity.name))) {
+			bool competing = false;
+			for (const auto &entry : provenance.function_entries)
+				if (entry.type == "scalar" && gatekeeper::Lower(entry.name) == gatekeeper::Lower(identity.name) &&
+				    !gatekeeper::SystemIdentity(entry))
+					competing = true;
+			if (!competing)
+				identity = {"system", {"main"}, identity.name, "scalar"};
 		}
 #endif
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
@@ -268,6 +276,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			auto &name = engine::FunctionName(implementation);
 			function(engine::FunctionIdentity(implementation, "scalar"), attributable(name),
 			         binding.caller_functions.count(gatekeeper::CanonicalFunction(name)) ||
+			             provenance.collation_functions.count(gatekeeper::Lower(name)) ||
 			             (binding.caller_collates && gatekeeper::CollationFunction(name)));
 			auto lambda = dynamic_cast<ListLambdaBindData *>(engine::BindInfo(bound).get());
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
@@ -295,17 +304,6 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &name = engine::FunctionName(child.Cast<BoundAggregateExpression>());
 			auto identity = engine::AggregateIdentity(child.Cast<BoundAggregateExpression>());
-#if GATEKEEPER_DUCKDB_MAJOR < 2
-			// plan_subquery.cpp constructs count_star directly, without a catalog lookup. Recognize the
-			// actual builtin callbacks, not just a leaf that a foreign implementation could reuse. A
-			// statically linked loadable has its own engine copy: accept either its factory or the host's
-			// fixed system catalog implementation, captured without running a bind callback.
-			if (identity.catalog.empty() && name == "count_star" &&
-			    (child.Cast<BoundAggregateExpression>().function == CountStarFun::GetFunction() ||
-			     (provenance.host_count_star &&
-			      child.Cast<BoundAggregateExpression>().function == *provenance.host_count_star)))
-				identity = {"system", {"main"}, "count_star", "aggregate"};
-#endif
 			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::CanonicalFunction(name)));
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {

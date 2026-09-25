@@ -818,9 +818,10 @@ execution time, outside this validation.
 
 ### Callback bypasses
 
-Gatekeeper does not authorize type names or cast implementations. Caller COLLATE is refused
-on 1.5 because its directly bound scalar has no reliable namespace; 2.0 checks the scalar
-implementations that survive binding. This is not a collation-name allowlist.
+Gatekeeper does not authorize type names or cast implementations. Caller COLLATE implementations
+that survive binding are authorized by qualified scalar identity: 1.5 recovers missing stamps only
+from the exact caller-selected system collation entries; 2.0 supplies qualified scalar implementations.
+This is not a collation-name allowlist or a pre-callback interception surface.
 The database owner controls extension loading and definitions. Table/view catalog
 and schema restrictions do not restrict type lookup. There is no mandatory type audit.
 Type resolution can autoload or autoinstall extensions when enabled; hosts must

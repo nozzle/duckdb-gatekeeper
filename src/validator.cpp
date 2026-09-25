@@ -462,8 +462,10 @@ struct Walker {
 		if (kind == "BaseTableRef" && binding)
 			binding->caller_table_names.insert(WrittenPath(value));
 		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
-		if (kind == "CollateExpression" && binding)
+		if (kind == "CollateExpression" && binding) {
 			binding->caller_collates = true;
+			binding->caller_collation_names.insert(Lower(Field(value, "collation")));
+		}
 		if (kind == "LimitModifier" || kind == "LimitPercentModifier" || kind == "LegacyLimitPercentModifier") {
 			BindTime(yyjson_obj_get(value, "limit"), "LIMIT");
 			BindTime(yyjson_obj_get(value, "offset"), "OFFSET");
@@ -549,8 +551,8 @@ struct Walker {
 			auto arguments = Arguments(value);
 			if (yyjson_is_true(yyjson_obj_get(value, "is_operator")))
 				Implied({name});
-			// The parsers also serialize literal constructors as ordinary calls. Until origin is exposed,
-			// treat an explicit same-name call conservatively as the corresponding builtin syntax.
+			// The parsed AST does not distinguish syntax-implied helpers from written calls, so both
+			// receive the corresponding builtin syntax's system-origin requirement.
 			if (name == "list_value" || name == "struct_pack" || name == "row" || name == "contains" ||
 			    name == "regexp_full_match")
 				Implied({name});

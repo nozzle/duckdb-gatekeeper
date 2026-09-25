@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from support.artifact import ROOT, ENGINE_MAJOR
+from support.artifact import ROOT
 from support.enforcement import DENIED, enforce
 from support.headers import header_names
 from support.typed_helpers import configure, validate, grants
@@ -42,9 +42,6 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
     configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "tm"]]})
     for sql in [direct, *WRAPPERS.values()]:
         result = validate(db, sql)
-        if ENGINE_MAJOR < 2 and sql == direct and "COLLATE" in expression:
-            assert result["code"] == "forbidden"
-            continue
         assert result["allowed"], (sql, result)
         assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (sql, result)
         db.execute(sql).fetchall()
@@ -54,7 +51,7 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
     layer = {"blocked_functions": [] if global_block else [blocked]}
     result = validate(db, direct, layer)
     assert result["code"] == "forbidden", result
-    assert (ENGINE_MAJOR < 2 and "COLLATE" in expression) or any(v["function_name"] == blocked for v in result["violations"]), result
+    assert any(v["function_name"] == blocked for v in result["violations"]), result
     assert result["objects"] == result["functions"] == []
     for wrapper, sql in WRAPPERS.items():
         result = validate(db, sql, layer)
@@ -62,7 +59,7 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
         assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (wrapper, result)
     result = validate(db, direct + " FROM v", layer)
     assert result["code"] == "forbidden", result
-    assert (ENGINE_MAJOR < 2 and "COLLATE" in expression) or any(v["function_name"] == blocked for v in result["violations"]), result
+    assert any(v["function_name"] == blocked for v in result["violations"]), result
 
 
 @pytest.mark.parametrize("expression", ["list_sum(NULL)", "list_distinct(NULL)", "list_unique(NULL)"])
@@ -240,15 +237,11 @@ def test_every_list_lambda_alias_exposes_its_body(db, function):
     db.execute("CREATE VIEW v AS SELECT " + expression + " AS x")
     for sql in ("SELECT " + expression, "SELECT * FROM v"):
         result = validate(db, sql)
-        if ENGINE_MAJOR < 2 and sql != "SELECT * FROM v":
-            assert result["code"] == "forbidden"
-            continue
         assert result["allowed"], result
         assert any(f["name"] == "lower" for f in result["functions"]), result
     result = validate(db, "SELECT " + expression, {"blocked_functions": ["lower"]})
     assert result["code"] == "forbidden", result
-    if ENGINE_MAJOR >= 2:
-        assert result["violations"][0]["function_name"] == "lower", result
+    assert result["violations"][0]["function_name"] == "lower", result
     assert validate(db, "SELECT * FROM v", {"blocked_functions": ["lower"]})["allowed"]
     # A NULL list still binds the builtin with an empty body; nothing to inspect, nothing to deny.
     assert validate(db, f"SELECT {function}(NULL, lambda x: x)" if "reduce" not in function

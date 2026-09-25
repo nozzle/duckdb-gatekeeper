@@ -193,3 +193,26 @@ def test_default_macro_dependencies_need_qualified_grants_in_strict_layers(db, c
     configure(db, {"use_default_functions":False,
                    "allowed_functions":grants("host_count", catalog="memory", schema_path=("main",), type="macro")})
     assert validate(db, "SELECT host_count()")["allowed"]
+
+
+@pytest.mark.parametrize("collation,name", [("nocase","lower"), ("noaccent","strip_accents"),
+                                            ("nfc","nfc_normalize"), ("de","icu_collate_de")])
+def test_collation_system_capability_and_scalar_shadow(db, collation, name):
+    from support.artifact import ENGINE_MAJOR
+    if collation == "de" and ENGINE_MAJOR >= 2:
+        name = "collate_de"
+    sql = f"SELECT s FROM (VALUES ('a'), ('B')) t(s) ORDER BY s COLLATE {collation}"
+    db.execute(f'CREATE MACRO main."{name}"(s) AS s')
+    strict = {"use_default_functions":False,
+              "allowed_functions":grants(name, catalog="system", schema_path=("main",), type="scalar")}
+    configure(db, strict)
+    result = validate(db, sql)
+    assert result["allowed"], result
+    assert {"catalog":"system","schema_path":["main"],"name":name,"type":"scalar"} in result["functions"]
+    assert validate(db, f'SELECT main."{name}"(\'a\')')["code"] == "forbidden"
+    assert validate(db, sql, {"blocked_functions":[name]})["code"] == "forbidden"
+    assert validate(db, sql, {"allowed_functions":grants(name, catalog="memory", schema_path=("main",))})["code"] == "forbidden"
+    assert validate(db, sql, {"allowed_functions":grants(name, catalog="system", schema_path=("main",), type="table")})["code"] == "forbidden"
+    with db.cursor() as agent:
+        enforce(agent)
+        assert len(agent.execute(sql).fetchall()) == 2

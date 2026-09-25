@@ -2,7 +2,7 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -765,33 +765,26 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
 	CheckParameterFallbacks(context, layers, unit.binding, parameters, true, result);
-#if GATEKEEPER_DUCKDB_MAJOR < 2
-	// The host catalog owns callbacks from the running engine, even when our binder/factories are
-	// statically linked into a separate loadable. Resolve only the fixed builtin, without binding it.
-	if (!unit.provenance.host_count_star) {
-		auto &entry = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", "count_star");
-		if (entry.type != CatalogType::AGGREGATE_FUNCTION_ENTRY || !entry.internal)
-			throw BinderException("Cannot identify host count_star builtin");
-		auto &functions = entry.Cast<AggregateFunctionCatalogEntry>().functions;
-		if (functions.Size() != 1)
-			throw BinderException("Unexpected host count_star overloads");
-		unit.provenance.host_count_star = std::make_shared<AggregateFunction>(functions.GetFunctionByOffset(0));
+	// PushVarcharCollation resolves only system.main collation entries, never scalar search-path shadows.
+	// Read their embedded scalar names without binding/evaluating anything. Only these exact capabilities
+	// may recover absent 1.5 stamps; on 2.0 they also attribute renamed ICU implementations. A familiar
+	// scalar leaf or ICU prefix by itself supplies no provenance.
+	for (const auto &collation : unit.binding.caller_collation_names) {
+		if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix")
+			continue;
+		for (const auto &part : StringUtil::Split(collation, ".")) {
+			auto &entry = engine::GetEntry(context, CatalogType::COLLATION_ENTRY, "system", "main", part);
+			if (entry.type != CatalogType::COLLATION_ENTRY)
+				throw BinderException("Unknown collation implementation");
+			unit.provenance.collation_functions.insert(
+			    gatekeeper::Lower(engine::FunctionName(entry.Cast<CollateCatalogEntry>().function)));
+		}
 	}
-#endif
 	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
 	BoundParameterMap bound_parameters(parameter_data);
 	auto binder = Binder::CreateBinder(context);
-	// On 1.5 collation functions are embedded, unstamped implementations bound without our callback.
-	// Refuse the caller's explicit route before binding rather than invent a scalar catalog identity.
-#if GATEKEEPER_DUCKDB_MAJOR < 2
-	if (unit.binding.caller_collates) {
-		result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
-		                          "qualified function authorization for caller COLLATE requires DuckDB 2.0");
-		throw PermissionException("unverifiable collation implementation");
-	}
-#endif
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
 	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{context, layers, unit.binding, unit.provenance, result});
