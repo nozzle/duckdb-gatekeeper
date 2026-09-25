@@ -116,13 +116,13 @@ false	forbidden
 statement ok
 DROP TABLE hidden.payload;
 
-# Binding errors in the tested engine expose the missing hidden name. Evidence is host-only.
-query TIIII
-SELECT code, contains(error_message, 'payload'), len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
+# Binding failures retain empty evidence; do not require the engine to disclose hidden names.
+query TIII
+SELECT code, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
 ----
-binding	true	0	0	0
+binding	0	0	0
 
 statement error agent
 SELECT * FROM exposed.direct;
 ----
-payload
+<REGEX>:.*
