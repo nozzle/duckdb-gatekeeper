@@ -60,7 +60,7 @@ def split(db):
 ])
 def test_hidden_table_references(split, sql):
     configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
-    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}], "allowed_functions": ["secret_scalar", "secret_table"]}
+    options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}], "allowed_functions": ["secret_scalar", "secret_table"]}
     result = validate(split, sql, options)
     assert not result["allowed"], (sql, result)
     assert result["code"] == "forbidden", (sql, result)
@@ -79,10 +79,10 @@ def test_trusted_definitions_are_opaque_to_table_policy(split, sql):
     # the nested view, the scalar macro's subquery, the table macro's body. What such a definition reads is its
     # own, and is still reported as evidence. A CTE named like the table the view reads is not a reference to it.
     configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
-    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]}
+    options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}]}
     result = validate(split, sql, options)
     assert result["allowed"], (sql, result)
-    assert {"catalog": "memory", "schema": "secret", "table": "t", "type": "table"} in result["objects"], (sql, result)
+    assert {"catalog": "memory", "schema_path": ["secret"], "table": "t", "type": "table"} in result["objects"], (sql, result)
     assert not validate(split, sql, {"allowed_tables": [], "allowed_functions": []})["allowed"]
 
 
@@ -96,7 +96,7 @@ def test_trusted_definitions_are_opaque_to_table_policy(split, sql):
 ])
 def test_cte_binding_scope(split, sql):
     split.execute("SET schema='secret'; CREATE TABLE secret.b AS SELECT 3 x")
-    result = validate(split, sql, {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]})
+    result = validate(split, sql, {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}]})
     assert not result["allowed"], (sql, result)
 
 
@@ -115,7 +115,7 @@ def test_function_hidden_positions(split, expression):
 
 @pytest.mark.parametrize("options", [
     "blocked_functions := ['md5'], BLOCKED_FUNCTIONS := []",
-    "allowed_tables := [{schema: 'main', 'table': 't', TABLE: 'other'}]",
+    "allowed_tables := [{schema_path: ['main'], 'table': 't', TABLE: 'other'}]",
 ])
 def test_duplicate_typed_policy_fields(db, options):
     import duckdb
@@ -133,10 +133,10 @@ def test_preflight_denies_before_reader_binding(db):
 
 
 def test_request_cannot_opt_out_of_ceiling(split):
-    configure(split,{"blocked_functions":["md5"],"allowed_tables":[{"catalog":"*","schema":"allowed","table":"*"}]})
+    configure(split,{"blocked_functions":["md5"],"allowed_tables":[{"catalog":"*","schema_path":["allowed"],"table":"*"}]})
     assert not validate(split, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
     assert not validate(split, "SELECT md5('x')")["allowed"]
-    assert not validate(split, "SELECT * FROM secret.t", {"allowed_tables": [{"catalog": "*", "schema": "secret", "table": "*"}]})["allowed"]
+    assert not validate(split, "SELECT * FROM secret.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["secret"], "table": "*"}]})["allowed"]
     assert not validate(split, "SELECT * FROM secret.t")["allowed"]
 
 
@@ -144,8 +144,8 @@ def test_catalog_changes_rechecked(split):
     # Every validation binds against the catalog as it is: the definition behind a name is read again, so the
     # evidence follows a replaced view and the decision follows a dropped one.
     split.execute("CREATE VIEW allowed.changing AS SELECT * FROM allowed.t")
-    split.execute("PREPARE validation AS SELECT allowed, list_transform(objects, lambda o: o.schema || '.' || o.\"table\") "
-                  "FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema:'allowed','table':'*'}])")
+    split.execute("PREPARE validation AS SELECT allowed, list_transform(objects, lambda o: o.schema_path[1] || '.' || o.\"table\") "
+                  "FROM gatekeeper_validate('SELECT * FROM allowed.changing',allowed_tables := [{catalog:'*',schema_path:['allowed'],'table':'*'}])")
     assert split.execute("EXECUTE validation").fetchone() == (True, ["allowed.changing", "allowed.t"])
     split.execute("CREATE OR REPLACE VIEW allowed.changing AS SELECT * FROM secret.t")
     assert split.execute("EXECUTE validation").fetchone() == (True, ["allowed.changing", "secret.t"])
@@ -155,21 +155,21 @@ def test_catalog_changes_rechecked(split):
 
 def test_search_path_and_temp_shadowing(split):
     split.execute("SET schema='allowed'")
-    options = {"allowed_tables": [{"catalog": "*", "schema": "allowed", "table": "*"}]}
+    options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}]}
     assert validate(split, "SELECT * FROM t", options)["allowed"]
     split.execute("SET schema='secret'")
     assert not validate(split, "SELECT * FROM t", options)["allowed"]
     split.execute("CREATE TEMP TABLE t(x INT)")
-    assert not validate(split, "SELECT * FROM t", {"allowed_tables": [{"catalog": "memory", "schema": "*", "table": "*"}]})["allowed"]
-    assert validate(split, "SELECT * FROM t", {"allowed_tables": [{"catalog": "temp", "schema": "main", "table": "*"}]})["allowed"]
+    assert not validate(split, "SELECT * FROM t", {"allowed_tables": [{"catalog": "memory", "schema_path": ["*"], "table": "*"}]})["allowed"]
+    assert validate(split, "SELECT * FROM t", {"allowed_tables": [{"catalog": "temp", "schema_path": ["main"], "table": "*"}]})["allowed"]
 
 
 def test_quoted_names_and_exact_catalog(db):
     db.execute('ATTACH \':memory:\' AS "lake.one"; CREATE SCHEMA "lake.one"."report.ing"; CREATE TABLE "lake.one"."report.ing"."ord\'ers"(x INT)')
     sql = 'SELECT * FROM "lake.one"."report.ing"."ord\'ers"'
-    options = {"allowed_tables": [{"catalog": "lake.one", "schema": "report.ing", "table": "ord'ers"}]}
+    options = {"allowed_tables": [{"catalog": "lake.one", "schema_path": ["report.ing"], "table": "ord'ers"}]}
     assert validate(db, sql, options)["allowed"]
-    assert not validate(db, sql, {"allowed_tables": [{"catalog": "lake", "schema": "one.report.ing", "table": "ord'ers"}]})["allowed"]
+    assert not validate(db, sql, {"allowed_tables": [{"catalog": "lake", "schema_path": ["one.report.ing"], "table": "ord'ers"}]})["allowed"]
 
 
 def test_trusted_implementation_is_not_caller_code(split):
@@ -221,18 +221,13 @@ def test_write_smuggling(db, sql, code):
         assert result["violations"][0]["rule"] == "limit"
 
 
-@pytest.mark.parametrize("sql", ["SELECT * FROM a.b.c.d", "SELECT a.b.c.f(1)", "SELECT max(x) OVER () FROM a.b.c.d"])
-def test_nested_schema_paths_are_unsupported(db, sql):
-    """DuckDB 2.0 parses a name qualified by a nested schema path and writes it next to catalog/schema/name
-    views that are lossy for it (the catalog is the first component, the schema the one before the name).
-    The grammar refuses the path until the name-based checks are reviewed for it, before anything binds;
-    DuckDB 1.5's parser refuses the spelling itself."""
+@pytest.mark.parametrize("sql", ["SELECT * FROM a.b.c.d", "SELECT a.b.c.abs(1)", "SELECT max(x) OVER () FROM a.b.c.d"])
+def test_missing_nested_schema_objects_fail_binding(db, sql):
+    """2.0 accepts nested names, but these objects do not exist. 1.5 refuses their syntax."""
     db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql)
     assert not result["allowed"]
-    assert result["code"] == by_engine(v1="parser", v2="unsupported"), result
-    if result["code"] == "unsupported":
-        assert result["violations"][0]["message"] == "nested schema paths are unsupported", result
+    assert result["code"] == by_engine(v1="parser", v2="binding"), result
 
 
 @pytest.mark.parametrize("sql", [

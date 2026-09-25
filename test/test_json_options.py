@@ -10,12 +10,12 @@ from support.audit import decisions, enable, records
 from support.typed_helpers import configure, policy, validate
 
 
-SCHEMA = json.loads((ROOT / "docs/policy-v1.schema.json").read_text())
+SCHEMA = json.loads((ROOT / "docs/policy-v2.schema.json").read_text())
 SCHEMA_VALIDATOR = Draft202012Validator(SCHEMA)
 
 
 def document(options):
-    return {"version": 1, "options": options}
+    return {"version": 2, "options": options}
 
 
 def encoded(options):
@@ -37,14 +37,15 @@ VALID_OPTIONS = [
     {}, {"use_default_functions": False}, {"allowed_functions": ["ABS", "abs", "+", "*", "λ", "a\nb"]},
     {"blocked_functions": ["MD5"]}, {"allowed_functions": [], "blocked_functions": []},
     {"allowed_tables": []}, {"blocked_tables": []},
-    {"allowed_tables": [{"schema": "MAIN", "table": "t"}]},
-    {"allowed_tables": [{"catalog": None, "schema": "main", "table": "t"}]},
-    {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"},
-                        {"schema": "main", "table": "secret"}]},
-    {"blocked_tables": [{"catalog": "*", "schema": "*", "table": "secret"}]},
+    {"allowed_tables": [{"schema_path": ["MAIN"], "table": "t"}]},
+    {"allowed_tables": [{"catalog": None, "schema_path": ["main"], "table": "t"}]},
+    {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"},
+                        {"schema_path": ["main"], "table": "secret"}]},
+    {"blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "secret"}]},
     {"use_default_functions": False, "allowed_functions": ["abs"], "blocked_functions": ["md5"],
-     "allowed_tables": [{"schema": "main", "table": "*"}],
-     "blocked_tables": [{"schema": "main", "table": "secret"}]},
+     "allowed_tables": [{"schema_path": ["main"], "table": "*"}],
+     "blocked_tables": [{"schema_path": ["main"], "table": "secret"}]},
+    {"allowed_tables": [{"schema_path": ["finance", "reports"], "table": "t"}]},
 ]
 
 
@@ -69,11 +70,11 @@ def schema_cases():
     """Mutate each schema level, including every option and identity field."""
     yield document({}), True
     yield {"$schema": SCHEMA["$id"], **document({})}, True
-    yield {"version": 1.0, "options": {}}, True  # JSON Schema integers include integral numbers.
-    for value in [None, [], True, 1, "policy", {}, {"version": 1}, {"options": {}},
-                  {"version": 2, "options": {}}, {"version": True, "options": {}},
+    yield {"version": 2.0, "options": {}}, True  # JSON Schema integers include integral numbers.
+    for value in [None, [], True, 1, "policy", {}, {"version": 2}, {"options": {}},
+                  {"version": 1, "options": {}}, {"version": True, "options": {}},
                   {"version": "1", "options": {}}, {"version": 1.5, "options": {}},
-                  {"version": 1, "options": None}, {"version": 1, "options": []},
+                  {"version": 2, "options": None}, {"version": 2, "options": []},
                   {**document({}), "extra": 1}, {**document({}), "$schema": None},
                   {**document({}), "$schema": "https://example.com/other.json"}]:
         yield value, False
@@ -89,17 +90,22 @@ def schema_cases():
             yield document({name: value}), True
     for name in ["allowed_tables", "blocked_tables"]:
         for value in [None, {}, "main.t", [None], [1], ["main.t"], [[]], [{}],
-                      [{"schema": "main"}], [{"table": "t"}],
-                      [{"schema": "main", "table": "t", "catlog": "memory"}]]:
+                      [{"schema_path": ["main"]}], [{"table": "t"}],
+                      [{"schema": "main", "table": "t"}],
+                      [{"schema_path": ["main"], "table": "t", "catlog": "memory"}]]:
             yield document({name: value}), False
-        for field in ["catalog", "schema", "table"]:
+        for field in ["catalog", "table"]:
             for value in [None, "", "a\0b", 1, True, [], {}, "*", "λ", "a'b", "a\nb", "😀",
                           "\ud800", "\udfff", "a\ud800b"]:
-                entry = {"schema": "main", "table": "t", field: value}
+                entry = {"schema_path": ["main"], "table": "t", field: value}
                 valid = (field == "catalog" and value is None) or (
                     isinstance(value, str) and value != "" and "\0" not in value
                     and not any(0xD800 <= ord(c) <= 0xDFFF for c in value))
                 yield document({name: [entry]}), valid
+        for value in [None, "main", [], [None], [1], [[]], [""], ["a\0b"], ["\ud800"], ["main", None]]:
+            yield document({name: [{"schema_path": value, "table": "t"}]}), False
+        for value in [["main"], ["finance", "reports"], ["a.b"], ["*", "reports"], ["a", "a"], ["😀"]]:
+            yield document({name: [{"schema_path": value, "table": "t"}]}), True
 
 
 @pytest.mark.parametrize("value,accepted", list(schema_cases()))
@@ -119,15 +125,15 @@ def test_schema_and_both_decoders_agree(db, value, accepted):
 
 
 @pytest.mark.parametrize("text", [
-    None, "", "{", "{} {}", '{"version":1,"options":{},}',
-    '{/* comment */"version":1,"options":{}}', '{"version":NaN,"options":{}}',
-    '{"version":1,"options":{},"version":1}',
-    '{"version":1,"options":{},"options":{}}',
-    '{"version":1,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
-    '{"version":1,"options":{"blocked_functions":[],"blocked_\\u0066unctions":["md5"]}}',
-    '{"version":1,"options":{"allowed_tables":[{"schema":"main","table":"t","catalog":"a","catalog":"b"}]}}',
-    '{"version":1,"options":{"allowed_functions":["\\ud800"]}}',
-    '{"version":1,"options":{}}\0',
+    None, "", "{", "{} {}", '{"version":2,"options":{},}',
+    '{/* comment */"version":2,"options":{}}', '{"version":NaN,"options":{}}',
+    '{"version":2,"options":{},"version":2}',
+    '{"version":2,"options":{},"options":{}}',
+    '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
+    '{"version":2,"options":{"blocked_functions":[],"blocked_\\u0066unctions":["md5"]}}',
+    '{"version":2,"options":{"allowed_tables":[{"schema_path":["main"],"table":"t","catalog":"a","catalog":"b"}]}}',
+    '{"version":2,"options":{"allowed_functions":["\\ud800"]}}',
+    '{"version":2,"options":{}}\0',
 ])
 def test_invalid_json_text_fails_closed(db, text):
     configure(db, {"blocked_functions": ["md5"]})
@@ -163,8 +169,8 @@ def test_duplicate_json_argument_is_a_bind_error(db):
 
 def test_json_inherits_and_cannot_widen_the_current_global_policy(db):
     db.execute("CREATE TABLE t(x INT); CREATE TABLE secret(x INT)")
-    configure(db, encoded({"blocked_functions": ["md5"], "allowed_tables": [{"schema": "main", "table": "t"}]}))
-    for options in [{}, {"blocked_functions": [], "allowed_tables": [{"schema": "*", "table": "*"}]}]:
+    configure(db, encoded({"blocked_functions": ["md5"], "allowed_tables": [{"schema_path": ["main"], "table": "t"}]}))
+    for options in [{}, {"blocked_functions": [], "allowed_tables": [{"schema_path": ["*"], "table": "*"}]}]:
         assert validate(db, "SELECT md5('x')", encoded(options))["code"] == "forbidden"
         assert validate(db, "SELECT * FROM secret", encoded(options))["code"] == "forbidden"
         assert validate(db, "SELECT * FROM t", encoded(options))["allowed"]
@@ -178,27 +184,27 @@ def test_json_inherits_and_cannot_widen_the_current_global_policy(db):
 
 def test_prepared_json_validation_rechecks_policy_and_parameters(db):
     db.execute("PREPARE validation AS SELECT code FROM gatekeeper_validate($1, json := $2)")
-    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":1,\"options\":{}}')").fetchone() == ("ok",)
+    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{}}')").fetchone() == ("ok",)
     configure(db, encoded({"blocked_functions": ["md5"]}))
-    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":1,\"options\":{}}')").fetchone() == ("forbidden",)
+    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{}}')").fetchone() == ("forbidden",)
     assert db.execute("EXECUTE validation('SELECT 1', 'bad json')").fetchone() == ("invalid_input",)
     configure(db)
-    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')").fetchone() == ("forbidden",)
+    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{\"blocked_functions\":[\"md5\"]}}')").fetchone() == ("forbidden",)
 
 
 def test_prepared_json_configuration_only_mutates_on_execution_and_obeys_lock(db):
     before = policy(db)
     db.execute("PREPARE cfg AS SELECT * FROM gatekeeper_configure(json := $1)")
-    db.execute("PREPARE fixed AS SELECT * FROM gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
-    db.execute("EXPLAIN CALL gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
+    db.execute("PREPARE fixed AS SELECT * FROM gatekeeper_configure(json := '{\"version\":2,\"options\":{}}')")
+    db.execute("EXPLAIN CALL gatekeeper_configure(json := '{\"version\":2,\"options\":{}}')")
     assert policy(db) == before
     # Unread on purpose: the configure runs when its statement runs, on either engine.
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"md5\"]}}')")
+    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[\"md5\"]}}')")
     assert policy(db)["blocked_functions"] == ["md5"]
-    db.execute("EXECUTE cfg('{\"version\":1,\"options\":{\"blocked_functions\":[\"lower\"]}}')")
+    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[\"lower\"]}}')")
     assert policy(db)["blocked_functions"] == ["lower"]
     db.execute("SET lock_configuration = true")
-    for sql in ["EXECUTE cfg('{\"version\":1,\"options\":{}}')", "EXECUTE fixed"]:
+    for sql in ["EXECUTE cfg('{\"version\":2,\"options\":{}}')", "EXECUTE fixed"]:
         with pytest.raises(duckdb.Error, match="locked"):
             db.execute(sql)
     assert policy(db)["blocked_functions"] == ["lower"]
@@ -211,7 +217,7 @@ def test_json_configuration_shared_with_enforced_connections(db):
         with pytest.raises(duckdb.PermissionException):
             agent.execute("SELECT md5('x')")
         with pytest.raises(duckdb.PermissionException):
-            agent.execute("CALL gatekeeper_configure(json := '{\"version\":1,\"options\":{}}')")
+            agent.execute("CALL gatekeeper_configure(json := '{\"version\":2,\"options\":{}}')")
         assert policy(db)["blocked_functions"] == ["md5"]
 
 
@@ -232,7 +238,7 @@ def test_json_uses_existing_audit_records(db):
 
 @pytest.mark.parametrize("options,path", [
     ({"allowed_functions": [1]}, "options.allowed_functions[0]"),
-    ({"allowed_tables": [{"schema": "main", "table": 1}]}, "options.allowed_tables[0].table"),
+    ({"allowed_tables": [{"schema_path": ["main"], "table": 1}]}, "options.allowed_tables[0].table"),
     ({"allowed_tables": ["main.t"]}, "options.allowed_tables[0]"),
     ([], "options"),
 ])

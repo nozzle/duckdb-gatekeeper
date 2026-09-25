@@ -37,7 +37,7 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
     assert validate(catalog, "PRAGMA version")["code"] == "unsupported"
     assert validate(catalog, "SELECT * FROM pragma_version()")["allowed"]
     assert agent.execute("PRAGMA version").fetchall() == catalog.execute("SELECT * FROM pragma_version()").fetchall()
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}],
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
                         "blocked_functions": ["pragma_version"]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("PRAGMA version").fetchall()
@@ -228,17 +228,17 @@ def test_host_connection_is_unaffected(catalog, agent):
 
 def test_policy_changes_apply_to_the_next_statement(catalog, agent):
     assert agent.execute("SELECT sum(amount) FROM reporting.orders").fetchone() == (35.75,)
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}], "blocked_functions": ["sum"]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "blocked_functions": ["sum"]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT sum(amount) FROM reporting.orders").fetchall()
-    configure(catalog, {"allowed_tables": [{"schema": "secret", "table": "*"}]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["secret"], "table": "*"}]})
     assert agent.execute("SELECT * FROM secret.salaries").fetchall() == [("x", 1.0)]
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT * FROM reporting.orders").fetchall()
 
 
 def test_validate_is_available_when_allowed(catalog, agent):
-    configure(catalog, {"allowed_tables": [{"schema": "reporting", "table": "*"}],
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
                         "allowed_functions": ["gatekeeper_validate"]})
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM secret.salaries')").fetchall()
     assert rows == [(False, "forbidden")]
@@ -246,7 +246,7 @@ def test_validate_is_available_when_allowed(catalog, agent):
     assert rows == [(True, "ok")]
     # The request layer can only narrow the global policy, never widen it.
     rows = agent.execute("""SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.salaries',
-                            allowed_tables := [{schema: 'secret', 'table': '*'}])""").fetchall()
+                            allowed_tables := [{schema_path: ['secret'], 'table': '*'}])""").fetchall()
     assert rows == [(False,)]
 
 
@@ -467,8 +467,8 @@ def test_posture_warnings():
 
 
 def test_concurrent_enforced_connections_never_leak_under_policy_flips(catalog):
-    reporting = {"allowed_tables": [{"schema": "reporting", "table": "*"}]}
-    secret = {"allowed_tables": [{"schema": "secret", "table": "*"}]}
+    reporting = {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}]}
+    secret = {"allowed_tables": [{"schema_path": ["secret"], "table": "*"}]}
     stop = threading.Event()
     leaks = []
 

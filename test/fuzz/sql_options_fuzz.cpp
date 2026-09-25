@@ -65,17 +65,28 @@ static Value Decision(QueryResult &result) {
 		const auto &entries = ListValue::GetChildren(fields[i]);
 		if (!fields[0].GetValue<bool>() && !entries.empty())
 			std::abort();
-		std::vector<std::string> previous;
+		gatekeeper::Identity previous;
+		bool have_previous = false;
 		for (const auto &entry : entries) {
-			std::vector<std::string> current;
-			for (const auto &part : StructValue::GetChildren(entry)) {
+			auto &parts = StructValue::GetChildren(entry);
+			if (parts.size() != 4)
+				std::abort();
+			for (const auto &part : parts) {
 				if (part.IsNull())
 					std::abort();
-				current.push_back(part.GetValue<std::string>());
 			}
-			if (current.size() != 4 || (!previous.empty() && !(previous < current)))
+			gatekeeper::NamePath path;
+			for (const auto &component : ListValue::GetChildren(parts[1])) {
+				if (component.IsNull() || component.type() != LogicalType::VARCHAR)
+					std::abort();
+				path.push_back(component.GetValue<std::string>());
+			}
+			gatekeeper::Identity current{parts[0].GetValue<std::string>(), std::move(path),
+			                             parts[2].GetValue<std::string>(), parts[3].GetValue<std::string>()};
+			if (have_previous && !(previous < current))
 				std::abort();
 			previous = current;
+			have_previous = true;
 		}
 	}
 	const auto code = fields[1].GetValue<std::string>();
@@ -148,28 +159,31 @@ static std::string Argument(uint8_t selector) {
 	    "[$1]",
 	    "[NULL]",
 	    "[1]",
-	    "[{schema:'main', 'table':$1}]",
-	    "[{catalog:'memory', schema:'main', 'table':$1}]",
-	    "[{catalog:NULL, schema:'main', 'table':$1}]",
-	    "[{schema:NULL, 'table':$1}]",
+	    "[{schema_path:['main'], 'table':$1}]",
+	    "[{catalog:'memory', schema_path:['main'], 'table':$1}]",
+	    "[{catalog:NULL, schema_path:['main'], 'table':$1}]",
+	    "[{schema_path:NULL, 'table':$1}]",
+	    "[{schema_path:[], 'table':$1}]",
+	    "[{schema_path:['finance','*'], 'table':$1}]",
+	    "[{schema_path:['finance',NULL], 'table':$1}]",
 	    "[{'table':$1}]",
-	    "[{schema:'main', 'table':$1, extra:'x'}]",
-	    "[{schema:'main', 'table':[$1]}]",
-	    "[{schema:'main', 'table':{nested:$1}}]",
-	    "[{schema:'main', 'table':1}]",
-	    "[NULL::STRUCT(schema VARCHAR, \"table\" VARCHAR)]",
-	    "{schema:'main', 'table':$1}",
+	    "[{schema_path:['main'], 'table':$1, extra:'x'}]",
+	    "[{schema_path:['main'], 'table':[$1]}]",
+	    "[{schema_path:['main'], 'table':{nested:$1}}]",
+	    "[{schema_path:['main'], 'table':1}]",
+	    "[NULL::STRUCT(schema_path VARCHAR[], \"table\" VARCHAR)]",
+	    "{schema_path:['main'], 'table':$1}",
 	    "['main','secret']",
 	    "['md5','read_csv','query_table']",
 	    "[]",
 	    "['sum']",
 	    "['lower']",
-	    "[{catalog:'memory', schema:'main', 'table':'t'}]",
+	    "[{catalog:'memory', schema_path:['main'], 'table':'t'}]",
 	    "['unnest']",
-	    "[{catalog:'*', schema:'main', 'table':'*'}]",
-	    "[{catalog:'memory', schema:'*', 'table':$1}]",
-	    "[{catalog:'*', schema:'*', 'table':'*'}]",
-	    "[{catalog:'memory', schema:'main', 'table':'*'}, {catalog:'*', schema:'secret', 'table':$1}]"};
+	    "[{catalog:'*', schema_path:['main'], 'table':'*'}]",
+	    "[{catalog:'memory', schema_path:['*'], 'table':$1}]",
+	    "[{catalog:'*', schema_path:['*'], 'table':'*'}]",
+	    "[{catalog:'memory', schema_path:['main'], 'table':'*'}, {catalog:'*', schema_path:['secret'], 'table':$1}]"};
 	return values[selector % (sizeof(values) / sizeof(values[0]))];
 }
 
@@ -387,7 +401,7 @@ static void CheckEnforcedLatch(DuckDB &database) {
 // under the definition's authority, the documented residual (docs/security.md, execution boundary).
 static void CheckHostileRelation(DuckDB &database) {
 	Connection host(database);
-	auto policy = host.Query("CALL gatekeeper_configure(allowed_tables := [{schema: 'main', \"table\": 'v'}])");
+	auto policy = host.Query("CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], \"table\": 'v'}])");
 	if (policy->HasError())
 		std::abort();
 	Connection enforced(database);
@@ -526,7 +540,7 @@ static void CheckNativeSettingBypass() {
 		std::abort();
 	// A deny-only canonical setting must remain effective without restrict_tables.
 	auto blocked = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_tables := "
-	                                "[{catalog: '', schema: 'main', \"table\": 'v'}])");
+	                                "[{catalog: '', schema_path: ['main'], \"table\": 'v'}])");
 	if (blocked->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", blocked->GetValue(0, 0));
@@ -546,7 +560,7 @@ static void CheckNativeSettingBypass() {
 	// Native setters must not install an ignored nonempty table restriction.
 	auto inconsistent =
 	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "
-		                 "[{catalog: 'memory', schema: 'main', \"table\": 'v'}], restrict_tables := false)");
+		                 "[{catalog: 'memory', schema_path: ['main'], \"table\": 'v'}], restrict_tables := false)");
 	if (inconsistent->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", inconsistent->GetValue(0, 0));
@@ -558,8 +572,8 @@ static void CheckNativeSettingBypass() {
 	// The canonical value is NULL-free at every depth, so a NULL nested catalog installed through a native
 	// setter (or DuckDB's lossy STRUCT cast) must fail closed instead of matching any catalog.
 	auto widened = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), allowed_tables := "
-	                                "[{catalog: NULL, schema: 'main', \"table\": 'v'}]::STRUCT(catalog VARCHAR, "
-	                                "schema VARCHAR, \"table\" VARCHAR)[])");
+	                                "[{catalog: NULL, schema_path: ['main'], \"table\": 'v'}]::STRUCT(catalog VARCHAR, "
+	                                "schema_path VARCHAR[], \"table\" VARCHAR)[])");
 	if (widened->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", widened->GetValue(0, 0));
@@ -880,6 +894,21 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		CheckFuzzLimits(connection);
 		CheckEnforcedLatch(database);
 		CheckHostileRelation(database);
+		// Exercise nonempty evidence and component ordering before random inputs. Stringifying a LIST
+		// changes its ordering (e.g. [a] versus [a!]) and must not stand in for schema-path comparison.
+		{
+			DuckDB evidence_db(nullptr);
+			Connection evidence(evidence_db);
+			auto setup = evidence.Query("CREATE SCHEMA a; CREATE SCHEMA \"a!\"; "
+			                            "CREATE TABLE a.t(i INT); CREATE TABLE \"a!\".t(i INT)");
+			for (QueryResult *current = setup.get(); current; current = current->next.get())
+				if (current->HasError())
+					std::abort();
+			auto result = evidence.Query("SELECT * FROM gatekeeper_validate('SELECT abs(x.i) FROM a.t x, \"a!\".t y')");
+			auto decision = Decision(*result);
+			if (!StructValue::GetChildren(decision)[0].GetValue<bool>())
+				std::abort();
+		}
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
@@ -896,8 +925,8 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		               ", allowed_functions := ['sum','list_sum','unnest','list_value','list_transform'], "
 		               "blocked_functions := " +
 		               (data[1] & 2 ? "['sum','lower','unnest']" : "[]") +
-		               ", allowed_tables := " + (data[1] & 4 ? "[]" : "[{schema:'main', 'table':'*'}]") +
-		               ", blocked_tables := " + (data[1] & 8 ? "[{schema:'main', 'table':'t'}]" : "[]");
+		               ", allowed_tables := " + (data[1] & 4 ? "[]" : "[{schema_path:['main'], 'table':'*'}]") +
+		               ", blocked_tables := " + (data[1] & 8 ? "[{schema_path:['main'], 'table':'t'}]" : "[]");
 		auto query = "SELECT * FROM gatekeeper_validate($1, " + options + ")";
 		if (Run(connection, query, text, data[3]) != Run(connection, query, text, data[3]))
 			std::abort();

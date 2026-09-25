@@ -5,22 +5,22 @@
 require gatekeeper
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":1,"options":{"blocked_functions":["md5"]}}');
+SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":2,"options":{"blocked_functions":["md5"]}}');
 ----
 forbidden
 
 query I
-CALL gatekeeper_configure(json := '{"version":1,"options":{"blocked_functions":["md5"]}}');
+CALL gatekeeper_configure(json := '{"version":2,"options":{"blocked_functions":["md5"]}}');
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":1,"options":{"blocked_functions":[]}}');
+SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := '{"version":2,"options":{"blocked_functions":[]}}');
 ----
 forbidden
 
 statement error
-CALL gatekeeper_configure(json := '{"version":1,"options":{}}', blocked_functions := []);
+CALL gatekeeper_configure(json := '{"version":2,"options":{}}', blocked_functions := []);
 ----
 mutually exclusive
 
@@ -50,24 +50,24 @@ SELECT code FROM gatekeeper_validate('SELECT 1', json := 'bad json');
 invalid_input
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}');
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}');
 ----
 invalid_input
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"allowed_tables":[{"schema":"main","table":"t","catlog":"memory"}]}}');
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":2,"options":{"allowed_tables":[{"schema_path":["main"],"table":"t","catlog":"memory"}]}}');
 ----
 invalid_input
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":1,"options":{"use_default_functions":"false"}}');
+SELECT code FROM gatekeeper_validate('SELECT 1', json := '{"version":2,"options":{"use_default_functions":"false"}}');
 ----
 invalid_input
 
 statement error
-CALL gatekeeper_configure(json := '{"version":2,"options":{}}');
+CALL gatekeeper_configure(json := '{"version":1,"options":{}}');
 ----
-version must be 1
+version must be 2
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT md5(''x'')');
@@ -78,18 +78,18 @@ statement ok
 CREATE TABLE t(x INT);
 
 statement ok
-CALL gatekeeper_configure(json := '{"version":1,"options":{"allowed_tables":[]}}');
+CALL gatekeeper_configure(json := '{"version":2,"options":{"allowed_tables":[]}}');
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":1,"options":{}}');
+SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":2,"options":{}}');
 ----
 forbidden
 
 statement ok
-CALL gatekeeper_configure(json := '{"version":1,"options":{}}');
+CALL gatekeeper_configure(json := '{"version":2,"options":{}}');
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":1,"options":{"allowed_tables":[{"catalog":null,"schema":"main","table":"t"}]}}');
+SELECT code FROM gatekeeper_validate('SELECT * FROM t', json := '{"version":2,"options":{"allowed_tables":[{"catalog":null,"schema_path":["main"],"table":"t"}]}}');
 ----
 ok
 
@@ -97,12 +97,12 @@ statement ok
 PREPARE validation AS SELECT code FROM gatekeeper_validate('SELECT md5(''x'')', json := $1);
 
 query T
-EXECUTE validation('{"version":1,"options":{}}');
+EXECUTE validation('{"version":2,"options":{}}');
 ----
 ok
 
 query T
-EXECUTE validation('{"version":1,"options":{"blocked_functions":["md5"]}}');
+EXECUTE validation('{"version":2,"options":{"blocked_functions":["md5"]}}');
 ----
 forbidden
 
@@ -110,6 +110,6 @@ statement ok
 SET lock_configuration = true;
 
 statement error
-CALL gatekeeper_configure(json := '{"version":1,"options":{}}');
+CALL gatekeeper_configure(json := '{"version":2,"options":{}}');
 ----
 locked

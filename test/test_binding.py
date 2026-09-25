@@ -9,12 +9,12 @@ from support.typed_helpers import configure, policy, validate
 
 def test_resolves_unqualified_objects(db):
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders(x INT); SET schema='reporting'")
-    assert validate(db,"SELECT sum(x) FROM orders",{"allowed_tables":[{"catalog":"*","schema":"reporting","table":"*"}]})["allowed"]
-    result=validate(db,"SELECT sum(x) FROM orders",{"allowed_tables":[{"catalog":"*","schema":"secret","table":"*"}]})
+    assert validate(db,"SELECT sum(x) FROM orders",{"allowed_tables":[{"catalog":"*","schema_path":["reporting"],"table":"*"}]})["allowed"]
+    result=validate(db,"SELECT sum(x) FROM orders",{"allowed_tables":[{"catalog":"*","schema_path":["secret"],"table":"*"}]})
     assert result["code"]=="forbidden"
-    assert validate(db,"SELECT * FROM orders",{"allowed_tables":[{"schema":"reporting","table":"orders"}]})["allowed"]
+    assert validate(db,"SELECT * FROM orders",{"allowed_tables":[{"schema_path":["reporting"],"table":"orders"}]})["allowed"]
     assert not validate(db,"SELECT * FROM orders",{"allowed_tables":[]})["allowed"]
-    assert validate(db,"SELECT * FROM orders",{"allowed_tables":[{"catalog":"memory","schema":"*","table":"*"}]})["allowed"]
+    assert validate(db,"SELECT * FROM orders",{"allowed_tables":[{"catalog":"memory","schema_path":["*"],"table":"*"}]})["allowed"]
 
 
 def test_binding_errors_and_no_execution(db):
@@ -32,8 +32,8 @@ def test_trusted_views_and_macros(db):
     # body reads is its own. The caller's own reference to the same table is still the caller's.
     configure(db, {"allowed_functions": ["report"]})
     db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
-    reporting = {"catalog": "*", "schema": "reporting", "table": "*"}
-    secret = {"catalog": "*", "schema": "secret", "table": "*"}
+    reporting = {"catalog": "*", "schema_path": ["reporting"], "table": "*"}
+    secret = {"catalog": "*", "schema_path": ["secret"], "table": "*"}
     assert validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[reporting]})["allowed"]
     assert not validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[secret]})["allowed"]
     assert not validate(db,"SELECT * FROM reporting.v, secret.t",{"allowed_tables":[reporting]})["allowed"]
@@ -44,13 +44,13 @@ def test_trusted_views_and_macros(db):
 
 def test_attached_database_and_trusted_reader(db,tmp_path):
     db.execute("ATTACH ':memory:' AS lake; CREATE TABLE lake.main.orders AS SELECT 1 AS x")
-    options={"allowed_tables":[{"catalog":"lake","schema":"main","table":"orders"}]}
+    options={"allowed_tables":[{"catalog":"lake","schema_path":["main"],"table":"orders"}]}
     assert validate(db,"SELECT * FROM lake.main.orders",options)["allowed"]
-    assert not validate(db,"SELECT * FROM lake.main.orders",{**options,"allowed_tables":[{"catalog":"other","schema":"*","table":"*"}]})["allowed"]
+    assert not validate(db,"SELECT * FROM lake.main.orders",{**options,"allowed_tables":[{"catalog":"other","schema_path":["*"],"table":"*"}]})["allowed"]
     path=str(tmp_path/'trusted.parquet').replace("'","''")
     db.execute(f"COPY lake.main.orders TO '{path}' (FORMAT PARQUET)")
     db.execute(f"CREATE VIEW lake.main.file_view AS SELECT * FROM read_parquet('{path}')")
-    options = {"allowed_tables": [{"catalog": "lake", "schema": "*", "table": "*"}]}
+    options = {"allowed_tables": [{"catalog": "lake", "schema_path": ["*"], "table": "*"}]}
     assert validate(db,"SELECT * FROM lake.main.file_view",options)["allowed"]
     # The view's reader is the view's: a block on it does not reach into the body, but it still governs the
     # caller's own call, alone or next to the view.
@@ -110,8 +110,8 @@ def test_binding_preserves_temp_and_transaction_context(db):
 def test_show_policy_is_preserved(db):
     db.execute("CREATE TABLE t(x INT)")
     assert not validate(db,"SHOW TABLES",{"allowed_tables":[]})["allowed"]
-    assert not validate(db,"SHOW ALL TABLES",{"allowed_tables":[{"catalog":"*","schema":"main","table":"*"}]})["allowed"]
-    result = validate(db,"SHOW TABLES FROM main",{"allowed_tables":[{"catalog":"*","schema":"main","table":"*"}]})
+    assert not validate(db,"SHOW ALL TABLES",{"allowed_tables":[{"catalog":"*","schema_path":["main"],"table":"*"}]})["allowed"]
+    result = validate(db,"SHOW TABLES FROM main",{"allowed_tables":[{"catalog":"*","schema_path":["main"],"table":"*"}]})
     assert result["code"] == "forbidden"
     assert "table" in {v["rule"] for v in result["violations"]}
 
@@ -121,5 +121,5 @@ def test_bound_cte_and_policy_override(db):
     sql="SELECT * FROM secret WHERE EXISTS (WITH secret AS (SELECT 1) SELECT * FROM secret)"
     assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
     configure(db,{"allowed_tables":[],"allowed_functions":["custom"]})
-    assert not validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema":"main","table":"secret"}]})["allowed"]
+    assert not validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema_path":["main"],"table":"secret"}]})["allowed"]
     assert validate(db,"SELECT mystery(1)",{"allowed_functions":["mystery"]})["code"]=="forbidden"

@@ -3,6 +3,7 @@
 #include "validator.hpp"
 
 namespace gatekeeper {
+duckdb::Value PathValue(const NamePath &path);
 const std::vector<std::string> &OptionNames();
 void CheckOptionShape(const std::string &name, const duckdb::Value &value);
 // SQL arguments may supply either typed options or one JSON document, never both.

@@ -1,4 +1,4 @@
-"""Run disposable localhost Iceberg/MinIO and local DuckLake integration tests."""
+"""Run disposable localhost Iceberg/RustFS and local DuckLake integration tests."""
 import os
 from pathlib import Path
 import subprocess
@@ -14,7 +14,7 @@ def main():
     command = ["docker", "compose", "-p", project, "-f", str(root / "test/integration/compose.yml")]
     try:
         subprocess.run(command + ["up", "-d"], check=True)
-        for url in ["http://127.0.0.1:19000/minio/health/live", "http://127.0.0.1:18181/v1/config"]:
+        for url in ["http://127.0.0.1:19000/health", "http://127.0.0.1:18181/v1/config"]:
             for attempt in range(60):
                 try:
                     with urllib.request.urlopen(url, timeout=2) as response:

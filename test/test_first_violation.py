@@ -14,9 +14,9 @@ from support.audit import decisions, enable
 from support.enforcement import DENIED, attempt
 from support.typed_helpers import configure, validate
 
-REPORTING = {"schema": "reporting", "table": "*"}
-SECRET = {"schema": "secret", "table": "*"}
-SALARIES = {"schema": "secret", "table": "salaries"}
+REPORTING = {"schema_path": ["reporting"], "table": "*"}
+SECRET = {"schema_path": ["secret"], "table": "*"}
+SALARIES = {"schema_path": ["secret"], "table": "salaries"}
 
 
 def first(result):

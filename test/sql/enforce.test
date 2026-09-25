@@ -19,7 +19,7 @@ statement ok
 CREATE VIEW leak AS SELECT * FROM secret;
 
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{schema: 'main', 'table': 'reporting_orders'}], blocked_functions := ['md5']);
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 'reporting_orders'}], blocked_functions := ['md5']);
 
 # Enforcement is per connection; there is no instance-wide setting to find or flip.
 

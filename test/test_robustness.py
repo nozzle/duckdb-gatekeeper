@@ -26,8 +26,8 @@ PEG_DEEP_NESTING_CRASH = pytest.mark.skipif(
 def test_depth(db, depth):
     db.execute("CREATE SCHEMA tenant_a; CREATE TABLE tenant_a.t(x INT)")
     sql = "SELECT * FROM " + "(SELECT * FROM " * depth + "tenant_a.t" + ") t" * depth
-    assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_a", "table": "*"}]})["allowed"]
-    assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema": "tenant_b", "table": "*"}]})["allowed"]
+    assert validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema_path": ["tenant_a"], "table": "*"}]})["allowed"]
+    assert not validate(db, sql, {"allowed_tables": [{"catalog": "*", "schema_path": ["tenant_b"], "table": "*"}]})["allowed"]
 
 
 def test_width(db):

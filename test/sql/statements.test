@@ -461,21 +461,19 @@ SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('WITH
 ----
 false	true
 
-# DuckDB 2.0 qualifies names with nested schema paths (a.b.c.name) and writes them as qualified_name next to
-# catalog/schema/name properties that are lossy views of such a path; the walker refuses the path before
-# anything binds (validator.cpp References). 1.5's parser refuses the spelling itself.
+# DuckDB 2.0 binds nested schema paths. These objects do not exist; 1.5 refuses their spelling in its parser.
 
 query II
-SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT * FROM a.b.c.d');
+SELECT allowed, code IN ('parser', 'binding') FROM gatekeeper_validate('SELECT * FROM a.b.c.d');
 ----
 false	true
 
 query II
-SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT a.b.c.f(1)');
+SELECT allowed, code IN ('parser', 'forbidden') FROM gatekeeper_validate('SELECT a.b.c.f(1)');
 ----
 false	true
 
 query II
-SELECT allowed, code IN ('parser', 'unsupported') FROM gatekeeper_validate('SELECT max(x) OVER () FROM a.b.c.d');
+SELECT allowed, code IN ('parser', 'binding') FROM gatekeeper_validate('SELECT max(x) OVER () FROM a.b.c.d');
 ----
 false	true

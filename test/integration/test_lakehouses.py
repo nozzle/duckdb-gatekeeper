@@ -52,11 +52,11 @@ def initialize_lake(db, kind, tmp_path):
 def test_allowed_and_denied_tables(lake):
     db, schema, kind = lake
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema_path": [schema], "table": "orders"}]}
     configure(db, policy)
     result = validate(db, sql, policy)
     assert result["allowed"], (kind, result)
-    assert result["caller_objects"] == [{"catalog": "lake", "schema": schema, "table": "orders", "type": "table"}]
+    assert result["caller_objects"] == [{"catalog": "lake", "schema_path": [schema], "table": "orders", "type": "table"}]
     assert db.execute(sql).fetchone() == (50.0,)
     # The scan function an attached catalog resolves an allowed table to is the catalog's, not the caller's: a
     # block on it does not reach the read, and it is still reported in the dependency list. The caller's own
@@ -67,15 +67,15 @@ def test_allowed_and_denied_tables(lake):
         direct = validate(db, "SELECT * FROM iceberg_scan('s3://warehouse/untrusted')",
                           {**policy, "allowed_functions": ["iceberg_scan"], "blocked_functions": ["iceberg_scan"]})
         assert direct["code"] == "forbidden" and direct["violations"][0]["function_name"] == "iceberg_scan", direct
-    for changes in [{"allowed_tables": [{"catalog": "other", "schema": "*", "table": "*"}]},
-                    {"allowed_tables": [{"catalog": "*", "schema": "other", "table": "*"}]}, {"allowed_tables": []}]:
+    for changes in [{"allowed_tables": [{"catalog": "other", "schema_path": ["*"], "table": "*"}]},
+                    {"allowed_tables": [{"catalog": "*", "schema_path": ["other"], "table": "*"}]}, {"allowed_tables": []}]:
         denied = validate(db, sql, {**policy, **changes})
         assert not denied["allowed"] and denied["code"] == "forbidden", (kind, denied)
     db.execute(f"USE lake.{schema}")
     assert validate(db, "SELECT * FROM orders", policy)["allowed"]
     assert not validate(db, "SELECT * FROM secret", policy)["allowed"]
     assert not validate(db, "SELECT * FROM secret", {**policy, "allowed_tables": [
-        {"catalog": "lake", "schema": schema, "table": "secret"}]})["allowed"]
+        {"catalog": "lake", "schema_path": [schema], "table": "secret"}]})["allowed"]
     assert not validate(db, "SELECT * FROM orders WHERE EXISTS (SELECT * FROM secret)", policy)["allowed"]
     assert not validate(db, "SELECT * FROM read_parquet('s3://warehouse/untrusted.parquet')", policy)["allowed"]
 
@@ -83,22 +83,22 @@ def test_allowed_and_denied_tables(lake):
 def test_trusted_view_and_no_writes(lake):
     db, schema, kind = lake
     db.execute(f"CREATE VIEW main.allowed_view AS SELECT * FROM lake.{schema}.orders")
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "*"},
-                                 {"catalog": "memory", "schema": "main", "table": "*"}]}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema_path": [schema], "table": "*"},
+                                 {"catalog": "memory", "schema_path": ["main"], "table": "*"}]}
     assert validate(db, "SELECT * FROM main.allowed_view", policy)["allowed"]
     assert not validate(db, "SELECT * FROM main.allowed_view", {**policy, "allowed_tables": []})["allowed"]
     # The host view is a trusted definition: the lake table it reads is the view's own, still reported as
     # evidence with the identity the attached catalog resolved it to. The caller's own reference to that table,
     # next to the view, is the caller's.
-    view_only = {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "allowed_view"}]}
+    view_only = {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "allowed_view"}]}
     result = validate(db, "SELECT * FROM main.allowed_view", view_only)
     assert result["allowed"], result
-    assert result["caller_objects"] == [{"catalog": "memory", "schema": "main", "table": "allowed_view", "type": "view"}]
-    assert {"catalog": "lake", "schema": schema, "table": "orders", "type": "table"} in result["objects"], result
+    assert result["caller_objects"] == [{"catalog": "memory", "schema_path": ["main"], "table": "allowed_view", "type": "view"}]
+    assert {"catalog": "lake", "schema_path": [schema], "table": "orders", "type": "table"} in result["objects"], result
     mixed = validate(db, f"SELECT * FROM main.allowed_view, lake.{schema}.orders", policy)
     assert mixed["allowed"] and mixed["caller_objects"] == [
-        {"catalog": "lake", "schema": schema, "table": "orders", "type": "table"},
-        {"catalog": "memory", "schema": "main", "table": "allowed_view", "type": "view"}]
+        {"catalog": "lake", "schema_path": [schema], "table": "orders", "type": "table"},
+        {"catalog": "memory", "schema_path": ["main"], "table": "allowed_view", "type": "view"}]
     assert not validate(db, f"SELECT * FROM main.allowed_view, lake.{schema}.orders", view_only)["allowed"]
     assert not validate(db, f"SELECT * FROM lake.{schema}.orders", view_only)["allowed"]
     result = validate(db, f"DELETE FROM lake.{schema}.orders", policy)
@@ -111,7 +111,7 @@ def test_enforced_connection_reads_allowed_lake_tables_and_refuses_the_rest(lake
     # Parquet) runs through an enforced connection; everything the policy denies is refused before it reaches
     # the lake, with and without parameters.
     db, schema, kind = lake
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema_path": [schema], "table": "orders"}]}
     configure(db, policy)
     with db.cursor() as agent:
         agent.execute(f"USE lake.{schema}")  # before enforcing: an enforced connection cannot change its search path
@@ -138,8 +138,8 @@ def test_enforced_connection_reads_allowed_lake_tables_and_refuses_the_rest(lake
 def test_host_policy_changes_apply_to_enforced_connections_at_their_next_statement(lake):
     db, schema, kind = lake
     db.execute(f"CREATE VIEW main.allowed_view AS SELECT * FROM lake.{schema}.orders")
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "*"},
-                                 {"catalog": "memory", "schema": "main", "table": "*"}]}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema_path": [schema], "table": "*"},
+                                 {"catalog": "memory", "schema_path": ["main"], "table": "*"}]}
     configure(db, policy)
     sql = f"SELECT sum(amount) FROM lake.{schema}.orders"
     with db.cursor() as agent:
@@ -153,7 +153,7 @@ def test_host_policy_changes_apply_to_enforced_connections_at_their_next_stateme
         assert agent.execute(f"SELECT amount FROM lake.{schema}.orders WHERE id = ?", [2]).fetchone() == (30.0,)
         # A trusted view is authorized by its own identity: the lake table it reads is the view's own, so
         # withdrawing the lake from the policy leaves the view readable and refuses the caller's own reads.
-        configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "*"}]})
+        configure(db, {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "*"}]})
         assert agent.execute("SELECT count(*) FROM main.allowed_view").fetchone() == (2,)
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
@@ -172,7 +172,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
     # The adoption path on a real lakehouse: the enforced connection behaves like an unenforced one while every
     # decision is recorded as the gatekeeper_validate row for it, allowed reads naming the lake's scan function.
     db, schema, kind = lake
-    policy = {"allowed_tables": [{"catalog": "lake", "schema": schema, "table": "orders"}]}
+    policy = {"allowed_tables": [{"catalog": "lake", "schema_path": [schema], "table": "orders"}]}
     configure(db, policy)
     enable(db, "debug")
     db.execute("SET gatekeeper_log_only = true")
@@ -199,7 +199,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
             expected = validate(db, record["statement"], policy)
             for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
                 assert record[column] == expected[column], (record["statement"], column, record, expected)
-        assert found[0]["objects"] == [{"catalog": "lake", "schema": schema, "table": "orders", "type": "table"}]
+        assert found[0]["objects"] == [{"catalog": "lake", "schema_path": [schema], "table": "orders", "type": "table"}]
         assert SCAN[kind] in {f["name"] for f in found[0]["functions"]}, found[0]
         assert [v["table"] for v in found[1]["violations"]] == ["secret"]
         assert [v["function_name"] for v in found[3]["violations"]] == ["read_parquet"]

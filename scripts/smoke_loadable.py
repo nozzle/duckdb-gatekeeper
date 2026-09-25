@@ -208,7 +208,7 @@ def enforcement(artifact):
     db = connect(artifact, autoload_known_extensions=False, autoinstall_known_extensions=False)
     db.execute("CREATE SCHEMA reporting; CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
     db.execute("CREATE TABLE secret AS SELECT 'x' AS token")
-    db.execute("CALL gatekeeper_configure(allowed_tables := [{'schema': 'reporting', 'table': '*'}])")
+    db.execute("CALL gatekeeper_configure(allowed_tables := [{'schema_path': ['reporting'], 'table': '*'}])")
     db.execute("CALL enable_logging('Gatekeeper')")
     db.execute("SET logging_level = 'debug'")
     agent = db.cursor()

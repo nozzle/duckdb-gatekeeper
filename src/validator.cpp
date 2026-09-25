@@ -2,6 +2,7 @@
 #include "function_policy.hpp"
 #include "grammar.hpp"
 #include "inventory.hpp"
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -27,39 +28,46 @@ std::string Lower(std::string value) {
 			c += 'a' - 'A';
 	return value;
 }
-std::string TableRefPath(const std::string &catalog, const std::string &schema, const std::string &table) {
-	std::string path = catalog;
-	if (!schema.empty())
-		path += (path.empty() ? "" : ".") + schema;
-	path += (path.empty() ? "" : ".") + table;
-	return Lower(path);
+NamePath FoldPath(NamePath path) {
+	for (auto &part : path)
+		part = Lower(part);
+	return path;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
-static bool TableMatches(const std::set<Table> &rules, const std::string &catalog, const std::string &schema,
-                         const std::string &table, bool internal = false) {
-	auto folded_catalog = Lower(catalog), folded_schema = Lower(schema), folded_table = Lower(table);
+static bool TableMatches(const std::set<Table> &rules, const Table &key, bool internal = false) {
 	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
-	if (internal && (folded_schema == "*" || folded_table == "*"))
+	if (internal &&
+	    (std::find(key.schema_path.begin(), key.schema_path.end(), "*") != key.schema_path.end() || key.table == "*"))
 		return false;
-	for (const auto &c : {folded_catalog, std::string("*"), std::string()}) {
-		if (rules.count({c, folded_schema, folded_table}))
-			return true;
-		if (!internal &&
-		    (rules.count({c, "*", folded_table}) || rules.count({c, folded_schema, "*"}) || rules.count({c, "*", "*"})))
+	// Exact rules use the set index. Wildcard rules still require a linear scan; avoid enumerating
+	// the exponentially many wildcard combinations of an arbitrarily deep schema path.
+	if (rules.count(key))
+		return true;
+	for (const auto &rule : rules) {
+		if ((!rule.catalog.empty() && rule.catalog != "*" && rule.catalog != key.catalog) ||
+		    rule.schema_path.size() != key.schema_path.size() ||
+		    (rule.table != key.table && (internal || rule.table != "*")))
+			continue;
+		bool matches = true;
+		for (size_t i = 0; i < rule.schema_path.size(); i++)
+			if (rule.schema_path[i] != key.schema_path[i] && (internal || rule.schema_path[i] != "*"))
+				matches = false;
+		if (matches)
 			return true;
 	}
 	return false;
 }
 
-bool TableBlocked(const Policy &policy, const std::string &catalog, const std::string &schema,
+bool TableBlocked(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
                   const std::string &table) {
-	return TableMatches(policy.blocked_tables, catalog, schema, table);
+	return TableMatches(policy.blocked_tables, ObjectKey(catalog, schema_path, table));
 }
 
-bool TableAllowed(const Policy &policy, const std::string &catalog, const std::string &schema, const std::string &table,
-                  bool internal) {
-	return !TableBlocked(policy, catalog, schema, table) &&
-	       ((!policy.tables && !internal) || TableMatches(policy.allowed_tables, catalog, schema, table, internal));
+bool TableAllowed(const Policy &policy, const std::string &catalog, const NamePath &schema_path,
+                  const std::string &table, bool internal) {
+	auto key = ObjectKey(catalog, schema_path, table);
+	return !TableMatches(policy.blocked_tables, key) &&
+	       ((!policy.tables && !internal) || TableMatches(policy.allowed_tables, key, internal));
 }
 
 static Names Strings(Json *value, bool lower = false) {
@@ -163,36 +171,39 @@ bool Provenance::Attributable(const BindingPolicy &binding, const std::string &n
 	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
 	return CallerCanName(binding, name) || caller_lookups.count(CanonicalFunction(name));
 }
-Table ObjectKey(const std::string &catalog, const std::string &schema, const std::string &table) {
-	return {Lower(catalog), Lower(schema), Lower(table)};
+Table ObjectKey(const std::string &catalog, const NamePath &schema_path, const std::string &table) {
+	return {Lower(catalog), FoldPath(schema_path), Lower(table)};
 }
-bool NamesObject(const std::set<Table> &written, const std::string &catalog, const std::string &schema,
+bool NamesObject(const WrittenNames &written, const std::string &catalog, const NamePath &schema_path,
                  const std::string &table) {
-	auto key = ObjectKey(catalog, schema, table);
+	auto key = ObjectKey(catalog, schema_path, table);
+	NamePath full{key.catalog};
+	full.insert(full.end(), key.schema_path.begin(), key.schema_path.end());
+	full.push_back(key.table);
 	for (const auto &ref : written) {
-		if (ref.table != key.table)
+		if (ref.empty() || ref.back() != key.table)
 			continue;
-		if (!ref.catalog.empty()) {
-			if (ref.catalog == key.catalog && (ref.schema.empty() || ref.schema == key.schema))
-				return true;
-			continue;
-		}
-		// Two parts: schema.table, or catalog.table with the catalog's default schema.
-		if (ref.schema.empty() || ref.schema == key.schema || ref.schema == key.catalog)
+		if (ref.size() <= full.size() && std::equal(ref.rbegin(), ref.rend(), full.rbegin()))
+			return true;
+		// catalog.table: the catalog's default schema is resolved by DuckDB.
+		if (ref.size() == 2 && ref.front() == key.catalog)
+			return true;
+		// 1.5 can serialize catalog-only qualification with an empty schema placeholder.
+		if (ref.size() == 3 && ref[0] == key.catalog && ref[1].empty())
 			return true;
 	}
 	return false;
 }
-bool Provenance::CallerNamesObject(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
-                                   const std::string &table) const {
-	return NamesObject(binding.caller_table_names, catalog, schema, table);
+bool Provenance::CallerNamesObject(const BindingPolicy &binding, const std::string &catalog,
+                                   const NamePath &schema_path, const std::string &table) const {
+	return NamesObject(binding.caller_table_names, catalog, schema_path, table);
 }
-bool Provenance::ObjectAttributable(const BindingPolicy &binding, const std::string &catalog, const std::string &schema,
-                                    const std::string &table) const {
+bool Provenance::ObjectAttributable(const BindingPolicy &binding, const std::string &catalog,
+                                    const NamePath &schema_path, const std::string &table) const {
 	if (unattributed)
 		return false;
-	auto key = ObjectKey(catalog, schema, table);
-	if (caller_objects.count(key) || CallerNamesObject(binding, catalog, schema, table))
+	auto key = ObjectKey(catalog, schema_path, table);
+	if (caller_objects.count(key) || CallerNamesObject(binding, catalog, schema_path, table))
 		return true;
 	return !trusted_objects.count(key);
 }
@@ -200,6 +211,34 @@ struct Stop {
 	std::string message;
 	std::string rule = rules::UNSUPPORTED_STRUCTURE;
 };
+// Preserve written components without guessing whether the first qualifier names a catalog.
+static NamePath WrittenPath(Json *value, bool function = false) {
+	NamePath path;
+	if (auto qualified = yyjson_obj_get(value, "qualified_name")) {
+		auto parts = yyjson_obj_get(qualified, "path");
+		if (!yyjson_is_arr(parts))
+			throw Stop{"invalid qualified name path"};
+		size_t i, n;
+		Json *part;
+		yyjson_arr_foreach(parts, i, n, part) {
+			if (!yyjson_is_str(part))
+				throw Stop{"invalid qualified name component"};
+			path.push_back(Text(part));
+		}
+		if (path.empty())
+			throw Stop{"empty qualified name path"};
+	} else {
+		auto catalog = Field(value, function ? "catalog" : "catalog_name");
+		auto schema = Field(value, function ? "schema" : "schema_name");
+		if (!catalog.empty()) {
+			path.push_back(catalog);
+			path.push_back(schema);
+		} else if (!schema.empty())
+			path.push_back(schema);
+		path.push_back(Field(value, function ? "function_name" : "table_name"));
+	}
+	return FoldPath(std::move(path));
+}
 struct Walker {
 	const Inventory &inventory;
 	Layers layers;
@@ -270,9 +309,12 @@ struct Walker {
 				return false;
 			if (binding && kind == "FUNCTION")
 				binding->literal_constructors.insert(name);
-			if ((!Field(expr, "catalog").empty() && Lower(Field(expr, "catalog")) != "system") ||
-			    (!Field(expr, "schema").empty() && Lower(Field(expr, "schema")) != "main"))
-				return false;
+			if (kind == "FUNCTION") {
+				auto path = WrittenPath(expr, true);
+				if (path != NamePath{name} && path != NamePath{"main", name} &&
+				    path != NamePath{"system", "main", name} && path != NamePath{"system", "", name})
+					return false;
+			}
 			if (!yyjson_is_arr(yyjson_obj_get(expr, "children")) && !yyjson_is_arr(yyjson_obj_get(expr, "arguments")))
 				return false;
 			for (auto argument : Arguments(expr))
@@ -362,28 +404,16 @@ struct Walker {
 	}
 	void Reject(const std::string &rule, const std::string &message, Json *node = nullptr,
 	            const std::string &function = {}) {
-		violations.emplace(rule, message, Field(node, "catalog_name"), Field(node, "schema_name"),
-		                   Field(node, "table_name"), function, Position(node));
+		// Before binding a written qualifier is not a resolved catalog/schema identity.
+		violations.emplace(rule, message, "", NamePath{}, Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
-		// DuckDB 2.0 can qualify a name with a nested schema path (a.b.c.name) and writes it as qualified_name
-		// next to the catalog/schema/name properties, which are lossy views of such a path: the catalog is its
-		// first component, the schema the one before the name. The name-based checks below read those views
-		// and were written for three-part names; the bound entry is still checked in full at authorization,
-		// but a text-level view that disagrees with it is not one to reason from. Refused until reviewed.
-		auto qualified = yyjson_obj_get(value, "qualified_name");
-		if (qualified && yyjson_arr_size(yyjson_obj_get(qualified, "path")) > 3)
-			throw Stop{"nested schema paths are unsupported"};
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
 		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
 		// which names are which and treats the rest as trusted. The same names, as written components, are what
 		// the catalog callback and the plan walk attribute to the caller wherever they resolve.
-		if (kind == "BaseTableRef" && binding) {
-			auto catalog = Field(value, "catalog_name"), schema = Field(value, "schema_name"),
-			     table = Field(value, "table_name");
-			binding->caller_table_refs.insert(TableRefPath(catalog, schema, table));
-			binding->caller_table_names.insert({Lower(catalog), Lower(schema), Lower(table)});
-		}
+		if (kind == "BaseTableRef" && binding)
+			binding->caller_table_names.insert(WrittenPath(value));
 		// COLLATE binds the collation's function without naming it; the choice is still the caller's.
 		if (kind == "CollateExpression" && binding)
 			binding->caller_collates = true;
@@ -500,8 +530,8 @@ struct Walker {
 			if ((edge == "function" &&
 			     (name == "query" || name == "query_table" || name == "json_execute_serialized_sql")) ||
 			    name == "json_serialize_plan")
-				violations.emplace(rules::DYNAMIC_SQL, "dynamic SQL is never allowed: " + name, Field(value, "catalog"),
-				                   Field(value, "schema"), "", name, Position(value));
+				violations.emplace(rules::DYNAMIC_SQL, "dynamic SQL is never allowed: " + name, "", NamePath{}, "",
+				                   name, Position(value));
 		}
 		if (kind != "ShowRef")
 			return;
@@ -649,7 +679,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 			if (entry.second > 1)
 				message += " (" + std::to_string(entry.second) + " occurrences)";
 			auto found = walker.function_positions.find(name);
-			walker.violations.emplace(rules::FUNCTION, message, "", "", "", canonical,
+			walker.violations.emplace(rules::FUNCTION, message, "", NamePath{}, "", canonical,
 			                          found == walker.function_positions.end() ? -1 : found->second);
 		}
 	}

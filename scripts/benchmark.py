@@ -31,7 +31,7 @@ CREATE TABLE big AS SELECT range AS id, range % 97 AS k, random() AS v FROM rang
 CREATE SCHEMA secret;
 CREATE TABLE secret.small AS SELECT * FROM small LIMIT 0;
 CREATE TABLE secret.big AS SELECT * FROM big LIMIT 0;
-CALL gatekeeper_configure(allowed_tables := [{{'catalog': '*', 'schema': 'main', 'table': '*'}}]);
+CALL gatekeeper_configure(allowed_tables := [{{'catalog': '*', 'schema_path': ['main'], 'table': '*'}}]);
 """
 
 

@@ -20,13 +20,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		policy.defaults = data[0] & 1;
 		policy.tables = data[0] & 2;
 		if (data[0] & 4)
-			policy.blocked_tables.insert({"*", "main", "t"});
+			policy.blocked_tables.insert({"*", {"main"}, "t"});
 		if (data[0] & 8)
-			policy.allowed_tables.insert({"memory", "*", "*"});
+			policy.allowed_tables.insert({"memory", {"*"}, "*"});
 		if (data[0] & 16)
-			policy.allowed_tables.insert({"*", "main", "*"});
+			policy.allowed_tables.insert({"*", {"main"}, "*"});
 		if (data[0] & 32)
-			policy.allowed_tables.insert({"", "main", "t"});
+			policy.allowed_tables.insert({"", {"main"}, "t"});
 		if (data[0] & 64)
 			policy.blocked_functions = {"md5", "read_csv"};
 		if (data[0] & 128)

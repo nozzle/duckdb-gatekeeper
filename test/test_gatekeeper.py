@@ -128,22 +128,22 @@ def test_function_position_is_the_earliest_occurrence(db, sql, position):
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT * FROM db.s.t", {"allowed_tables": []}, False),
-    ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "*", "table": "*"}]}, True),
-    ("SELECT * FROM other.s.t", {"allowed_tables": [{"catalog": "db", "schema": "*", "table": "*"}]}, False),
+    ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, True),
+    ("SELECT * FROM other.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, False),
     ("SELECT db.main.md5('x')", {"allowed_tables": []}, True),
-    ("SELECT * FROM s.t", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, True),
-    ("SELECT * FROM t", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
-    ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
-    ("SELECT * FROM db.s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
-    ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema": "s", "table": "t"}]}, True),
+    ("SELECT * FROM s.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, True),
+    ("SELECT * FROM t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, False),
+    ("SELECT * FROM s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, True),
+    ("SELECT * FROM db.s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, True),
+    ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["s"], "table": "t"}]}, True),
     ("SELECT * FROM s.t", {"allowed_tables": []}, False),
     ("SELECT 1", {"allowed_tables": []}, True),
-    ("SELECT * FROM s.t", {"allowed_tables": [{"schema": "s", "table": "*"}]}, True),
-    ('SELECT * FROM s."*"', {"allowed_tables": [{"schema": "s", "table": "*"}]}, True),
-    ("SHOW TABLES FROM s", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
-    ("SHOW ALL TABLES", {"allowed_tables": [{"catalog": "*", "schema": "s", "table": "*"}]}, False),
-    ("SHOW TABLES FROM s", {"allowed_tables": [{"schema": "s", "table": "t"}]}, False),
-    ("DESCRIBE s.t", {"allowed_tables": [{"schema": "s", "table": "t"}]}, True),
+    ("SELECT * FROM s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "*"}]}, True),
+    ('SELECT * FROM s."*"', {"allowed_tables": [{"schema_path": ["s"], "table": "*"}]}, True),
+    ("SHOW TABLES FROM s", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, False),
+    ("SHOW ALL TABLES", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, False),
+    ("SHOW TABLES FROM s", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, False),
+    ("DESCRIBE s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, True),
 ])
 def test_objects(populated, sql, opts, allowed):
     result = validate(populated, sql, opts)
@@ -226,7 +226,7 @@ def test_concurrent_policies():
         def worker(i):
             with db.cursor() as conn:
                 for j in range(30):
-                    policy = {"allowed_tables": [{"catalog": "*", "schema": f"tenant_{i}" if j%2 == 0 else "other", "table": "*"}]}
+                    policy = {"allowed_tables": [{"catalog": "*", "schema_path": [f"tenant_{i}" if j%2 == 0 else "other"], "table": "*"}]}
                     result = validate(conn, f"SELECT sum(x) FROM tenant_{i}.t", policy)
                     assert result["allowed"] == (j%2 == 0), result
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
@@ -239,8 +239,8 @@ def test_configure_interleaved_with_validate():
     with connect() as db:
         db.execute("CREATE TABLE a(x INT); CREATE TABLE b(x INT)")
         policies = [
-            {"allowed_tables": [{"schema": "main", "table": "a"}], "blocked_functions": ["sum"]},
-            {"allowed_tables": [{"schema": "main", "table": "b"}], "blocked_functions": ["count"]},
+            {"allowed_tables": [{"schema_path": ["main"], "table": "a"}], "blocked_functions": ["sum"]},
+            {"allowed_tables": [{"schema_path": ["main"], "table": "b"}], "blocked_functions": ["count"]},
         ]
         stop = False
         configure(db, policies[0])  # never validate against the built-in defaults

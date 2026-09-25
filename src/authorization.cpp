@@ -36,9 +36,6 @@ const char *FunctionKind(CatalogType type) {
 }
 
 // The engine's own builtins live in system.main; an entry anywhere else is a host's or an extension's.
-static bool SystemBuiltin(const string &catalog, const string &schema) {
-	return catalog == "system" && schema == "main";
-}
 
 // Function policy, the never-bind list included, holds for names attributable to the caller; a trusted
 // definition's own functions are outside it, with one exception: Gatekeeper's own control plane is refused on
@@ -49,8 +46,8 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	auto canonical = gatekeeper::CanonicalFunction(name);
 	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
 	    (binding.synthesized_functions.count(canonical) && !gatekeeper::FunctionAllowed(policy, canonical))) {
-		result.violations.emplace(gatekeeper::rules::FUNCTION, "resolved function is not allowed: " + canonical, "", "",
-		                          "", canonical);
+		result.violations.emplace(gatekeeper::rules::FUNCTION, "resolved function is not allowed: " + canonical, "",
+		                          gatekeeper::NamePath{}, "", canonical);
 		throw PermissionException("resolved function is not allowed");
 	}
 }
@@ -61,8 +58,9 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 	if (auto kind = FunctionKind(entry.type)) {
 		AuthorizeFunction(policy, binding, name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();
-		auto catalog = engine::CatalogName(function.schema.catalog), schema = engine::EntryName(function.schema);
-		bool builtin = SystemBuiltin(catalog, schema);
+		auto catalog = engine::CatalogName(function.schema.catalog);
+		auto schema = engine::SchemaPath(function.schema);
+		bool builtin = catalog == "system" && schema == gatekeeper::NamePath{"main"};
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
 		    binding.runtime_table_functions.count(gatekeeper::Lower(name)) &&
 		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || !builtin)) {
@@ -84,7 +82,8 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
 		return;
 	auto &object = entry.Cast<StandardEntry>();
-	auto catalog = engine::CatalogName(object.schema.catalog), schema = engine::EntryName(object.schema);
+	auto catalog = engine::CatalogName(object.schema.catalog);
+	auto schema = engine::SchemaPath(object.schema);
 	// Table policy, the internal-object rule included, holds for objects attributable to the caller. An object
 	// a trusted definition's body retrieved is that definition's own: recorded as evidence, outside policy.
 	if (attributable && !gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
@@ -122,7 +121,7 @@ static string ListAggregateImplementation(const BoundFunctionExpression &express
 		return {};
 	// Catalog construction stamps this provenance onto each overload and binding preserves it.
 	// A matching leaf name alone does not authorize inspecting a foreign implementation's bind data.
-	if (!SystemBuiltin(engine::CatalogName(function), engine::SchemaName(function)))
+	if (!engine::SystemBuiltin(function))
 		throw BinderException("List aggregate implementation is not the pinned builtin");
 	auto &children = engine::Children(expression);
 	auto bind_info = engine::BindInfo(expression);
@@ -178,7 +177,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			if (entry.name == name && entry.type == type)
 				return;
 		// Bound implementations do not provide reliable catalog provenance.
-		result.functions.insert({"", "", name, type});
+		result.functions.insert({"", {}, name, type});
 	};
 	vector<LogicalOperator *> operators{&root};
 	vector<Expression *> expressions;
@@ -215,8 +214,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
 			// host/extension boundary; if it ever fails there, refuse rather than silently skip the body.
-			if (!lambda && gatekeeper::ListLambdaFunctions().count(name) &&
-			    SystemBuiltin(engine::CatalogName(implementation), engine::SchemaName(implementation)))
+			if (!lambda && gatekeeper::ListLambdaFunctions().count(name) && engine::SystemBuiltin(implementation))
 				throw BinderException("Cannot inspect list lambda implementation");
 			if (lambda && lambda->lambda_expr)
 				expressions.push_back(lambda->lambda_expr.get());
@@ -230,8 +228,8 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				    !gatekeeper::FunctionAllowed(policy, aggregate)) {
 					auto canonical = gatekeeper::CanonicalFunction(aggregate);
 					result.violations.emplace(gatekeeper::rules::FUNCTION,
-					                          "dispatched aggregate is not allowed: " + canonical, "", "", "",
-					                          canonical);
+					                          "dispatched aggregate is not allowed: " + canonical, "",
+					                          gatekeeper::NamePath{}, "", canonical);
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
 				// The dispatched aggregate is the dispatcher's: the caller's when the dispatcher is.

@@ -84,17 +84,17 @@ def test_objects_and_functions_are_resolved_deduplicated_sorted(db):
     result = validate(db, "WITH cte AS (SELECT * FROM Reporting.V) SELECT abs(a.x), abs(b.x) FROM cte a, Reporting.V b")
     assert result["allowed"], result
     assert result["objects"] == [
-        {"catalog": "memory", "schema": "Reporting", "table": "Orders", "type": "table"},
-        {"catalog": "memory", "schema": "Reporting", "table": "V", "type": "view"},
+        {"catalog": "memory", "schema_path": ["Reporting"], "table": "Orders", "type": "table"},
+        {"catalog": "memory", "schema_path": ["Reporting"], "table": "V", "type": "view"},
     ]
-    assert {"catalog": "system", "schema": "main", "name": "abs", "type": "scalar"} in result["functions"]
+    assert {"catalog": "system", "schema_path": ["main"], "name": "abs", "type": "scalar"} in result["functions"]
     for field, leaf in [("objects", "table"), ("functions", "name")]:
-        tuples = [(v["catalog"], v["schema"], v[leaf], v["type"]) for v in result[field]]
+        tuples = [(v["catalog"], tuple(v["schema_path"]), v[leaf], v["type"]) for v in result[field]]
         assert tuples == sorted(set(tuples))
     configure(db, {"allowed_functions": ["report"]})
     macro = validate(db, "SELECT * FROM report()", {"allowed_functions": ["report"]})
     assert macro["allowed"] and macro["objects"] == result["objects"][:1]
-    assert {"catalog": "memory", "schema": "main", "name": "report", "type": "table_macro"} in macro["functions"]
+    assert {"catalog": "memory", "schema_path": ["main"], "name": "report", "type": "table_macro"} in macro["functions"]
 
 
 @pytest.mark.parametrize("sql,options", [
@@ -112,16 +112,17 @@ def test_failed_results_never_expose_partial_dependencies(db, sql, options):
 
 def test_temp_shadowing_and_explicit_catalog(db):
     db.execute("CREATE TABLE t(x INTEGER); CREATE TEMP TABLE t(x INTEGER)")
-    result = validate(db, "SELECT * FROM t", {"allowed_tables": [{"schema": "main", "table": "t"}]})
+    result = validate(db, "SELECT * FROM t", {"allowed_tables": [{"schema_path": ["main"], "table": "t"}]})
     assert result["allowed"] and result["objects"][0]["catalog"] == "temp"
     assert not validate(db, "SELECT * FROM t", {
-        "allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]})["allowed"]
+        "allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"}]})["allowed"]
 
 
 def test_qualified_function_capability_diagnostics(db):
     result = validate(db, "SELECT * FROM SYSTEM.main.query('SELECT 1')")
     violation = next(v for v in result["violations"] if v["rule"] == "dynamic_sql")
-    assert violation["catalog"] == "SYSTEM" and violation["schema"] == "main"
+    # Refused before catalog lookup: written qualifiers are not a resolved identity.
+    assert violation["catalog"] == "" and violation["schema_path"] == []
     # The position is the parser's: the default parser stamps the qualified table function's location, the
     # PEG parser stamps none, and the violation reports NULL rather than inventing one.
     assert violation["position"] == by_parser(postgres=14, peg=None)
@@ -131,7 +132,7 @@ def test_quoted_dependency_identities_are_not_dotted_strings(db):
     db.execute('CREATE SCHEMA "a.b"; CREATE TABLE "a.b"."x.y"(x INT)')
     result = validate(db, 'SELECT * FROM "a.b"."x.y"')
     assert result["allowed"]
-    assert result["objects"] == [{"catalog": "memory", "schema": "a.b", "table": "x.y", "type": "table"}]
+    assert result["objects"] == [{"catalog": "memory", "schema_path": ["a.b"], "table": "x.y", "type": "table"}]
 
 
 def test_table_macro_cte_shadowing_differs_from_view(db):
@@ -154,7 +155,7 @@ def test_literal_constructor_shadow_cannot_evaluate_macro(db):
 def test_non_catalog_window_is_reported_without_invented_namespace(db):
     result = validate(db, "SELECT row_number() OVER ()")
     assert result["allowed"]
-    assert {"catalog": "", "schema": "", "name": "row_number", "type": "window"} in result["functions"]
+    assert {"catalog": "", "schema_path": [], "name": "row_number", "type": "window"} in result["functions"]
 
 
 def test_typed_parameter_execution_uses_same_text(db):
@@ -186,7 +187,7 @@ def test_local_connection_profile_after_setup(db):
                "SET autoinstall_known_extensions=false; SET memory_limit='512MB'; SET threads=1; "
                "SET search_path='memory.reporting'; SET lock_configuration=true")
     result = validate(db, "SELECT x FROM t WHERE x=?")
-    assert result["allowed"] and result["objects"][0]["schema"] == "reporting"
+    assert result["allowed"] and result["objects"][0]["schema_path"] == ["reporting"]
 
 
 def test_qualified_builtin_containers_and_named_fields(db):

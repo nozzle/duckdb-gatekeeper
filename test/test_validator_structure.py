@@ -9,6 +9,17 @@ from support.artifact import ENGINE_MAJOR, ENGINE_SOURCE, ROOT, by_engine
 from support.toolchain import compile_cpp
 
 
+def test_schema_path_identity_and_attribution(tmp_path):
+    generated = tmp_path / "generated"
+    subprocess.run([sys.executable, str(ROOT / "scripts/generate.py"), "--output", str(generated),
+                    "--duckdb-source", str(ENGINE_SOURCE)], check=True)
+    binary = compile_cpp([ROOT / "test/schema_path_identity.cpp", ROOT / "src/validator.cpp",
+                          ENGINE_SOURCE / "third_party/yyjson/yyjson.cpp"], tmp_path / "paths", flags=["-O1"],
+                         includes=[generated, ROOT / "src/include", ENGINE_SOURCE / "src/include",
+                                   ENGINE_SOURCE / "third_party/yyjson/include"])
+    subprocess.run([str(binary)], check=True)
+
+
 @pytest.fixture(scope="module")
 def native_validator(tmp_path_factory):
     work = tmp_path_factory.mktemp("validator")
@@ -100,7 +111,14 @@ def test_serialized_type_collation_is_host_trusted(db, native_validator):
 
 def expression(db, sql):
     return json.loads(db.execute("SELECT json_serialize_sql(?, skip_default:=true, skip_empty:=true, skip_null:=true)",
-                                 [sql]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
+                                  [sql]).fetchone()[0])["statements"][0]["node"]["select_list"][0]
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="qualified_name serialization requires DuckDB 2.0")
+def test_empty_written_path_is_unsupported(db, native_validator):
+    ast = json.loads(db.execute("SELECT json_serialize_sql('SELECT * FROM main.t')").fetchone()[0])
+    ast["statements"][0]["node"]["from_table"]["qualified_name"]["path"] = []
+    assert native_validator(ast) == "unsupported"
 
 
 @pytest.mark.parametrize("order", ["explicit first", "implied first", "implied twice"])

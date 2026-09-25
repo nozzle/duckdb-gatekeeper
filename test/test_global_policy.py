@@ -73,8 +73,8 @@ def test_configuration_is_nontransactional_and_requires_table_function(db):
 @pytest.mark.parametrize("options", [
     {"unknown": ["main"]}, {"use_default_functions": "false"}, {"use_default_functions": 1},
     {"allowed_functions": [1]}, {"allowed_functions": [None]},
-    {"allowed_tables": [{"schema": "main", "table": "t", "catlog": "memory"}]},
-    {"allowed_tables": [{"schema": "main", "tabel": "t"}]},
+    {"allowed_tables": [{"schema_path": ["main"], "table": "t", "catlog": "memory"}]},
+    {"allowed_tables": [{"schema_path": ["main"], "tabel": "t"}]},
 ])
 def test_strict_parameterized_call_preserves_policy_on_failure(db, options):
     configure(db, {"blocked_functions": ["md5"]})
@@ -86,29 +86,29 @@ def test_strict_parameterized_call_preserves_policy_on_failure(db, options):
 
 def test_any_catalog_is_canonically_empty_and_quoted_parameters(db):
     db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
-    configure(db, {"allowed_tables": [{"catalog": None, "schema": "a'b", "table": "t"},
-                                      {"schema": "main", "table": "t"}]})
+    configure(db, {"allowed_tables": [{"catalog": None, "schema_path": ["a'b"], "table": "t"},
+                                      {"schema_path": ["main"], "table": "t"}]})
     # The canonical setting never contains NULL; '' spells "any catalog".
-    assert policy(db)["allowed_tables"] == [{"catalog": "", "schema": "a'b", "table": "t"},
-                                            {"catalog": "", "schema": "main", "table": "t"}]
+    assert policy(db)["allowed_tables"] == [{"catalog": "", "schema_path": ["a'b"], "table": "t"},
+                                            {"catalog": "", "schema_path": ["main"], "table": "t"}]
     assert validate(db, "SELECT * FROM memory.main.t")["allowed"]
     assert validate(db, "SELECT * FROM lake.main.t")["allowed"]
     # Round trip through direct SET is a no-op and preserves any-catalog matching.
     db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
-    assert policy(db)["allowed_tables"][1] == {"catalog": "", "schema": "main", "table": "t"}
+    assert policy(db)["allowed_tables"][1] == {"catalog": "", "schema_path": ["main"], "table": "t"}
     assert validate(db, "SELECT * FROM lake.main.t")["allowed"]
 
 
 @pytest.mark.parametrize("entry", [
-    "{catlog: 'memory', schema: 'main', \"table\": 't'}",
-    "{catalog: NULL, schema: 'main', \"table\": 't'}",
-    "{catalog: 'memory', schema: NULL, \"table\": 't'}",
-    "NULL::STRUCT(catalog VARCHAR, schema VARCHAR, \"table\" VARCHAR)",
+    "{catlog: 'memory', schema_path: ['main'], \"table\": 't'}",
+    "{catalog: NULL, schema_path: ['main'], \"table\": 't'}",
+    "{catalog: 'memory', schema_path: NULL, \"table\": 't'}",
+    "NULL::STRUCT(catalog VARCHAR, schema_path VARCHAR[], \"table\" VARCHAR)",
 ])
 def test_set_rejects_null_nested_identity_fields(db, entry):
     """A misspelled or NULL nested field on direct SET must fail closed rather than widen to any catalog."""
     db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
-    configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]})
+    configure(db, {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"}]})
     before = policy(db)
     assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
     with pytest.raises(duckdb.Error, match="NULL policy field"):
@@ -121,10 +121,10 @@ def test_set_rejects_null_nested_identity_fields(db, entry):
 def test_set_drops_extra_nested_keys_without_widening(db):
     """An extra key beside complete canonical fields is cast away silently; the identity is unchanged."""
     db.execute("CREATE TABLE t(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
-    configure(db, {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]})
+    configure(db, {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"}]})
     before = policy(db)
     db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := ["
-               "{catalog: 'memory', schema: 'main', \"table\": 't', catlog: 'lake'}])")
+               "{catalog: 'memory', schema_path: ['main'], \"table\": 't', catlog: 'lake'}])")
     assert policy(db) == before
     assert validate(db, "SELECT * FROM memory.main.t")["allowed"]
     assert not validate(db, "SELECT * FROM lake.main.t")["allowed"]
@@ -133,7 +133,7 @@ def test_set_drops_extra_nested_keys_without_widening(db):
 def test_set_requires_consistent_table_restriction(db):
     db.execute("CREATE TABLE t(x INT); CREATE TABLE secret(x INT)")
     before = policy(db)
-    entry = "[{catalog:'memory', schema:'main', 'table':'t'}]"
+    entry = "[{catalog:'memory', schema_path:['main'], 'table':'t'}]"
     with pytest.raises(duckdb.Error, match="nonempty allowed_tables requires restrict_tables"):
         db.execute("SET gatekeeper_policy = struct_update(current_setting('gatekeeper_policy'), allowed_tables := " + entry + ")")
     assert policy(db) == before
@@ -151,7 +151,7 @@ def test_set_requires_consistent_table_restriction(db):
     assert validate(db, "SELECT * FROM secret")["allowed"]
 
 
-@pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema VARCHAR, "table" VARCHAR, extra VARCHAR)[]',
+@pytest.mark.parametrize("argument", ['allowed_tables := []::STRUCT(schema_path VARCHAR[], "table" VARCHAR, extra VARCHAR)[]',
                                      "use_default_functions := NULL::BOOLEAN",
                                      "blocked_functions := [], blocked_functions := ['md5']",
                                      "blocked_functions = [], blocked_functions = ['md5']"])
@@ -233,7 +233,7 @@ def test_set_validation_and_cast_limitations(db):
     before = policy(db)
     for expr in ["NULL", "{'use_default_functions': false, 'unknown': ['main']}",
                  "struct_update(current_setting('gatekeeper_policy'), blocked_functions := [NULL])",
-                 "struct_update(current_setting('gatekeeper_policy'), allowed_tables := [{schema:'main', tabel:'t'}])"]:
+                 "struct_update(current_setting('gatekeeper_policy'), allowed_tables := [{schema_path:['main'], tabel:'t'}])"]:
         with pytest.raises(duckdb.Error):
             db.execute("SET gatekeeper_policy = " + expr)
         assert policy(db) == before
@@ -272,13 +272,13 @@ def test_broadening_cannot_escape_preflight(db, global_options, overrides, sql, 
 
 def test_identity_layers_match_independently_and_request_can_narrow(db):
     db.execute("CREATE TABLE t(x INT); CREATE TABLE u(x INT); ATTACH ':memory:' AS lake; CREATE TABLE lake.main.t(x INT)")
-    configure(db, {"allowed_tables": [{"schema": "main", "table": "t"}, {"schema": "main", "table": "u"}]})
-    request = {"allowed_tables": [{"catalog": "memory", "schema": "main", "table": "t"}]}
+    configure(db, {"allowed_tables": [{"schema_path": ["main"], "table": "t"}, {"schema_path": ["main"], "table": "u"}]})
+    request = {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"}]}
     assert validate(db, "SELECT * FROM memory.main.t", request)["allowed"]
     assert not validate(db, "SELECT * FROM lake.main.t", request)["allowed"]
     assert not validate(db, "SELECT * FROM u", request)["allowed"]
     configure(db, request)
-    broader = {"allowed_tables": [{"schema": "main", "table": "t"}, {"schema": "main", "table": "u"}]}
+    broader = {"allowed_tables": [{"schema_path": ["main"], "table": "t"}, {"schema_path": ["main"], "table": "u"}]}
     assert validate(db, "SELECT * FROM memory.main.t", broader)["allowed"]
     assert not validate(db, "SELECT * FROM lake.main.t", broader)["allowed"]
     assert not validate(db, "SELECT * FROM u", broader)["allowed"]
@@ -288,7 +288,7 @@ def test_table_ceiling_does_not_restrict_types(db):
     db.execute("CREATE SCHEMA private; CREATE TYPE private.customer AS ENUM ('a'); CREATE TABLE private.t(x INT)")
     configure(db, {"allowed_tables": []})
     assert validate(db, "SELECT NULL::private.customer")["allowed"]
-    assert not validate(db, "SELECT * FROM private.t", {"allowed_tables": [{"catalog": "*", "schema": "*", "table": "*"}]})["allowed"]
+    assert not validate(db, "SELECT * FROM private.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["*"], "table": "*"}]})["allowed"]
 
 
 def test_resolved_denies_in_trusted_expansions_obey_both_layers(db):

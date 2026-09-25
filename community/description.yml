@@ -35,7 +35,7 @@ docs:
     -- Trusted setup: install the global ceiling, then freeze it.
     -- An omitted catalog matches any database; add catalog: 'mydb' to pin one.
     CALL gatekeeper_configure(
-        allowed_tables := [{schema: 'reporting', 'table': '*'}],
+        allowed_tables := [{schema_path: ['reporting'], 'table': '*'}],
         blocked_functions := ['md5']
     );
     -- Success
@@ -56,10 +56,10 @@ docs:
     -- false   | unsupported
 
     -- Denied: tables are matched by resolved identity, with structured diagnostics
-    SELECT allowed, code, violations[1].rule AS rule, violations[1].schema AS schema, violations[1]."table" AS "table"
+    SELECT allowed, code, violations[1].rule AS rule, violations[1].schema_path AS schema_path, violations[1]."table" AS "table"
     FROM gatekeeper_validate('SELECT * FROM secrets');
-    -- allowed | code      | rule  | schema | table
-    -- false   | forbidden | table | main   | secrets
+    -- allowed | code      | rule  | schema_path | table
+    -- false   | forbidden | table | [main] | secrets
 
     -- Denied: a request can narrow the global policy but never widen it
     SELECT allowed, code, violations[1].rule AS rule, violations[1].function_name AS function_name
@@ -70,7 +70,7 @@ docs:
     -- Narrowed: per-request options restrict a tenant to one table within the ceiling
     SELECT allowed, code
     FROM gatekeeper_validate('SELECT count(*) FROM reporting.orders',
-                             allowed_tables := [{schema: 'reporting', 'table': 'orders'}]);
+                             allowed_tables := [{schema_path: ['reporting'], 'table': 'orders'}]);
     -- allowed | code
     -- true    | ok
 
@@ -118,8 +118,8 @@ docs:
 
     | Option | Type | Default | Notes |
     |--------|------|---------|-------|
-    | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema, table}`. `'*'` matches any whole component; omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
-    | `blocked_tables` | STRUCT[] | `[]` | Same identity rules. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
+    | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. Nonempty path, outermost first; `'*'` matches one component at exactly that depth, never recursively. Omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
+    | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
     | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. No wildcards. |
     | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
@@ -134,12 +134,12 @@ docs:
     |--------|------|---------|
     | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
     | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema`, `table`, `function_name`, `position`. Nonempty only for `forbidden` and `unsupported`. |
+    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden` and `unsupported`. |
     | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) for engine errors. |
     | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
     | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
-    | `objects` | STRUCT[] | Resolved `catalog`, `schema`, `table`, `type` (`table`, `view`, `replacement`), including trusted dependencies. See `caller_objects` for the caller-attributable catalog subset. Empty unless `ok`. |
-    | `functions` | STRUCT[] | Resolved `catalog`, `schema`, `name`, `type` the query bound to. Empty unless `ok`. |
+    | `objects` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `table`, `type` (`table`, `view`, `replacement`), including trusted dependencies. See `caller_objects` for the caller-attributable catalog subset. Empty unless `ok`. |
+    | `functions` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `name`, `type` the query bound to. Empty unless `ok`. |
     | `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
 
     Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,

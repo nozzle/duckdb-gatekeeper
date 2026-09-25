@@ -46,8 +46,10 @@ jobs:
           - name: DuckDB 2.0 candidate (6844d1b)
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+            nested_schemas: '1'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
+      GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,8 +111,10 @@ jobs:
           - name: DuckDB 2.0 candidate (6844d1b)
             key: 6844d1b
             ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+            nested_schemas: '1'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
+      GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

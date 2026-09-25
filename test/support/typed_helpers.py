@@ -34,6 +34,6 @@ def policy(db):
     return db.execute("SELECT current_setting('gatekeeper_policy')").fetchone()[0]
 
 
-def rule(catalog="*", schema="*", table="*"):
+def rule(catalog="*", schema_path=("*",), table="*"):
     """A table rule for allowed_tables or blocked_tables."""
-    return {"catalog": catalog, "schema": schema, "table": table}
+    return {"catalog": catalog, "schema_path": list(schema_path), "table": table}

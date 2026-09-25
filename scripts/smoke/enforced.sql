@@ -29,7 +29,7 @@ CREATE TABLE reporting.orders AS SELECT 20.0 AS amount;
 CREATE TABLE secret AS SELECT 'x' AS token;
 
 -- @host
-CALL gatekeeper_configure(allowed_tables := [{'schema': 'reporting', 'table': '*'}]);
+CALL gatekeeper_configure(allowed_tables := [{'schema_path': ['reporting'], 'table': '*'}]);
 
 -- @host
 CALL enable_logging('Gatekeeper');

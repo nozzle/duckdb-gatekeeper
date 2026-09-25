@@ -75,6 +75,29 @@ static Names Strings(const Value &value, bool lower) {
 	}
 	return result;
 }
+static NamePath SchemaPath(const Value &value) {
+	if (value.IsNull() || value.type().id() != LogicalTypeId::LIST)
+		throw std::invalid_argument("schema_path requires a nonempty VARCHAR[]");
+	NamePath path;
+	for (const auto &part : duckdb::ListValue::GetChildren(value)) {
+		if (part.IsNull() || part.type().id() != LogicalTypeId::VARCHAR)
+			throw std::invalid_argument("schema_path requires non-NULL string components");
+		auto text = part.GetValue<std::string>();
+		if (text.empty() || text.find('\0') != std::string::npos)
+			throw std::invalid_argument("schema_path components must be nonempty and NUL-free");
+		path.push_back(Lower(text));
+	}
+	if (path.empty())
+		throw std::invalid_argument("schema_path must be nonempty");
+	return path;
+}
+
+Value PathValue(const NamePath &path) {
+	duckdb::vector<Value> values;
+	for (const auto &part : path)
+		values.emplace_back(part);
+	return Value::LIST(LogicalType::VARCHAR, values);
+}
 
 void CheckArguments(const std::vector<std::pair<std::string, Value>> &arguments) {
 	for (const auto &argument : arguments) {
@@ -123,10 +146,11 @@ static Value JsonOption(const std::string &name, Json *value) {
 	}
 	if (!yyjson_is_arr(value))
 		throw std::invalid_argument(name + " requires JSON array");
-	auto type = element == LogicalTypeId::VARCHAR ? LogicalType::VARCHAR
-	                                              : LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
-	                                                                     {"schema", LogicalType::VARCHAR},
-	                                                                     {"table", LogicalType::VARCHAR}});
+	auto type = element == LogicalTypeId::VARCHAR
+	                ? LogicalType::VARCHAR
+	                : LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
+	                                       {"schema_path", LogicalType::LIST(LogicalType::VARCHAR)},
+	                                       {"table", LogicalType::VARCHAR}});
 	duckdb::vector<Value> entries;
 	size_t i, count;
 	Json *entry;
@@ -138,14 +162,24 @@ static Value JsonOption(const std::string &name, Json *value) {
 			entries.emplace_back(JsonString(entry, path));
 		else {
 			duckdb::vector<Value> fields(3, Value(LogicalType::VARCHAR));
+			fields[1] = Value(LogicalType::LIST(LogicalType::VARCHAR));
 			bool schema = false, table = false;
 			for (const auto &field : JsonObject(entry, path)) {
 				size_t index;
 				if (field.first == "catalog")
 					index = 0;
-				else if (field.first == "schema") {
+				else if (field.first == "schema_path") {
 					index = 1;
 					schema = true;
+					if (!yyjson_is_arr(field.second))
+						throw std::invalid_argument("schema_path requires JSON array");
+					NamePath parts;
+					size_t j, n;
+					Json *part;
+					yyjson_arr_foreach(field.second, j, n, part)
+					    parts.push_back(JsonString(part, path + ".schema_path"));
+					fields[index] = PathValue(parts);
+					continue;
 				} else if (field.first == "table") {
 					index = 2;
 					table = true;
@@ -155,7 +189,7 @@ static Value JsonOption(const std::string &name, Json *value) {
 					fields[index] = Value(JsonString(field.second, path + "." + field.first));
 			}
 			if (!schema || !table)
-				throw std::invalid_argument("table entries require schema and table");
+				throw std::invalid_argument("table entries require schema_path and table");
 			entries.push_back(Value::STRUCT(type, fields));
 		}
 	}
@@ -175,14 +209,14 @@ static std::vector<std::pair<std::string, Value>> JsonOptions(const Value &input
 	bool version = false;
 	for (const auto &field : JsonObject(yyjson_doc_get_root(doc.get()), "policy")) {
 		if (field.first == "version") {
-			if (!yyjson_is_num(field.second) || yyjson_get_num(field.second) != 1)
-				throw std::invalid_argument("policy JSON version must be 1");
+			if (!yyjson_is_num(field.second) || yyjson_get_num(field.second) != 2)
+				throw std::invalid_argument("policy JSON version must be 2");
 			version = true;
 		} else if (field.first == "options")
 			options = field.second;
 		else if (field.first == "$schema") {
 			if (JsonString(field.second, "$schema") !=
-			    "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v1.schema.json")
+			    "https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v2.schema.json")
 				throw std::invalid_argument("unknown policy JSON $schema");
 		} else
 			throw std::invalid_argument("unknown policy JSON field: " + field.first);
@@ -229,11 +263,11 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				Names fields;
 				for (const auto &field : duckdb::StructType::GetChildTypes(entry_type)) {
 					auto &key = duckdb::engine::Str(field.first);
-					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != leaf))
+					if (!fields.insert(key).second || (key != "catalog" && key != "schema_path" && key != leaf))
 						throw std::invalid_argument("unknown " + leaf + " field: " + key);
 				}
-				if (!fields.count("schema") || !fields.count(leaf))
-					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
+				if (!fields.count("schema_path") || !fields.count(leaf))
+					throw std::invalid_argument(leaf + " entries require schema_path and " + leaf);
 			}
 			if (kind == OptionKind::ALLOWED_TABLES)
 				policy.tables = true;
@@ -248,8 +282,12 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				Table table;
 				for (size_t i = 0; i < types.size(); i++) {
 					auto &key = duckdb::engine::Str(types[i].first);
-					if (!fields.insert(key).second || (key != "catalog" && key != "schema" && key != leaf))
+					if (!fields.insert(key).second || (key != "catalog" && key != "schema_path" && key != leaf))
 						throw std::invalid_argument("unknown " + leaf + " field: " + key);
+					if (key == "schema_path") {
+						table.schema_path = SchemaPath(values[i]);
+						continue;
+					}
 					if (values[i].IsNull() && key == "catalog")
 						continue;
 					if (values[i].IsNull() || values[i].type().id() != LogicalTypeId::VARCHAR)
@@ -260,13 +298,11 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 					text = Lower(text);
 					if (key == "catalog")
 						table.catalog = text;
-					if (key == "schema")
-						table.schema = text;
 					if (key == leaf)
 						table.table = text;
 				}
-				if (!fields.count("schema") || !fields.count(leaf))
-					throw std::invalid_argument(leaf + " entries require schema and " + leaf);
+				if (!fields.count("schema_path") || !fields.count(leaf))
+					throw std::invalid_argument(leaf + " entries require schema_path and " + leaf);
 				identities.insert(table);
 			}
 		}
@@ -282,14 +318,15 @@ Value PolicyValue(const Policy &policy) {
 	};
 	auto identities = [](const std::set<Table> &entries, const std::string &leaf) {
 		auto type = LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
-		                                 {"schema", LogicalType::VARCHAR},
+		                                 {"schema_path", LogicalType::LIST(LogicalType::VARCHAR)},
 		                                 {duckdb::engine::ToName(leaf), LogicalType::VARCHAR}});
 		duckdb::vector<Value> values;
 		// The canonical setting is NULL-free at every depth: an empty catalog means any catalog. A NULL
 		// produced by DuckDB's lossy STRUCT cast (for example a misspelled catalog key on direct SET) is
 		// therefore always distinguishable from an intentional any-catalog entry and is rejected on read.
 		for (const auto &entry : entries)
-			values.push_back(Value::STRUCT(type, {Value(entry.catalog), Value(entry.schema), Value(entry.table)}));
+			values.push_back(
+			    Value::STRUCT(type, {Value(entry.catalog), PathValue(entry.schema_path), Value(entry.table)}));
 		return Value::LIST(type, values);
 	};
 	return Value::STRUCT({{"use_default_functions", Value::BOOLEAN(policy.defaults)},
