@@ -133,7 +133,7 @@ SET gatekeeper_log_only = true;
 query I con2
 SELECT warnings[1] FROM gatekeeper_enforce();
 ----
-gatekeeper_log_only is true: this connection records decisions and refuses nothing
+gatekeeper_log_only is true: this connection records policy decisions without refusing them; CONNECT/DISCONNECT routing controls remain refused
 
 statement ok
 SET lock_configuration = true;

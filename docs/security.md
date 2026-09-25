@@ -195,10 +195,60 @@ connection object itself (Python's `DuckDBPyConnection` methods other than execu
 the C++ `Connection`) are out of scope: a caller holding them can open a new, unenforced
 connection. Hand out the ability to execute SQL, not the object.
 
+### CONNECT mode and native host state
+
+**Local enforcement requires a LOCAL connection throughout its use.** DuckDB 2.0's
+`ClientContext::SubmitStatement` checks `IsConnected()` and calls
+`Catalog::RemoteExecute(context, original_sql)` **before** `BeginQueryInternal` and Gatekeeper's
+`QueryBegin`. The returned table reference replaces the statement. Whether that callback
+transmits or executes SQL immediately belongs to the catalog implementation; Gatekeeper
+cannot authorize text before that callback on an already-connected session.
+
+The supported host setup is to create a fresh local connection (or explicitly `DISCONNECT`
+during trusted setup), end any host transaction, and execute `CALL gatekeeper_enforce()`
+locally before accepting untrusted SQL. Keep it local afterward. Attaching a catalog is
+different from entering CONNECT mode; local queries over attached tables continue to use the
+normal authorization path. CONNECT-mode local enforcement and automatic enforcement of
+connections created by a remote server are unsupported. Loading Gatekeeper on a client does
+not latch the server's sessions: a server must perform its own trusted setup on each local
+connection that executes untrusted SQL.
+
+The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counted
+`DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
+trace covers the CI 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
+(`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
+
+| Route | Boundary and result |
+| --- | --- |
+| `CONNECT name`, connection-string CONNECT, or CONNECT in a batch on a local enforced connection | The existing non-SELECT text check refuses before binding/execution can change state or attach a target. Zero remote callbacks. `DISCONNECT` is also non-SELECT and refused. |
+| Client `Prepare("CONNECT ...")` after latching, or execution of a CONNECT handle prepared before latching | Refused at the local text boundary; zero remote callbacks. SQL `PREPARE ... AS CONNECT` is rejected by the engine parser. Normal local parameterized SELECT handles remain supported. |
+| A host macro selecting `gatekeeper_enforce()`, directly or via `query('SELECT ...')` | Control-plane catalog authorization refuses even inside trusted definitions. A macro does not grant SQL the right to change enforcement state. `query()` itself accepts only a single SELECT, not CONNECT. |
+| Local activation body reached while `IsConnected()` is true | The latch throws a Permission Error and installs no enforcement state, even in log-only mode. It tests the flag, not just the live target, so stale/expired targets are refused too. |
+| SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
+| SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
+| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. In the tested engine, client Prepare also dispatches before failing to register a local handle; bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
+| CONNECT/DISCONNECT while log-only is on | Routing controls are identified by parsed statement type before log-only can waive a denial. They retain `mode = 'enforce'` and are refused before binding, with zero remote callbacks on local sessions. Turning log-only off therefore restores policy refusals on the same local route. Native-mutated connected state remains unsupported and must be restored through trusted native setup or the connection replaced. |
+
+Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
+are trusted code. Do not install or expose implementations that change an enforced
+connection's routing state, including through an otherwise admitted view or macro. SQL
+control-plane name checks cannot constrain an arbitrary native implementation calling
+`ConnectToCatalog`, executing SQL on a fresh connection, or changing registered hook state.
+The host must also keep state stable between prepare and execute. Public client entry points
+that reach `SubmitStatement` share its early dispatch ordering; host APIs are not a separate
+pre-callback authorization boundary.
+
+Supporting already-connected enforcement requires an upstream veto/authorization hook
+**before any remote dispatch**, covering direct submissions and prepared/client entry points,
+plus a guard on connection-state transitions (including native `ConnectToCatalog`). A
+`QueryBegin` connected-state check cannot supply either guarantee. These restrictions are
+separate from the pre-hook PRAGMA-processing limitation in [#46](https://github.com/nozzle/duckdb-gatekeeper/issues/46).
+DuckDB 1.5 has no CONNECT routing API; its local enforcement behavior is unchanged.
+
 ### Two boundaries
 
-Gatekeeper decides at two points in DuckDB's query lifecycle. Each owns a guarantee that can
-be stated and tested independently.
+Gatekeeper decides at two points in DuckDB's local query lifecycle, subject to the LOCAL-state
+host requirements above. Each owns a guarantee that can be stated and tested independently.
 
 **Binding boundary** (`ClientContextState::QueryBegin`, before the engine binds). The
 statement text is parsed with the connection's parser options, serialized, and walked
@@ -439,19 +489,27 @@ so on that connection, at that moment.
 
 `SET gatekeeper_log_only = true` is a global BOOLEAN setting, default `false`, reversible, and
 frozen by `lock_configuration`. While it is true, every enforced connection makes and records
-every decision exactly as it otherwise would, and refuses nothing: a denial is written to the
-log with `mode = 'log_only'` and the engine then binds and executes the statement as it would
+every policy decision as it otherwise would, without refusing policy denials: a denial is
+written to the log with `mode = 'log_only'` and the engine then binds and executes the statement as it would
 on an unenforced connection. It exists so a policy can be measured against real traffic (what
 would be refused, and what the traffic resolves to) before any of it is refused.
+
+**Routing exception:** CONNECT/DISCONNECT on DuckDB 2.0 always retain `mode = 'enforce'`
+and are refused at the text boundary, including client-prepared routes. Parsed statement
+types select this exception before policy or size-limit failures can be waived by log-only.
+Keeping the execution route LOCAL makes the rollout switch reversible and keeps audit
+records about locally authorized execution. This does not protect against trusted native
+state mutation or already-connected activation; the [host requirements](#connect-mode-and-native-host-state)
+still apply. Other control-plane statements remain subject to normal log-only semantics.
 
 Semantics that follow from "the same decision, without the refusal":
 
 - The switch is read once per statement, in `QueryBegin` next to the policy, and snapshotted
   with it, so every boundary of one statement agrees; a flip applies at the next statement on
   every enforced connection, in both directions.
-- Identical checks at identical cost: the text check, the private authorizing bind, the
-  rebind of prepared executions, and the plan check all run. What log-only measures, denials
-  and latency alike, is what enforcement will do.
+- The same policy checks: the text check, the private authorizing bind, the
+  rebind of prepared executions, and the plan check all run. Log-only measures what enforcement
+  would deny; 2.0 log-only additionally parses to identify routing controls.
 - Exactly one record per statement, at the boundary that decided it, in both modes. Once a
   log-only statement has been decided, the hooks the engine reaches while binding and
   executing it anyway do not decide it again. The replacement-scan gate lets the engine's own
@@ -472,14 +530,14 @@ Semantics that follow from "the same decision, without the refusal":
   connection shows; `test/test_log_only.py` asserts
   this over the enforcement parity corpus on identical fresh instances, and asserts the record
   equals the `gatekeeper_validate` row.
-- A `Prepare()` is pre-screened as before and a denial there is recorded with
+- Apart from routing controls, a `Prepare()` is pre-screened as before and a denial there is recorded with
   `mode = 'log_only'` (on 1.5 with no statement text, on 2.0 with the prepared text); each
   later execution is its own record.
-- **Log-only mode protects nothing, including Gatekeeper.** On a log-only connection `SET
-  gatekeeper_policy`, `CALL gatekeeper_configure()`, and `SET gatekeeper_log_only` are
-  unsupported statements that are recorded and then execute, exactly like every other
-  statement. The connection stays enforced, so flipping the switch back restores refusals on
-  it, but until then the caller has the whole engine. `lock_configuration` is the mitigation,
+- **Log-only provides no policy protection, including for Gatekeeper.** Apart from the routing
+  exception, on a log-only connection `SET gatekeeper_policy`, `CALL gatekeeper_configure()`,
+  and `SET gatekeeper_log_only` are unsupported statements that are recorded and then execute.
+  The connection stays enforced and LOCAL, so flipping the switch back restores policy refusals
+  on it. `lock_configuration` is the mitigation,
   as for the policy; the `lock_configuration` posture warning names both settings, and
   `gatekeeper_enforce()` warns whenever the switch is on. Locking while the switch is on
   freezes it on: `SET allowed_configs = ['gatekeeper_log_only']` before locking keeps the way
@@ -509,7 +567,7 @@ the enforcement parity corpus. The rest of the record is:
 | column | meaning |
 | --- | --- |
 | `event` | `decision`, `policy_changed`, or `log_only_changed` |
-| `mode` | `enforce` (an enforced connection), `log_only` (an enforced connection while `gatekeeper_log_only` is true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
+| `mode` | `enforce` (an enforced decision, including CONNECT/DISCONNECT while log-only is on), `log_only` (a policy decision with `gatekeeper_log_only` true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
 | `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
 | `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
 | `policy_hash` | sixteen hex digits over the canonical `gatekeeper_policy` value in force for the decision; the same hash appears on the `policy_changed` record that installed it, whose `new_value` is the full policy |
