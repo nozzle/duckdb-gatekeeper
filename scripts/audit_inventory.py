@@ -87,7 +87,8 @@ def main():
         check_sources(entries, duckdb_source=args.source_checkout)
     baseline = json.loads(args.baseline.read_text())
     delta = compare(baseline, candidate)
-    report = {**delta, **coverage(candidate, entries), "compiled_default_count": len(defaults)}
+    report = {**delta, **coverage(candidate, entries), "compiled_default_count": len(defaults),
+              "default_namespace": {"catalog": "system", "schema_path": ["main"]}}
     print(json.dumps(report, indent=2))
     if args.strict and (any(delta.values()) or report["unclassified_runtime_names"]):
         raise SystemExit("Runtime inventory differs from the historical baseline")

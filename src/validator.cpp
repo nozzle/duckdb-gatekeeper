@@ -34,6 +34,18 @@ NamePath FoldPath(NamePath path) {
 	return path;
 }
 static void Invalid(const std::string &message) { throw std::invalid_argument(message); }
+bool NamespaceMatches(const std::string &catalog, const NamePath &schema_path, const std::string &actual_catalog,
+                      const NamePath &actual_schema_path, bool exact_schema) {
+	if (actual_catalog.empty() || actual_schema_path.empty() || schema_path.size() != actual_schema_path.size())
+		return false;
+	if (!catalog.empty() && catalog != "*" && catalog != Lower(actual_catalog))
+		return false;
+	for (size_t i = 0; i < schema_path.size(); i++)
+		if (actual_schema_path[i].empty() ||
+		    (schema_path[i] != Lower(actual_schema_path[i]) && (exact_schema || schema_path[i] != "*")))
+			return false;
+	return true;
+}
 static bool TableMatches(const std::set<Table> &rules, const Table &key, bool internal = false) {
 	// Exact schema/table names are required for internal objects, even when the resolved name is '*'.
 	if (internal &&
@@ -44,16 +56,10 @@ static bool TableMatches(const std::set<Table> &rules, const Table &key, bool in
 	if (rules.count(key))
 		return true;
 	for (const auto &rule : rules) {
-		if ((!rule.catalog.empty() && rule.catalog != "*" && rule.catalog != key.catalog) ||
-		    rule.schema_path.size() != key.schema_path.size() ||
+		if (!NamespaceMatches(rule.catalog, rule.schema_path, key.catalog, key.schema_path, internal) ||
 		    (rule.table != key.table && (internal || rule.table != "*")))
 			continue;
-		bool matches = true;
-		for (size_t i = 0; i < rule.schema_path.size(); i++)
-			if (rule.schema_path[i] != key.schema_path[i] && (internal || rule.schema_path[i] != "*"))
-				matches = false;
-		if (matches)
-			return true;
+		return true;
 	}
 	return false;
 }
@@ -147,14 +153,47 @@ static const Inventory &GetInventory() {
 	return inventory;
 }
 
-bool FunctionAllowed(const Policy &policy, const std::string &name) {
-	auto &inventory = GetInventory();
-	auto canonical = CanonicalFunction(name);
-	// Parquet aliases share a permission; JSON aliases accept the canonical extraction name.
-	return !FunctionDenied(policy, name) &&
-	       (policy.allowed_functions.count(Lower(name)) || policy.allowed_functions.count(canonical) ||
-	        (canonical == "read_parquet" && policy.allowed_functions.count("parquet_scan")) ||
-	        (policy.defaults && inventory.defaults.count(Lower(name))));
+bool SupportedFunctionKind(const std::string &kind) {
+	static const Names kinds = {"scalar", "aggregate", "table", "macro", "table_macro", "window"};
+	return kinds.count(kind);
+}
+bool SystemIdentity(const Identity &identity) {
+	return !identity.name.empty() && Lower(identity.catalog) == "system" &&
+	       FoldPath(identity.schema_path) == NamePath{"main"};
+}
+static bool GrantNameMatches(const FunctionGrant &rule, const std::string &name, bool aliases) {
+	return rule.name == Lower(name) || (aliases && CanonicalFunction(rule.name) == CanonicalFunction(name));
+}
+bool FunctionEligible(const Policy &policy, const std::string &name) {
+	if (FunctionDenied(policy, name))
+		return false;
+	if (policy.defaults && GetInventory().defaults.count(Lower(name)))
+		return true;
+	for (const auto &rule : policy.allowed_functions)
+		if (GrantNameMatches(rule, name, NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"})))
+			return true;
+	return false;
+}
+bool FunctionAllowed(const Policy &policy, const Identity &identity) {
+	if (identity.name.empty() || identity.catalog.empty() || identity.schema_path.empty() ||
+	    !SupportedFunctionKind(identity.type) || FunctionDenied(policy, identity.name))
+		return false;
+	for (const auto &part : identity.schema_path)
+		if (part.empty())
+			return false;
+	const bool system = SystemIdentity(identity);
+	if (system && policy.defaults && GetInventory().defaults.count(Lower(identity.name)))
+		return true;
+	// Reviewed alias grants belong only to their system scalar/table implementations, never host shadows/macros.
+	const bool aliases =
+	    system && ((identity.type == "table" && CanonicalFunction(identity.name) == "read_parquet") ||
+		           (identity.type == "scalar" && (CanonicalFunction(identity.name) == "json_extract" ||
+		                                          CanonicalFunction(identity.name) == "json_extract_string")));
+	for (const auto &rule : policy.allowed_functions)
+		if ((rule.type.empty() || rule.type == identity.type) && GrantNameMatches(rule, identity.name, aliases) &&
+		    NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path))
+			return true;
+	return false;
 }
 
 bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
@@ -453,6 +492,12 @@ struct Walker {
 		if (kind == "OperatorExpression") {
 			auto type = Field(value, "type");
 			if (type == "ARRAY_CONSTRUCTOR")
+				Implied({"list_value"});
+			if (type == "ARRAY_SLICE")
+				Implied({"array_slice"});
+			if (type == "ARROW")
+				Implied({"json_extract"});
+			if (type == "ARRAY_CONSTRUCTOR")
 				Function("list_value", value);
 			if (type == "ARRAY_SLICE")
 				Function("array_slice", value);
@@ -494,6 +539,12 @@ struct Walker {
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
 			auto arguments = Arguments(value);
+			if (yyjson_is_true(yyjson_obj_get(value, "is_operator")))
+				Implied({name});
+			// The parsers also serialize literal constructors as ordinary calls. Until origin is exposed,
+			// treat an explicit same-name call conservatively as the corresponding builtin syntax.
+			if (name == "list_value" || name == "struct_pack" || name == "row")
+				Implied({name});
 			if (edge == "function") {
 				static const Names runtime_capable = {"unnest", "range", "generate_series"};
 				bool runtime = false;
@@ -521,10 +572,27 @@ struct Walker {
 					BindTime(arguments[i], "quantile fraction/options", true);
 			}
 			Function(name, value);
-			// The aggregate these dispatch to is selected by a caller-supplied (foldable) expression that only
-			// binding resolves; remember that the caller wrote the dispatcher so the bound target is allowlisted.
-			if (binding && DispatchingAggregators().count(name))
-				binding->caller_dispatchers.insert(name);
+			// Only literal caller-selected aggregate names can be authorized before entering the dispatcher.
+			if (DispatchingAggregators().count(name)) {
+				if (binding)
+					binding->caller_dispatchers.insert(name);
+				// The engines resolve the argument as one leaf in system.main, never as SQL qualification.
+				// Do not evaluate a foldable expression to discover what permission it needs.
+				auto target = arguments.size() > 1 ? arguments[1] : nullptr;
+				auto constant = yyjson_obj_get(target, "value");
+				auto text = yyjson_obj_get(constant, "value");
+				if (Field(target, "class") != "CONSTANT" || !yyjson_is_str(text))
+					Reject(rules::BIND_TIME_EXPRESSION, "aggregate dispatch requires a literal aggregate name", value,
+					       name);
+				else {
+					Identity selected{"system", {"main"}, Text(text), "aggregate"};
+					if (binding)
+						binding->dispatcher_targets.insert(Lower(selected.name));
+					if (!layers.All([&](const Policy &p) { return FunctionAllowed(p, selected); }))
+						violations.emplace(rules::FUNCTION, "dispatched aggregate is not allowed", selected.catalog,
+						                   selected.schema_path, "", selected.name, Position(value));
+				}
+			}
 			// Dynamic SQL and plan inspection bind caller-supplied SQL at execution time, outside this
 			// validation. They are on the never-bind list; this is the earlier, more specific diagnostic.
 			if ((edge == "function" &&
@@ -673,7 +741,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 		auto &name = entry.first;
 		if (binding)
 			binding->caller_functions.insert(CanonicalFunction(name));
-		if (!walker.layers.All([&](const Policy &p) { return FunctionAllowed(p, name); })) {
+		if (!walker.layers.All([&](const Policy &p) { return FunctionEligible(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;
 			if (entry.second > 1)

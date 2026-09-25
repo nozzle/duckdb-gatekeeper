@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -20,9 +21,13 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "name_path.hpp"
+#include "validator.hpp"
 
 #ifndef GATEKEEPER_DUCKDB_MAJOR
 #error "GATEKEEPER_DUCKDB_MAJOR must be defined by the Gatekeeper build"
+#endif
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+#include "duckdb/function/window_function.hpp"
 #endif
 
 namespace duckdb {
@@ -91,6 +96,30 @@ template <class FUNCTION> inline bool SystemBuiltin(const FUNCTION &function) {
 }
 inline const LogicalType &ReturnType(const Expression &expression) { return expression.return_type; }
 #endif
+
+template <class FUNCTION> inline gatekeeper::Identity FunctionIdentity(const FUNCTION &function, const string &kind) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto qualified = function.GetQualifiedName();
+	auto &path = qualified.Path();
+	if (path.size() < 3 || Str(path.front()).empty())
+		return {"", {}, FunctionName(function), kind};
+	gatekeeper::NamePath schema;
+	for (idx_t i = 1; i + 1 < path.size(); i++)
+		schema.push_back(Str(path[i]));
+	return {Str(path.front()), schema, Str(path.back()), kind};
+#else
+	return {function.catalog_name,
+	        function.schema_name.empty() ? gatekeeper::NamePath{} : gatekeeper::NamePath{function.schema_name},
+	        function.name, kind};
+#endif
+}
+inline gatekeeper::Identity AggregateIdentity(const BoundAggregateExpression &expression) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	return FunctionIdentity(expression.Function(), "aggregate");
+#else
+	return FunctionIdentity(expression.function, "aggregate");
+#endif
+}
 
 // Parsed expressions.
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
@@ -173,11 +202,29 @@ inline CatalogEntry &GetEntry(ClientContext &context, CatalogType type, const st
 }
 #endif
 
-// A table function whose execution is its point (gatekeeper_enforce latches, gatekeeper_configure writes the
-// policy) must run when its statement runs, however the statement is spelled. DuckDB 1.5 runs every statement
-// to completion; 2.0 produces a SELECT's rows only as the client reads them, and runs CALL at once by marking
-// the statement's result eagerness in Binder::Bind(CallStatement). The same mark from the function's bind makes
-// `SELECT ... FROM gatekeeper_enforce()`, a prepared statement over it, and EXECUTE of one run at once too.
+// Resolve without binding arguments, then pin the replacement reference to the exact returned entry.
+inline CatalogEntry &ResolveReplacementFunction(ClientContext &context, FunctionExpression &expression) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto binder = Binder::CreateBinder(context);
+	auto name = binder->BindTableName(expression.GetQualifiedName());
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, name);
+	auto &standard = entry.Cast<StandardEntry>();
+	expression.SetQualifiedName(standard.schema.GetQualifiedName(entry.name));
+#else
+	auto catalog = expression.catalog;
+	auto schema = expression.schema;
+	Binder::BindSchemaOrCatalog(context, catalog, schema);
+	auto &entry =
+	    Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, expression.function_name);
+	auto &standard = entry.Cast<StandardEntry>();
+	expression.catalog = standard.schema.catalog.GetName();
+	expression.schema = standard.schema.name;
+	expression.function_name = entry.name;
+#endif
+	return entry;
+}
+
+// A table function whose execution is its point must run even when the client does not fetch its rows.
 inline void RunAtOnce(TableFunctionBindInput &input) {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	if (input.binder)

@@ -102,6 +102,14 @@ int main() {
 	// Prepare both shapes while the table is allowed, and keep the handles.
 	const vector<Value> one{Value::INTEGER(0)};
 	const vector<Value> none;
+	Run(catalog, "CREATE MACRO reporting.identity_function(x) AS x");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := "
+	             "[{catalog:'memory',schema_path:['reporting'],name:'identity_function',type:'macro'}])");
+	auto function_handle = agent.Prepare("SELECT reporting.identity_function(?)");
+	ExpectRows(Execute(*function_handle, one), 1, "qualified function before policy change");
+	Run(catalog, "CALL gatekeeper_configure()");
+	ExpectRefused(Execute(*function_handle, one), "prepared qualified grant withdrawal");
+	Allow(catalog, "*");
 	auto with_parameter = agent.Prepare("SELECT x FROM reporting.leak WHERE x > ?");
 	auto without_parameter = agent.Prepare("SELECT x FROM reporting.leak");
 	if (with_parameter->HasError())

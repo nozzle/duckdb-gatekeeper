@@ -72,8 +72,8 @@ def test_parameter_does_not_override_function_policy(db):
     result = validate(db, "SELECT * FROM read_csv(?)")
     assert result["code"] == "forbidden"
     assert any(v["function_name"] == "read_csv" for v in result["violations"])
-    configure(db, {"allowed_functions": ["read_csv"]})
-    result = validate(db, "SELECT * FROM read_csv(?)", {"allowed_functions": ["read_csv"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
+    result = validate(db, "SELECT * FROM read_csv(?)", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
     assert result["code"] == "binding"
 
 
@@ -91,8 +91,8 @@ def test_objects_and_functions_are_resolved_deduplicated_sorted(db):
     for field, leaf in [("objects", "table"), ("functions", "name")]:
         tuples = [(v["catalog"], tuple(v["schema_path"]), v[leaf], v["type"]) for v in result[field]]
         assert tuples == sorted(set(tuples))
-    configure(db, {"allowed_functions": ["report"]})
-    macro = validate(db, "SELECT * FROM report()", {"allowed_functions": ["report"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "report"}]})
+    macro = validate(db, "SELECT * FROM report()", {"allowed_functions": [{"schema_path": ["*"], "name": "report"}]})
     assert macro["allowed"] and macro["objects"] == result["objects"][:1]
     assert {"catalog": "memory", "schema_path": ["main"], "name": "report", "type": "table_macro"} in macro["functions"]
 
@@ -136,9 +136,9 @@ def test_quoted_dependency_identities_are_not_dotted_strings(db):
 
 
 def test_table_macro_cte_shadowing_differs_from_view(db):
-    configure(db, {"allowed_functions": ["m"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}]})
     db.execute("CREATE TABLE t AS SELECT 1 x; CREATE MACRO m() AS TABLE SELECT * FROM t; CREATE VIEW v AS SELECT * FROM t")
-    macro = validate(db, "WITH t AS (SELECT 2 x) SELECT * FROM m()", {"allowed_functions": ["m"]})
+    macro = validate(db, "WITH t AS (SELECT 2 x) SELECT * FROM m()", {"allowed_functions": [{"schema_path": ["*"], "name": "m"}]})
     view = validate(db, "WITH t AS (SELECT 2 x) SELECT * FROM v")
     assert macro["allowed"] and view["allowed"]
     assert macro["objects"] == []
@@ -149,13 +149,13 @@ def test_literal_constructor_shadow_cannot_evaluate_macro(db):
     db.execute("CREATE MACRO main.list_value(x) AS repeat('x', 200000000)")
     result = validate(db, "SELECT * FROM range(list_value(1))")
     assert result["code"] == "forbidden" and result["error_message"] == "", result
-    assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
+    assert any(v["rule"] in {"function", "bind_time_expression"} for v in result["violations"])
 
 
-def test_non_catalog_window_is_reported_without_invented_namespace(db):
+def test_engine_window_has_explicit_system_identity(db):
     result = validate(db, "SELECT row_number() OVER ()")
     assert result["allowed"]
-    assert {"catalog": "", "schema_path": [], "name": "row_number", "type": "window"} in result["functions"]
+    assert {"catalog": "system", "schema_path": ["main"], "name": "row_number", "type": "window"} in result["functions"]
 
 
 def test_typed_parameter_execution_uses_same_text(db):
@@ -176,7 +176,7 @@ def test_host_enum_allows_label_introspection(db):
 
 def test_bind_time_named_reader_options_are_checked(db):
     for suffix in ["header=contains(repeat('x',200000000),'x')", "header:=contains(repeat('x',200000000),'x')"]:
-        result = validate(db, "SELECT * FROM read_csv('missing.csv', " + suffix + ")", {"allowed_functions": ["read_csv"]})
+        result = validate(db, "SELECT * FROM read_csv('missing.csv', " + suffix + ")", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
         assert result["code"] == "forbidden" and result["error_message"] == ""
         assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
 
@@ -230,7 +230,7 @@ def test_in_out_exception_requires_builtin_identity(db):
 
 
 def test_unresolved_column_does_not_relax_standard_reader(db):
-    result = validate(db, "SELECT * FROM read_csv(repeat(not_a_column,200000000))", {"allowed_functions": ["read_csv"]})
+    result = validate(db, "SELECT * FROM read_csv(repeat(not_a_column,200000000))", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
     assert result["code"] == "forbidden" and result["error_message"] == ""
     assert any(v["rule"] == "bind_time_expression" for v in result["violations"])
 

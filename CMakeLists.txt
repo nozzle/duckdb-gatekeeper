@@ -80,6 +80,9 @@ option(GATEKEEPER_NATIVE_PROBES "Build the native client-API probes (test/native
 if(GATEKEEPER_NATIVE_PROBES)
   add_executable(gatekeeper_prepared_probe test/native/prepared_handle_probe.cpp)
   target_link_libraries(gatekeeper_prepared_probe duckdb)
+  add_executable(gatekeeper_qualified_probe test/native/qualified_function_probe.cpp)
+  target_compile_definitions(gatekeeper_qualified_probe PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
+  target_link_libraries(gatekeeper_qualified_probe duckdb)
 endif()
 install(TARGETS gatekeeper_extension EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

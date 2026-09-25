@@ -588,11 +588,12 @@ implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
 treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
 
-Function allowlisting cannot be disabled. Each policy layer admits its explicit
+Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
 explicit blocks and the never-bind list take precedence for what the caller writes.
 
-The Parquet reader names `read_parquet` and `parquet_scan` share allow/block
+The system.main Parquet readers `read_parquet` and `parquet_scan` share grant permission;
+their leaf names share block
 permission. This explicit pair is source-reviewed in
 `duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
 `ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
@@ -669,18 +670,17 @@ a constant.
 Name-selected aggregate dispatch (`list_aggregate`, `list_aggr`, `aggregate`,
 `array_aggregate`, `array_aggr`) is elevated, and admitting a dispatcher does not admit
 every aggregate it can reach: when the caller writes one, the aggregate DuckDB resolves
-from the caller's (foldable) name argument must pass both allowlists, and like other
+from the caller's literal name argument must pass both qualified allowlists before private binding, and like other
 ambiguous caller syntax the check applies query-wide, so a trusted view's own dispatch in
 the same plan is checked too. Dispatchers used only inside trusted definitions, and the
 fixed `histogram` behind `list_distinct`/`list_unique`, are those definitions' own.
 
-Defaults are admitted by leaf name, so a host-created macro or function that shadows a
-default name is a trusted definition: `CREATE MACRO ltrim(x) AS ...` in a schema ahead of
-`system` on the search path is admitted whenever `ltrim` is, and its body is checked
-against Gatekeeper's control plane only. The same holds for views, types, casts, and
-collations. Gatekeeper assumes catalog integrity; letting untrusted users create
-definitions in a shared catalog is outside its model, and restricting defaults to
-`system.main` would not by itself make such DDL safe.
+Defaults authorize reviewed identities in `system.main` only. A host-created macro or function
+shadowing a default needs an explicit qualified grant; once authorized, a host macro's body
+retains the trust described above. Types, casts, and host default collations remain trusted
+configuration. Catalog integrity remains a prerequisite; namespace pinning does not make
+untrusted DDL safe. See [qualified grants and feasibility](qualified-functions.md) for the
+exact kind/alias matching contract, migration, intrinsic provenance, and direct-binding limits.
 Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
@@ -747,7 +747,9 @@ execution time, outside this validation.
 
 ### Callback bypasses
 
-Gatekeeper does not restrict type or collation names, or authorize cast implementations.
+Gatekeeper does not authorize type names or cast implementations. Caller COLLATE is refused
+on 1.5 because its directly bound scalar has no reliable namespace; 2.0 checks the scalar
+implementations that survive binding. This is not a collation-name allowlist.
 The database owner controls extension loading and definitions. Table/view catalog
 and schema restrictions do not restrict type lookup. There is no mandatory type audit.
 Type resolution can autoload or autoinstall extensions when enabled; hosts must
@@ -791,15 +793,18 @@ catalogs/schemas fail closed before their serialization callbacks can run.
 `list_distinct`/`list_unique` and their `array_*` aliases use the source-reviewed fixed
 `histogram` implementation.
 These implementations obey blocks in both layers and appear in successful function
-evidence. Their catalog is `''` and schema path is `[]` when the bound representation supplies no
-reliable provenance. Arbitrary extension bind data is not introspected.
+evidence. Known identities retain catalog/schema; source-backed intrinsics have explicit system
+identities. Unknown caller implementations refuse rather than satisfying a grant by leaf. Unknown
+trusted-body dependencies can still appear with empty namespace. See the narrowly scoped 1.5
+definition recovery in [qualified-function feasibility](qualified-functions.md). Arbitrary extension
+bind data is not introspected.
 
 ## Remaining boundaries
 
 - Validation always binds on the calling connection and authorizes the retrieved table
   and view identities attributable to the caller; what a trusted view or macro reads is
   recorded, not authorized, so a host definition is the host's decision to expose what it
-  reads. No public syntax-only mode exists. Function matching remains name-based, not a
+  reads. No public syntax-only mode exists. Function matching uses qualified identity, not a
   proof of a macro/UDF's implementation; catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks

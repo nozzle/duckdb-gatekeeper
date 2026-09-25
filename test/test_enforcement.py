@@ -208,7 +208,7 @@ def test_latch_is_irreversible_and_unreachable_from_sql(catalog, agent):
                 "CALL gatekeeper_configure()"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
-    assert validate(catalog, "SELECT * FROM gatekeeper_enforce()", {"allowed_functions": ["gatekeeper_enforce"]})["code"] == "forbidden"
+    assert validate(catalog, "SELECT * FROM gatekeeper_enforce()", {"allowed_functions": [{"schema_path": ["*"], "name": "gatekeeper_enforce"}]})["code"] == "forbidden"
     # There is no instance-wide switch for a trusted connection to flip either.
     with pytest.raises(duckdb.CatalogException):
         catalog.execute("SET gatekeeper_enforcement = 'off'")
@@ -239,7 +239,7 @@ def test_policy_changes_apply_to_the_next_statement(catalog, agent):
 
 def test_validate_is_available_when_allowed(catalog, agent):
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-                        "allowed_functions": ["gatekeeper_validate"]})
+                        "allowed_functions": [{"schema_path": ["*"], "name": "gatekeeper_validate"}]})
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM secret.salaries')").fetchall()
     assert rows == [(False, "forbidden")]
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT count(*) FROM reporting.orders')").fetchall()

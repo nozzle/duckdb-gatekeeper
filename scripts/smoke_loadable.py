@@ -145,7 +145,8 @@ def main(argv):
         result = validate(db, f"SELECT * FROM {view}", {"blocked_functions": ["lower"]})
         expect(result["allowed"], f"{view}: block reached the view's own lambda body: {result}")
         result = validate(db, f"SELECT {expression}", {"blocked_functions": ["lower"]})
-        expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower",
+        expect(result["code"] == "forbidden" and
+               (result["violations"][0]["function_name"] == "lower" or result["violations"][0]["rule"] == "bind_time_expression"),
                f"{view}: block did not reach the caller's lambda body: {result}")
 
     # The dispatched aggregate is recovered through the serialization callback of the host's function.
@@ -154,11 +155,11 @@ def main(argv):
            f"dispatched aggregate not observed: {result}")
     result = validate(db, "SELECT * FROM dispatched", {"blocked_functions": ["sum"]})
     expect(result["allowed"], f"block reached the view's own dispatched aggregate: {result}")
-    db.execute("CALL gatekeeper_configure(allowed_functions := ['list_aggregate'])")
+    db.execute("CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}])")
     result = validate(db, "SELECT list_aggregate([1, 2], 'sum')", {"blocked_functions": ["sum"]})
     expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum",
            f"block did not reach the caller's dispatched aggregate: {result}")
-    db.execute("CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value'])")
+    db.execute("CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}, {'catalog':'system','schema_path':['main'],'name':'list_value'}])")
     result = validate(db, "SELECT list_aggregate([1, 2], 'sum')")
     expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum",
            f"caller-written dispatch target escaped the allowlist: {result}")
@@ -177,7 +178,7 @@ def main(argv):
         result = validate(db, f"SELECT * FROM '{path}'")
         expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet",
                f"replacement scan admitted without a reader grant: {result}")
-        db.execute("CALL gatekeeper_configure(allowed_functions := ['read_parquet'])")
+        db.execute("CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'read_parquet'}])")
         result = validate(db, f"SELECT * FROM '{path}'")
         expect(result["allowed"] and result["objects"][0]["type"] == "replacement",
                f"granted replacement scan not recorded: {result}")

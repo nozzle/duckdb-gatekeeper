@@ -112,8 +112,8 @@ def test_table_wildcards_are_independent_of_functions_and_types(db):
     broad = {"allowed_tables": [rule()]}
     assert not validate(db, "SELECT custom(1)", broad)["allowed"]
     assert validate(db, "SELECT NULL::customer", broad)["allowed"]
-    configure(db, {"allowed_tables": [], "allowed_functions": ["custom"]})
+    configure(db, {"allowed_tables": [], "allowed_functions": [{"schema_path": ["*"], "name": "custom"}]})
     assert validate(db, "SELECT memory.main.custom(1), NULL::memory.main.customer")["allowed"]
     assert not validate(db, "SELECT custom(1)", {"blocked_functions": ["custom"]})["allowed"]
     # Function names use exact matching.
-    assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": ["*"]})["allowed"]
+    assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "*"}]})["allowed"]

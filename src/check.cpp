@@ -332,6 +332,7 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 // text, bind and plan phases: they have different inputs, and only the bind writes provenance. (The engine's
 // own duckdb::BindContext is the binder's table of bindings, hence the name.)
 struct PrivateBind {
+	ClientContext &context;
 	const gatekeeper::Layers &layers;
 	const gatekeeper::BindingPolicy &binding;
 	gatekeeper::Provenance &provenance;
@@ -474,13 +475,33 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			layers = {enforced.get()};
 		auto canonical = gatekeeper::CanonicalFunction(resolution.name);
 		for (const auto *layer : layers) {
-			if (caller_written && !gatekeeper::FunctionAllowed(*layer, resolution.name)) {
+			if (caller_written && !gatekeeper::FunctionEligible(*layer, resolution.name)) {
 				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + canonical,
 				         canonical))
 					return std::move(resolution.ref);
 			}
 		}
+		auto &expression = resolution.ref->Cast<TableFunctionRef>().function->Cast<FunctionExpression>();
+		auto &entry = engine::ResolveReplacementFunction(context, expression);
+		gatekeeper::BindingPolicy reader_binding = binding ? *binding : gatekeeper::BindingPolicy{};
+		reader_binding.caller_functions.insert(canonical);
+		gatekeeper::Result reader_result;
+		try {
+			for (const auto *layer : layers)
+				AuthorizeObject({*layer, *layer}, reader_binding, entry, reader_result, caller_written);
+		} catch (const PermissionException &) {
+			if (scope) {
+				scope->bind.result.violations.insert(reader_result.violations.begin(), reader_result.violations.end());
+				throw;
+			}
+			MarkDenied(reader_result);
+			if (record(reader_result, enforced))
+				return std::move(resolution.ref);
+		}
 		if (scope) {
+			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
+			if (caller_written)
+				scope->bind.provenance.replacement_functions.insert(canonical);
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
 			scope->bind.result.objects.insert({"", {}, path, "replacement"});
 		}
@@ -518,7 +539,7 @@ void InstallReplacementScan(DBConfig &config) {
 // by the same walk, for the same reason: the body binds in the caller's binder, so the objects it reads can
 // only be recognized by name.
 static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names,
-                           gatekeeper::WrittenNames *tables = nullptr) {
+                           gatekeeper::WrittenNames *tables = nullptr, gatekeeper::Names *targets = nullptr) {
 	auto node = make_uniq<SelectNode>();
 	for (auto &overload : macro.macros) {
 		node->select_list.push_back(overload->Cast<ScalarMacroFunction>().expression->Copy());
@@ -535,6 +556,8 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 		names.insert(set->begin(), set->end());
 	if (tables)
 		tables->insert(body.caller_table_names.begin(), body.caller_table_names.end());
+	if (targets)
+		targets->insert(body.dispatcher_targets.begin(), body.dispatcher_targets.end());
 	// A COLLATE in the body binds its collation's function (lower, icu_collate_de, ...) directly, never through
 	// the catalog callback, so there is no lookup to recognize here: the plan walk attributes a collation
 	// function to the caller only when the caller wrote COLLATE (BindingPolicy::caller_collates).
@@ -549,6 +572,22 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 // attributed to nothing, with one exception: Gatekeeper's control plane is refused on every route. A scalar
 // macro body binds in the caller's own binder, so its names and table references are learned from its
 // definition instead, and an object the caller's text names is the caller's wherever it binds.
+static void CheckAggregateDependency(ClientContext &context, const string &name, gatekeeper::Result &result) {
+	if (name != "min" && name != "max")
+		return;
+	auto dependency = name == "min" ? "arg_min" : "arg_max";
+	auto &target = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "", "", dependency);
+	auto &standard = target.Cast<StandardEntry>();
+	if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY ||
+	    engine::CatalogName(standard.schema.catalog) != "system" ||
+	    engine::SchemaPath(standard.schema) != gatekeeper::NamePath{"main"}) {
+		result.violations.emplace(gatekeeper::rules::FUNCTION, "implicit aggregate must resolve to system.main",
+		                          engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema), "",
+		                          dependency);
+		throw PermissionException("untrusted implicit aggregate");
+	}
+}
+
 struct LookupCallback {
 	shared_ptr<PrivateBind> bind;
 	bool trusted = false;
@@ -589,9 +628,24 @@ struct LookupCallback {
 		// bind in the same binder.
 		bool attributable = !trusted && !(s.provenance.trusted_names.count(canonical) &&
 		                                  !s.provenance.CallerCanName(s.binding, canonical));
-		AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
+		if (s.provenance.caller_expansions.count(canonical) || s.provenance.replacement_functions.count(canonical)) {
+			auto lookup_binding = s.binding;
+			lookup_binding.system_functions = s.provenance.caller_expansions;
+			if (s.provenance.replacement_functions.count(canonical))
+				lookup_binding.caller_functions.insert(canonical);
+			AuthorizeObject(s.layers, lookup_binding, entry, s.result, attributable);
+		} else
+			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
+		auto &function_entry = entry.Cast<StandardEntry>();
+		s.provenance.function_entries.insert({engine::CatalogName(function_entry.schema.catalog),
+		                                      engine::SchemaPath(function_entry.schema), engine::EntryName(entry),
+		                                      FunctionKind(entry.type)});
 		if (attributable)
 			s.provenance.caller_lookups.insert(canonical);
+		// Collated min/max directly resolve these dependencies through the search path on both engines.
+		// Refuse a shadow before min/max can bind, even when an explicit grant would admit the shadow.
+		if (attributable && entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY)
+			CheckAggregateDependency(s.context, canonical, s.result);
 		if (trusted)
 			return;
 		// A host table macro's body binds in the next child binder. So does what a table function a trusted
@@ -609,8 +663,22 @@ struct LookupCallback {
 		// and so is everything its body names.
 		if (!entry.internal || !attributable)
 			MacroBodyNames(macro, s.provenance.trusted_names, &s.provenance.trusted_table_names);
-		else
-			MacroBodyNames(macro, s.provenance.caller_expansions);
+		else {
+			gatekeeper::Names targets;
+			MacroBodyNames(macro, s.provenance.caller_expansions, nullptr, &targets);
+			for (const auto &name : targets) {
+				CheckAggregateDependency(s.context, name, s.result);
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				auto &standard = target.Cast<StandardEntry>();
+				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
+				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
+				                              FunctionKind(target.type)};
+				s.provenance.function_entries.insert(identity);
+			}
+		}
 	}
 };
 
@@ -623,9 +691,35 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 		parameter_data = *parameters;
 	BoundParameterMap bound_parameters(parameter_data);
 	auto binder = Binder::CreateBinder(context);
+	// On 1.5 collation functions are embedded, unstamped implementations bound without our callback.
+	// Refuse the caller's explicit route before binding rather than invent a scalar catalog identity.
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+	if (unit.binding.caller_collates) {
+		result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
+		                          "qualified function authorization for caller COLLATE requires DuckDB 2.0");
+		throw PermissionException("unverifiable collation implementation");
+	}
+#endif
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{layers, unit.binding, unit.provenance, result});
+	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{context, layers, unit.binding, unit.provenance, result});
+	// Literal dispatch targets are resolved without binding/evaluating arguments. Both engines' dispatcher
+	// uses exactly system.main plus this leaf. Keep the entry evidence separately from the resulting plan.
+	for (const auto &name : unit.binding.dispatcher_targets) {
+		CheckAggregateDependency(context, name, result);
+		auto &entry = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+		if (entry.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+			throw BinderException("List aggregate target is not an aggregate");
+		auto &standard = entry.Cast<StandardEntry>();
+		gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema),
+		                              engine::EntryName(entry), FunctionKind(entry.type)};
+		if (!layers.All([&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
+			result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
+			                          identity.catalog, identity.schema_path, "", identity.name);
+			throw PermissionException("dispatched aggregate is not allowed");
+		}
+		unit.provenance.function_entries.insert(identity);
+	}
 	binder->SetCatalogLookupCallback(LookupCallback(bind));
 	ValidationScope scope{context, *bind, {}};
 	BoundStatement bound;

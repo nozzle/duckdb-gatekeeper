@@ -39,7 +39,7 @@ SELECT CASE WHEN NOT coalesce(allowed, false)
             THEN error('lambda_view: block reached the view''s own lambda body: ' || code) END
 FROM gatekeeper_validate('SELECT * FROM lambda_view', blocked_functions := ['lower']);
 
-SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'lower', false)
+SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND (violations[1].function_name = 'lower' OR violations[1].rule = 'bind_time_expression'), false)
             THEN error('lambda_view: block did not reach the caller''s lambda body: ' || code) END
 FROM gatekeeper_validate('SELECT list_transform([''a''], lambda v: v COLLATE nocase = ''A'')',
                          blocked_functions := ['lower']);
@@ -52,7 +52,7 @@ SELECT CASE WHEN NOT coalesce(allowed, false)
             THEN error('nested_lambda: block reached the view''s own lambda body: ' || code) END
 FROM gatekeeper_validate('SELECT * FROM nested_lambda', blocked_functions := ['lower']);
 
-SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'lower', false)
+SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND (violations[1].function_name = 'lower' OR violations[1].rule = 'bind_time_expression'), false)
             THEN error('nested_lambda: block did not reach the caller''s lambda body: ' || code) END
 FROM gatekeeper_validate('SELECT list_transform([[''a'']], lambda xs: list_filter(xs, lambda v: v COLLATE nocase = ''A''))',
                          blocked_functions := ['lower']);
@@ -66,13 +66,13 @@ SELECT CASE WHEN NOT coalesce(allowed, false)
             THEN error('block reached the view''s own dispatched aggregate: ' || code) END
 FROM gatekeeper_validate('SELECT * FROM dispatched', blocked_functions := ['sum']);
 
-CALL gatekeeper_configure(allowed_functions := ['list_aggregate']);
+CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}]);
 
 SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'sum', false)
             THEN error('block did not reach the caller''s dispatched aggregate: ' || code) END
 FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')', blocked_functions := ['sum']);
 
-CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value']);
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}, {'catalog':'system','schema_path':['main'],'name':'list_value'}]);
 
 SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'sum', false)
             THEN error('caller-written dispatch target escaped the allowlist: ' || code) END
@@ -95,7 +95,7 @@ SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name
             THEN error('replacement scan admitted without a reader grant: ' || code) END
 FROM gatekeeper_validate('SELECT * FROM ''gatekeeper_smoke.parquet''');
 
-CALL gatekeeper_configure(allowed_functions := ['read_parquet']);
+CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'read_parquet'}]);
 
 SELECT CASE WHEN NOT coalesce(allowed AND objects[1].type = 'replacement', false)
             THEN error('granted replacement scan not recorded: ' || code) END

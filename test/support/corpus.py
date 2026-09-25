@@ -34,7 +34,7 @@ CATALOG_SQL = """CREATE SCHEMA reporting; CREATE SCHEMA secret;
     CREATE TYPE tags AS ENUM ('a', 'b');
     CREATE TYPE empty_tags AS ENUM (SELECT tag FROM reporting.orders WHERE false)"""
 CATALOG_POLICY = {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-                  "allowed_functions": ["twice"], "blocked_functions": ["md5"]}
+                  "allowed_functions": [{"schema_path": ["reporting"], "name": "twice"}], "blocked_functions": ["md5"]}
 
 # Statement text the three legs decide against CATALOG_POLICY, each comparing its own observation with what
 # gatekeeper_validate says about it. Allowed rows read only reporting.* under the fixture policy.

@@ -73,7 +73,8 @@ def test_random_invalid_sql(db):
 
 def test_random_option_types(db):
     rng = random.Random(99)
-    values = [None, True, False, 1, -1, 1.5, "x", [], {}, ["x"]]
+    values = [None, True, False, 1, -1, 1.5, "x", [], {}, ["x"],
+              [{"catalog":"system", "schema_path":["main"], "name":"abs", "type":"scalar"}]]
     keys = ["use_default_functions", "allowed_functions", "blocked_functions", "allowed_tables", "blocked_tables", "unknown"]
     for _ in range(100):
         options = {rng.choice(keys): rng.choice(values)}

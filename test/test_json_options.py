@@ -34,7 +34,7 @@ def test_schema_is_valid_and_covers_the_sql_options(db):
 
 
 VALID_OPTIONS = [
-    {}, {"use_default_functions": False}, {"allowed_functions": ["ABS", "abs", "+", "*", "λ", "a\nb"]},
+    {}, {"use_default_functions": False}, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["ABS", "abs", "+", "*", "λ", "a\nb"]]},
     {"blocked_functions": ["MD5"]}, {"allowed_functions": [], "blocked_functions": []},
     {"allowed_tables": []}, {"blocked_tables": []},
     {"allowed_tables": [{"schema_path": ["MAIN"], "table": "t"}]},
@@ -42,7 +42,7 @@ VALID_OPTIONS = [
     {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"},
                         {"schema_path": ["main"], "table": "secret"}]},
     {"blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "secret"}]},
-    {"use_default_functions": False, "allowed_functions": ["abs"], "blocked_functions": ["md5"],
+    {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "abs"}], "blocked_functions": ["md5"],
      "allowed_tables": [{"schema_path": ["main"], "table": "*"}],
      "blocked_tables": [{"schema_path": ["main"], "table": "secret"}]},
     {"allowed_tables": [{"schema_path": ["finance", "reports"], "table": "t"}]},
@@ -82,12 +82,17 @@ def schema_cases():
         yield document({name: []}), False
     for value in [None, 0, 1, "false", [], {}]:
         yield document({"use_default_functions": value}), False
-    for name in ["allowed_functions", "blocked_functions"]:
+    for name in ["blocked_functions"]:
         for value in [None, "md5", {}, True, [None], [1], [True], [{}], [[]], [""], ["a\0b"], ["\0\n"],
                       ["\ud800"], ["\udfff"], ["a\ud800b"], ["\udc00\ud800"]]:
             yield document({name: value}), False
         for value in [[], ["a", "a"], ["\n"], ["*"], ["a\nb"], ["😀"], ["\ud83d\ude00"]]:
             yield document({name: value}), True
+    for value in [None, "abs", ["abs"], [None], [{}], [{"name":"abs"}],
+                  [{"schema_path":["main"],"name":"abs","type":"pragma"}]]:
+        yield document({"allowed_functions": value}), False
+    for kind in [None, "scalar", "ScAlAr", "aggregate", "table", "macro", "table_macro", "window"]:
+        yield document({"allowed_functions": [{"catalog":None,"schema_path":["*"],"name":"abs","type":kind}]}), True
     for name in ["allowed_tables", "blocked_tables"]:
         for value in [None, {}, "main.t", [None], [1], ["main.t"], [[]], [{}],
                       [{"schema_path": ["main"]}], [{"table": "t"}],
@@ -132,7 +137,7 @@ def test_schema_and_both_decoders_agree(db, value, accepted):
     '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
     '{"version":2,"options":{"blocked_functions":[],"blocked_\\u0066unctions":["md5"]}}',
     '{"version":2,"options":{"allowed_tables":[{"schema_path":["main"],"table":"t","catalog":"a","catalog":"b"}]}}',
-    '{"version":2,"options":{"allowed_functions":["\\ud800"]}}',
+    '{"version":2,"options":{"allowed_functions":[{"schema_path":["main"],"name":"\\ud800"}]}}',
     '{"version":2,"options":{}}\0',
 ])
 def test_invalid_json_text_fails_closed(db, text):

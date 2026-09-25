@@ -5,10 +5,10 @@ import json
 
 import pytest
 
-from support.artifact import ROOT
+from support.artifact import ROOT, ENGINE_MAJOR
 from support.enforcement import DENIED, enforce
 from support.headers import header_names
-from support.typed_helpers import configure, validate
+from support.typed_helpers import configure, validate, grants
 
 
 CASES = [
@@ -39,19 +39,22 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
     db.execute("CREATE MACRO m() AS " + expression)
     db.execute("CREATE MACRO tm() AS TABLE SELECT " + expression + " AS x")
     direct = "SELECT " + expression
-    configure(db, {"allowed_functions": ["m", "tm"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "tm"]]})
     for sql in [direct, *WRAPPERS.values()]:
         result = validate(db, sql)
+        if ENGINE_MAJOR < 2 and sql == direct and "COLLATE" in expression:
+            assert result["code"] == "forbidden"
+            continue
         assert result["allowed"], (sql, result)
         assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (sql, result)
         db.execute(sql).fetchall()
     if global_block:
-        configure(db, {"allowed_functions": ["m", "tm"], "blocked_functions": [blocked]})
+        configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "tm"]], "blocked_functions": [blocked]})
         db.execute("SET lock_configuration=true")
     layer = {"blocked_functions": [] if global_block else [blocked]}
     result = validate(db, direct, layer)
     assert result["code"] == "forbidden", result
-    assert any(v["function_name"] == blocked for v in result["violations"]), result
+    assert (ENGINE_MAJOR < 2 and "COLLATE" in expression) or any(v["function_name"] == blocked for v in result["violations"]), result
     assert result["objects"] == result["functions"] == []
     for wrapper, sql in WRAPPERS.items():
         result = validate(db, sql, layer)
@@ -59,7 +62,7 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
         assert any(f["name"] == blocked and f["type"] == kind for f in result["functions"]), (wrapper, result)
     result = validate(db, direct + " FROM v", layer)
     assert result["code"] == "forbidden", result
-    assert any(v["function_name"] == blocked for v in result["violations"]), result
+    assert (ENGINE_MAJOR < 2 and "COLLATE" in expression) or any(v["function_name"] == blocked for v in result["violations"]), result
 
 
 @pytest.mark.parametrize("expression", ["list_sum(NULL)", "list_distinct(NULL)", "list_unique(NULL)"])
@@ -76,7 +79,7 @@ def test_trusted_macro_body_does_not_launder_caller_expansions(db, order):
     (list_count names list_aggr); that expansion is the caller's, in either order, and the aggregate it
     dispatches stays subject to the caller's blocks. The host macro's own dispatch stays its own."""
     db.execute("CREATE MACRO m() AS list_sum([1,2])")
-    configure(db, {"allowed_functions": ["m"], "blocked_functions": ["count"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}], "blocked_functions": ["count"]})
     mixed = "SELECT m(), list_count([3])" if order == "macro_first" else "SELECT list_count([3]), m()"
     for sql in ["SELECT list_count([3])", mixed]:
         result = validate(db, sql)
@@ -132,7 +135,7 @@ def test_placeholder_plans_require_resolved_parameters(db, sql):
 
 
 def test_admitted_dispatch_uses_actual_aggregate(db):
-    configure(db, {"allowed_functions": ["list_aggregate"], "blocked_functions": ["sum"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}], "blocked_functions": ["sum"]})
     assert validate(db, "SELECT list_aggregate([1,2], 'min')")["allowed"]
     result = validate(db, "SELECT list_aggregate([1,2], 'sum')")
     assert result["code"] == "forbidden", result
@@ -147,22 +150,23 @@ def test_literal_json_is_not_bound_implementation_evidence(db):
 
 
 STRICT = {"use_default_functions": False,
-          "allowed_functions": ["list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr",
-                                "list_value", "list_distinct"]}
+          "allowed_functions": grants("list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr",
+                                      "list_value", "list_distinct", catalog="system", schema_path=("main",))}
 
 
 @pytest.mark.parametrize("dispatcher", ["list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr"])
 def test_caller_written_dispatch_target_must_be_allowed(db, dispatcher):
     """The aggregate a caller selects by name is caller-chosen text: a strict allowlist that admits only the
     dispatcher must not reach every unblocked aggregate. Folding the name does not evade the bound check."""
-    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["sum", "||"]})
-    concat = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["||"]}
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("sum", "||")})
+    concat = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("||")}
     for name in ("'sum'", "'su' || 'm'"):
         result = validate(db, f"SELECT {dispatcher}([1,2], {name})", concat)
         assert result["code"] == "forbidden", result
-        assert result["violations"][0]["rule"] == "function" and result["violations"][0]["function_name"] == "sum", result
-    granted = {**concat, "allowed_functions": concat["allowed_functions"] + ["sum"]}
-    result = validate(db, f"SELECT {dispatcher}([1,2], 'su' || 'm')", granted)
+        assert result["violations"][0]["rule"] == ("function" if name == "'sum'" else "bind_time_expression"), result
+    granted = {**concat, "allowed_functions": concat["allowed_functions"] + grants("sum")}
+    assert validate(db, f"SELECT {dispatcher}([1,2], 'su' || 'm')", granted)["code"] == "forbidden"
+    result = validate(db, f"SELECT {dispatcher}([1,2], 'sum')", granted)
     assert result["allowed"], result
     assert any(f["name"] == "sum" and f["type"] == "aggregate" for f in result["functions"]), result
     # Both layers must grant the target: the request cannot add it past the global ceiling.
@@ -175,18 +179,18 @@ def test_dispatch_target_check_is_scoped_to_caller_written_dispatchers(db):
     once the caller writes a dispatcher, the allowlist check applies query-wide like other ambiguous caller
     syntax."""
     db.execute("CREATE VIEW v AS SELECT list_aggregate([1,2], 'sum') AS s")
-    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]})
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count")})
     assert validate(db, "SELECT list_distinct([1,2])", STRICT)["allowed"]
     assert validate(db, "SELECT s FROM v", STRICT)["allowed"]
     # The view's dispatched aggregate is the view's: a block on it does not reach into the body.
     assert validate(db, "SELECT s FROM v", {**STRICT, "blocked_functions": ["sum"]})["allowed"]
-    request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + ["count"]}
+    request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count")}
     assert validate(db, "SELECT list_aggregate([1], 'count')", request)["allowed"]
     # The view's own dispatch is bound into the same plan, so the caller's dispatcher makes it subject to the check.
     result = validate(db, "SELECT list_aggregate([1], 'count') FROM v", request)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum", result
     # With defaults on, an admitted dispatcher reaches default aggregates but not elevated ones.
-    configure(db, {"allowed_functions": ["list_aggregate"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}]})
     assert validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
     result = validate(db, "SELECT list_aggregate([1,2], 'histogram')")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "histogram", result
@@ -236,10 +240,15 @@ def test_every_list_lambda_alias_exposes_its_body(db, function):
     db.execute("CREATE VIEW v AS SELECT " + expression + " AS x")
     for sql in ("SELECT " + expression, "SELECT * FROM v"):
         result = validate(db, sql)
+        if ENGINE_MAJOR < 2 and sql != "SELECT * FROM v":
+            assert result["code"] == "forbidden"
+            continue
         assert result["allowed"], result
         assert any(f["name"] == "lower" for f in result["functions"]), result
     result = validate(db, "SELECT " + expression, {"blocked_functions": ["lower"]})
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "lower", result
+    assert result["code"] == "forbidden", result
+    if ENGINE_MAJOR >= 2:
+        assert result["violations"][0]["function_name"] == "lower", result
     assert validate(db, "SELECT * FROM v", {"blocked_functions": ["lower"]})["allowed"]
     # A NULL list still binds the builtin with an empty body; nothing to inspect, nothing to deny.
     assert validate(db, f"SELECT {function}(NULL, lambda x: x)" if "reduce" not in function

@@ -65,7 +65,7 @@ def test_allowed_and_denied_tables(lake):
     assert blocked["allowed"] and SCAN[kind] in {f["name"] for f in blocked["functions"]}, (kind, blocked)
     if kind == "iceberg":
         direct = validate(db, "SELECT * FROM iceberg_scan('s3://warehouse/untrusted')",
-                          {**policy, "allowed_functions": ["iceberg_scan"], "blocked_functions": ["iceberg_scan"]})
+                          {**policy, "allowed_functions": [{"schema_path": ["*"], "name": "iceberg_scan"}], "blocked_functions": ["iceberg_scan"]})
         assert direct["code"] == "forbidden" and direct["violations"][0]["function_name"] == "iceberg_scan", direct
     for changes in [{"allowed_tables": [{"catalog": "other", "schema_path": ["*"], "table": "*"}]},
                     {"allowed_tables": [{"catalog": "*", "schema_path": ["other"], "table": "*"}]}, {"allowed_tables": []}]:

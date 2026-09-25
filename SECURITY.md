@@ -53,8 +53,8 @@ runs while parsing `PRAGMA` statements, before any extension hook runs (a docume
 residual, upstream [duckdb/duckdb#25875](https://github.com/duckdb/duckdb/issues/25875));
 functions and readers that host-created views, macros, and attached tables use inside their
 own definitions, which are outside function policy by design (Gatekeeper's own control plane
-excepted); behavior of host-created definitions that shadow default names
-or otherwise rely on an untrusted party having DDL in the shared catalog; the contents
+excepted); implementation behavior of explicitly granted host definitions,
+or attacks relying on an untrusted party having DDL in the shared catalog; the contents
 of engine `error_message` text; and hosts that leave `autoload_known_extensions`,
 `autoinstall_known_extensions`, or configuration changes enabled on validating or
 enforced connections; and callers who hold the host-language connection object rather

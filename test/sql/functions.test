@@ -46,39 +46,39 @@ function is not allowed: current_setting (2 occurrences)	7
 
 # A strict allowlist admits exactly the named functions; operators are functions too.
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT 1 + 2', use_default_functions := false, allowed_functions := ['+']);
+SELECT allowed FROM gatekeeper_validate('SELECT 1 + 2', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'+'}]);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT 1 + 2 * 3', use_default_functions := false, allowed_functions := ['+']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT 1 + 2 * 3', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'+'}]);
 ----
 forbidden	function	*
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT sum(x) FROM t', use_default_functions := false, allowed_functions := ['sum']);
+SELECT allowed FROM gatekeeper_validate('SELECT sum(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'sum'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT sum(x), count(x) FROM t', use_default_functions := false, allowed_functions := ['sum']);
+SELECT code FROM gatekeeper_validate('SELECT sum(x), count(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'sum'}]);
 ----
 forbidden
 
 # Names are ASCII case-folded; '*' in allowed_functions is the multiplication operator, not a wildcard.
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT SUM(x) FROM t', use_default_functions := false, allowed_functions := ['Sum']);
+SELECT allowed FROM gatekeeper_validate('SELECT SUM(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'Sum'}]);
 ----
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT sum(x) FROM t', use_default_functions := false, allowed_functions := ['*']);
+SELECT code FROM gatekeeper_validate('SELECT sum(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'*'}]);
 ----
 forbidden
 
 # Blocks always win, in either layer, over defaults and explicit allows.
 query T
-SELECT code FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := ['md5'], blocked_functions := ['md5']);
+SELECT code FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := [{'schema_path':['main'],'name':'md5'}], blocked_functions := ['md5']);
 ----
 forbidden
 
@@ -86,13 +86,13 @@ statement ok
 CALL gatekeeper_configure(blocked_functions := ['md5']);
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := ['md5'], blocked_functions := []);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := [{'schema_path':['main'],'name':'md5'}], blocked_functions := []);
 ----
 forbidden	function	md5
 
 # The request cannot widen the global ceiling: the global policy must also grant a name.
 statement ok
-CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['sum']);
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'sum'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT sum(x) FROM t');
@@ -100,7 +100,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT sum(x) FROM t');
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT count(x) FROM t', allowed_functions := ['count']);
+SELECT code FROM gatekeeper_validate('SELECT count(x) FROM t', allowed_functions := [{'schema_path':['main'],'name':'count'}]);
 ----
 forbidden
 
@@ -114,7 +114,7 @@ RESET gatekeeper_policy;
 
 # Readers can be granted by name in the global policy, and a request can narrow that grant away again.
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['read_csv_auto']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'read_csv_auto'}]);
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT * FROM read_csv_auto(''/definitely/missing.csv'')');
@@ -154,20 +154,20 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	md5
 
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['doubled']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'doubled'}]);
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := ['doubled']);
+SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}]);
 ----
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := ['doubled'], blocked_functions := ['*']);
+SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := ['*']);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) * 2 FROM t', use_default_functions := false, allowed_functions := ['doubled'], blocked_functions := ['*']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) * 2 FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := ['*']);
 ----
 forbidden	function	*
 
@@ -211,15 +211,18 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 ----
 forbidden	function	truncate_duckdb_logs
 
-# A host macro that shadows a default name is a trusted definition: it is admitted by the leaf name and its
-# body is checked against the never-bind list only. Hosts must control the catalog.
+# A host macro that shadows a default name requires its own namespace grant before its
+# body is trusted (the control-plane exception remains). Hosts must control the catalog.
 statement ok
 CREATE MACRO ltrim(v) AS md5(v);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t');
 ----
-true
+false
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['main'],name:'ltrim',type:'macro'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t', blocked_functions := ['md5']);
@@ -228,6 +231,9 @@ true
 
 statement ok
 DROP MACRO ltrim;
+
+statement ok
+CALL gatekeeper_configure();
 
 # Bound implementations of the caller's own expressions are blockable: lower behind nocase in a lambda, sum
 # behind list_sum. The same implementations inside a view are the view's.
@@ -267,7 +273,7 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	list_aggregate
 
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['list_aggregate']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'list_aggregate'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')');
@@ -285,7 +291,7 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	sum
 
 statement ok
-CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value']);
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'list_aggregate'}, {'schema_path':['main'],'name':'list_value'}]);
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')');
@@ -293,12 +299,12 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	sum
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')', use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value', 'sum']);
+SELECT code FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'list_aggregate'}, {'schema_path':['main'],'name':'list_value'}, {'schema_path':['main'],'name':'sum'}]);
 ----
 forbidden
 
 statement ok
-CALL gatekeeper_configure(use_default_functions := false, allowed_functions := ['list_aggregate', 'list_value', 'sum']);
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'list_aggregate'}, {'schema_path':['main'],'name':'list_value'}, {'schema_path':['main'],'name':'sum'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''sum'')');

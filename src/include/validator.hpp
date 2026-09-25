@@ -30,9 +30,19 @@ struct Table {
 		return std::tie(catalog, schema_path, table) < std::tie(other.catalog, other.schema_path, other.table);
 	}
 };
+struct FunctionGrant {
+	std::string catalog;
+	NamePath schema_path;
+	std::string name, type;
+	bool operator<(const FunctionGrant &other) const {
+		return std::tie(catalog, schema_path, name, type) <
+		       std::tie(other.catalog, other.schema_path, other.name, other.type);
+	}
+};
 struct Policy {
 	bool defaults = true, tables = false;
-	Names allowed_functions, blocked_functions;
+	std::set<FunctionGrant> allowed_functions;
+	Names blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
 };
 // The two layers every authorization consults: the global ceiling the host set, and the request layer, which is
@@ -97,6 +107,9 @@ struct Identity {
 		       std::tie(other.catalog, other.schema_path, other.name, other.type);
 	}
 };
+// Shared namespace matcher. Function leaves are always exact, including '*'.
+bool NamespaceMatches(const std::string &catalog, const NamePath &schema_path, const std::string &actual_catalog,
+                      const NamePath &actual_schema_path, bool exact_schema = false);
 struct Result {
 	bool allowed = false;
 	std::string code, error_type, error_message;
@@ -126,11 +139,14 @@ inline Result InvalidInput(std::string message) { return {false, codes::INVALID_
 struct BindingPolicy {
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
+	// Fixed names introduced by a reviewed default macro must never select a host shadow.
+	Names system_functions;
 	Names literal_constructors;
 	Names runtime_table_functions;
 	// Caller-written list_aggregate/aggregate family calls: the aggregate they select by name is caller-chosen
 	// text, so the bound implementation must pass the allowlists like any other caller-written function.
 	Names caller_dispatchers;
+	Names dispatcher_targets;
 	// Every function name the caller wrote, canonical: the names the text check decided, kept for the bind and
 	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
 	Names caller_functions;
@@ -157,6 +173,9 @@ bool NamesObject(const WrittenNames &written, const std::string &catalog, const 
 // Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
 // Everything else in the plan came from a trusted definition.
 struct Provenance {
+	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
+	std::set<Identity> function_entries;
+	Names replacement_functions;
 	// Canonical function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
 	// Canonical function names the default macros the caller's text expands to introduce (list_count names

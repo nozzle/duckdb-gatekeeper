@@ -8,6 +8,24 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- **Breaking (#108):** `allowed_functions` is now a list of qualified grants
+  `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
+  String grants are rejected with migration guidance. Catalog/schema wildcards follow table rules;
+  the leaf is exact (`*` is multiplication). Optional kinds are scalar, aggregate, table, macro,
+  table_macro, and window. Both policy layers authorize resolved entries before callbacks on the
+  private binder's catalog path. Defaults grant reviewed `system.main` identities only; host shadows
+  and `system.pg_catalog` compatibility macros need explicit grants. Reviewed grant aliases apply
+  only to their system implementations; blocks remain alias-canonicalized leaf-wide denies.
+- Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
+  caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
+  an unambiguous system definition recorded by the same authorizing bind; see
+  [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+- Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
+  `system.main` aggregate before private binding. Computed/parameterized target names are refused.
+  Caller `COLLATE` is refused on 1.5 because its direct-bound scalar implementation has no reliable
+  catalog provenance. Trusted macro/view bodies retain their existing trust. Replacement readers
+  are resolved and pinned before reader binding; implicit helper shadows are refused even if granted.
+
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace

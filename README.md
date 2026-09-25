@@ -147,7 +147,7 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
 | `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
+| `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Exact leaf; `'*'` names multiplication. Defaults grant reviewed `system.main` identities only. See [matching and migration](docs/qualified-functions.md). |
 | `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
@@ -165,7 +165,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functio
 | false |
 
 ```sql
-SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']);
+SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := [{catalog:'system', schema_path:['main'], name:'+', type:'scalar'}]);
 ```
 
 | allowed |
@@ -409,7 +409,7 @@ flowchart LR
 ```
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
-  `FROM read_parquet(...)`) all use the same policy, by leaf name.
+  `FROM read_parquet(...)`) all use the same qualified identity policy; blocks remain leaf-wide.
 - Trusted **views, macros, and attached tables** are opaque to function policy. What
   their definitions introduce is theirs, not the caller's: exempt from the allowlist,
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
@@ -436,7 +436,7 @@ text and must also be allowed in both layers, not merely unblocked.
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
 > `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
-> policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
+> policy: `allowed_functions := [{catalog:'system', schema_path:['main'], name:'current_schema'}]`. The clock (`current_date`, `now()`),
 > the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
 > compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
 > nothing about the host beyond the time and its `TimeZone`/`Calendar`, and `setseed` touches only
@@ -713,7 +713,7 @@ SET lock_configuration = true;
 - **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
   are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
 - **`gatekeeper_validate` on the enforced connection**, when the policy allows it
-  (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
+  (`allowed_functions := [{catalog:'system', schema_path:['main'], name:'gatekeeper_validate', type:'table'}]`), for agents that want the decision as a row
   before they run the statement.
 - **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
   a rebind for prepared executions). Negligible next to model latency, measurable on hot paths

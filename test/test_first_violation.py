@@ -39,23 +39,21 @@ def test_text_denials_are_all_reported_and_bind_denials_are_the_first_one(catalo
     "SELECT list_aggregate([1], 'max') FROM secret.salaries",
     "SELECT list_aggregate([1], 'max') FROM secret.salaries WHERE amount > 0",
 ])
-def test_table_denied_during_the_bind_precedes_a_function_denied_in_the_plan(catalog, agent, sql):
-    # list_aggregate's target is chosen by a string the binder resolves, so it can only be denied on the bound
-    # plan; the table is denied by the catalog callback while that plan is being bound, so it comes first.
+def test_literal_dispatch_denial_precedes_table_binding(catalog, agent, sql):
+    # Literal dispatch now has a qualified preflight check, before any table is bound.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": ["list_aggregate"],
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
                         "blocked_functions": ["max"]})
     expected = validate(catalog, sql)
-    assert first(expected) == ("table", "object is not allowed", "salaries", "")
+    assert first(expected) == ("function", "dispatched aggregate is not allowed", "", "max")
     seen = attempt(agent, sql)
-    assert seen.kind == "denied" and "table: object is not allowed" in str(seen.error), seen
-    assert "max" not in str(seen.error)
+    assert seen.kind == "denied" and "dispatched aggregate is not allowed" in str(seen.error), seen
     [record] = decisions(catalog, "mode = 'enforce'")
-    assert record["boundary"] == "authorize" and record["violations"] == expected["violations"]
+    assert record["boundary"] == "binding" and record["violations"] == expected["violations"]
     # The same function, with the table allowed, is the plan's denial.
     allowed_table = sql.replace("secret.salaries", "reporting.orders")
-    assert first(validate(catalog, allowed_table)) == ("function", "dispatched aggregate is not allowed: max", "", "max")
-    assert "dispatched aggregate is not allowed: max" in str(attempt(agent, allowed_table).error)
+    assert first(validate(catalog, allowed_table)) == ("function", "dispatched aggregate is not allowed", "", "max")
+    assert "dispatched aggregate is not allowed" in str(attempt(agent, allowed_table).error)
 
 
 @pytest.mark.parametrize("sql", [
@@ -66,16 +64,16 @@ def test_the_ceiling_is_walked_before_the_request_layer(catalog, sql):
     # Two plan-level denials in one statement, one per layer: the ceiling's is reported whichever the text
     # names first, because the plan is walked once per layer and the ceiling's walk is the first.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": ["list_aggregate"],
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
                         "blocked_functions": ["max"]})
     expected = validate(catalog, sql, {"blocked_functions": ["min"]})
-    assert first(expected) == ("function", "dispatched aggregate is not allowed: max", "", "max")
+    assert first(expected) == ("function", "dispatched aggregate is not allowed", "", "max")
     [record] = decisions(catalog, "mode = 'validate'")
     assert record["violations"] == expected["violations"]
     # Only the request layer's denial remains once the ceiling allows the other name.
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": ["list_aggregate"]})
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}]})
     assert first(validate(catalog, sql, {"blocked_functions": ["min"]})) == (
-        "function", "dispatched aggregate is not allowed: min", "", "min")
+        "function", "dispatched aggregate is not allowed", "", "min")
 
 
 @pytest.mark.parametrize("ceiling,options,message", [

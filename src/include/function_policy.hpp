@@ -131,5 +131,9 @@ inline bool CollationFunction(const std::string &name) {
 	       lower.compare(0, 12, "icu_collate_") == 0;
 }
 
-bool FunctionAllowed(const Policy &policy, const std::string &name);
+// Eligibility is only a pre-bind leaf screen, never a resolved authorization decision.
+bool FunctionEligible(const Policy &policy, const std::string &name);
+bool FunctionAllowed(const Policy &policy, const Identity &identity);
+bool SystemIdentity(const Identity &identity);
+bool SupportedFunctionKind(const std::string &kind);
 } // namespace gatekeeper
