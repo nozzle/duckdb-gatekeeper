@@ -20,6 +20,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
   an unambiguous system definition recorded by the same authorizing bind; see
   [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+- Disabling defaults requires explicit qualified grants for default-macro expansion functions and
+  literal aggregate targets as well as the macro itself. Host macro bodies remain opaque. Implicit
+  arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates.
 - Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
   `system.main` aggregate after resolving the system scalar dispatcher, before its bind callbacks.
   Computed/parameterized targets and dotted/method dispatcher calls are refused; unrelated host

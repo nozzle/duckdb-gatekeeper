@@ -162,3 +162,34 @@ def test_subquery_count_intrinsic_matches_host_and_loadable_evidence(db):
         assert validate(db, sql)["code"] == "forbidden"
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
+
+
+@pytest.mark.parametrize("ceiling", [False, True])
+def test_default_macro_dependencies_need_qualified_grants_in_strict_layers(db, ceiling):
+    sql = "SELECT list_count([1,2])"
+    base = grants("list_count", "list_value", catalog="system", schema_path=("main",))
+    complete = base + grants("list_aggr", catalog="system", schema_path=("main",), type="scalar") + grants(
+        "count", catalog="system", schema_path=("main",), type="aggregate")
+    # Both dependencies are real permissions: neither wrong namespace nor wrong kind grants them.
+    for rules in [base,
+                  base + grants("count", catalog="system", schema_path=("main",), type="aggregate"),
+                  base + grants("list_aggr", catalog="system", schema_path=("main",), type="scalar"),
+                  base + grants("list_aggr", "count", catalog="memory", schema_path=("main",)),
+                  base + grants("list_aggr", "count", catalog="system", schema_path=("main",), type="table")]:
+        strict = {"use_default_functions":False, "allowed_functions":rules}
+        configure(db, strict if ceiling else {"use_default_functions":False, "allowed_functions":complete})
+        result = validate(db, sql, {"use_default_functions":True} if ceiling else strict)
+        assert result["code"] == "forbidden", result
+    configure(db, {"use_default_functions":False, "allowed_functions":complete})
+    assert validate(db, sql)["allowed"]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute(sql).fetchone() == (2,)
+        configure(db, {"use_default_functions":False, "allowed_functions":base})
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql)
+    # Host macros remain opaque capabilities even when their body expands a builtin macro.
+    db.execute("CREATE MACRO main.host_count() AS list_count([1,2])")
+    configure(db, {"use_default_functions":False,
+                   "allowed_functions":grants("host_count", catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, "SELECT host_count()")["allowed"]

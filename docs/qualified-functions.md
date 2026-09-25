@@ -56,7 +56,7 @@ Source basis: DuckDB 1.5.5 d8cdaa33f and 2.0 candidate d4e72566a. Neither engine
 | Fixed list distinct/unique | Factory histogram | Factory histogram | Verified system dispatcher has source-backed histogram dependency, not discovered catalog selection. |
 | Replacement reader | Returned function expression then catalog lookup | Same with qualified names | Leaf screened, actual entry authorized and returned reference pinned before reader bind. Unsupported replacement shapes refused. |
 | Host macros | Full macro entry before expansion | Same, nested schemas | Macro authorized first, then existing body trust; control plane always denied. |
-| Default macros | System entries, unqualified body helpers | Same | Fixed dependencies require system origin and obey blocks. Literal dispatch dependencies recorded from source body; not treated as arbitrary caller-selected grants. |
+| Default macros | System entries, unqualified body helpers | Same | Fixed dependencies require system origin and obey blocks. With defaults disabled, expansion functions and literal aggregate targets each require qualified grants in that layer. With defaults enabled, reviewed fixed dependencies remain part of the default capability. Host macro bodies remain opaque. |
 
 Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.cpp`,
 `bind_operator_expression.cpp`, `bind_window_expression.cpp`, `collation_binding.cpp`,
@@ -97,8 +97,10 @@ Collation helpers and list dispatch bind directly without the callback. Literal 
 do not evaluate arguments to discover authorization; engine bind-time expression evaluation and
 serializer callbacks remain trusted implementation work. Serialization is a late backstop, not the
 pre-bind authorization mechanism. Collated min/max directly select arg_min/arg_max by search path:
-Gatekeeper conservatively checks these dependencies before caller min/max binding and refuses
-host shadows even when a grant would admit them. Trusted native callbacks can perform their own
+Gatekeeper conservatively checks these dependencies before caller system.main min/max binding and refuses
+host shadows even when a grant would admit them. An explicitly granted host min/max aggregate has
+its own implementation and is not subject to this system-only helper check. Default-macro aggregate
+targets retain the check because their selection is fixed to system.main. Trusted native callbacks can perform their own
 lookups; function grants are not a sandbox for their implementation code.
 
 A complete interception contract needs upstream hooks for engine-owned binders/preparation,
