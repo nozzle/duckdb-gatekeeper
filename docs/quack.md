@@ -18,7 +18,7 @@ host-only; they may disclose trusted definitions and must not be forwarded to un
 | Whole-query / partial SQL pushdown | Feature absent | Refused before planning when any remote-capable catalog is attached and remote pushdown is enabled |
 | CONNECT | Feature absent | Unsupported local enforcement deployment; see #106's pre-callback boundary |
 | Server-created connections | No automatic enforcement | No automatic enforcement |
-| Log-only | Records refusals, permits execution | Same; never a protection mode |
+| Log-only | Records refusals, permits execution | Same except CONNECT/DISCONNECT remain refused to preserve local routing |
 
 The pushdown refusal is deliberately conservative and database-wide: even a local-looking
 query can contain a remote subquery or resolve through a remote search path. A host can set

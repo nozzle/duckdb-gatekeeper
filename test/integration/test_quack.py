@@ -246,3 +246,9 @@ def test_candidate_full_partial_pushdown_and_connect(remote):
             with pytest.raises(duckdb.PermissionException, match=DENIED):
                 agent.execute(sql, args)
             assert remote.requests == []
+        db.execute("SET gatekeeper_log_only=true")
+        for sql in ("CONNECT remote", "DISCONNECT"):
+            remote.clear()
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute(sql)
+            assert remote.requests == []
