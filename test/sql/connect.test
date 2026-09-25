@@ -3,7 +3,7 @@
 # group: [gatekeeper]
 
 # CONNECT is DuckDB 2.0 syntax; both 2.0 compatibility jobs set this engine-feature marker.
-require-env GATEKEEPER_TEST_NESTED_SCHEMAS 1
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
 
 require gatekeeper
 
@@ -39,3 +39,34 @@ query I
 SELECT 42;
 ----
 42
+
+# The rollout switch must never permit routing-state changes. Host policy denials still run.
+statement ok host
+SET gatekeeper_log_only = true;
+
+statement error
+/* routing */ CoNnEcT ':memory:';
+----
+Gatekeeper denied this statement
+
+statement error
+-- routing
+DiScOnNeCt;
+----
+Gatekeeper denied this statement
+
+statement ok
+CREATE TABLE log_only_local(i INTEGER);
+
+query T
+SELECT 'CONNECT remote';
+----
+CONNECT remote
+
+statement ok host
+SET gatekeeper_log_only = false;
+
+statement error
+CREATE TABLE after_log_only(i INTEGER);
+----
+Gatekeeper denied this statement

@@ -19,7 +19,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   when the local latch is reached. Native callback-counter regressions verify that CONNECT on a
   local enforced connection is refused before remote dispatch. Hosts must activate and keep
   enforced connections LOCAL: already-connected SQL activation and native routing-state changes
-  can dispatch before Gatekeeper's hook, and switching off log-only does not undo CONNECT.
+  can dispatch before Gatekeeper's hook. CONNECT/DISCONNECT remain refused even during log-only
+  rollout, recorded as `mode = 'enforce'`, so SQL cannot change the routing state before the host
+  restores policy refusals. Other control-plane statements keep normal log-only semantics.
   CONNECT-mode local enforcement and automatic enforcement of remote server sessions remain
   unsupported; see [host requirements](docs/security.md#connect-mode-and-native-host-state). (#106)
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
