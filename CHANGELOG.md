@@ -8,6 +8,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
+  replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace
   `schema VARCHAR` with `schema_path VARCHAR[]`, outermost schema first. JSON policies now require
   version 2 and use `docs/policy-v2.schema.json`; version 1 and the old `schema` field are rejected.

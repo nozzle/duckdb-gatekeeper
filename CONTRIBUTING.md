@@ -252,7 +252,7 @@ Edit the JSON, re-render, and export the SVG rather than editing the SVG by hand
 
 ### Lakehouse integration
 
-Disposable localhost Iceberg/MinIO and DuckLake fixtures. Ports 18181 and 19000 must be
+Disposable localhost Iceberg/RustFS and DuckLake fixtures. Ports 18181 and 19000 must be
 free; the runner removes its containers and data afterward. The tests cover
 `gatekeeper_validate`, enforced connections, and log-only mode against each lake's real
 catalog and scan function.

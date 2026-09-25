@@ -804,7 +804,7 @@ reliable provenance. Arbitrary extension bind data is not introspected.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
   identify tables without depending on a particular scan operator. Local Iceberg
-  REST/MinIO and DuckLake integration tests verify this boundary; other catalog
+  REST/RustFS and DuckLake integration tests verify this boundary; other catalog
   implementations still need verification.
 - Binding may perform remote I/O or evaluate bind-time expressions before returning,
   even for a request eventually denied. Caller-authored prohibited functions are
