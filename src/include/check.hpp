@@ -81,8 +81,8 @@ void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextChe
                optional_ptr<const engine::ParameterMap> parameters, gatekeeper::Result &result);
 
 // Before binding: known inputs (validation/private bind) authorize actual caller fallback reads. When
-// supplied provenance is unavailable (enforcement hooks), refuse every caller parameter/variable collision,
-// even if getvariable is allowed: an explicit value and an implicit read cannot be distinguished there.
+// supplied provenance is unavailable (enforcement hooks), require getvariable for every caller
+// parameter/variable collision and conservatively record the capability regardless of the actual source.
 void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &layers,
                              const gatekeeper::BindingPolicy &binding,
                              optional_ptr<const engine::ParameterMap> supplied, bool provenance_known,

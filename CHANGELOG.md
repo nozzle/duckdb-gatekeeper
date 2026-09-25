@@ -34,16 +34,18 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
   named parameters read session variables, and reports that fixed capability as function evidence.
-  Enforced 2.0 connections conservatively refuse named-parameter/session-variable collisions before
-  binding, including explicitly supplied arguments and prepares: current engine hooks cannot establish
-  supplied-value precedence. Use a noncolliding name or positional parameter. Log-only records this
-  refusal and lets DuckDB proceed. Binding diagnostics in Gatekeeper decisions are suppressed when
-  session variables exist, since engine errors can contain their values. DuckDB 1.5 is unchanged. (#107)
+  Enforced 2.0 connections require that permission for named-parameter/session-variable collisions
+  before binding, including explicit arguments and prepares: current hooks cannot distinguish supplied
+  inputs. When granted, DuckDB preserves explicit-value precedence and Gatekeeper conservatively records
+  the capability. Without permission, use a noncolliding name or positional parameter. Log-only records
+  denials and lets DuckDB proceed. DuckDB 1.5 is unchanged. (#107)
 - DuckDB 2.0 local enforcement activation now refuses CONNECT-ed state, including stale targets,
   when the local latch is reached. Native callback-counter regressions verify that CONNECT on a
   local enforced connection is refused before remote dispatch. Hosts must activate and keep
   enforced connections LOCAL: already-connected SQL activation and native routing-state changes
-  can dispatch before Gatekeeper's hook, and switching off log-only does not undo CONNECT.
+  can dispatch before Gatekeeper's hook. CONNECT/DISCONNECT remain refused even during log-only
+  rollout, recorded as `mode = 'enforce'`, so SQL cannot change the routing state before the host
+  restores policy refusals. Other control-plane statements keep normal log-only semantics.
   CONNECT-mode local enforcement and automatic enforcement of remote server sessions remain
   unsupported; see [host requirements](docs/security.md#connect-mode-and-native-host-state). (#106)
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,

@@ -1,0 +1,57 @@
+# name: test/sql/parameter_fallback.test
+# description: DuckDB 2.0 session-variable fallback requires permission before binding
+# group: [gatekeeper]
+
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
+
+require gatekeeper
+
+statement ok
+SET VARIABLE x = 42;
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $x');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}]);
+
+query I
+SELECT allowed AND len(functions) = 1 AND functions[1].catalog = 'system' AND functions[1].schema_path = ['main'] AND functions[1].name = 'getvariable' AND functions[1].type = 'scalar' FROM gatekeeper_validate('SELECT $x, $X');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $x', blocked_functions := ['getvariable']);
+----
+forbidden
+
+statement ok
+CALL gatekeeper_enforce();
+
+query I
+SELECT $x;
+----
+42
+
+statement ok host
+CALL gatekeeper_configure(blocked_functions := ['getvariable']);
+
+statement error
+SELECT $x;
+----
+session-variable fallback requires system.main.getvariable permission
+
+statement ok host
+SET gatekeeper_log_only = true;
+
+query I
+SELECT $x;
+----
+42
+
+statement error
+CONNECT ':memory:';
+----
+Gatekeeper denied this statement

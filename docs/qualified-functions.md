@@ -132,5 +132,6 @@ EH smoke checks cover the policy cutover. Full native/loadable, browser and inte
 still required after building; header-only syntax checks do not establish runtime compatibility.
 
 Parameter fallback uses the same matcher at fixed `system.main.getvariable` / `scalar` identity:
-host shadows, wrong kinds and wrong namespaces cannot grant that capability. #107's conservative
-enforced collision policy and #106's local CONNECT guards are retained.
+host shadows, wrong kinds and wrong namespaces cannot grant that capability. Granted collisions
+retain DuckDB's explicit-value precedence and conservatively report fallback capability evidence;
+ungranted collisions refuse. CONNECT routing stays refused even in log-only mode.
