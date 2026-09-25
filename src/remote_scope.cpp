@@ -156,9 +156,12 @@ void RegisterRemoteScope(ExtensionLoader &loader) {
 	// statically linked startup loads. The loadable's compile-time linked list is not the host's.
 	auto &manager = ExtensionManager::Get(loader.GetDatabaseInstance());
 	for (const auto &name : manager.GetExtensions()) {
+		// Gatekeeper's own load lock is already held by this thread during initialization.
+		if (!core.count(name))
+			continue;
 		auto info = manager.GetExtensionInfo(name);
 		unique_lock<mutex> loading(info->lock, std::try_to_lock);
-		if (core.count(name) && loading.owns_lock() && info->is_loaded && info->install_info &&
+		if (loading.owns_lock() && info->is_loaded && info->install_info &&
 		    info->install_info->mode == ExtensionInstallMode::STATICALLY_LINKED)
 			state->startup.insert(name);
 	}
