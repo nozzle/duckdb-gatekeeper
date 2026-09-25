@@ -5,7 +5,7 @@ import pytest
 from support.artifact import ENGINE_MAJOR, literal
 from support.audit import decisions, enable
 from support.enforcement import enforce, settle
-from support.typed_helpers import configure, rule, validate
+from support.typed_helpers import configure, grants, rule, validate
 
 
 pytestmark = pytest.mark.skipif(ENGINE_MAJOR < 2, reason="Secure views require DuckDB 2.0")
@@ -47,7 +47,8 @@ def test_hidden_reader_and_caller_function_are_distinguished(secure):
     assert validate(secure, "SELECT * FROM exposed.direct WHERE md5(s) = digest")["code"] == "forbidden"
     # The caller function is still caller-attributable when the optimizer can push its predicate below
     # the secure boundary. It must be admitted explicitly, even if the body uses the same function.
-    configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])], "allowed_functions": ["md5"]})
+    configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])],
+                       "allowed_functions": grants("md5", catalog="system", schema_path=("main",), type="scalar")})
     sql = "SELECT i FROM exposed.direct WHERE md5(s) = digest"
     assert validate(secure, sql)["allowed"]
     with secure.cursor() as agent:
@@ -111,13 +112,14 @@ def test_engine_predicate_barrier_survives_enforcement(secure):
     sql = "SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = 12"
     assert secure.execute(sql).fetchall() == [(1,)]
     assert validate(secure, sql)["allowed"]
+    # EXPLAIN is a host operation: enforced connections admit supported read statements only.
+    plan = secure.execute("EXPLAIN " + sql).fetchone()[1]
+    assert "secure view" in plan.lower().replace("_", " ")
+    assert "payload" not in plan and "hidden" not in plan
     with secure.cursor() as agent:
         enforce(agent)
         assert agent.execute(sql).fetchall() == [(1,)]
         assert agent.execute("SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = ?", [12]).fetchall() == [(1,)]
-        plan = agent.execute("EXPLAIN " + sql).fetchone()[1]
-        assert "SECURE_VIEW" in plan
-        assert "payload" not in plan and "hidden" not in plan
 
 
 def test_secure_boundary_does_not_hide_gatekeeper_control_plane(secure):

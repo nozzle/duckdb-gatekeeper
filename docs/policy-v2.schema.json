@@ -25,8 +25,9 @@
           "type": "boolean"
         },
         "allowed_functions": {
-          "description": "Additional function leaf names, ASCII case-insensitive. '*' is multiplication, not a wildcard.",
-          "$ref": "#/$defs/functionNames"
+          "description": "Resolved function grants. Defaults cover reviewed system.main identities only. '*' in name is multiplication, not a wildcard.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/function"}
         },
         "blocked_functions": {
           "description": "Function leaf names to deny; denies win over allows.",
@@ -44,6 +45,17 @@
     }
   },
   "$defs": {
+    "function": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_path", "name"],
+      "properties": {
+        "catalog": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "schema_path": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+        "name": {"$ref": "#/$defs/name"},
+        "type": {"anyOf": [{"type": "null"}, {"type": "string", "pattern": "^(?:[sS][cC][aA][lL][aA][rR]|[aA][gG][gG][rR][eE][gG][aA][tT][eE]|[tT][aA][bB][lL][eE]|[mM][aA][cC][rR][oO]|[tT][aA][bB][lL][eE]_[mM][aA][cC][rR][oO]|[wW][iI][nN][dD][oO][wW])(?![\\s\\S])"}]}
+      }
+    },
     "name": {
       "description": "Nonempty Unicode name without NUL or unpaired surrogates; ASCII case-insensitive.",
       "type": "string",

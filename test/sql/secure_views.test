@@ -98,7 +98,7 @@ SELECT len(objects), len(caller_objects) FROM duckdb_logs_parsed('Gatekeeper') W
 statement error agent
 SELECT i FROM exposed.direct WHERE md5(s) = digest;
 ----
-function is blocked
+function is not allowed: md5
 
 statement ok
 SET gatekeeper_log_only = true;

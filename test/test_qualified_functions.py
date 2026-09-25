@@ -1,0 +1,143 @@
+"""Namespace grants are resolved permissions, not permission to use a written leaf."""
+import json
+
+import duckdb
+import pytest
+
+from support.typed_helpers import configure, grants, policy, validate
+from support.enforcement import enforce, DENIED
+
+
+def test_default_shadow_and_host_macro_trust(db):
+    db.execute("CREATE SCHEMA host; CREATE MACRO host.abs(x) AS md5(x::VARCHAR)")
+    denied = validate(db, "SELECT host.abs(1)")
+    assert denied["code"] == "forbidden"
+    assert denied["violations"][0]["schema_path"] == ["host"]
+    configure(db, {"allowed_functions": grants("abs", catalog="memory", schema_path=("host",), type="macro"),
+                   "blocked_functions": ["md5"]})
+    assert validate(db, "SELECT host.abs(1)")["allowed"]
+    assert not validate(db, "SELECT host.abs(1), md5('x')")["allowed"]
+
+
+@pytest.mark.parametrize("kind,scalar,table", [(None, True, True), ("scalar", True, False), ("table", False, True)])
+def test_same_leaf_separate_catalog_sets(db, kind, scalar, table):
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants("range", catalog="system", schema_path=("main",), type=kind)})
+    assert validate(db, "SELECT range(3)")["allowed"] is scalar
+    assert validate(db, "SELECT * FROM range(3)")["allowed"] is table
+
+
+def test_catalog_schema_and_both_layers(db):
+    db.execute("ATTACH ':memory:' AS other; CREATE SCHEMA a; CREATE SCHEMA b; "
+               "CREATE MACRO a.f(x) AS x; CREATE MACRO b.f(x) AS x; CREATE MACRO other.main.f(x) AS x")
+    configure(db, {"allowed_functions": grants("f", catalog="memory", schema_path=("a",))})
+    assert validate(db, "SELECT a.f(1)")["allowed"]
+    for sql in ["SELECT b.f(1)", "SELECT other.main.f(1)"]:
+        assert not validate(db, sql, {"allowed_functions": grants("f")})["allowed"]
+    assert not validate(db, "SELECT a.f(1)", {"allowed_functions": grants("f", schema_path=("b",))})["allowed"]
+
+
+def test_host_alias_names_are_not_equivalent(db):
+    db.execute("CREATE MACRO read_parquet(x) AS x; CREATE MACRO parquet_scan(x) AS x")
+    configure(db, {"allowed_functions": grants("read_parquet", catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, "SELECT memory.main.read_parquet(1)")["allowed"]
+    assert not validate(db, "SELECT memory.main.parquet_scan(1)")["allowed"]
+
+
+def test_canonical_roundtrip_and_json_v2(db):
+    rules = grants("abs", catalog="system", schema_path=("main",), type="ScAlAr")
+    configure(db, {"json": json.dumps({"version": 2, "options": {"allowed_functions": rules}})})
+    assert policy(db)["allowed_functions"] == grants("abs", catalog="system", schema_path=("main",), type="scalar")
+    db.execute("SET gatekeeper_policy = current_setting('gatekeeper_policy')")
+    assert validate(db, "SELECT abs(-1)")["allowed"]
+    configure(db, {"allowed_functions": grants("abs", catalog=None, schema_path=("main",))})
+    assert policy(db)["allowed_functions"][0]["catalog"] == ""
+    assert policy(db)["allowed_functions"][0]["type"] == ""
+
+
+@pytest.mark.parametrize("value", [["abs"], ["abs", {"schema_path": ["main"], "name": "abs"}]])
+def test_legacy_grants_are_not_accepted(db, value):
+    with pytest.raises((duckdb.BinderException, duckdb.ConversionException, duckdb.InvalidInputException)):
+        configure(db, {"allowed_functions": value})
+
+
+def test_unknown_kind_and_missing_namespace(db):
+    for entry in [{"name":"abs"}, {"schema_path":[],"name":"abs"},
+                  {"schema_path":["main"],"name":"abs","type":"pragma"}]:
+        with pytest.raises(duckdb.BinderException):
+            configure(db, {"allowed_functions": [entry]})
+
+
+def test_implicit_shadow_is_refused_even_if_granted(db):
+    db.execute("CREATE MACRO main.list_value(x) AS x")
+    configure(db, {"allowed_functions": grants("list_value", catalog="memory", schema_path=("main",))})
+    assert not validate(db, "SELECT [1]")["allowed"]
+
+
+def test_literal_dispatch_requires_selected_aggregate(db):
+    configure(db, {"use_default_functions":False,
+                   "allowed_functions":grants("list_aggregate", "list_value", catalog="system", schema_path=("main",))})
+    assert not validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
+    configure(db, {"allowed_functions":grants("list_aggregate", catalog="system", schema_path=("main",))})
+    assert validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
+    assert not validate(db, "SELECT list_aggregate([1,2], 'su' || 'm')")["allowed"]
+
+
+def test_enforcement_and_log_only_use_resolved_grants(db):
+    db.execute("CREATE MACRO main.abs(x) AS x; CALL enable_logging('Gatekeeper')")
+    with db.cursor() as agent:
+        enforce(agent)
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute("SELECT main.abs(1)")
+        configure(db, {"allowed_functions": grants("abs", catalog="memory", schema_path=("main",), type="macro")})
+        assert agent.execute("SELECT main.abs(1)").fetchone() == (1,)
+        configure(db)
+        db.execute("SET gatekeeper_log_only=true")
+        assert agent.execute("SELECT main.abs(2)").fetchone() == (2,)
+        row = db.execute("SELECT allowed, code FROM duckdb_logs_parsed('Gatekeeper') "
+                         "WHERE statement='SELECT main.abs(2)' AND mode='log_only'").fetchone()
+        assert row == (False, "forbidden")
+
+
+def test_all_overloads_and_literal_star(db):
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants("abs", "*", "-", catalog="system", schema_path=("main",), type="scalar")})
+    for sql in ["SELECT abs(-1::INTEGER)", "SELECT abs(-1::DOUBLE)", "SELECT abs(-1::DECIMAL(9,2))", "SELECT 2*3"]:
+        assert validate(db, sql)["allowed"], sql
+    assert not validate(db, "SELECT lower('X')")["allowed"]
+
+
+def test_dot_dispatch_cannot_shift_prechecked_target(db):
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants("list_aggregate", "list_value", "sum", catalog="system", schema_path=("main",))})
+    result = validate(db, "SELECT l.list_aggregate('string_agg', 'sum') FROM (VALUES (['a'])) t(l)")
+    assert result["code"] == "forbidden"
+    assert result["violations"][0]["rule"] == "bind_time_expression"
+
+
+@pytest.mark.parametrize("name,definition,sql", [
+    ("->>", "(x,y) AS 'captured'", "SELECT '{}'::JSON ->> 'x'"),
+    ("contains", "(x,y) AS true", "SELECT 1 IN [1,2]"),
+    ("regexp_full_match", "(x,y) AS true", "SELECT 'a' SIMILAR TO 'a'"),
+])
+def test_parser_helpers_cannot_use_granted_host_shadows(db, name, definition, sql):
+    db.execute(f'CREATE MACRO main."{name}"{definition}')
+    configure(db, {"allowed_functions": grants(name, catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, sql)["code"] == "forbidden"
+
+
+@pytest.mark.parametrize("name", ["mode", "entropy"])
+def test_specialized_default_aggregate_identity(db, name):
+    for sql in [f"SELECT {name}(x) FROM (VALUES (1),(1),(2)) t(x)",
+                f"SELECT {name}(x) OVER () FROM (VALUES (1),(2)) t(x)",
+                f"SELECT list_{name}([1,1,2])"]:
+        result = validate(db, sql)
+        assert result["allowed"], result
+        assert any(f["catalog"] == "system" and f["name"] == name for f in result["functions"])
+
+
+def test_host_dispatcher_leaf_is_not_a_dispatch_capability(db):
+    db.execute("CREATE MACRO main.aggregate(x) AS x")
+    configure(db, {"allowed_functions": grants("aggregate", catalog="memory", schema_path=("main",), type="macro")})
+    assert validate(db, "SELECT aggregate(42)")["allowed"]
+    assert validate(db, "SELECT main.aggregate(42)")["allowed"]

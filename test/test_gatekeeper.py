@@ -65,33 +65,33 @@ def test_validation_binds_without_executing(db, tmp_path):
     assert db.execute("SELECT * FROM existing").fetchone() == (42,)
     assert validate(db, "SELECT * FROM nonexistent")["code"] == "binding"
     missing = str(tmp_path / "missing.parquet")
-    configure(db, {"allowed_functions": ["read_parquet"]})
-    assert validate(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": ["read_parquet"]})["code"] == "binding"
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
+    assert validate(db, f"SELECT * FROM read_parquet('{missing}')", {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})["code"] == "binding"
 
 
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT custom(1)", {}, False),
-    ("SELECT custom(1)", {"allowed_functions": ["CUSTOM"]}, False),
+    ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "CUSTOM"}]}, False),
     ("SELECT md5('x')", {"blocked_functions": ["MD5"]}, False),
-    ("SELECT md5('x')", {"allowed_functions": ["md5"], "blocked_functions": ["md5"]}, False),
+    ("SELECT md5('x')", {"allowed_functions": [{"schema_path": ["*"], "name": "md5"}], "blocked_functions": ["md5"]}, False),
     ("SELECT sum(x) FROM t", {"use_default_functions": False}, False),
-    ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": ["sum"]}, True),
-    ("SELECT custom(1)", {"allowed_functions": ["custom"], "blocked_functions": ["custom"]}, False),
+    ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "sum"}]}, True),
+    ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "custom"}], "blocked_functions": ["custom"]}, False),
     ("SELECT * FROM read_parquet('local')", {}, False),
     ("SELECT 2*3", {"blocked_functions": ["*"]}, False),
     ("SELECT sum(y) FROM t", {"blocked_functions": ["*"]}, True),
-    ("SELECT lower('x')", {"use_default_functions": False, "allowed_functions": ["*"]}, False),
-    ("SELECT md5('x')", {"allowed_functions": ["md*"]}, True),
-    ("SELECT custom(1)", {"allowed_functions": ["cust*"]}, False),
+    ("SELECT lower('x')", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "*"}]}, False),
+    ("SELECT md5('x')", {"allowed_functions": [{"schema_path": ["*"], "name": "md*"}]}, True),
+    ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "cust*"}]}, False),
     ("SELECT * FROM range(3)", {}, True),
     ("SELECT range(3)", {}, True),
     ("SELECT * FROM range(3)", {"use_default_functions": False}, False),
-    ("SELECT * FROM range(3)", {"use_default_functions": False, "allowed_functions": ["range"]}, True),
+    ("SELECT * FROM range(3)", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "range"}]}, True),
     ("SELECT * FROM range(3)", {"blocked_functions": ["range"]}, False),
     ("SELECT range(3)", {"blocked_functions": ["range"]}, False),
-    ("SELECT * FROM query_table('t')", {"allowed_functions": ["query_table"]}, False),
-    ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": ["json_serialize_plan"]}, False),
-    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": ["query"]}, False),
+    ("SELECT * FROM query_table('t')", {"allowed_functions": [{"schema_path": ["*"], "name": "query_table"}]}, False),
+    ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": [{"schema_path": ["*"], "name": "json_serialize_plan"}]}, False),
+    ("SELECT * FROM query('SELECT 1')", {"allowed_functions": [{"schema_path": ["*"], "name": "query"}]}, False),
     ("SELECT * FROM query('SELECT 1')", {}, False),
 ])
 def test_functions(populated, sql, opts, allowed):
@@ -130,7 +130,7 @@ def test_function_position_is_the_earliest_occurrence(db, sql, position):
     ("SELECT * FROM db.s.t", {"allowed_tables": []}, False),
     ("SELECT * FROM db.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, True),
     ("SELECT * FROM other.s.t", {"allowed_tables": [{"catalog": "db", "schema_path": ["*"], "table": "*"}]}, False),
-    ("SELECT db.main.md5('x')", {"allowed_tables": []}, True),
+    ("SELECT db.main.md5('x')", {"allowed_tables": []}, False),
     ("SELECT * FROM s.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, True),
     ("SELECT * FROM t", {"allowed_tables": [{"catalog": "*", "schema_path": ["s"], "table": "*"}]}, False),
     ("SELECT * FROM s.t", {"allowed_tables": [{"schema_path": ["s"], "table": "t"}]}, True),

@@ -59,7 +59,7 @@ def test_limits_at_edges_and_recovery(db):
 
 def test_embedded_nul_policy_does_not_truncate(db):
     for key in ["allowed_functions", "blocked_functions"]:
-        policy = {key: ["md5\0suffix"]}
+        policy = {key: [{"schema_path":["main"], "name":"md5\0suffix"}] if key == "allowed_functions" else ["md5\0suffix"]}
         result = validate(db, "SELECT md5('x')", policy)
         assert result["code"] == "invalid_input"
     for field in ["catalog", "schema_path", "table"]:

@@ -21,7 +21,7 @@ def chain(db):
         CREATE VIEW nested_b AS SELECT * FROM b;
         CREATE MACRO m() AS TABLE SELECT * FROM b;
         CREATE MACRO scalar_m() AS (SELECT count(*) FROM b)""")
-    configure(db, {"allowed_functions": ["m", "scalar_m"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "scalar_m"]]})
     return db
 
 
@@ -93,7 +93,7 @@ def test_failure_never_exposes_partial_caller_evidence(chain, sql, options):
 def test_replacement_capabilities_are_not_catalog_inputs(db, tmp_path):
     path = str(tmp_path / "input.parquet").replace("'", "''")
     db.execute(f"COPY (SELECT 1 AS id) TO '{path}' (FORMAT PARQUET)")
-    configure(db, {"allowed_functions": ["read_parquet"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
     result = validate(db, f"SELECT * FROM '{path}'")
     assert result["allowed"] and result["caller_objects"] == []
     assert any(o["type"] == "replacement" for o in result["objects"])

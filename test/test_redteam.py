@@ -9,10 +9,10 @@ from support.typed_helpers import configure, validate
 @pytest.mark.parametrize("sql,options", [
     ("SELECT * FROM range(0,10,0)", {}),
     ("SELECT * FROM range(NULL)", {}),
-    ("SELECT * FROM read_parquet('missing-redteam-file.parquet')", {"allowed_functions": ["read_parquet"]}),
+    ("SELECT * FROM read_parquet('missing-redteam-file.parquet')", {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]}),
     ("SELECT * FROM range(3) t(a,b)", {}),
-    ("SELECT * FROM read_csv([])", {"allowed_functions": ["read_csv"]}),
-    ("SELECT * FROM read_csv('missing-file',delim='too long')", {"allowed_functions": ["read_csv"]}),
+    ("SELECT * FROM read_csv([])", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]}),
+    ("SELECT * FROM read_csv('missing-file',delim='too long')", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]}),
     ("SELECT (SELECT missing FROM range(1))", {}),
 ])
 def test_binding_errors_never_allow(db, sql, options):
@@ -59,8 +59,8 @@ def split(db):
     "SUMMARIZE secret.t",
 ])
 def test_hidden_table_references(split, sql):
-    configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
-    options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}], "allowed_functions": ["secret_scalar", "secret_table"]}
+    configure(split, {"allowed_functions": [{"schema_path": ["*"], "name": "secret_scalar"}, {"schema_path": ["*"], "name": "secret_table"}]})
+    options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}], "allowed_functions": [{"schema_path": ["*"], "name": "secret_scalar"}, {"schema_path": ["*"], "name": "secret_table"}]}
     result = validate(split, sql, options)
     assert not result["allowed"], (sql, result)
     assert result["code"] == "forbidden", (sql, result)
@@ -78,7 +78,7 @@ def test_trusted_definitions_are_opaque_to_table_policy(split, sql):
     # The caller may reach secret.t only through a definition the host created and the policy allows: the view,
     # the nested view, the scalar macro's subquery, the table macro's body. What such a definition reads is its
     # own, and is still reported as evidence. A CTE named like the table the view reads is not a reference to it.
-    configure(split, {"allowed_functions": ["secret_scalar", "secret_table"]})
+    configure(split, {"allowed_functions": [{"schema_path": ["*"], "name": "secret_scalar"}, {"schema_path": ["*"], "name": "secret_table"}]})
     options = {"allowed_tables": [{"catalog": "*", "schema_path": ["allowed"], "table": "*"}]}
     result = validate(split, sql, options)
     assert result["allowed"], (sql, result)
@@ -127,8 +127,8 @@ def test_preflight_denies_before_reader_binding(db):
     sql = "SELECT * FROM read_parquet('missing-gatekeeper-test.parquet')"
     result = validate(db, sql)
     assert result["code"] == "forbidden" and not result["error_message"]
-    configure(db, {"allowed_functions": ["read_parquet"]})
-    result = validate(db, sql, {"allowed_functions": ["read_parquet"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
+    result = validate(db, sql, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
     assert not result["allowed"] and result["code"] == "binding"
 
 
@@ -176,9 +176,9 @@ def test_trusted_implementation_is_not_caller_code(split):
     # The host macro's abs is the macro's: allowing the macro admits its body whatever the caller may not write
     # directly. The caller's own abs stays blocked, alone or next to the macro, and the macro cannot be used to
     # launder a caller-written argument that is itself blocked.
-    configure(split, {"allowed_functions": ["trusted_abs"]})
-    options = {"allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]}
-    assert validate(split, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
+    configure(split, {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})
+    options = {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}], "blocked_functions": ["abs"]}
+    assert validate(split, "SELECT trusted_abs(-1)", {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})["allowed"]
     assert validate(split, "SELECT trusted_abs(-1)", options)["allowed"]
     for sql in ["SELECT abs(-1)", "SELECT trusted_abs(-1), abs(-2)", "SELECT trusted_abs(abs(-1))"]:
         result = validate(split, sql, options)
@@ -192,9 +192,9 @@ def test_validation_cannot_execute_configuration(db):
 
 
 def test_mixed_batch_rejected_before_binding(split):
-    configure(split, {"allowed_functions": ["missing_file_reader"]})
+    configure(split, {"allowed_functions": [{"schema_path": ["*"], "name": "missing_file_reader"}]})
     sql = "SELECT * FROM missing_file_reader(); DROP TABLE allowed.t"
-    result = validate(split, sql, {"allowed_functions": ["missing_file_reader"]})
+    result = validate(split, sql, {"allowed_functions": [{"schema_path": ["*"], "name": "missing_file_reader"}]})
     assert not result["allowed"] and result["code"] == "forbidden"
     assert result["violations"][0]["rule"] == "limit"
     assert result["error_message"] == ""
@@ -237,7 +237,7 @@ def test_missing_nested_schema_objects_fail_binding(db, sql):
     "SELECT system.main.json_serialize_plan('SELECT * FROM secret.t')",
 ])
 def test_dynamic_sql_independent_of_allowlist(split, sql):
-    options = {"allowed_functions": ["query", "query_table", "json_execute_serialized_sql", "json_serialize_plan"]}
+    options = {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["query", "query_table", "json_execute_serialized_sql", "json_serialize_plan"]]}
     configure(split, options)
     result = validate(split, sql, options)
     assert not result["allowed"] and result["code"] == "forbidden"

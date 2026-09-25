@@ -102,7 +102,7 @@ def test_parent_paths_prevent_identity_collisions_and_preserve_trusted_attributi
     assert {**table(["sales", "reports"]), "type": "table"} in result["objects"]
     for reference in ["sales.reports.orders", "memory.sales.reports.orders"]:
         assert not validate(nested, f"SELECT * FROM visible, {reference}", options)["allowed"]
-    configure(nested, {"allowed_functions": ["hidden"]})
+    configure(nested, {"allowed_functions": [{"schema_path": ["main"], "name": "hidden"}]})
     assert validate(nested, "SELECT hidden() FROM finance.reports.orders", options)["allowed"]
     assert not validate(nested, "SELECT hidden() FROM sales.reports.orders", options)["allowed"]
 
@@ -127,7 +127,7 @@ def test_nested_enforcement_and_audit(nested):
 def test_nested_function_identity_and_literal_constructor_qualification(nested):
     nested.execute("CREATE MACRO finance.reports.calc(x) AS abs(x); "
                    "CREATE MACRO finance.reports.list_value(x) AS [x]")
-    configure(nested, {"allowed_functions": ["calc"]})
+    configure(nested, {"allowed_functions": [{"schema_path": ["finance", "reports"], "name": "calc"}]})
     result = validate(nested, "SELECT finance.reports.calc(-1)")
     assert result["allowed"], result
     assert {"catalog": "memory", "schema_path": ["finance", "reports"], "name": "calc", "type": "macro"} in result["functions"]
@@ -163,7 +163,7 @@ def test_nested_layers_intersect_and_blocks_win(nested):
 def test_nested_view_and_macro_bodies_keep_full_written_paths(nested):
     nested.execute("CREATE VIEW finance.reports.exposed AS SELECT * FROM sales.reports.orders; "
                    "CREATE MACRO finance.reports.hidden() AS (SELECT sum(i) FROM sales.reports.orders)")
-    configure(nested, {"allowed_functions": ["hidden"]})
+    configure(nested, {"allowed_functions": [{"schema_path": ["finance", "reports"], "name": "hidden"}]})
     options = {"allowed_tables": [table(["finance", "reports"], "exposed")]}
     result = validate(nested, "SELECT * FROM finance.reports.exposed", options)
     assert result["allowed"] and result["caller_objects"] == [{**options["allowed_tables"][0], "type": "view"}]

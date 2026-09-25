@@ -1,3 +1,4 @@
+#include "function_policy.hpp"
 #include "validator.hpp"
 #include <cstdlib>
 
@@ -8,6 +9,31 @@ static void Check(bool condition) {
 
 int main() {
 	using namespace gatekeeper;
+	Policy functions;
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"", {}, "abs", "scalar"}));
+	functions.defaults = false;
+	functions.allowed_functions = {{"", {"finance", "*"}, "f", "scalar"},
+	                               {"system", {"main"}, "*", "scalar"},
+	                               {"system", {"main"}, "read_parquet", "table"}};
+	Check(FunctionEligible(functions, "f"));
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports", "deep"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance.reports"}, "f", "scalar"}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "*", "scalar"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "parquet_scan", "table"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"memory", {"main"}, "read_parquet", ""});
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"", {"finance", "reports"}, "f", ""});
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
+	functions.blocked_functions.insert("parquet_scan");
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "read_parquet", "table"}));
+	functions.allowed_functions.insert({"*", {"*"}, "nextval", ""});
+	Check(!FunctionEligible(functions, "nextval"));
 	Policy policy;
 	policy.tables = true;
 	policy.allowed_tables = {{"memory", {"finance", "*"}, "orders"}};

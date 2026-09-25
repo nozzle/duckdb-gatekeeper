@@ -181,7 +181,7 @@ statement ok
 CREATE MACRO secret_count() AS (SELECT count(*) FROM secrets);
 
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['peek', 'secret_count']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'peek'}, {'schema_path':['main'],'name':'secret_count'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT * FROM peek()');
@@ -221,7 +221,7 @@ statement ok
 CREATE MACRO consume() AS TABLE SELECT * FROM exposed;
 
 statement ok
-CALL gatekeeper_configure(allowed_functions := ['peek', 'secret_count', 'consume']);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'peek'}, {'schema_path':['main'],'name':'secret_count'}, {'schema_path':['main'],'name':'consume'}]);
 
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT * FROM consume()', allowed_tables := [{schema_path: ['reporting'], 'table': '*'}]);
