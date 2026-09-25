@@ -1,5 +1,9 @@
 # Security model
 
+For Quack, see the [remote authorization support matrix](quack.md): evidence is checked local
+binding scope, opaque delegation is refused, and server-created connections are not automatically
+enforced. Trusted definitions do not override these remote-scope restrictions.
+
 Gatekeeper decides whether one SQL statement conforms to the selected syntax, caller-function
 and resolved-deny/object policies on the build engine's parser and binder. It offers that decision two ways:
 `gatekeeper_validate` returns it to the host before the host executes, and an

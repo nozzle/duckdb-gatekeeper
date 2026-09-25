@@ -8,6 +8,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Quack authorization now explicitly refuses opaque SQL delegation, including trusted-view
+  expansions and prepared binds. The 1.5 Quack attached-object path is refused because it loses
+  server schema qualification; 2.0 local-binding reads require remote SQL pushdown disabled and
+  table provenance. Evidence remains local binding scope, not complete remote lineage. See
+  [Quack support](docs/quack.md), including server-connection and CONNECT restrictions.
+
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.
 - **Breaking:** table policies, canonical settings, validation results, and audit identities replace

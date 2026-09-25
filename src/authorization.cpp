@@ -11,6 +11,7 @@
 #include "engine_api.hpp"
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
+#include "remote_scope.hpp"
 #include <map>
 
 namespace duckdb {
@@ -55,6 +56,29 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                                    CatalogEntry &entry, gatekeeper::Result &result, bool attributable) {
 	auto &name = engine::EntryName(entry);
+	if (FunctionKind(entry.type) && OpaqueQuackFunction(name)) {
+		result.violations.emplace(gatekeeper::rules::STATEMENT, "opaque Quack SQL delegation is unsupported", "",
+		                          gatekeeper::NamePath{}, "", name);
+		throw PermissionException("unsupported remote authorization scope");
+	}
+	if (entry.type == CatalogType::TABLE_ENTRY || entry.type == CatalogType::VIEW_ENTRY) {
+		auto &object = entry.Cast<StandardEntry>();
+		if (object.schema.catalog.GetCatalogType() == "quack") {
+			// 1.5 sends an unqualified table name and exposes no table bind info. Local schema
+			// permission cannot establish which server object is actually read.
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+			bool unsupported = true;
+#else
+			bool unsupported = entry.type == CatalogType::VIEW_ENTRY;
+#endif
+			if (unsupported) {
+				result.violations.emplace(
+				    gatekeeper::rules::STATEMENT, "Quack object has unsupported remote authorization scope",
+				    engine::CatalogName(object.schema.catalog), engine::SchemaPath(object.schema), name);
+				throw PermissionException("unsupported remote authorization scope");
+			}
+		}
+	}
 	if (auto kind = FunctionKind(entry.type)) {
 		AuthorizeFunction(policy, binding, name, attributable, result);
 		auto &function = entry.Cast<StandardEntry>();

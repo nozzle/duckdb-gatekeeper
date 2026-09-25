@@ -14,6 +14,7 @@
 #include "duckdb/planner/planner_extension.hpp"
 #include "engine_api.hpp"
 #include "policy_setting.hpp"
+#include "remote_scope.hpp"
 #include "single_row.hpp"
 
 namespace duckdb {
@@ -139,6 +140,11 @@ struct EnforcementState : ClientContextState {
 		const auto &sql = context.GetCurrentQuery();
 		if (!TryGlobalPolicy(context, policy, result)) {
 			Record(context, Boundary::BINDING, nullptr, &sql);
+			return;
+		}
+		if (!CheckRemoteScope(context, result)) {
+			MarkDenied(result);
+			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
 		// The two errors the binding boundary raises for text it cannot read (see CheckText), described exactly

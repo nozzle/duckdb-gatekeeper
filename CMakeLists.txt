@@ -32,7 +32,7 @@ include_directories(src/include ${GATEKEEPER_GENERATED_DIR}
                     "${DuckDB_SOURCE_DIR}/extension/json/include"
                     "${DuckDB_SOURCE_DIR}/third_party/yyjson/include")
 set(EXTENSION_SOURCES src/gatekeeper_extension.cpp src/audit.cpp src/authorization.cpp src/check.cpp
-    src/enforcement.cpp src/options.cpp src/policy_setting.cpp src/result_value.cpp src/validator.cpp
+    src/enforcement.cpp src/options.cpp src/policy_setting.cpp src/result_value.cpp src/validator.cpp src/remote_scope.cpp
     "${DuckDB_SOURCE_DIR}/extension/json/json_serializer.cpp")
 build_static_extension(gatekeeper ${EXTENSION_SOURCES})
 build_loadable_extension(gatekeeper "" ${EXTENSION_SOURCES})
