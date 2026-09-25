@@ -1,10 +1,11 @@
 """Real Quack transport and local authorization scope. See docs/quack.md for the support matrix."""
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR, EXTENSION, literal
+from support.artifact import ENGINE_MAJOR, EXTENSION, connect, literal
 from support.audit import decisions, enable
 from support.enforcement import DENIED, enforce
 from support.quack import quack_fixture
@@ -134,7 +135,6 @@ def test_unrelated_local_identity_does_not_authorize_remote_object(remote):
     assert remote.requests == []
 
 
-@pytest.mark.skipif(ENGINE_MAJOR >= 2, reason="documents the 1.5 Quack pin's unqualified scan")
 def test_release_schema_qualification_cannot_be_an_authorization_contract(remote):
     server, db = remote.server, remote.client
     server.execute("CREATE SCHEMA other; CREATE TABLE other.orders(id INTEGER, amount INTEGER); "
@@ -142,10 +142,10 @@ def test_release_schema_qualification_cannot_be_an_authorization_contract(remote
     # Reattach to snapshot the new schema. The release implementation binds the local other.orders,
     # but its scan sends FROM orders, which resolves to main.orders on the server.
     remote.attach(db, "refreshed")
-    assert db.execute("SELECT sum(amount) FROM refreshed.other.orders").fetchone() == (50,)
+    assert db.execute("SELECT sum(amount) FROM refreshed.other.orders").fetchone() == ((50,) if ENGINE_MAJOR < 2 else (999,))
     remote.clear()
     policy = {"allowed_tables": [rule("refreshed", ("other",), "orders")]}
-    assert not validate(db, "SELECT * FROM refreshed.other.orders", policy)["allowed"]
+    assert validate(db, "SELECT * FROM refreshed.other.orders", policy)["allowed"] == (ENGINE_MAJOR >= 2)
     assert remote.requests == []
 
 
@@ -220,6 +220,84 @@ def test_parameterized_opaque_execution_and_log_only(remote):
         assert remote.executions == [1, 2]
         found = decisions(db, "mode='log_only'")
         assert len(found) == 1 and not found[0]["allowed"], found
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="LOAD AS is a 2.0 feature")
+def test_aliased_quack_load_is_guarded(remote):
+    with connect(autoinstall_known_extensions=False, autoload_known_extensions=False) as host:
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]) + " AS q")
+        remote.attach(host)
+        host.execute("SET disabled_optimizers='remote_pushdown'")
+        configure(host, {"allowed_tables": [rule()], "allowed_functions": ["quack_query_by_name"]})
+        with host.cursor() as agent:
+            enforce(agent)
+            remote.clear()
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute("SELECT * FROM quack_query_by_name('remote', ?)", ["SELECT * FROM ticking"]).fetchall()
+            assert remote.requests == [] and remote.executions == []
+
+
+def test_enforcement_seals_future_quack_loads():
+    with connect(autoinstall_known_extensions=False, autoload_known_extensions=False) as host:
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        with host.cursor() as agent:
+            enforce(agent)
+            suffixes = [""] + ([" AS q"] if ENGINE_MAJOR >= 2 else [])
+            for suffix in suffixes:
+                with pytest.raises(duckdb.Error, match="remote setup is sealed"):
+                    host.execute("LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]) + suffix)
+
+
+def test_concurrent_activation_publishes_one_guarded_catalog(remote):
+    import threading
+    start = threading.Barrier(3)
+    host = remote.client
+    with host.cursor() as first, host.cursor() as second, ThreadPoolExecutor(2) as pool:
+        def activate(connection):
+            start.wait(timeout=30)
+            enforce(connection)
+        futures = [pool.submit(activate, connection) for connection in (first, second)]
+        start.wait(timeout=30)
+        for future in futures:
+            future.result(timeout=30)
+        remote.clear()
+        for agent in (first, second):
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute("SELECT * FROM quack_query_by_name('remote', ?)", ["SELECT * FROM ticking"]).fetchall()
+        assert remote.requests == [] and remote.executions == []
+
+
+@pytest.mark.parametrize("gatekeeper_first", [False, True])
+def test_concurrent_load_barrier(remote, gatekeeper_first):
+    barrier = os.environ.get("GATEKEEPER_QUACK_BARRIER")
+    if not barrier:
+        pytest.fail("Set GATEKEEPER_QUACK_BARRIER to the GATEKEEPER_REMOTE_PROBES artifact")
+    with duckdb.connect(config={"allow_unsigned_extensions": True, "autoload_known_extensions": False,
+                                "autoinstall_known_extensions": False}) as host:
+        host.execute("LOAD " + literal(os.environ["GATEKEEPER_HTTPFS_EXTENSION"]))
+        host.execute("LOAD " + literal(barrier))
+        if gatekeeper_first:
+            host.execute("LOAD " + literal(EXTENSION))
+        with host.cursor() as loader, host.cursor() as agent, ThreadPoolExecutor(1) as pool:
+            future = pool.submit(loader.execute, "LOAD " + literal(os.environ["GATEKEEPER_QUACK_EXTENSION"]))
+            try:
+                host.execute("SELECT quack_load_barrier(false)").fetchall()
+                if not gatekeeper_first:
+                    host.execute("LOAD " + literal(EXTENSION))
+                with pytest.raises(duckdb.PermissionException, match="Quack load is unfinished"):
+                    enforce(agent)
+            finally:
+                host.execute("SELECT quack_load_barrier(true)").fetchall()
+            future.result(timeout=30)
+            remote.attach(host)
+            if ENGINE_MAJOR >= 2:
+                host.execute("SET disabled_optimizers='remote_pushdown'")
+            enforce(agent)
+            remote.clear()
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute("SELECT * FROM quack_query_by_name('remote', ?)", ["SELECT * FROM ticking"]).fetchall()
+            assert remote.requests == [] and remote.executions == []
 
 
 @pytest.mark.skipif(ENGINE_MAJOR < 2, reason="1.5 pin has no RemotePushdownOptimizer or CONNECT")

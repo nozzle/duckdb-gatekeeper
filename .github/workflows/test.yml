@@ -63,7 +63,12 @@ jobs:
           python scripts/test_lakehouses.py
       - name: Local Quack scope integration
         if: runner.os == 'Linux'
-        run: python scripts/test_quack.py
+        env:
+          GATEKEEPER_QUACK_BARRIER: ${{ github.workspace }}/build/release/extension/gatekeeper/quack_load_barrier.duckdb_extension
+        run: |
+          cmake -S duckdb -B build/release -DGATEKEEPER_REMOTE_PROBES=ON
+          cmake --build build/release --target quack_load_barrier_loadable_extension --parallel 4
+          python scripts/test_quack.py
       - name: Native fuzz smoke test
         if: runner.os == 'Linux'
         run: |

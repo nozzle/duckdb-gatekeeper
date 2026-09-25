@@ -30,10 +30,16 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
   `quack_query_by_name`. The resulting operator is an ordinary `LogicalGet`; post-bind
   operator allowlisting or divergence detection alone is too late.
 * Gatekeeper checks the private catalog lookup and wraps the two registered Quack bind
-  callbacks, covering either extension load order, Prepare without QueryBegin, and parameters
-  that defer binding. Ordinary unenforced connections and log-only continue using the
-  original callbacks. The host must finish loading extensions before sharing connections;
-  native catalog mutation/replacement after setup is trusted host activity.
+  callbacks, covering either extension load order (including `LOAD ... AS q`), Prepare without
+  QueryBegin, and parameters that defer binding. Ordinary unenforced connections and log-only
+  continue using the original callbacks. The first enforcement activation seals Quack loading
+  for the database. An in-flight/failed Quack load refuses activation; subsequent new Quack loads
+  are refused before extension initialization, even on the unenforced host. Load Quack before
+  activating enforcement. Native catalog mutation/replacement after setup is trusted host activity.
+  Installation copies overloads and uses catalog replacement, never mutating function slots live.
+  A database-local setup mutex coordinates concurrent activations and begin-load callbacks;
+  existing per-extension load locks are acquired nonblocking to catch loads that began before
+  callback registration. The seal closes the new-load race before publishing the guarded entries.
 * The 1.5 pin sends only a base table's leaf name, discarding schema qualification, and exposes
   no `get_bind_info` table identity. The executable schema-collision regression demonstrates a
   read of `other.orders` returning `main.orders`. All its Quack objects are therefore refused
@@ -66,9 +72,11 @@ outside SQL query hooks. Server-side enforcement of the entire protocol remains 
 
 ## Running the disposable fixture
 
-Build Gatekeeper normally, then:
+Build Gatekeeper and the test-only barrier, then:
 
 ```sh
+cmake -S duckdb -B build/release -DGATEKEEPER_REMOTE_PROBES=ON
+cmake --build build/release --target gatekeeper_loadable_extension quack_load_barrier_loadable_extension --parallel 4
 .venv/bin/python scripts/test_quack.py
 ```
 
@@ -83,7 +91,11 @@ Server-side `Quack` logs prove whether a PREPARE request arrived. A sequence-bac
 view proves execution independently of transactional rollback. Setup/metadata requests are
 excluded by an explicit observation baseline. Held C API prepared handles use the same engine
 library as the Python host, testing preparation separately from execution and policy changes.
-The runner fails on a bad download checksum or missing/incompatible explicit artifact.
+The runner fails on a bad download checksum or missing/incompatible explicit artifact. The
+barrier artifact defaults to the directory containing Gatekeeper; override with
+`GATEKEEPER_QUACK_BARRIER`. Barrier tests park a real loader before extension initialization,
+then assert enforcement cannot activate until that loader finishes. Both callback-registration
+orders are exercised. The barrier extension is test-only and never installed in production.
 
 ```sh
 GATEKEEPER_EXTENSION=/absolute/gatekeeper.duckdb_extension \
@@ -118,9 +130,9 @@ cmake -G Ninja -S /path/to/pinned-engine -B build/quack-candidate \
   -DDUCKDB_EXTENSION_CONFIGS="$PWD/extension_config.cmake" \
   '-DBUILD_EXTENSIONS=quack;httpfs;json;autocomplete' \
   -DBUILD_SHELL=ON -DBUILD_UNITTESTS=ON -DENABLE_UNITTEST_CPP_TESTS=OFF \
-  -DUNITTEST_ROOT_DIRECTORY="$PWD" -DGATEKEEPER_NATIVE_PROBES=ON
+  -DUNITTEST_ROOT_DIRECTORY="$PWD" -DGATEKEEPER_NATIVE_PROBES=ON -DGATEKEEPER_REMOTE_PROBES=ON
 cmake --build build/quack-candidate --parallel 4 --target shell unittest \
-  gatekeeper_loadable_extension quack_loadable_extension httpfs_loadable_extension
+  gatekeeper_loadable_extension quack_load_barrier_loadable_extension quack_loadable_extension httpfs_loadable_extension
 ```
 
 For release source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v1.5.5`.
@@ -144,10 +156,16 @@ SHA256 40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20
 
 The footers identify `fa3f82c53c` and `0507d4ae49` respectively, matching the source pins.
 Verify compressed bytes before decompression and supply the explicit paths above; automatic
-downloads remain limited to the supported 1.5.5 release. Both platform/version URLs can change,
+downloads default to the supported 1.5.5 release. `--candidate` selects this exact candidate
+on Linux AMD64 or macOS ARM64, checks the Python version and engine source ID, and fails if
+any selected test skips. Both platform/version URLs can change,
 so the checksum, not the URL alone, is the artifact pin. Candidate errors can surface while
 fetching results; server-denial tests drain the result before asserting the error.
-Tests skip full/partial pushdown and CONNECT only on 1.5, where those features do not exist.
+The dedicated `Quack candidate integration` workflow pins the Linux CPython 3.13 wheel by
+SHA256, checks out the exact engine commit, builds Gatekeeper and the barrier, downloads the
+hash-pinned matching protocol-3 extensions, and executes the entire suite with zero skips.
+Existing compatibility and release pins are unchanged. Release tests skip alias loading,
+full/partial pushdown and CONNECT only on 1.5, where those features do not exist.
 The candidate test executes positive transport controls before checking refusals.
 
 Quack currently disables scan-level filter pushdown and rejects multiple streaming scans of

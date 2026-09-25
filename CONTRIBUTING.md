@@ -265,7 +265,9 @@ catalog and scan function.
 
 ### Quack integration
 
-Run `.venv/bin/python scripts/test_quack.py` for the disposable loopback client/server fixture.
+Build the test-only barrier with `-DGATEKEEPER_REMOTE_PROBES=ON` and target
+`quack_load_barrier_loadable_extension`, then run `.venv/bin/python scripts/test_quack.py`
+for the disposable loopback client/server fixture.
 It downloads checksum-pinned 1.5.5 Quack/httpfs artifacts; candidate engines require explicit
 matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
 source pins, server-session limits, and the distinction between observed release behavior and

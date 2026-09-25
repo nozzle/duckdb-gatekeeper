@@ -3,6 +3,8 @@
 #include "check.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "enforcement.hpp"
 #include "engine_api.hpp"
@@ -53,7 +55,9 @@ static void InstallQuackGuards(ExtensionLoader &loader) {
 		auto entry = loader.TryGetTableFunction(name);
 		if (!entry)
 			continue;
-		auto &functions = entry->Cast<TableFunctionCatalogEntry>().functions;
+		// Copy the set and overloads. Never mutate a published entry or a shared function slot:
+		// concurrent binders may still be using it. Catalog replacement publishes a new entry.
+		auto functions = entry->Cast<TableFunctionCatalogEntry>().functions;
 		auto wrap = [](TableFunction &function) {
 			if (!function.bind || function.bind == GuardQuackBind)
 				return;
@@ -69,21 +73,70 @@ static void InstallQuackGuards(ExtensionLoader &loader) {
 		for (idx_t i = 0; i < functions.Size(); i++)
 			wrap(functions.GetFunctionReferenceByOffset(i));
 #endif
+		CreateTableFunctionInfo replacement(std::move(functions));
+		replacement.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+		loader.RegisterFunction(std::move(replacement));
 	}
 }
 
 struct QuackLoadCallback : ExtensionCallback {
-	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
-		if (name != "quack")
+	mutex lock;
+	bool sealed = false;
+
+	static bool IsQuack(DatabaseInstance &db, const string &name) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		auto info = ExtensionManager::Get(db).GetExtensionInfo(name);
+		return info && info->orig_ext_name == "quack";
+#else
+		return name == "quack";
+#endif
+	}
+
+	void OnBeginExtensionLoad(DatabaseInstance &db, const string &name) override {
+		if (!IsQuack(db, name))
 			return;
-		ExtensionLoader loader(db, "gatekeeper");
+		lock_guard<mutex> guard(lock);
+		if (sealed)
+			throw PermissionException("Load Quack before activating Gatekeeper enforcement; remote setup is sealed");
+	}
+
+	void Seal(ClientContext &context) {
+		lock_guard<mutex> guard(lock);
+		if (sealed)
+			return;
+		auto &manager = ExtensionManager::Get(context);
+		vector<unique_lock<mutex>> loads;
+		// BeginLoad inserts ExtensionInfo before notifying callbacks. Holding this lock blocks new
+		// Quack loads at OnBegin; try-locking existing entries catches loads that began before our
+		// callback was registered as well. Never wait: a loader may itself be waiting for this lock.
+		for (const auto &name : manager.GetExtensions()) {
+			if (!IsQuack(*context.db, name))
+				continue;
+			auto info = manager.GetExtensionInfo(name);
+			unique_lock<mutex> loading(info->lock, std::try_to_lock);
+			if (!loading.owns_lock() || !info->is_loaded)
+				throw PermissionException("Quack load is unfinished; complete extension setup before enforcement");
+			loads.push_back(std::move(loading));
+		}
+		ExtensionLoader loader(*context.db, "gatekeeper");
 		InstallQuackGuards(loader);
+		sealed = true;
 	}
 };
 
 void RegisterRemoteScope(ExtensionLoader &loader) {
-	InstallQuackGuards(loader);
 	ExtensionCallback::Register(DBConfig::GetConfig(loader.GetDatabaseInstance()),
 	                            make_shared_ptr<QuackLoadCallback>());
+}
+
+void SealRemoteScope(ClientContext &context) {
+	for (auto &callback : ExtensionCallback::Iterate(context)) {
+		auto state = dynamic_cast<QuackLoadCallback *>(callback.get());
+		if (state) {
+			state->Seal(context);
+			return;
+		}
+	}
+	throw InternalException("Gatekeeper remote setup state is missing");
 }
 } // namespace duckdb

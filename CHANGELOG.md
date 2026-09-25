@@ -13,6 +13,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   server schema qualification; 2.0 local-binding reads require remote SQL pushdown disabled and
   table provenance. Evidence remains local binding scope, not complete remote lineage. See
   [Quack support](docs/quack.md), including server-connection and CONNECT restrictions.
+  Load Quack before the first enforcement activation: activation refuses unfinished loads and
+  seals later Quack loads, including aliases, before installing guarded catalog copies.
 
 - Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
   replacing MinIO's image after its registry stopped allowing anonymous pulls.

@@ -11,6 +11,7 @@
 namespace duckdb {
 class ExtensionLoader;
 void RegisterRemoteScope(ExtensionLoader &loader);
+void SealRemoteScope(ClientContext &context);
 // Remote SQL rewrites bind a delegating table function before PostBind. Refuse that configuration
 // before the engine plans, including when parameters defer the private authorization bind.
 inline bool CheckRemoteScope(ClientContext &context, gatekeeper::Result &result) {
