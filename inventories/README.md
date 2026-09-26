@@ -6,6 +6,10 @@ Gatekeeper owns its function classifications here:
   generators, scalars), default compute names, and excluded names.
 - `extensions/*.json`: one file for each reviewed core extension, preserving
   `compute` and `elevated` groups, implementation source links, and review notes/pins.
+- `default_identities.json`: explicit default catalog/schema_path/name/type grants,
+  grouped by registration evidence and kind, plus reasoned exclusions. Its schema is
+  `default_identities.schema.json`; [default provenance](../docs/default-provenance.md)
+  records completeness, namespace evidence, intrinsic exceptions and coverage limits.
 - `baselines/duckdb-1.5.5.json`: runtime signatures and loaded-extension versions
   captured from the pinned Python DuckDB runtime. This includes Python-specific
   functions; it does not claim that all extensions were loaded or audited live.
@@ -15,9 +19,21 @@ Gatekeeper allowlist or mandatory inventory audit.
 
 ## Adjusting defaults
 
+All compiled defaults grant explicit `system.main` identities and concrete kinds, including
+reviewed extension functions registered there. Host shadows and `system.pg_catalog` macros
+require explicit grants. Runtime discovery remains a maintenance report and never creates
+permissions. All 953 historical compute names are accounted for: 913 names contribute 919
+identities; 40 pg_catalog-only names are explicitly excluded without reclassification. The audit
+reports reviewed names, compiled names, compiled identities, exclusions and qualified drift.
+`reporting_discrepancies` records the historical 1.5.5 synthetic window rows labeled
+`aggregate`; executable window intrinsics grant only kind `window`. Snapshot labels remain
+unchanged and aggregate collisions remain ungranted, even when a discrepancy explains the label.
+
 Move exact normalized names between `compute` and `elevated` after source review.
-Only compute names are compiled into defaults. If a core function moves, update
-its descriptive `groups` membership too. `unreviewed` records baseline names without
+Only compute names with explicit registration identities are compiled into defaults. Update
+the identity map in the same change; missing names, conflicting exclusions, duplicate identities,
+unknown kinds, unpinned evidence and non-compute grants fail source-only validation. If a core
+function moves, update its descriptive `groups` membership too. `unreviewed` records baseline names without
 a completed source review; these remain excluded and must not be promoted
 automatically. Unreviewed is not a claim of elevated behavior.
 
@@ -86,7 +102,7 @@ inventory's recorded core source, not the current release build pin.
 
 ## Version update procedure
 
-Function policy matches names. Existing DuckDB implementations are trusted across
+Function policy matches qualified identities and kinds. Existing DuckDB implementations are trusted across
 upgrades; changes behind an existing name are not a backwards-compatibility attack
 model. New names remain excluded until explicitly allowed or classified. Maintaining
 defaults improves convenience and does not gate engine upgrades.
@@ -109,7 +125,12 @@ To investigate coverage on another runtime:
    Additions, removals, changed overload signatures/macro definitions, engine version,
    and loaded-extension versions are reported without failing. `--strict` optionally
    turns drift into an error for baseline investigations. Unknown names remain excluded;
-   they are never added to defaults by enumeration.
+   they are never added to defaults by enumeration. New captures retain catalog, full nested
+   schema paths and kind, including 2.0 windows. Qualified additions/removals/signature changes
+   require two qualified snapshots; the historical unqualified baseline is preserved and reported
+   as such. Default-name registrations at ungranted identities and defaults not observed in a
+   candidate are reported separately. Missing optional extensions and cross-version intrinsic
+   kinds are expected reasons for defaults not being observed, not instructions to remove grants.
 
 3. Review names you choose to add or reclassify, including their overloads. Record why
    non-obvious entries are default or elevated and preserve the reviewed source revision.
@@ -124,6 +145,201 @@ To investigate coverage on another runtime:
    an existing name, so these baselines aid an investigation rather than gate anything.
 5. Run generation, the runtime report, full tests, and a build after classification
    changes. Update a historical baseline only intentionally, preserving its provenance.
+
+## Explicit all-extension collection
+
+`scripts/capture_extensions.py` is a separate **opt-in installer/collector** for the
+extensions named by `inventories/extensions/*.json`. Its parent needs only the Python
+standard library; `--python` chooses the exact DuckDB environment for subprocesses.
+Run discovery first, then replay its artifact lock into a new directory:
+
+```sh
+python scripts/capture_extensions.py collect --allow-install \
+  --python /path/to/duckdb-1.5.5-venv/bin/python \
+  --output build/extensions-1.5.5-discovery --discover
+python scripts/capture_extensions.py collect --allow-install \
+  --python /path/to/duckdb-1.5.5-venv/bin/python \
+  --output build/extensions-1.5.5-verified \
+  --lock build/extensions-1.5.5-discovery/lock.json
+```
+
+Repeat with the candidate Python environment and separate output directories. For
+independent capture workers, use `worker --extension iceberg --extension postgres`
+with the same required options. `collect --extension NAME` also selects a subset.
+Workers each emit their own base and lock; identical `base_sha256` values establish
+that their deltas share a base. `--dependency avro` explicitly installs a prerequisite
+without loading it independently; repeat for additional prerequisites during discovery.
+Omit `--dependency` on locked replay: the lock supplies the complete install list.
+For explicit preloading, use ordered, target-scoped flags such as
+`--preload aws=httpfs --preload iceberg=httpfs --preload iceberg=aws` during discovery.
+These dependencies are installed **and loaded in the stated order** before their target;
+install-only dependencies are a separate mechanism. Replay uses locked `load_names`
+and rejects `--preload` overrides. This preserves the actual capture environment when,
+for example, an exploratory AWS capture explicitly preloaded HTTPFS even though AWS's
+initializer did not load it itself.
+Output directories must be new, so candidate captures cannot overwrite a baseline.
+
+### Isolation, downloads, and failures
+
+Collection currently requires POSIX. Every extension attempt runs in a fresh process
+with an empty temporary HOME, working directory, secret directory, and extension store.
+The child inherits an allowlisted environment, without authentication tokens, cloud
+credentials, proxies, Python/loader overrides, or the user's installed extension store.
+Python `-I -B` disables user-site imports and bytecode writes, including imports from
+the repository's `scripts/` directory outside temporary HOME. Autoload and autoinstall are disabled
+throughout catalog enumeration; persistent secrets, unsigned binaries, and community
+signatures are disabled. Only the chosen extension and ordered explicit preloads are
+explicitly loaded. If native
+initialization requires an absent registered dependency, discovery starts a fresh
+attempt with that dependency explicitly installed first (at most 16 dependencies).
+Explicit/native dependency loads are attributed from `duckdb_extensions()`; automatic
+downloads remain disabled. Locked replay cannot discover or download an unpinned dependency.
+
+The downloader accepts only exact engine-ABI/platform/name HTTPS URLs under
+`https://extensions.duckdb.org` (`--repository core`, default) or
+`https://nightly-extensions.duckdb.org` (`--repository core_nightly`, explicit).
+There is no fallback to another engine, repository, or community source. Redirects
+and proxy discovery are disabled. Names such as `postgres` and `sqlite` resolve using
+the running engine's registry aliases. Discovery records compressed-download and
+uncompressed-binary SHA-256, binary size, exact URL, repository, and the engine-reported
+extension version for every downloaded prerequisite and target. Local `INSTALL`
+preserves engine metadata checks, and `LOAD` retains official signature checks.
+Locked replay verifies downloaded bytes **before installation or loading**, checks
+installed bytes/version, and matches the full observed engine identity, including the
+native Python module hash. Unavailable artifacts remain explicitly incomplete; a lock
+with no artifact does not authorize a later download. Discovery is exploratory trust
+on first download; only the second pass establishes reproduction of those pins.
+
+The collector invokes no extension functions, UI/server startup commands, authentication,
+or external `ATTACH`. MotherDuck is downloaded and installed when available but **never
+loaded**: its proprietary initialization has no reviewed offline contract here. It is
+reported as `skipped` with `motherduck_load_requires_offline_review`, without supplying
+a token or connecting to its service. Native extension initialization still executes
+trusted signed code; process/store isolation is not an OS network sandbox.
+
+`--timeout 180` bounds each attempt, including downloads and native loading. Timeouts,
+crashes, unavailable binaries, and load failures are recorded per extension and do not
+abort subsequent extensions. Process groups are terminated and temporary stores removed.
+Checkpoints preserve downloaded artifact provenance even when native loading crashes.
+Errors contain phase, stable code, exception type or HTTP/exit status; arbitrary native
+exception text/stdout/stderr is discarded to avoid writing tokens or personal paths.
+Exit status is 1 if any extension is incomplete (including a deliberate skip), and 0
+only if every selected capture succeeded. Inspect `summary.json` after either result.
+
+### Collector output schema (version 2)
+
+Every base, extension, lock, and summary identifies
+`capture_protocol: "gatekeeper-isolated-staged-capture-v2"`. Legacy schema-v1 exports
+and adapters are rejected as replay locks: recapture them with this collector. The
+summary records the collector source SHA-256 and `evidence_kind` as
+`collector_discovery` or `collector_locked_replay`. Previously exported exploratory
+raw captures remain separate historical evidence; converting their JSON shape does
+not establish that the collector replayed them. Protocol labels are provenance
+claims, not cryptographic attestations of who ran the tool.
+
+- `base.json`: `snapshot_type: "base"`, `engine`, `loaded_extensions`, and the full
+  qualified `functions` list from `audit_inventory.capture_functions`. Engine identity
+  includes library version, source ID, codename, Python/package versions, platform,
+  extension ABI directory, and native-module SHA-256. Statically linked extension
+  provenance is covered by this engine hash, rather than an invented downloaded artifact.
+- `<inventory-name>.json`: `snapshot_type: "extension_delta"`, `inventory`,
+  `resolved_name`, `base_sha256`, `mode` (`discovery`/`verified`), `status`, `phase`,
+  `attempts`, `install_names`, ordered `load_names`, `artifacts`, and, on success, `initial_extensions`,
+  `loaded_extensions`, `dependencies_loaded`, `function_count`, and `functions`.
+  Early failures can omit fields not yet observed. `functions.added` and
+  `functions.removed` contain complete signature rows for added/removed qualified
+  identities; `functions.changed` contains `{before: [...], after: [...]}` overload
+  groups for an existing identity whose signatures changed. Identities use exact
+  catalog, full schema path, name, and kind. Reconstruct the full snapshot by removing
+  removed rows and changed-before groups from the base, then adding added rows and
+  changed-after groups. The delta includes registrations from loaded dependencies;
+  the loaded list records attribution candidates, not proof of individual function ownership.
+  `stages` records `before`, each explicit `dependency` load, and `target`, retaining
+  loaded-extension observations and a full-function-content hash at every stage.
+  Each load stage includes a delta relative to the previous stage; the target stage
+  thus excludes registrations already observed after explicit preloads. Native
+  dependencies loaded by the target remain attributed to that target stage and its
+  loaded list. `stages_sha256` pins the ordered stage observations; replay fails if
+  preload order, dependency registrations, loaded versions, or target signatures differ.
+- `lock.json` (discovery): `schema_version`, `engine`, `base_sha256`, and `extensions`
+  keyed by inventory name, each with `repository`, `resolved_name`, `install_names`,
+  ordered `load_names`, `artifacts`, discovery `status`, and `stages_sha256` (null
+  for incomplete captures). A successful lock requires staged evidence and cannot
+  claim MotherDuck was loaded. A skipped MotherDuck result has no function snapshot
+  or completed target stage. Linked builtins appear in the load plan as needed,
+  retain engine-hash provenance, and never acquire invented downloaded hashes.
+  All hashes are SHA-256; JSON-content hashes use sorted keys and compact separators
+  with Python's default ASCII escaping. This lock pins binaries, not classifications.
+- `summary.json`: collection mode, protocol/source identity, base hash, and per-extension statuses.
+  `mode: "verified"` means a locked replay was attempted; only `status: "ok"`
+  establishes a successful artifact-and-stage verification. A base
+  failure instead produces `base-failure.json` and prevents extension collection.
+
+Candidate JSON outputs can be checked in intentionally as runtime evidence. Keep the
+shared base once per engine and compact per-extension deltas rather than duplicating
+the core catalog for every extension. Historical baselines and review provenance remain
+separate; collection never creates grants or reclassifies functions. The existing
+`audit_inventory.py` interface retains its no-automatic-install behavior.
+
+### Offline collection audit and reconstruction
+
+Committed collections are audited without importing DuckDB, installing extensions or
+replaying native code. The supported inputs are:
+
+```sh
+# A full collector base is also a supported --candidate snapshot.
+python -S scripts/audit_inventory.py --candidate inventories/runtime/duckdb-1.5.5-osx_arm64/base.json
+# Aggregate qualified coverage from the base and successful independent final setups.
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64
+# One full reconstructed final target, compared with --baseline (historical by default).
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64 --extension excel
+# Recompute and check every field, not just report counts.
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64 \
+  --verify-report inventories/runtime/duckdb-1.5.5-osx_arm64/qualified-report.json
+```
+
+`--collection` accepts a directory or its `collection.json` path. An extension delta
+is **not** a full `--candidate`: use `--collection DIR --extension NAME`. Failed or
+skipped targets produce no final snapshot and are rejected by `--extension`.
+`--strict` makes collection coverage drift/incomplete outcomes fail; ordinary audits
+report them without treating optional-extension absence as a compatibility failure.
+
+`scripts/inventory_capture.py` provides `snapshot(value)` (legacy and collector full
+snapshot adapter), `apply_delta(rows, delta)` (multiset reconstruction), and
+`reconstruct_collection(path)` returning an adapted base and outcomes with original
+metadata and full stage snapshots. The adapter reads `engine.library_version` and
+normalizes loaded-extension name/version pairs for comparison. It preserves function
+rows and never invents qualifications for historical snapshots. Reconstruction verifies
+the base hash, engine/protocol, artifact metadata against the lock, ordered load plan,
+every recorded stage function hash, successful stage-list hashes, final delta/count,
+and loaded/dependency observations. This is offline consistency checking of committed
+evidence; it does not rehash unavailable binaries or attest who collected them.
+
+`audit_inventory.collection_report(path, root=ROOT)` recomputes exact observed-default,
+missing-default, ungranted-identity and unclassified-name sets from those snapshots and
+the current inventories. Per-extension reports compare the stage immediately before
+the target with its final stage, retain source-default identities already observed
+before the target, and cross-check concrete kinds for that extension's compute names.
+Dependency attribution remains an observation, not proof of function ownership.
+
+Both collections have a reproducible `qualified-report.json` using
+`gatekeeper-qualified-collection-audit-v1`. Regenerate intentionally with
+`--collection DIR --write-report DIR/qualified-report.json`; `--verify-report` compares
+the entire parsed report, including policy hash and all sets. These reports contain
+identities and stage references, not duplicate full function snapshots. Historical
+`report.json` files retain exploratory origins/comparisons as evidence; their aggregate
+missing/ungranted/unclassified claims are also checked by each collection's
+`reconstruct.py`. Current per-stage policy verification uses the qualified report,
+not the historical report's exploratory per-extension fields or hard-coded counts.
+Historical baselines, locks and raw labels remain unchanged.
+
+`test/test_collection_audit.py` is included by the existing standard `pytest test`
+CI invocation. It consumes both committed collections, checks optional-extension
+source-map kinds and exact version-specific missing identities, and rejects report,
+source-map, stage and hash mutations (including equal-count Excel scalar/table swaps).
+Source-dependent tooling tests accept `GATEKEEPER_ENGINE_SOURCE` for build grammar and
+`GATEKEEPER_REVIEW_SOURCE` for historical provenance; both default to local `duckdb/`.
+The collection tests themselves need neither checkout nor extension artifact.
 
 ## Repinning the engine
 

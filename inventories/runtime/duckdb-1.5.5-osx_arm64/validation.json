@@ -1,0 +1,46 @@
+{
+  "record_scope": "Preliminary compaction-time validation; preserves the incomplete full-suite run before the pinned source was made available. Not the final PR validation.",
+  "subsequent_validation": {
+    "evidence": "https://github.com/nozzle/duckdb-gatekeeper/pull/113#issuecomment-5843594477",
+    "release_default": "1656 passed, 53 skipped, 2 xfailed; zero failures; inventory tooling included",
+    "release_peg": "1654 passed, 55 skipped, 2 xfailed; zero failures; inventory tooling included",
+    "candidate": "1645 passed, 13 skipped, 2 xfailed; zero failures; release-specific pin tooling excluded"
+  },
+  "byte_reduction_percent": 94.665,
+  "checks": {
+    "audit": {
+      "returncode": 0
+    },
+    "build": {
+      "returncode": 0
+    },
+    "collector_tests": {
+      "returncode": 0
+    },
+    "full_suite": {
+      "limitation": "Seven tooling tests require uninitialized worktree duckdb submodule; external engine source works for build and functional tests.",
+      "returncode": 1,
+      "summary": "7 failed, 1648 passed, 54 skipped, 2 xfailed in 45.14s"
+    },
+    "generation": {
+      "returncode": 0
+    }
+  },
+  "compact_size_before_validation_file": {
+    "bytes": 1937757,
+    "files": 37,
+    "lines": 85004
+  },
+  "exact_original_snapshot_reconstruction": 37,
+  "final_outcomes": {
+    "ok": 28,
+    "skipped": 1
+  },
+  "final_verified_stages": 65,
+  "one_shared_base_verified": true,
+  "original_size": {
+    "bytes": 36322064,
+    "files": 188,
+    "lines": 1835558
+  }
+}

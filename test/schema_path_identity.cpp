@@ -1,3 +1,4 @@
+#include "function_policy.hpp"
 #include "validator.hpp"
 #include <cstdlib>
 
@@ -8,6 +9,48 @@ static void Check(bool condition) {
 
 int main() {
 	using namespace gatekeeper;
+	Policy functions;
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "table"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "macro"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"", {}, "abs", "scalar"}));
+	functions.defaults = false;
+	functions.allowed_functions = {{"", {"finance", "*"}, "f", "scalar"},
+	                               {"system", {"main"}, "*", "scalar"},
+	                               {"system", {"main"}, "read_parquet", "table"}};
+	Check(FunctionEligible(functions, "f"));
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports", "deep"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance.reports"}, "f", "scalar"}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "*", "scalar"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "parquet_scan", "table"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"memory", {"main"}, "read_parquet", ""});
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"", {"finance", "reports"}, "f", ""});
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
+	functions.blocked_functions.insert({"system", {"main"}, "parquet_scan", "table"});
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "read_parquet", "table"}));
+	functions.allowed_functions.insert({"*", {"*"}, "nextval", ""});
+	Check(!FunctionEligible(functions, "nextval"));
+	Policy blocks;
+	blocks.defaults = false;
+	blocks.allowed_functions = {{"*", {"a", "*"}, "f", ""}};
+	blocks.blocked_functions = {{"*", {"a", "b"}, "f", ""}};
+	Check(FunctionEligible(blocks, "f"));
+	Check(!FunctionAllowed(blocks, {"host", {"a", "b"}, "f", "scalar"}));
+	Check(FunctionAllowed(blocks, {"host", {"a", "c"}, "f", "scalar"}));
+	Check(!FunctionBlocked(blocks, {"host", {"a", "b", "c"}, "f", "scalar"}));
+	Check(!FunctionAllowed(blocks, {"", {}, "f", "scalar"}));
+	blocks.blocked_functions.clear();
+	for (const auto &kind : {"scalar", "aggregate", "table", "macro", "table_macro", "window"})
+		blocks.blocked_functions.insert({"*", {"a", "*"}, "f", kind});
+	Check(!FunctionEligible(blocks, "f"));
+	blocks.allowed_functions.insert({"other", {"a", "*", "*"}, "f", "scalar"});
+	Check(FunctionEligible(blocks, "f")); // A one-depth block cannot suppress a deeper eligible identity.
 	Policy policy;
 	policy.tables = true;
 	policy.allowed_tables = {{"memory", {"finance", "*"}, "orders"}};

@@ -1,0 +1,202 @@
+{
+  "format": 1,
+  "evidence": {
+    "core-registrations": {
+      "inventories": ["core", "icu"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function",
+        "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/core_functions",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/register_function_list.cpp"
+      ],
+      "notes": ["The functions.json registration inputs (including aliases), function_list.cpp and generated headers distinguish scalar and aggregate registrations. RegisterFunctionList constructs the corresponding Create*FunctionInfo in system.main. Historical 1.5.5 signatures cross-check kinds; descriptive core.groups are not catalog kinds."]
+    },
+    "core-macros": {
+      "inventories": ["core"],
+      "sources": ["https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/catalog/default/default_functions.cpp"],
+      "notes": ["DefaultMacro internal_macros explicitly distinguishes DEFAULT_SCHEMA (main) from pg_catalog. CreateInternalMacroInfo and the default generator preserve this schema. The 40 pg_catalog-only compute names retain historical classification but grant no fabricated main identity."]
+    },
+    "core-tables": {
+      "inventories": ["core"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/table",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/built_in_functions.cpp"
+      ],
+      "notes": ["TableFunction/TableFunctionSet registrations in range.cpp, repeat.cpp, repeat_row.cpp, summary.cpp, unnest.cpp, system/duckdb_keywords.cpp, system/duckdb_optimizers.cpp and version/pragma_version.cpp. BuiltinFunctions targets the system catalog, default schema. range/generate_series/repeat also have separately reviewed scalar registrations."]
+    },
+    "unnest-intrinsic": {
+      "inventories": ["core"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/planner/binder/expression/bind_unnest_expression.cpp",
+        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/planner/binder/expression/bind_unnest_expression.cpp"
+      ],
+      "notes": ["SELECT-list unnest is a source-defined binder intrinsic, not a scalar catalog row. Gatekeeper assigns its intrinsic system.main scalar identity explicitly; the separately registered table form is not evidence for arbitrary scalar grants."]
+    },
+    "windows": {
+      "inventories": ["core"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/parser/expression/window_expression.cpp",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/table/system/duckdb_functions.cpp",
+        "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/window",
+        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/register_function_list.cpp"
+      ],
+      "notes": ["internal_window_functions defines the 1.5 executable window intrinsics, represented by Gatekeeper as system.main window identities. duckdb_functions.cpp:194-220 constructs temporary reporting entries with OID 0 and labels them aggregate, explicitly noting that the label should be window. Those synthetic rows are NOT aggregate registrations and cannot authorize aggregate collisions. The 2.0 rows/ranking/values functions.json inputs register the same 13 names as window_function, including rank_dense. first/last have independent real aggregate registrations. Historical reporting discrepancies are recorded separately without rewriting snapshots or expanding permissions."]
+    },
+    "rounding-2.0": {
+      "inventories": ["core"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/core_functions/scalar/math/functions.json",
+        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/register_function_list.cpp"
+      ],
+      "notes": ["The 2.0 registration explicitly defines round_even as scalar_function_set with roundbankers alias. Keep these concrete scalar identities alongside the historical macro identities; existing implementation classifications remain trusted."]
+    },
+    "json": {
+      "inventories": ["core", "json"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/json/json_extension.cpp",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/json/json_functions.cpp",
+        "https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/json/json_functions"
+      ],
+      "notes": ["GetScalarFunctions includes explicit AddAliases; GetTableFunctions registers json_each/json_tree. json_extension.cpp DefaultMacro definitions register json and the three json_group_* macros under DEFAULT_SCHEMA through ExtensionLoader. Historical kinds cross-checked."]
+    },
+    "icu": {
+      "inventories": ["icu"],
+      "sources": ["https://github.com/duckdb/duckdb/tree/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/icu"],
+      "notes": ["icu_extension.cpp GetICUCollateFunction constructs scalar icu_collate_ names from the embedded locale list; RegisterCollation also registers a scalar function. Explicit locale names below are the historically reviewed inventory, cross-checked against its baseline, not a live locale expansion. icu-current.cpp, icu-makedate.cpp and icu-timezone.cpp register the remaining scalars; icu_calendar_names and pg_timezone_names are TableFunction registrations. Shared core names are covered by their identical core identity; icu-table-range.cpp and icu-list-range.cpp confirm both range kinds."]
+    },
+    "autocomplete": {
+      "inventories": ["autocomplete"],
+      "sources": ["https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/autocomplete/autocomplete_extension.cpp"],
+      "notes": ["LoadInternal registers check_peg_parser_fun as TableFunction through ExtensionLoader; optional extension absent from historical Python baseline."]
+    },
+    "delta": {
+      "inventories": ["delta"],
+      "sources": ["https://github.com/duckdb/duckdb-delta/blob/45c40878601b54b4188b09e08732fe0d576ad222/src/delta_macros.cpp"],
+      "notes": ["delta_macros defines parse_delta_filter_logline as DefaultMacro DEFAULT_SCHEMA; RegisterMacros passes CreateInternalMacroInfo to ExtensionLoader. Not a scalar function despite its scalar-shaped use. Absent from historical Python baseline."]
+    },
+    "ducklake": {
+      "inventories": ["ducklake"],
+      "sources": [
+        "https://github.com/duckdb/ducklake/blob/d8a1881e22516ea3d186d73e83c65fe5bd1a1dc4/src/functions/ducklake_murmur3.cpp",
+        "https://github.com/duckdb/ducklake/blob/d8a1881e22516ea3d186d73e83c65fe5bd1a1dc4/src/ducklake_extension.cpp"
+      ],
+      "notes": ["ScalarFunction murmur3_32 registered through ExtensionLoader; absent from historical Python baseline."]
+    },
+    "excel": {
+      "inventories": ["excel"],
+      "sources": ["https://github.com/duckdb/duckdb-excel/blob/f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d/src/excel/excel_extension.cpp"],
+      "notes": ["LoadInternal registers text_func and excel_text_func ScalarFunctions through ExtensionLoader; absent from historical Python baseline."]
+    },
+    "fts": {
+      "inventories": ["fts"],
+      "sources": ["https://github.com/duckdb/duckdb-fts/blob/6814ec9a7d5fd63500176507262b0dbf7cea0095/extension/fts/fts_extension.cpp"],
+      "notes": ["LoadInternal registers stem_func ScalarFunction through ExtensionLoader; absent from historical Python baseline."]
+    },
+    "iceberg": {
+      "inventories": ["iceberg"],
+      "sources": [
+        "https://github.com/duckdb/duckdb-iceberg/blob/45163a28e0ed6a2071a82a1bf1dd432d0216cf9c/src/function/iceberg_scalar_functions.cpp",
+        "https://github.com/duckdb/duckdb-iceberg/blob/45163a28e0ed6a2071a82a1bf1dd432d0216cf9c/src/iceberg_extension.cpp"
+      ],
+      "notes": ["Explicit ScalarFunctionSet iceberg_bucket and iceberg_truncate flow through GetScalarFunctions and ExtensionLoader; absent from historical Python baseline."]
+    },
+    "inet": {
+      "inventories": ["inet"],
+      "sources": [
+        "https://github.com/duckdb/duckdb-inet/blob/fe7f60bb60245197680fb07ecd1629a1dc3d91c8/src/inet_extension.cpp",
+        "https://github.com/duckdb/duckdb-inet/blob/fe7f60bb60245197680fb07ecd1629a1dc3d91c8/src/inet_escape_functions.cpp"
+      ],
+      "notes": ["Explicit ScalarFunction/ScalarFunctionSet registrations, including <<=, >>= and GetEscapeFunctionSet/GetUnescapeFunction. Shared + and - are covered by core scalar identities. ExtensionLoader targets system.main; absent from historical Python baseline."]
+    },
+    "parquet": {
+      "inventories": ["parquet"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/parquet/parquet_extension.cpp",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/parquet/writer/variant/convert_variant.cpp",
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/parquet/reader/variant/variant_shredded_conversion.cpp"
+      ],
+      "notes": ["ScalarFunction constructors registered through ExtensionLoader; historical kinds cross-checked."]
+    },
+    "postgres": {
+      "inventories": ["postgres"],
+      "sources": [
+        "https://github.com/duckdb/duckdb-postgres/blob/41223e51559cd581f1c06e170b71c71df25bbaac/src/postgres_hstore.cpp",
+        "https://github.com/duckdb/duckdb-postgres/blob/41223e51559cd581f1c06e170b71c71df25bbaac/src/postgres_extension.cpp"
+      ],
+      "notes": ["RegisterHstoreFunctions constructs both ScalarFunctions and passes them to ExtensionLoader; absent from historical Python baseline."]
+    },
+    "quack": {
+      "inventories": ["quack"],
+      "sources": [
+        "https://github.com/duckdb/duckdb-quack/blob/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0/src/quack_extension.cpp",
+        "https://github.com/duckdb/duckdb-quack/blob/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0/src/quack_uri.cpp"
+      ],
+      "notes": ["LoadInternal constructs ScalarFunctions quack_check_token/quack_nop_authorization and registers QuackParseUriFunction::GetFunction through ExtensionLoader. Source-backed despite unavailable optional runtime coverage in the historical baseline."]
+    },
+    "spatial": {
+      "inventories": ["spatial"],
+      "sources": [
+        "https://github.com/duckdb/duckdb-spatial/tree/eb1e57c9d92c0f3f76eb03eaa52c315090f328cc/src/spatial/modules",
+        "https://github.com/duckdb/duckdb-spatial/blob/eb1e57c9d92c0f3f76eb03eaa52c315090f328cc/src/spatial/util/function_builder.cpp"
+      ],
+      "notes": ["FunctionBuilder::RegisterScalar/RegisterAggregate/RegisterMacro in main, geos, proj and mvt modules define kinds; the builder explicitly retrieves system.DEFAULT_SCHEMA and uses ExtensionLoader. main/spatial_functions_table.cpp registers ST_GeneratePoints as TableFunctionSet. The eight HEXWKB/geometry-count aliases use RegisterScalar(loader, alias); force-dimension and vertex-access templates use scalar builders. Seven affine convenience functions are macros, and nine *_Agg/AsMVT names aggregates. Core-overlapping identities are already recorded. Optional extension absent from historical Python baseline; no kind inferred from spelling or runtime discovery."]
+    },
+    "tpcds": {
+      "inventories": ["tpcds"],
+      "sources": ["https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/tpcds/tpcds_extension.cpp"],
+      "notes": ["LoadInternal registers tpcds_queries and tpcds_answers as TableFunctions through ExtensionLoader; absent from historical Python baseline."]
+    },
+    "tpch": {
+      "inventories": ["tpch"],
+      "sources": ["https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/extension/tpch/tpch_extension.cpp"],
+      "notes": ["LoadInternal registers tpch_queries and tpch_answers as TableFunctions through ExtensionLoader; absent from historical Python baseline."]
+    }
+  },
+  "grants": [
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "autocomplete", "names": ["check_peg_parser"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "macro", "evidence": "core-macros", "names": [
+      "ago", "array_append", "array_pop_back", "array_pop_front", "array_prepend", "array_push_back", "array_push_front", "array_reverse", "array_to_string", "array_to_string_comma_default", "current_role", "current_user", "date_add", "days_in_month", "fdiv", "fmod", "generate_subscripts", "geomean", "geometric_mean", "list_any_value", "list_append", "list_approx_count_distinct", "list_avg", "list_bit_and", "list_bit_or", "list_bit_xor", "list_bool_and", "list_bool_or", "list_count", "list_entropy", "list_first", "list_histogram", "list_kurtosis", "list_kurtosis_pop", "list_last", "list_mad", "list_max", "list_median", "list_min", "list_mode", "list_prepend", "list_product", "list_reverse", "list_sem", "list_skewness", "list_stddev_pop", "list_stddev_samp", "list_string_agg", "list_sum", "list_var_pop", "list_var_samp", "map_contains_entry", "map_contains_value", "md5_number_lower", "md5_number_upper", "nullif", "regexp_split_to_table", "round_even", "roundbankers", "session_user", "split_part", "user", "wavg", "weighted_avg"
+    ]},
+    {"catalog": "system", "schema_path": ["main"], "type": "aggregate", "evidence": "core-registrations", "names": [
+      "any_value", "approx_count_distinct", "approx_quantile", "approx_top_k", "arbitrary", "arg_max", "arg_max_null", "arg_max_nulls_last", "arg_min", "arg_min_null", "arg_min_nulls_last", "argmax", "argmin", "array_agg", "avg", "bit_and", "bit_or", "bit_xor", "bitstring_agg", "bool_and", "bool_or", "corr", "count", "count_if", "count_star", "countif", "covar_pop", "covar_samp", "entropy", "favg", "first", "fsum", "group_concat", "histogram_exact", "kahan_sum", "kurtosis", "kurtosis_pop", "last", "list", "listagg", "mad", "max", "max_by", "mean", "median", "min", "min_by", "mode", "product", "quantile", "quantile_cont", "quantile_disc", "regr_avgx", "regr_avgy", "regr_count", "regr_intercept", "regr_r2", "regr_slope", "regr_sxx", "regr_sxy", "regr_syy", "reservoir_quantile", "sem", "skewness", "stddev", "stddev_pop", "stddev_samp", "string_agg", "sum", "sum_no_overflow", "sumkahan", "var_pop", "var_samp", "variance"
+    ]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "core-registrations", "names": [
+      "!__postfix", "!~~", "!~~*", "%", "&", "&&", "*", "**", "+", "-", "/", "//", "<->", "<<", "<=>", "<@", ">>", "@", "@>", "^", "^@", "abs", "acos", "acosh", "add", "age", "alias", "apply", "array_apply", "array_cat", "array_concat", "array_contains", "array_cosine_distance", "array_cosine_similarity", "array_cross_product", "array_distance", "array_distinct", "array_dot_product", "array_extract", "array_filter", "array_grade_up", "array_has", "array_has_all", "array_has_any", "array_indexof", "array_inner_product", "array_intersect", "array_length", "array_negative_dot_product", "array_negative_inner_product", "array_position", "array_reduce", "array_resize", "array_reverse_sort", "array_select", "array_slice", "array_sort", "array_transform", "array_unique", "array_value", "array_where", "array_zip", "ascii", "asin", "asinh", "atan", "atan2", "atanh", "bar", "base64", "bin", "bit_count", "bit_length", "bit_position", "bitstring", "can_cast_implicitly", "cardinality", "cast_to_type", "cbrt", "ceil", "ceiling", "century", "char_length", "character_length", "chr", "concat", "concat_ws", "constant_or_null", "contains", "cos", "cosh", "cot", "create_sort_key", "damerau_levenshtein", "date_diff", "date_part", "date_sub", "date_trunc", "datediff", "datepart", "datesub", "datetrunc", "day", "dayname", "dayofmonth", "dayofweek", "dayofyear", "decade", "decode", "degrees", "divide", "editdist3", "element_at", "encode", "ends_with", "enum_code", "enum_first", "enum_last", "enum_range", "enum_range_boundary", "epoch", "epoch_ms", "epoch_ns", "epoch_us", "equi_width_bins", "era", "error", "even", "exp", "factorial", "filter", "flatten", "floor", "format", "format_bytes", "formatreadabledecimalsize", "formatreadablesize", "from_base64", "from_binary", "from_hex", "gamma", "gcd", "gen_random_uuid", "generate_series", "get_bit", "get_current_timestamp", "get_type", "grade_up", "greatest", "greatest_common_divisor", "hamming", "hash", "hex", "hour", "ilike_escape", "instr", "is_histogram_other_bin", "isfinite", "isinf", "isnan", "isodow", "isoyear", "jaccard", "jaro_similarity", "jaro_winkler_similarity", "julian", "last_day", "lcase", "lcm", "least", "least_common_multiple", "left", "left_grapheme", "len", "length", "length_grapheme", "levenshtein", "lgamma", "like_escape", "list_apply", "list_cat", "list_concat", "list_contains", "list_cosine_distance", "list_cosine_similarity", "list_distance", "list_distinct", "list_dot_product", "list_element", "list_extract", "list_filter", "list_grade_up", "list_has", "list_has_all", "list_has_any", "list_indexof", "list_inner_product", "list_intersect", "list_negative_dot_product", "list_negative_inner_product", "list_pack", "list_position", "list_reduce", "list_resize", "list_reverse_sort", "list_select", "list_slice", "list_sort", "list_transform", "list_unique", "list_value", "list_where", "list_zip", "ln", "log", "log10", "log2", "lower", "lpad", "ltrim", "make_date", "make_time", "make_timestamp", "make_timestamp_ms", "make_timestamp_ns", "map", "map_concat", "map_contains", "map_entries", "map_extract", "map_extract_value", "map_from_entries", "map_keys", "map_values", "md5", "md5_number", "microsecond", "millennium", "millisecond", "minute", "mismatches", "mod", "month", "monthname", "multiply", "nanosecond", "nextafter", "nfc_normalize", "normalized_interval", "not_ilike_escape", "not_like_escape", "now", "octet_length", "ord", "parse_dirname", "parse_dirpath", "parse_filename", "parse_formatted_bytes", "parse_path", "pi", "position", "pow", "power", "prefix", "printf", "quarter", "radians", "random", "range", "reduce", "regexp_escape", "regexp_extract", "regexp_extract_all", "regexp_full_match", "regexp_matches", "regexp_replace", "regexp_split_to_array", "remap_struct", "repeat", "replace", "replace_type", "reverse", "right", "right_grapheme", "round", "row", "rpad", "rtrim", "second", "set_bit", "setseed", "sha1", "sha256", "sign", "signbit", "sin", "sinh", "split", "sqrt", "st_asbinary", "st_astext", "st_aswkb", "st_aswkt", "st_crs", "st_geomfromwkb", "st_intersects_extent", "starts_with", "str_split", "str_split_regex", "strftime", "string_split", "string_split_regex", "string_to_array", "strip_accents", "strlen", "strpos", "strptime", "struct_concat", "struct_contains", "struct_extract", "struct_extract_at", "struct_has", "struct_indexof", "struct_insert", "struct_keys", "struct_pack", "struct_position", "struct_update", "struct_values", "substr", "substring", "substring_grapheme", "subtract", "suffix", "tan", "tanh", "time_bucket", "timetz_byte_comparable", "timezone", "timezone_hour", "timezone_minute", "to_base", "to_base64", "to_binary", "to_centuries", "to_days", "to_decades", "to_hex", "to_hours", "to_microseconds", "to_millennia", "to_milliseconds", "to_minutes", "to_months", "to_quarters", "to_seconds", "to_timestamp", "to_weeks", "to_years", "transaction_timestamp", "translate", "trim", "trunc", "try_strptime", "typeof", "ucase", "unbin", "unhex", "unicode", "union_extract", "union_tag", "union_value", "unpivot_list", "upper", "url_decode", "url_encode", "uuid", "uuid_extract_timestamp", "uuid_extract_version", "uuidv4", "uuidv7", "variant_extract", "variant_normalize", "variant_typeof", "version", "week", "weekday", "weekofyear", "xor", "year", "yearweek", "|", "||", "~", "~~", "~~*", "~~~"
+    ]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "core-tables", "names": ["duckdb_keywords", "duckdb_optimizers", "generate_series", "pragma_version", "range", "repeat", "repeat_row", "summary", "unnest"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "macro", "evidence": "delta", "names": ["parse_delta_filter_logline"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "ducklake", "names": ["murmur3_32"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "excel", "names": ["excel_text", "text"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "fts", "names": ["stem"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "iceberg", "names": ["iceberg_bucket", "iceberg_truncate"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "icu", "names": [
+      "current_date", "current_localtime", "current_localtimestamp", "get_current_time", "icu_collate_af", "icu_collate_am", "icu_collate_ar", "icu_collate_ar_sa", "icu_collate_as", "icu_collate_az", "icu_collate_be", "icu_collate_bg", "icu_collate_bn", "icu_collate_bo", "icu_collate_br", "icu_collate_bs", "icu_collate_ca", "icu_collate_ceb", "icu_collate_chr", "icu_collate_cs", "icu_collate_cy", "icu_collate_da", "icu_collate_de", "icu_collate_de_at", "icu_collate_dsb", "icu_collate_dz", "icu_collate_ee", "icu_collate_el", "icu_collate_en", "icu_collate_en_us", "icu_collate_eo", "icu_collate_es", "icu_collate_et", "icu_collate_fa", "icu_collate_fa_af", "icu_collate_ff", "icu_collate_fi", "icu_collate_fil", "icu_collate_fo", "icu_collate_fr", "icu_collate_fr_ca", "icu_collate_fy", "icu_collate_ga", "icu_collate_gl", "icu_collate_gu", "icu_collate_ha", "icu_collate_haw", "icu_collate_he", "icu_collate_he_il", "icu_collate_hi", "icu_collate_hr", "icu_collate_hsb", "icu_collate_hu", "icu_collate_hy", "icu_collate_id", "icu_collate_id_id", "icu_collate_ig", "icu_collate_is", "icu_collate_it", "icu_collate_ja", "icu_collate_ka", "icu_collate_kk", "icu_collate_kl", "icu_collate_km", "icu_collate_kn", "icu_collate_ko", "icu_collate_kok", "icu_collate_ku", "icu_collate_ky", "icu_collate_lb", "icu_collate_lij", "icu_collate_lkt", "icu_collate_ln", "icu_collate_lo", "icu_collate_lt", "icu_collate_lv", "icu_collate_mk", "icu_collate_ml", "icu_collate_mn", "icu_collate_mr", "icu_collate_ms", "icu_collate_mt", "icu_collate_my", "icu_collate_nb", "icu_collate_nb_no", "icu_collate_ne", "icu_collate_nl", "icu_collate_nn", "icu_collate_noaccent", "icu_collate_nso", "icu_collate_om", "icu_collate_or", "icu_collate_pa", "icu_collate_pa_in", "icu_collate_pl", "icu_collate_ps", "icu_collate_pt", "icu_collate_ro", "icu_collate_ru", "icu_collate_sa", "icu_collate_se", "icu_collate_si", "icu_collate_sk", "icu_collate_sl", "icu_collate_smn", "icu_collate_sq", "icu_collate_sr", "icu_collate_sr_ba", "icu_collate_sr_me", "icu_collate_sr_rs", "icu_collate_st", "icu_collate_sv", "icu_collate_sw", "icu_collate_ta", "icu_collate_te", "icu_collate_th", "icu_collate_tk", "icu_collate_tn", "icu_collate_to", "icu_collate_tr", "icu_collate_ug", "icu_collate_uk", "icu_collate_ur", "icu_collate_uz", "icu_collate_vi", "icu_collate_wae", "icu_collate_wo", "icu_collate_xh", "icu_collate_yi", "icu_collate_yo", "icu_collate_yue", "icu_collate_yue_cn", "icu_collate_zh", "icu_collate_zh_cn", "icu_collate_zh_hk", "icu_collate_zh_mo", "icu_collate_zh_sg", "icu_collate_zh_tw", "icu_collate_zu", "icu_sort_key", "make_timestamptz", "today"
+    ]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "icu", "names": ["icu_calendar_names", "pg_timezone_names"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "inet", "names": ["<<=", ">>=", "broadcast", "family", "host", "html_escape", "html_unescape", "netmask", "network"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "macro", "evidence": "json", "names": ["json", "json_group_array", "json_group_object", "json_group_structure"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "json", "names": ["->>", "array_to_json", "from_json", "from_json_strict", "json_array", "json_array_length", "json_contains", "json_deserialize_sql", "json_exists", "json_extract", "json_extract_path", "json_extract_path_text", "json_extract_string", "json_keys", "json_merge_patch", "json_object", "json_pretty", "json_quote", "json_serialize_sql", "json_structure", "json_transform", "json_transform_strict", "json_type", "json_valid", "json_value", "row_to_json", "to_json"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "json", "names": ["json_each", "json_tree"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "parquet", "names": ["variant_bytes_to_variant", "variant_to_parquet_variant"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "postgres", "names": ["postgres_hstore_get", "postgres_hstore_to_json"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "quack", "names": ["quack_check_token", "quack_nop_authorization", "quack_uri_parser"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "aggregate", "evidence": "spatial", "names": ["st_asmvt", "st_coverageinvalidedges_agg", "st_coveragesimplify_agg", "st_coverageunion_agg", "st_envelope_agg", "st_extent_agg", "st_intersection_agg", "st_memunion_agg", "st_union_agg"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "macro", "evidence": "spatial", "names": ["st_rotate", "st_rotatex", "st_rotatey", "st_rotatez", "st_scale", "st_translate", "st_transscale"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "spatial", "names": [
+      "duckdb_proj_compiled_version", "duckdb_proj_version", "st_affine", "st_area", "st_area_spheroid", "st_asgeojson", "st_ashexwkb", "st_asmvtgeom", "st_assvg", "st_azimuth", "st_boundary", "st_buffer", "st_buildarea", "st_centroid", "st_closestpoint", "st_collect", "st_collectionextract", "st_concavehull", "st_contains", "st_containsproperly", "st_convexhull", "st_coverageclean", "st_coverageinvalidedges", "st_coveragesimplify", "st_coverageunion", "st_coveredby", "st_covers", "st_crosses", "st_difference", "st_dimension", "st_disjoint", "st_distance", "st_distance_geos", "st_distance_sphere", "st_distance_spheroid", "st_dump", "st_dwithin", "st_dwithin_geos", "st_dwithin_spheroid", "st_endpoint", "st_envelope", "st_equals", "st_expand", "st_extent", "st_extent_approx", "st_exteriorring", "st_flipcoordinates", "st_force2d", "st_force3dm", "st_force3dz", "st_force4d", "st_geometrytype", "st_geomfromgeojson", "st_geomfromhexewkb", "st_geomfromhexwkb", "st_geomfromtext", "st_hasm", "st_hasz", "st_hilbert", "st_interiorringn", "st_interpolatepoint", "st_intersection", "st_intersects", "st_isclosed", "st_isempty", "st_isring", "st_issimple", "st_isvalid", "st_length", "st_length_spheroid", "st_lineinterpolatepoint", "st_lineinterpolatepoints", "st_linelocatepoint", "st_linemerge", "st_linestring2dfromwkb", "st_linesubstring", "st_locatealong", "st_locatebetween", "st_m", "st_makebox2d", "st_makeenvelope", "st_makeline", "st_makepoint", "st_makepolygon", "st_makevalid", "st_maximuminscribedcircle", "st_minimumrotatedrectangle", "st_mmax", "st_mmin", "st_multi", "st_ngeometries", "st_ninteriorrings", "st_node", "st_normalize", "st_npoints", "st_numgeometries", "st_numinteriorrings", "st_numpoints", "st_overlaps", "st_perimeter", "st_perimeter_spheroid", "st_point", "st_point2d", "st_point2dfromwkb", "st_point3d", "st_point4d", "st_pointn", "st_pointonsurface", "st_points", "st_polygon2dfromwkb", "st_polygonize", "st_quadkey", "st_reduceprecision", "st_removerepeatedpoints", "st_reverse", "st_shortestline", "st_simplify", "st_simplifypreservetopology", "st_snap", "st_startpoint", "st_symdifference", "st_tileenvelope", "st_touches", "st_union", "st_voronoidiagram", "st_within", "st_withinproperly", "st_x", "st_xmax", "st_xmin", "st_y", "st_ymax", "st_ymin", "st_z", "st_zmax", "st_zmflag", "st_zmin"
+    ]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "spatial", "names": ["st_generatepoints"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "tpcds", "names": ["tpcds_answers", "tpcds_queries"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "tpch", "names": ["tpch_answers", "tpch_queries"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "unnest-intrinsic", "names": ["unnest"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "rounding-2.0", "names": ["round_even", "roundbankers"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "window", "evidence": "windows", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
+  ],
+  "reporting_discrepancies": [
+    {"duckdb_version": "v1.5.5", "catalog": "system", "schema_path": ["main"], "reported_type": "aggregate", "type": "window", "evidence": "windows", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
+  ],
+  "exclusions": [
+    {"evidence": "core-macros", "reason": "Source registers these compute macros only in system.pg_catalog. The default namespace is system.main; explicit host grants are required. No main identity is inferred.", "names": [
+      "col_description", "format_pg_type", "has_any_column_privilege", "has_column_privilege", "has_database_privilege", "has_foreign_data_wrapper_privilege", "has_function_privilege", "has_language_privilege", "has_schema_privilege", "has_sequence_privilege", "has_server_privilege", "has_table_privilege", "has_tablespace_privilege", "inet_client_addr", "inet_client_port", "inet_server_addr", "inet_server_port", "map_to_pg_oid", "obj_description", "pg_collation_is_visible", "pg_conf_load_time", "pg_conversion_is_visible", "pg_function_is_visible", "pg_get_expr", "pg_has_role", "pg_is_other_temp_schema", "pg_my_temp_schema", "pg_opclass_is_visible", "pg_operator_is_visible", "pg_opfamily_is_visible", "pg_postmaster_start_time", "pg_size_pretty", "pg_table_is_visible", "pg_ts_config_is_visible", "pg_ts_dict_is_visible", "pg_ts_parser_is_visible", "pg_ts_template_is_visible", "pg_type_is_visible", "pg_typeof", "shobj_description"
+    ]}
+  ]
+}

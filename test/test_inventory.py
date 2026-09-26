@@ -4,10 +4,10 @@ import shutil
 import pytest
 
 from audit_inventory import compare, coverage
-from inventory import load
+from inventory import load, load_default_identities, load_default_mapping
 from support.artifact import ENGINE_MAJOR, ROOT, by_parser
 from support.headers import never_bind_names
-from support.typed_helpers import validate
+from support.typed_helpers import function_rules, validate
 from versions import BASELINE_FILENAME
 
 # Default names whose call syntax the parser under test owns, with the argument list that reaches the binder
@@ -29,12 +29,19 @@ def test_complete_default_inventory(db):
     entries, names = load()
     assert len(entries) == 30
     assert len(names) == 953
+    defaults = load_default_identities()
+    excluded = {name for group in load_default_mapping()["exclusions"] for name in group["names"]}
+    assert len(defaults) == 919 and len({identity["name"] for identity in defaults}) == 913
+    assert len(excluded) == 40
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'
         sql = f"SELECT {quoted}" + PARSER_OWNED_ARGUMENTS.get(name, "(1)")
         result = validate(db, sql)
+        if name in excluded:
+            assert result["code"] == "forbidden", (name, result)
+            continue  # Source-mapped exclusions can be rejected before catalog resolution.
         assert result["code"] in {"ok", "binding"}, (name, result)
-        assert not validate(db, sql, {"blocked_functions": [name]})["allowed"]
+        assert not validate(db, sql, {"blocked_functions": function_rules(name)})["allowed"]
 
 
 def test_nondefault_inventory(db):
@@ -90,8 +97,11 @@ def test_clock_random_and_compatibility_names_are_defaults(db, sql, name):
     """Each default is blockable and disappears with use_default_functions=false."""
     db.execute("CREATE TABLE t AS SELECT 1 x")
     db.execute(sql).fetchall()
+    if name in {"has_table_privilege", "pg_typeof"}:
+        assert validate(db, sql)["code"] == "forbidden"
+        return  # Reviewed system.pg_catalog implementations are not system.main defaults.
     assert validate(db, sql)["allowed"], (name, validate(db, sql))
-    for options in [{"blocked_functions": [name]}, {"use_default_functions": False}]:
+    for options in [{"blocked_functions": function_rules(name)}, {"use_default_functions": False}]:
         result = validate(db, sql, options)
         assert result["code"] == "forbidden", (name, options, result)
         assert any(v["rule"] == "function" and v["function_name"] == name for v in result["violations"]), result

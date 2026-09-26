@@ -1,0 +1,872 @@
+[
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/icu/icu_extension.cpp",
+    "sha256": "414574aaaefe9a1b2fc9290f35a2b1958db607f6e2753efa30e587a9758adb91",
+    "pattern": "GetCollations|RegisterFunction\\(GetICUCollateFunction|FUNCTION_PREFIX",
+    "matches": 10,
+    "excerpts": [
+      {
+        "line": 94,
+        "text": "\t//! The prefix of the collation functions, and of the ones that are kept for backwards"
+      },
+      {
+        "line": 95,
+        "text": "\t//! compatibility, which return the sort key in hexadecimal instead of as a blob"
+      },
+      {
+        "line": 96,
+        "text": "\tstatic const string FUNCTION_PREFIX;"
+      },
+      {
+        "line": 97,
+        "text": "\tstatic const string HEX_FUNCTION_PREFIX;"
+      },
+      {
+        "line": 98,
+        "text": ""
+      },
+      {
+        "line": 99,
+        "text": "\tstatic string EncodeFunctionName(const string &collation) {"
+      },
+      {
+        "line": 100,
+        "text": "\t\treturn FUNCTION_PREFIX + collation;"
+      },
+      {
+        "line": 101,
+        "text": "\t}"
+      },
+      {
+        "line": 102,
+        "text": "\tstatic string EncodeHexFunctionName(const string &collation) {"
+      },
+      {
+        "line": 103,
+        "text": "\t\treturn HEX_FUNCTION_PREFIX + collation;"
+      },
+      {
+        "line": 104,
+        "text": "\t}"
+      },
+      {
+        "line": 105,
+        "text": "\tstatic string DecodeFunctionName(const Identifier &fname) {"
+      },
+      {
+        "line": 106,
+        "text": "\t\tauto &name = fname.GetIdentifierName();"
+      },
+      {
+        "line": 107,
+        "text": "\t\tauto prefix = StringUtil::StartsWith(name, HEX_FUNCTION_PREFIX) ? HEX_FUNCTION_PREFIX : FUNCTION_PREFIX;"
+      },
+      {
+        "line": 108,
+        "text": "\t\treturn name.substr(prefix.size());"
+      },
+      {
+        "line": 109,
+        "text": "\t}"
+      },
+      {
+        "line": 110,
+        "text": "};"
+      },
+      {
+        "line": 111,
+        "text": ""
+      },
+      {
+        "line": 112,
+        "text": "const string IcuBindData::FUNCTION_PREFIX = \"collate_\";"
+      },
+      {
+        "line": 113,
+        "text": "const string IcuBindData::HEX_FUNCTION_PREFIX = \"icu_collate_\";"
+      },
+      {
+        "line": 114,
+        "text": ""
+      },
+      {
+        "line": 115,
+        "text": "//! The two hexadecimal characters of every byte value"
+      },
+      {
+        "line": 116,
+        "text": "static const uint16_t &HexDigits(uint8_t byte) {"
+      },
+      {
+        "line": 117,
+        "text": "\tstatic const auto HEX_PAIRS = []() {"
+      },
+      {
+        "line": 118,
+        "text": "\t\tconst char digits[] = \"0123456789ABCDEF\";"
+      },
+      {
+        "line": 119,
+        "text": "\t\tarray<uint16_t, 256> pairs {};"
+      },
+      {
+        "line": 120,
+        "text": "\t\tfor (idx_t value = 0; value < 256; value++) {"
+      },
+      {
+        "line": 411,
+        "text": "static void LoadInternal(ExtensionLoader &loader) {"
+      },
+      {
+        "line": 412,
+        "text": "\t// iterate over all the collations"
+      },
+      {
+        "line": 413,
+        "text": "\tfor (auto &collation : collation::Collator::GetCollations()) {"
+      },
+      {
+        "line": 414,
+        "text": "\t\tCreateCollationInfo info(Identifier(collation), GetCollateFunction(collation, \"\"), false, false);"
+      },
+      {
+        "line": 415,
+        "text": "\t\tloader.RegisterCollation(info);"
+      },
+      {
+        "line": 416,
+        "text": "\t\tloader.RegisterFunction(GetICUCollateFunction(collation, \"\"));"
+      },
+      {
+        "line": 417,
+        "text": "\t}"
+      },
+      {
+        "line": 418,
+        "text": ""
+      },
+      {
+        "line": 419,
+        "text": "\t/**"
+      },
+      {
+        "line": 420,
+        "text": "\t * This collation function is inpired on the Postgres \"ignore_accents\":"
+      },
+      {
+        "line": 421,
+        "text": "\t * See: https://www.postgresql.org/docs/current/collation.html"
+      },
+      {
+        "line": 422,
+        "text": "\t * CREATE COLLATION ignore_accents (provider = icu, locale = 'und-u-ks-level1-kc-true', deterministic = false);"
+      },
+      {
+        "line": 423,
+        "text": "\t *"
+      },
+      {
+        "line": 429,
+        "text": "\tCreateCollationInfo info(\"icu_noaccent\", GetCollateFunction(\"noaccent\", \"und-u-ks-level1-kc-true\"), false, false);"
+      },
+      {
+        "line": 430,
+        "text": "\tloader.RegisterCollation(info);"
+      },
+      {
+        "line": 431,
+        "text": "\tloader.RegisterFunction(GetICUCollateFunction(\"noaccent\", \"und-u-ks-level1-kc-true\"));"
+      },
+      {
+        "line": 432,
+        "text": ""
+      },
+      {
+        "line": 433,
+        "text": "\tScalarFunction sort_key(\"icu_sort_key\", {}, LogicalType::VARCHAR, ICUCollateFunction<true>, ICUSortKeyBind);"
+      },
+      {
+        "line": 434,
+        "text": "\tsort_key.GetSignature().AddParameter(\"str\", LogicalType::VARCHAR).AddParameter(\"collator\", LogicalType::VARCHAR);"
+      },
+      {
+        "line": 435,
+        "text": "\tsort_key.SetInitStateCallback(CollatorLocalState::Init);"
+      },
+      {
+        "line": 436,
+        "text": "\tloader.RegisterFunction(sort_key);"
+      },
+      {
+        "line": 437,
+        "text": ""
+      },
+      {
+        "line": 438,
+        "text": "\t// Time Zones"
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/icu/collation/collation_collator.cpp",
+    "sha256": "93790f9bd0037934c3cce3b09a6f9adcb7d56823c1507193a8928cbb2df9ab1a",
+    "pattern": "GetCollations",
+    "matches": 1,
+    "excerpts": [
+      {
+        "line": 860,
+        "text": "}"
+      },
+      {
+        "line": 861,
+        "text": ""
+      },
+      {
+        "line": 862,
+        "text": "vector<string> Collator::GetCollations() {"
+      },
+      {
+        "line": 863,
+        "text": "\tvector<string> result;"
+      },
+      {
+        "line": 864,
+        "text": "\tfor (uint32_t i = 0; i < collation_count; i++) {"
+      },
+      {
+        "line": 865,
+        "text": "\t\tresult.emplace_back(collation_infos[i].name);"
+      },
+      {
+        "line": 866,
+        "text": "\t}"
+      },
+      {
+        "line": 867,
+        "text": "\treturn result;"
+      },
+      {
+        "line": 868,
+        "text": "}"
+      },
+      {
+        "line": 869,
+        "text": ""
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/icu/collation/generated/collation_data.cpp",
+    "sha256": "4c7d8973f14fedb2332200a81c732d9ea046286e0124e204bea7fe499a084f11",
+    "pattern": "yue|zh_hk|zh_tw|locale",
+    "matches": 2,
+    "excerpts": [
+      {
+        "line": 31737,
+        "text": "    {\"xh\", 82, 2, false, 0, false, false, false},     {\"yi\", 110, 2, false, 0, false, false, true},"
+      },
+      {
+        "line": 31738,
+        "text": "    {\"yo\", 111, 2, false, 0, false, false, true},     {\"zh\", 112, 2, false, 0, false, false, false},"
+      },
+      {
+        "line": 31739,
+        "text": "    {\"zh_cn\", 112, 2, false, 0, false, false, false}, {\"zh_hk\", 113, 2, false, 0, false, false, false},"
+      },
+      {
+        "line": 31740,
+        "text": "    {\"zh_mo\", 113, 2, false, 0, false, false, false}, {\"zh_sg\", 112, 2, false, 0, false, false, false},"
+      },
+      {
+        "line": 31741,
+        "text": "    {\"zh_tw\", 113, 2, false, 0, false, false, false}, {\"zu\", 82, 2, false, 0, false, false, false},"
+      },
+      {
+        "line": 31742,
+        "text": "};"
+      },
+      {
+        "line": 31743,
+        "text": ""
+      },
+      {
+        "line": 31744,
+        "text": "const uint32_t collation_count = 140;"
+      },
+      {
+        "line": 31745,
+        "text": "const uint32_t variable_top_primary = 0x0BFFFFFF;"
+      },
+      {
+        "line": 31746,
+        "text": ""
+      },
+      {
+        "line": 31747,
+        "text": "} // namespace collation"
+      },
+      {
+        "line": 31748,
+        "text": "} // namespace duckdb"
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/core_functions/scalar/math/functions.json",
+    "sha256": "d49df93693066542d7e75e5ae012e51597843e7d22bda8972e01df2c2e182253",
+    "pattern": "round_even|roundbankers",
+    "matches": 3,
+    "excerpts": [
+      {
+        "line": 238,
+        "text": "    },"
+      },
+      {
+        "line": 239,
+        "text": "    {"
+      },
+      {
+        "line": 240,
+        "text": "        \"name\": \"round_even\","
+      },
+      {
+        "line": 241,
+        "text": "        \"parameters\": \"x,precision\","
+      },
+      {
+        "line": 242,
+        "text": "        \"description\": \"Rounds x to s decimal places, rounding halfway cases to the nearest even digit\","
+      },
+      {
+        "line": 243,
+        "text": "        \"example\": \"round_even(24.5, 0)\","
+      },
+      {
+        "line": 244,
+        "text": "        \"type\": \"scalar_function_set\","
+      },
+      {
+        "line": 245,
+        "text": "        \"aliases\": [\"roundbankers\"]"
+      },
+      {
+        "line": 246,
+        "text": "    },"
+      },
+      {
+        "line": 247,
+        "text": "    {"
+      },
+      {
+        "line": 248,
+        "text": "        \"name\": \"sign\","
+      },
+      {
+        "line": 249,
+        "text": "        \"parameters\": \"x\","
+      },
+      {
+        "line": 250,
+        "text": "        \"description\": \"Returns the sign of x as -1, 0 or 1\","
+      },
+      {
+        "line": 251,
+        "text": "        \"example\": \"sign(-349)\","
+      },
+      {
+        "line": 252,
+        "text": "        \"type\": \"scalar_function_set\""
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/catalog/default/default_functions.cpp",
+    "sha256": "e489b74dbf291b0262efee8510b9092aa65d80e4542c6ad559c5bfa058d360b7",
+    "pattern": "round_even|roundbankers",
+    "matches": 0,
+    "excerpts": []
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/planner/binder/expression/bind_unnest_expression.cpp",
+    "sha256": "60490269e0229c7516ba848e20af345b6b99e058193d88b40feb115989adfe96",
+    "pattern": "BindUnnest|BoundUnnest",
+    "matches": 9,
+    "excerpts": [
+      {
+        "line": 54,
+        "text": "void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {"
+      },
+      {
+        "line": 55,
+        "text": "\t// Extract the unnests and check if any match the column index."
+      },
+      {
+        "line": 56,
+        "text": "\tauto check_unnests = [&](const BoundUnnestMap &unnests) {"
+      },
+      {
+        "line": 57,
+        "text": "\t\tfor (auto &node_pair : unnests) {"
+      },
+      {
+        "line": 58,
+        "text": "\t\t\tauto &unnest_node = node_pair.second;"
+      },
+      {
+        "line": 59,
+        "text": ""
+      },
+      {
+        "line": 60,
+        "text": "\t\t\tif (unnest_node.index == column_binding.table_index) {"
+      },
+      {
+        "line": 61,
+        "text": "\t\t\t\tif (column_binding.column_index < unnest_node.expressions.size()) {"
+      },
+      {
+        "line": 62,
+        "text": "\t\t\t\t\tthrow BinderException(\"UNNEST in lambda expressions is not supported\");"
+      },
+      {
+        "line": 63,
+        "text": "\t\t\t\t}"
+      },
+      {
+        "line": 69,
+        "text": "}"
+      },
+      {
+        "line": 70,
+        "text": ""
+      },
+      {
+        "line": 71,
+        "text": "static void AddUnnestExpression(Binder &binder, BoundUnnestMap &unnests, idx_t current_level,"
+      },
+      {
+        "line": 72,
+        "text": "                                unique_ptr<BoundUnnestExpression> result, TableIndex &unnest_table_index,"
+      },
+      {
+        "line": 73,
+        "text": "                                ProjectionIndex &unnest_column_index) {"
+      },
+      {
+        "line": 74,
+        "text": "\tauto entry = unnests.find(current_level);"
+      },
+      {
+        "line": 75,
+        "text": "\tif (entry == unnests.end()) {"
+      },
+      {
+        "line": 76,
+        "text": "\t\tBoundUnnestNode unnest_node;"
+      },
+      {
+        "line": 77,
+        "text": "\t\tunnest_node.index = binder.GenerateTableIndex();"
+      },
+      {
+        "line": 78,
+        "text": "\t\tunnest_table_index = unnest_node.index;"
+      },
+      {
+        "line": 79,
+        "text": "\t\tunnest_column_index = ColumnBinding::PushExpression(unnest_node.expressions, std::move(result));"
+      },
+      {
+        "line": 80,
+        "text": "\t\tunnests.insert(make_pair(current_level, std::move(unnest_node)));"
+      },
+      {
+        "line": 81,
+        "text": "\t} else {"
+      },
+      {
+        "line": 82,
+        "text": "\t\tunnest_table_index = entry->second.index;"
+      },
+      {
+        "line": 83,
+        "text": "\t\tunnest_column_index = ColumnBinding::PushExpression(entry->second.expressions, std::move(result));"
+      },
+      {
+        "line": 102,
+        "text": "class UnnestBinder {"
+      },
+      {
+        "line": 103,
+        "text": "public:"
+      },
+      {
+        "line": 104,
+        "text": "\tUnnestBinder(ExpressionBinder &expression_binder, Binder &binder, ClientContext &context, BoundUnnestMap &unnests,"
+      },
+      {
+        "line": 105,
+        "text": "\t             idx_t &unnest_level, StructUnnestHandling struct_handling, string struct_error)"
+      },
+      {
+        "line": 106,
+        "text": "\t    : expression_binder(expression_binder), binder(binder), context(context), unnests(unnests),"
+      },
+      {
+        "line": 107,
+        "text": "\t      unnest_level(unnest_level), struct_handling(struct_handling), struct_error(std::move(struct_error)) {"
+      },
+      {
+        "line": 108,
+        "text": "\t}"
+      },
+      {
+        "line": 109,
+        "text": ""
+      },
+      {
+        "line": 110,
+        "text": "\tBindResult Bind(FunctionExpression &function, idx_t depth, bool root_expression);"
+      },
+      {
+        "line": 111,
+        "text": ""
+      },
+      {
+        "line": 114,
+        "text": "\tBinder &binder;"
+      },
+      {
+        "line": 115,
+        "text": "\tClientContext &context;"
+      },
+      {
+        "line": 116,
+        "text": "\tBoundUnnestMap &unnests;"
+      },
+      {
+        "line": 117,
+        "text": "\tidx_t &unnest_level;"
+      },
+      {
+        "line": 118,
+        "text": "\tStructUnnestHandling struct_handling;"
+      },
+      {
+        "line": 119,
+        "text": "\tstring struct_error;"
+      },
+      {
+        "line": 120,
+        "text": "};"
+      },
+      {
+        "line": 121,
+        "text": ""
+      },
+      {
+        "line": 122,
+        "text": "BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool root_expression) {"
+      },
+      {
+        "line": 123,
+        "text": "\t// bind the children of the function expression"
+      },
+      {
+        "line": 256,
+        "text": "\t\t}"
+      },
+      {
+        "line": 257,
+        "text": ""
+      },
+      {
+        "line": 258,
+        "text": "\t\tauto result = make_uniq<BoundUnnestExpression>(return_type);"
+      },
+      {
+        "line": 259,
+        "text": "\t\tresult->ChildMutable() = std::move(unnest_expr);"
+      },
+      {
+        "line": 260,
+        "text": "\t\tIdentifier alias = function.GetAlias().empty() ? Identifier(result->ToString()) : function.GetAlias();"
+      },
+      {
+        "line": 261,
+        "text": ""
+      },
+      {
+        "line": 262,
+        "text": "\t\tauto current_level = outer_unnest_level + list_unnests - current_depth - 1;"
+      },
+      {
+        "line": 263,
+        "text": "\t\tTableIndex unnest_table_index;"
+      },
+      {
+        "line": 264,
+        "text": "\t\tProjectionIndex unnest_column_index;"
+      },
+      {
+        "line": 265,
+        "text": "\t\tAddUnnestExpression(binder, unnests, current_level, std::move(result), unnest_table_index, unnest_column_index);"
+      },
+      {
+        "line": 313,
+        "text": "}"
+      },
+      {
+        "line": 314,
+        "text": ""
+      },
+      {
+        "line": 315,
+        "text": "BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {"
+      },
+      {
+        "line": 316,
+        "text": "\tif (inside_window || inside_aggregate || inside_try) {"
+      },
+      {
+        "line": 317,
+        "text": "\t\treturn BindResult(BinderException(function, UnsupportedUnnestMessage()));"
+      },
+      {
+        "line": 318,
+        "text": "\t}"
+      },
+      {
+        "line": 319,
+        "text": "\tUnnestBinder unnest_binder(*this, binder, context, node.unnests.SelectList(), unnest_level,"
+      },
+      {
+        "line": 320,
+        "text": "\t                           StructUnnestHandling::ALLOW_ROOT, \"UNNEST of struct cannot be used in GROUP BY clause\");"
+      },
+      {
+        "line": 321,
+        "text": "\treturn unnest_binder.Bind(function, depth, root_expression);"
+      },
+      {
+        "line": 322,
+        "text": "}"
+      },
+      {
+        "line": 323,
+        "text": ""
+      },
+      {
+        "line": 324,
+        "text": "BindResult GroupBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {"
+      },
+      {
+        "line": 325,
+        "text": "\tif (inside_try) {"
+      },
+      {
+        "line": 326,
+        "text": "\t\treturn BindResult(BinderException(function, UnsupportedUnnestMessage()));"
+      },
+      {
+        "line": 327,
+        "text": "\t}"
+      },
+      {
+        "line": 328,
+        "text": "\tUnnestBinder unnest_binder(*this, binder, context, node.unnests.GroupBy(), unnest_level,"
+      },
+      {
+        "line": 329,
+        "text": "\t                           StructUnnestHandling::REJECT, \"UNNEST of struct cannot be used in GROUP BY clause\");"
+      },
+      {
+        "line": 330,
+        "text": "\treturn unnest_binder.Bind(function, depth, root_expression);"
+      },
+      {
+        "line": 331,
+        "text": "}"
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0005-remove-geojson-functions.patch",
+    "sha256": "be21ab58ff9642205eba34813aafdc8f85d5063f5816d3ca9adfb6fbdeeb7688",
+    "pattern": "ST_",
+    "matches": 17,
+    "excerpts": [
+      {
+        "line": 3,
+        "text": "--- a/src/spatial/modules/main/spatial_functions_scalar.cpp"
+      },
+      {
+        "line": 4,
+        "text": "+++ b/src/spatial/modules/main/spatial_functions_scalar.cpp"
+      },
+      {
+        "line": 5,
+        "text": "@@ -9481,7 +9481,7 @@ bool ST_DWithinHelper::TryGetConstDistance(const unique_ptr<FunctionData> &bind_"
+      },
+      {
+        "line": 6,
+        "text": " void RegisterSpatialScalarFunctions(ExtensionLoader &loader) {"
+      },
+      {
+        "line": 7,
+        "text": " \tST_Affine::Register(loader);"
+      },
+      {
+        "line": 8,
+        "text": " \tST_Area::Register(loader);"
+      },
+      {
+        "line": 9,
+        "text": "-\tST_AsGeoJSON::Register(loader);"
+      },
+      {
+        "line": 10,
+        "text": "+\t// ST_AsGeoJSON::Register(loader);"
+      },
+      {
+        "line": 11,
+        "text": " \tST_AsText::Register(loader);"
+      },
+      {
+        "line": 12,
+        "text": " \t// ST_AsWKB::Register(loader);"
+      },
+      {
+        "line": 13,
+        "text": " \tST_AsHEXWKB::Register(loader);"
+      },
+      {
+        "line": 14,
+        "text": "@@ -9508,7 +9508,7 @@ void RegisterSpatialScalarFunctions(ExtensionLoader &loader) {"
+      },
+      {
+        "line": 15,
+        "text": " \tST_Force4D::Register(loader);"
+      },
+      {
+        "line": 16,
+        "text": " \tST_GeometryType::Register(loader);"
+      },
+      {
+        "line": 17,
+        "text": " \tST_GeomFromHEXWKB::Register(loader);"
+      },
+      {
+        "line": 18,
+        "text": "-\tST_GeomFromGeoJSON::Register(loader);"
+      },
+      {
+        "line": 19,
+        "text": "+\t// ST_GeomFromGeoJSON::Register(loader);"
+      },
+      {
+        "line": 20,
+        "text": " \tST_GeomFromText::Register(loader);"
+      },
+      {
+        "line": 21,
+        "text": " \tST_GeomFromWKB::Register(loader);"
+      },
+      {
+        "line": 22,
+        "text": " \tST_HasZ::Register(loader);"
+      },
+      {
+        "line": 23,
+        "text": "diff --git a/test/sql/geometry/st_asgeojson.test b/test/sql/geometry/st_asgeojson.test"
+      },
+      {
+        "line": 24,
+        "text": "index 3f486ab..20ac4e2 100644"
+      },
+      {
+        "line": 25,
+        "text": "--- a/test/sql/geometry/st_asgeojson.test"
+      },
+      {
+        "line": 26,
+        "text": "+++ b/test/sql/geometry/st_asgeojson.test"
+      },
+      {
+        "line": 27,
+        "text": "@@ -3,6 +3,8 @@"
+      },
+      {
+        "line": 28,
+        "text": " "
+      },
+      {
+        "line": 29,
+        "text": " require spatial"
+      },
+      {
+        "line": 34,
+        "text": " statement ok"
+      },
+      {
+        "line": 35,
+        "text": " CREATE TABLE types (geom GEOMETRY);"
+      },
+      {
+        "line": 36,
+        "text": "@@ -114,5 +116,5 @@ SELECT ST_AsGeoJSON('LINESTRING ZM (1 2 3 4, 4 5 6 7)');"
+      },
+      {
+        "line": 37,
+        "text": " statement error"
+      },
+      {
+        "line": 38,
+        "text": " select st_geomfromgeojson('null');"
+      },
+      {
+        "line": 39,
+        "text": " ----"
+      },
+      {
+        "line": 40,
+        "text": "-Could not parse GeoJSON input: Not a valid JSON object, (null)"
+      },
+      {
+        "line": 41,
+        "text": "+Invalid GeoJSON: geometry must be an object"
+      },
+      {
+        "line": 42,
+        "text": " "
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb-spatial/blob/686950e980a0629c5ffbc788b498681e2b06e75e/src/spatial/modules/geos/geos_module.cpp",
+    "sha256": "881c7b8f5cf51ad4828684c1cb11ccac919e7ff8c85c47253cb779b961757ccd",
+    "pattern": "\\bST_Snap\\b",
+    "matches": 0,
+    "excerpts": []
+  },
+  {
+    "url": "https://github.com/duckdb/duckdb-spatial/blob/eb1e57c9d92c0f3f76eb03eaa52c315090f328cc/src/spatial/modules/geos/geos_module.cpp",
+    "sha256": "df3a43bc244cd895b6597a578d3d1daef09ff0da777f397f24c4401308afcbd3",
+    "pattern": "\\bST_Snap\\b",
+    "matches": 3,
+    "excerpts": [
+      {
+        "line": 2244,
+        "text": "struct ST_Snap {"
+      },
+      {
+        "line": 2258,
+        "text": "\t\tFunctionBuilder::RegisterScalar(loader, \"ST_Snap\", [](ScalarFunctionBuilder &func) {"
+      },
+      {
+        "line": 3378,
+        "text": "\tST_Snap::Register(loader);"
+      }
+    ]
+  }
+]

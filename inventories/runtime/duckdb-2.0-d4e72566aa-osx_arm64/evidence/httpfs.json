@@ -1,0 +1,43 @@
+{
+  "inventory": "httpfs",
+  "extension": "httpfs",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+      "compressed_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+      "decompressed_sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+      "compressed_bytes": 6573997,
+      "decompressed_bytes": 19246078,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "0507d4ae49",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/httpfs.cmake",
+    "descriptor_sha256": "81f506bb514fdbeda44ffc9433a8bd83251b9a8e66929a2cff0ecf2b336583f6",
+    "descriptor_text": "duckdb_extension_load(httpfs\n    LOAD_TESTS\n    APPLY_PATCHES\n    GIT_URL https://github.com/duckdb/duckdb-httpfs\n    GIT_TAG 0507d4ae4914ef30be5952bda0a547aa2b7ca981\n)\n",
+    "repository": "https://github.com/duckdb/duckdb-httpfs",
+    "revision": "0507d4ae4914ef30be5952bda0a547aa2b7ca981",
+    "source_url": "https://github.com/duckdb/duckdb-httpfs/tree/0507d4ae4914ef30be5952bda0a547aa2b7ca981",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/httpfs/0001-curl-share-lock-thread-safety.patch",
+        "sha256": "5983dab9e2dc4d9b076a8c9835936815f6de3ba3efea452ab4e9a7debbf009de"
+      }
+    ]
+  }
+}

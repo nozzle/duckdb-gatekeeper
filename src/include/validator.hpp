@@ -30,9 +30,19 @@ struct Table {
 		return std::tie(catalog, schema_path, table) < std::tie(other.catalog, other.schema_path, other.table);
 	}
 };
+struct FunctionGrant {
+	std::string catalog;
+	NamePath schema_path;
+	std::string name, type;
+	bool operator<(const FunctionGrant &other) const {
+		return std::tie(catalog, schema_path, name, type) <
+		       std::tie(other.catalog, other.schema_path, other.name, other.type);
+	}
+};
 struct Policy {
 	bool defaults = true, tables = false;
-	Names allowed_functions, blocked_functions;
+	std::set<FunctionGrant> allowed_functions;
+	std::set<FunctionGrant> blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
 };
 // The two layers every authorization consults: the global ceiling the host set, and the request layer, which is
@@ -77,15 +87,17 @@ struct Violation {
 	NamePath schema_path;
 	std::string table, function_name;
 	int64_t position = -1;
+	std::string function_type;
 	Violation(std::string rule, std::string message, std::string catalog = {}, NamePath schema_path = {},
-	          std::string table = {}, std::string function_name = {}, int64_t position = -1)
+	          std::string table = {}, std::string function_name = {}, int64_t position = -1,
+	          std::string function_type = {})
 	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)),
 	      schema_path(std::move(schema_path)), table(std::move(table)), function_name(std::move(function_name)),
-	      position(position) {}
+	      position(position), function_type(std::move(function_type)) {}
 	bool operator<(const Violation &other) const {
-		return std::tie(rule, message, catalog, schema_path, table, function_name, position) <
+		return std::tie(rule, message, catalog, schema_path, table, function_name, position, function_type) <
 		       std::tie(other.rule, other.message, other.catalog, other.schema_path, other.table, other.function_name,
-		                other.position);
+		                other.position, other.function_type);
 	}
 };
 struct Identity {
@@ -97,6 +109,9 @@ struct Identity {
 		       std::tie(other.catalog, other.schema_path, other.name, other.type);
 	}
 };
+// Shared namespace matcher. Function leaves are always exact, including '*'.
+bool NamespaceMatches(const std::string &catalog, const NamePath &schema_path, const std::string &actual_catalog,
+                      const NamePath &actual_schema_path, bool exact_schema = false);
 struct Result {
 	bool allowed = false;
 	std::string code, error_type, error_message;
@@ -129,17 +144,25 @@ struct BindingPolicy {
 	std::map<std::string, int64_t> caller_parameters;
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
+	// Fixed names introduced by a reviewed default macro must never select a host shadow.
+	Names system_functions;
 	Names literal_constructors;
 	Names runtime_table_functions;
 	// Caller-written list_aggregate/aggregate family calls: the aggregate they select by name is caller-chosen
 	// text, so the bound implementation must pass the allowlists like any other caller-written function.
 	Names caller_dispatchers;
-	// Every function name the caller wrote, canonical: the names the text check decided, kept for the bind and
+	Names dispatcher_targets;
+	std::map<std::string, Names> dispatcher_targets_by_name;
+	Names unsupported_dispatchers;
+	// Builtin argument contracts are enforced only after resolving the system implementation.
+	Names unsupported_quantiles;
+	// Every function name the caller wrote, case-folded but never alias-canonicalized: kept for the bind and
 	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
 	Names caller_functions;
 	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
 	// though it never appears in the text.
 	bool caller_collates = false;
+	Names caller_collation_names;
 	// Caller-written table references as identifier components, case-folded. A
 	// replacement scan for one of them substitutes a reader the caller chose, so that reader must pass the
 	// allowlists like a caller-written table function. A replacement reached only through a trusted view or
@@ -160,13 +183,25 @@ bool NamesObject(const WrittenNames &written, const std::string &catalog, const 
 // Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
 // Everything else in the plan came from a trusted definition.
 struct Provenance {
-	// Canonical function names the caller's binders retrieved from the catalog.
+	// Exact scalar capabilities carried by the caller's system collation entries (1.5 has no stamps).
+	Names collation_functions;
+	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
+	std::set<Identity> function_entries;
+	// Source-reviewed implementation edges from exact entries observed by this bind. Preserve origin
+	// separately: a trusted body's substitution is not a caller capability just because its leaf changed.
+	std::set<Identity> caller_implementations, trusted_implementations;
+	void RecordFunction(const Identity &identity, bool caller, int engine_major);
+	Names replacement_functions;
+	Names authorized_dispatchers;
+	// Case-folded raw function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
-	// Canonical function names the default macros the caller's text expands to introduce (list_count names
+	// Case-folded raw function names the default macros the caller's text expands to introduce (list_count names
 	// list_aggr without the caller writing it). With the text's own names, these are the names the caller can
 	// produce; a trusted scalar-macro body sharing one of them does not make it the body's.
 	Names caller_expansions;
-	// Canonical function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
+	// Literal aggregate targets introduced by caller-attributable default macros.
+	Names caller_expansion_targets;
+	// Case-folded raw function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
 	// so its names are recognized by name; a name the caller can also produce is checked as the caller's,
 	// query-wide.
 	Names trusted_names;

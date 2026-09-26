@@ -28,9 +28,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		if (data[0] & 32)
 			policy.allowed_tables.insert({"", {"main"}, "t"});
 		if (data[0] & 64)
-			policy.blocked_functions = {"md5", "read_csv"};
+			policy.blocked_functions = {{"*", {"*"}, "md5", ""}, {"*", {"*"}, "read_csv", ""}};
 		if (data[0] & 128)
-			policy.allowed_functions = {"md5", "range", "query_table"};
+			policy.allowed_functions = {{"system", {"main"}, "md5", "scalar"},
+			                            {"system", {"main"}, "range", ""},
+			                            {"system", {"main"}, "query_table", "table"}};
 		gatekeeper::Limits limits;
 		limits.nodes = data[1] ? data[1] : gatekeeper::MAX_AST_NODES;
 		limits.depth = data[2] ? data[2] : gatekeeper::MAX_AST_DEPTH;
@@ -41,7 +43,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		auto result = gatekeeper::Validate(ast, policy, &binding, nullptr, limits);
 		gatekeeper::Policy ceiling;
 		ceiling.defaults = data[3] & 1;
-		ceiling.blocked_functions = {"abs", "md5"};
+		ceiling.blocked_functions = {{"*", {"*"}, "abs", ""}, {"*", {"*"}, "md5", ""}};
 		auto layered = gatekeeper::Validate(ast, policy, nullptr, &ceiling, limits);
 		if (layered.allowed &&
 		    (!result.allowed || !gatekeeper::Validate(ast, ceiling, nullptr, nullptr, limits).allowed))

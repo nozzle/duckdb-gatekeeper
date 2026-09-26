@@ -8,7 +8,7 @@ DuckDB itself refuses to run anything the policy denies (`CALL gatekeeper_enforc
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
-| **Function ACL** | Only the functions you allow, starting from 953 reviewed defaults, with exact-name allow and block lists. |
+| **Function ACL** | Only the functions you allow, starting from 919 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
 | **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -146,9 +146,9 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | VARCHAR[] | `[]` | Leaf names, ASCII case-folded. `'*'` here is the multiplication operator, not a wildcard. |
-| `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 919 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Exact leaf; `'*'` names multiplication. Defaults grant reviewed `system.main` identities only. See [matching and migration](docs/qualified-functions.md). |
+| `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
 segments, so `SELECT 1;`, `SELECT 1;;`, and `;SELECT 1` are accepted. Empty,
@@ -157,7 +157,7 @@ return `forbidden` with violation rule `limit`. The statement cap is fixed inter
 like the AST caps.
 
 ```sql
-SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']);
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]);
 ```
 
 | allowed |
@@ -165,7 +165,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functio
 | false |
 
 ```sql
-SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := ['+']);
+SELECT allowed FROM gatekeeper_validate('SELECT 1+2', use_default_functions := false, allowed_functions := [{catalog:'system', schema_path:['main'], name:'+', type:'scalar'}]);
 ```
 
 | allowed |
@@ -188,7 +188,7 @@ when a typed option is empty or NULL.
   "version": 2,
   "options": {
     "allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-    "blocked_functions": ["md5"]
+    "blocked_functions": [{"catalog":"system", "schema_path":["main"], "name":"md5", "type":"scalar"}]
   }
 }
 ```
@@ -211,7 +211,8 @@ The decoder routes through the same typed option validation and policy applicati
 - `gatekeeper_validate(sql, json := ...)` applies request options under the current
   global policy; omitted options inherit that policy and requests cannot widen it.
 - Omitted `allowed_tables` differs from `"allowed_tables": []`, which denies all tables
-  and views. Omitted or JSON `null` catalog matches any catalog; other NULL values are
+  and views. Omitted or JSON `null` catalog matches any catalog; omitted or JSON `null`
+  function `type` matches all supported kinds at that identity. Other NULL values are
   invalid. Names must be nonempty and NUL-free, just as in typed options.
 - `use_default_functions: true` uses this installation's reviewed defaults; it does not
   freeze those defaults across Gatekeeper releases.
@@ -219,7 +220,7 @@ The decoder routes through the same typed option validation and policy applicati
 ```sql
 SELECT allowed FROM gatekeeper_validate(
     'SELECT md5(''hello'')',
-    json := '{"version": 2, "options": {"blocked_functions": ["md5"]}}'
+    json := '{"version": 2, "options": {"blocked_functions": [{"catalog":"system", "schema_path":["main"], "name":"md5", "type":"scalar"}]}}'
 );
 ```
 
@@ -247,7 +248,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -257,6 +258,15 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 
 Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 `replacement_scan`, `bind_time_expression`, `statement`, `limit`, `unsupported_structure`.
+
+For a known function identity, `catalog`, `schema_path`, `function_name`, and `function_type`
+identify the denied capability, using the same kinds as `functions[].type`. For example,
+`system.main.range` can be `scalar` or `table`; its name alone does not distinguish them.
+`function_type = ''` when the kind is unresolved or the violation is not about a function.
+Pre-resolution refusals do not infer a kind from the written call's syntax. Denied identities
+remain in `violations` even though the `functions` evidence list is empty on failure.
+The same shape is returned in `duckdb_logs_parsed('Gatekeeper')` for validation, enforced,
+and log-only decisions.
 
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
@@ -292,13 +302,17 @@ FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [])
 
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
-       violations[1].message AS message, violations[1].function_name AS function_name
+       violations[1].message AS message, violations[1].function_name AS function_name,
+       violations[1].function_type AS function_type
 FROM gatekeeper_validate('SELECT md5(''x''), current_setting(''threads'')');
 ```
 
-| allowed | code | rule | message | function_name |
-| --- | --- | --- | --- | --- |
-| false | forbidden | function | function is not allowed: current_setting | current_setting |
+| allowed | code | rule | message | function_name | function_type |
+| --- | --- | --- | --- | --- | --- |
+| false | forbidden | function | function is not allowed: current_setting | current_setting | '' |
+
+This call is refused before resolution because no function identity with that name is eligible;
+its kind is therefore empty.
 
 **Engine error:** the code identifies the phase and `violations` is empty. This
 example displays the first line of DuckDB's error message, omitting suggestions:
@@ -409,7 +423,9 @@ flowchart LR
 ```
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
-  `FROM read_parquet(...)`) all use the same policy, by leaf name.
+  `FROM read_parquet(...)`) all use the same qualified identity policy for grants and blocks.
+  Omitting a block's `type` covers every supported function kind within its namespace pattern,
+  not unrelated functions with the same leaf name in other namespaces.
 - Trusted **views, macros, and attached tables** are opaque to function policy. What
   their definitions introduce is theirs, not the caller's: exempt from the allowlist,
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
@@ -431,12 +447,29 @@ caller-written `list_sum`, `list_aggr` behind it. These implementations are incl
 successful function dependency lists, as are the ones trusted definitions introduce.
 When the caller writes a name-selected dispatcher (`list_aggregate`, `list_aggr`,
 `aggregate`, `array_aggregate`, `array_aggr`), the aggregate it names is caller-chosen
-text and must also be allowed in both layers, not merely unblocked.
+text and must also be allowed in both layers, not merely unblocked. System dispatchers require
+unqualified positional calls with literal targets; named and dotted/method calls refuse after resolution.
+
+Source-backed binder substitutions retain their origin: collated `min`/`max` can bind
+`arg_min`/`arg_max`, `date_part`/`datepart` can bind `epoch`/`julian` on 1.5 or any constant
+unary date part on 2.0 (such as `year`), and `quantile` can bind
+`quantile_disc`. Caller-selected implementations obey blocks and, with defaults disabled,
+need their own qualified grants as well as the source function's. These substitutions are
+not grant aliases. See [qualified-function feasibility](docs/qualified-functions.md#binder-substitutions-and-specialization)
+for provenance and timing limits.
+
+Native scalar/aggregate replacements on 2.0 retain caller origin through the original
+definition's qualified identity, even across namespace changes. On 1.5, caller non-system
+scalar bind/extended-bind callbacks and aggregate bind callbacks are conservatively refused
+before invocation because that provenance is unavailable. Scalar expression-replacement
+callbacks are refused on caller non-system routes on both engines. These restrictions cover
+every overload; a lambda-type callback alone is not refused. Ordinary native functions,
+casts, and callbacks used only inside trusted definitions remain usable.
 
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
 > `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
-> policy: `allowed_functions := ['current_schema']`. The clock (`current_date`, `now()`),
+> policy: `allowed_functions := [{catalog:'system', schema_path:['main'], name:'current_schema'}]`. The clock (`current_date`, `now()`),
 > the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
 > compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
 > nothing about the host beyond the time and its `TimeZone`/`Calendar`, and `setseed` touches only
@@ -500,7 +533,7 @@ flowchart TB
 ```sql
 CALL gatekeeper_configure(
     allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': '*'}],
-    blocked_functions := ['md5']
+    blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]
 );
 ```
 
@@ -524,7 +557,7 @@ SELECT current_setting('gatekeeper_policy').blocked_functions AS blocked_functio
 
 | blocked_functions |
 | --- |
-| [md5] |
+| [{'catalog': 'system', 'schema_path': ['main'], 'name': 'md5', 'type': 'scalar'}] |
 
 A request that tries to widen access does not error; it simply cannot authorize anything
 the global policy denies. Grant capabilities (such as readers) in
@@ -548,7 +581,7 @@ the global policy denies. Grant capabilities (such as readers) in
 Prefer `CALL gatekeeper_configure`: it validates option names, types, and nested identity
 fields before DuckDB's casts. `SET gatekeeper_policy = <STRUCT>` also works but requires
 the **complete canonical STRUCT**: every option plus the `restrict_tables` flag, with no
-NULL at any depth. `SET gatekeeper_policy = {blocked_functions: ['md5']}` fails with
+NULL at any depth. `SET gatekeeper_policy = {blocked_functions: []}` fails with
 `NULL policy field: use_default_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead.
 
@@ -731,8 +764,11 @@ SET lock_configuration = true;
 - **Query pragmas** DuckDB rewrites into `SELECT`s before any extension runs (`PRAGMA version`)
   are checked as that `SELECT`; `gatekeeper_validate` reports the raw text as `unsupported`.
 - **`gatekeeper_validate` on the enforced connection**, when the policy allows it
-  (`allowed_functions := ['gatekeeper_validate']`), for agents that want the decision as a row
-  before they run the statement.
+  (`allowed_functions := [{catalog:'system', schema_path:['main'], name:'gatekeeper_validate', type:'table'}]`).
+  Grant this only when the caller is entitled to the full host-facing result, including
+  engine diagnostics and trusted-dependency evidence. Selecting only `allowed` in an example
+  does not restrict what an agent with this grant can select. Otherwise, have the host call
+  validation and expose an approved projection through its API.
 - **Cost**: up to three binds per statement (a private authorizing bind, the engine's bind, and
   a rebind for prepared executions). Negligible next to model latency, measurable on hot paths
   (see [Benchmarks](#benchmarks)); keep enforced connections for untrusted callers.
@@ -760,7 +796,7 @@ network posture remain host settings; see
 2. **Inspect the AST** for statement type, dynamic SQL, never-bind functions, and
    bind-time expressions the caller wrote.
 3. **Bind** on your connection, using the caller's search path and transaction.
-4. **Authorize** every resolved table and view, plus each caller-requested function,
+4. **Authorize** caller-attributable resolved tables, views, and functions,
    against both the global policy and the request layer.
 5. **Check the plan**: only reviewed read operators, resolved functions and implementations
    chosen during binding pass.
@@ -778,8 +814,10 @@ execute. A failure at any step raises; nothing executes.
 
 ### Things that surprise people
 
-- Objects are authorized by their **resolved** identity. Views and the tables behind them
-  must both pass.
+- Caller-attributable objects are authorized by their **resolved** identity. An allowed view's
+  backing tables are trusted dependencies: they appear in `objects` but need no separate grant
+  unless also attributed to the caller. Attribution is conservative and can apply query-wide
+  when caller names overlap trusted dependencies; see [declared input validation](docs/security.md#declared-input-validation).
 - On DuckDB 2.0, validation of `$name` falling back to a session variable requires
   `getvariable` permission in both policy layers. Enforced connections require that grant for a
   caller-written named parameter colliding with a session variable, **even when an explicit value is
@@ -799,9 +837,16 @@ execute. A failure at any step raises; nothing executes.
   evaluates per row: `FROM t, unnest(list_transform(t.arr, lambda x: x + 1))` is accepted.
 - File-shaped catalog names such as `"data.parquet"` use ordinary table policy when they
   resolve to a catalog object. Unclaimed names return binding errors.
-- Function policies apply by name, so blocking a table function also blocks a scalar
-  function sharing that name. To deny default row generators, add them to
-  `blocked_functions` or set `use_default_functions := false`.
+- Function policies match namespace, exact leaf, and optional kind. A block with `type: 'table'`
+  leaves a same-leaf scalar alone; omitting `type` covers both within the namespace pattern.
+  To deny default row generators, block their qualified table identities or set
+  `use_default_functions := false` and grant only the capabilities needed.
+- System quantile aggregates (including windows) require an unqualified positional call with
+  literal or bindable-parameter fractions/options. Named and dotted calls, including explicitly
+  qualified system calls, are conservatively refused after resolution because the hook cannot
+  map receivers or signature-reordered arguments to an occurrence. Explicitly granted host
+  functions/macros named `quantile` keep their own
+  argument contracts; see [quantile contracts](docs/qualified-functions.md#quantile-argument-contracts).
 
 ## Python
 

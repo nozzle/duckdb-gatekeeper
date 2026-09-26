@@ -48,7 +48,7 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
     assert validate(catalog, "SELECT * FROM pragma_version()")["allowed"]
     assert agent.execute("PRAGMA version").fetchall() == catalog.execute("SELECT * FROM pragma_version()").fetchall()
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-                        "blocked_functions": ["pragma_version"]})
+                        "blocked_functions": [{"schema_path":["*"],"name":"pragma_version"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("PRAGMA version").fetchall()
     for pragma in ["PRAGMA table_info('reporting.orders')", "PRAGMA show_tables", "PRAGMA database_list",
@@ -77,7 +77,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     # aggregate under a PIVOT operator above it. Blocking the LIST implementation denies the text as a whole, and
     # denies the statement at execution when the data selects that shape; the small-data case executes with an
     # aggregate FILTER plan that never binds it (the residual documented in docs/security.md).
-    configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
+    configure(catalog, dict(CATALOG_POLICY, blocked_functions=[{"schema_path":["*"],"name":"list"}]))
     result = validate(catalog, sql)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "list", result
     assert agent.execute(sql).fetchall() == catalog.execute(static).fetchall()
@@ -98,7 +98,7 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
     settle(agent)
     assert sorted(agent.execute(mixed).fetchall()) == sorted(catalog.execute(
         "PIVOT reporting.orders ON tag IN ('a', 'b'), id IN (1, 2) USING count(*)").fetchall())
-    configure(catalog, dict(CATALOG_POLICY, blocked_functions=["list"]))
+    configure(catalog, dict(CATALOG_POLICY, blocked_functions=[{"schema_path":["*"],"name":"list"}]))
     assert validate(catalog, mixed)["violations"][0]["function_name"] == "list"
     configure(catalog, CATALOG_POLICY)
     catalog.execute("RESET GLOBAL pivot_limit")
@@ -218,7 +218,7 @@ def test_latch_is_irreversible_and_unreachable_from_sql(catalog, agent):
                 "CALL gatekeeper_configure()"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
-    assert validate(catalog, "SELECT * FROM gatekeeper_enforce()", {"allowed_functions": ["gatekeeper_enforce"]})["code"] == "forbidden"
+    assert validate(catalog, "SELECT * FROM gatekeeper_enforce()", {"allowed_functions": [{"schema_path": ["*"], "name": "gatekeeper_enforce"}]})["code"] == "forbidden"
     # There is no instance-wide switch for a trusted connection to flip either.
     with pytest.raises(duckdb.CatalogException):
         catalog.execute("SET gatekeeper_enforcement = 'off'")
@@ -238,7 +238,7 @@ def test_host_connection_is_unaffected(catalog, agent):
 
 def test_policy_changes_apply_to_the_next_statement(catalog, agent):
     assert agent.execute("SELECT sum(amount) FROM reporting.orders").fetchone() == (35.75,)
-    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "blocked_functions": ["sum"]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT sum(amount) FROM reporting.orders").fetchall()
     configure(catalog, {"allowed_tables": [{"schema_path": ["secret"], "table": "*"}]})
@@ -249,7 +249,7 @@ def test_policy_changes_apply_to_the_next_statement(catalog, agent):
 
 def test_validate_is_available_when_allowed(catalog, agent):
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-                        "allowed_functions": ["gatekeeper_validate"]})
+                        "allowed_functions": [{"schema_path": ["*"], "name": "gatekeeper_validate"}]})
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM secret.salaries')").fetchall()
     assert rows == [(False, "forbidden")]
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT count(*) FROM reporting.orders')").fetchall()
@@ -300,7 +300,7 @@ def test_blocks_reach_caller_implementations_but_not_view_bodies_on_enforced_con
     # same implementation inside the view is the view's.
     catalog.execute("CREATE VIEW reporting.sums AS SELECT list_sum([amount]) AS s, tag FROM reporting.orders")
     catalog.execute("CREATE VIEW reporting.folded AS SELECT tag FROM reporting.orders WHERE tag COLLATE nocase = 'A'")
-    configure(catalog, {**CATALOG_POLICY, "blocked_functions": ["sum", "lower"]})
+    configure(catalog, {**CATALOG_POLICY, "blocked_functions": [{"schema_path":["*"],"name":n} for n in ["sum", "lower"]]})
     for sql in ["SELECT s FROM reporting.sums", "SELECT tag FROM reporting.folded",
                 "SELECT s FROM reporting.sums WHERE tag = ?"]:
         assert validate(catalog, sql.replace("?", "'a'"))["allowed"], sql
@@ -336,7 +336,7 @@ def test_file_shorthand_inside_trusted_views_is_enforced_like_the_reader_call(ca
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql).fetchall()
     # A block on the reader does not reach into either body, on either path, with or without parameters.
-    configure(catalog, {**CATALOG_POLICY, "blocked_functions": ["parquet_scan"]})
+    configure(catalog, {**CATALOG_POLICY, "blocked_functions": [{"schema_path":["*"],"name":"parquet_scan"}]})
     for view in ["reporting.by_path", "reporting.by_call"]:
         assert validate(catalog, f"SELECT * FROM {view}")["allowed"]
         assert agent.execute(f"SELECT sum(x) FROM {view}").fetchone() == (3,)

@@ -22,6 +22,10 @@ def test_record_shape(db):
     assert columns[:9] == ["context_id", "scope", "connection_id", "transaction_id", "query_id", "thread_id",
                            "timestamp", "type", "log_level"]
     assert columns[9:] == RECORD_COLUMNS
+    validation_type = db.execute("SELECT violations FROM gatekeeper_validate('SELECT 1') LIMIT 0").description[0][1]
+    audit_type = db.execute("SELECT violations FROM duckdb_logs_parsed('Gatekeeper') LIMIT 0").description[0][1]
+    assert validation_type == audit_type
+    assert "function_type VARCHAR" in str(audit_type)
     # Registration is what makes enable_logging('Gatekeeper') accept the name; an unknown type is refused.
     with pytest.raises(duckdb.InvalidInputException, match="Unknown log type"):
         db.execute("CALL enable_logging('Gatekeeper_missing')")
@@ -229,7 +233,7 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT * FROM secret.salaries")
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}, {"schema_path": ["secret"], "table": "*"}],
-                        "blocked_functions": ["md5"]})
+                        "blocked_functions": [{"schema_path":["*"],"name":"md5"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT md5(who) FROM secret.salaries")
     [first, second] = decisions(catalog)
@@ -242,7 +246,7 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
 
 def test_setting_changes_are_recorded(db):
     enable(db)
-    db.execute("SET gatekeeper_policy = {use_default_functions: true, allowed_functions: [], blocked_functions: ['md5'],"
+    db.execute("SET gatekeeper_policy = {use_default_functions: true, allowed_functions: [], blocked_functions: [{catalog:'',schema_path:['*'],name:'md5',type:''}],"
                " allowed_tables: [], blocked_tables: [], restrict_tables: false}")
     db.execute("RESET gatekeeper_policy")
     found = records(db, "event LIKE '%_changed'")
@@ -293,7 +297,7 @@ def test_sandboxed_connection_cannot_reach_the_log(catalog, agent, tmp_path):
                        ("disable_logging", "SELECT * FROM disable_logging()"),
                        ("truncate_duckdb_logs", "SELECT * FROM truncate_duckdb_logs()"),
                        ("write_log", "SELECT write_log('x', log_type := 'Gatekeeper')")]:
-        result = validate(catalog, call, {"allowed_functions": [name]})
+        result = validate(catalog, call, {"allowed_functions": [{"schema_path": ["*"], "name": name}]})
         assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name, (name, result)
     assert catalog.execute("SELECT current_setting('enable_logging')").fetchone() == (True,)
     # Nothing above reached the log: every Gatekeeper-typed entry is one of Gatekeeper's own records.
@@ -306,7 +310,7 @@ def test_write_log_forgery_is_refused_even_when_allowlisted(catalog, agent):
     # Gatekeeper-typed entry that forges a decision or that duckdb_logs_parsed cannot cast, which would
     # break the reader for the host. Never-bind keeps it unreachable whatever the policy says.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "allowed_functions": ["write_log"]})
+    configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}], "allowed_functions": [{"schema_path": ["*"], "name": "write_log"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT write_log('not-a-struct', log_type := 'Gatekeeper', level := 'info')").fetchall()
     assert all(r["event"] in {"decision", "policy_changed"} for r in records(catalog))
@@ -363,7 +367,7 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
     path = tmp_path / "flip.parquet"
     catalog.execute("COPY (SELECT range AS x FROM range(3)) TO ? (FORMAT parquet)", [str(path)])
     tables = [{"schema_path": ["reporting"], "table": "*"}]
-    reader_allowed = {"allowed_tables": tables, "allowed_functions": ["read_parquet"]}
+    reader_allowed = {"allowed_tables": tables, "allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]}
     reader_denied = {"allowed_tables": tables}
     enable(catalog, "debug")
     configure(catalog, reader_denied)  # both policies are installed after logging is on, so both hashes are recorded

@@ -1,0 +1,43 @@
+{
+  "inventory": "aws",
+  "extension": "aws",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+      "compressed_sha256": "2d182fc0de34aa96d208eb92c753d8faf4f9b4ae39086982819864a6c4ebdba3",
+      "decompressed_sha256": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
+      "compressed_bytes": 15458971,
+      "decompressed_bytes": 49232110,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "0a30cdb5ab",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/aws.cmake",
+    "descriptor_sha256": "2132a13513d069cbb5cf52f892f6d38187d4c495041b29cca0f53caca77eb135",
+    "descriptor_text": "if (NOT MINGW AND NOT ${WASM_ENABLED})\n    duckdb_extension_load(aws\n            LOAD_TESTS\n            GIT_URL https://github.com/duckdb/duckdb-aws\n            GIT_TAG 0a30cdb5ab6bf8cc6348487a80a24b465f674989\n            APPLY_PATCHES\n            )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-aws",
+    "revision": "0a30cdb5ab6bf8cc6348487a80a24b465f674989",
+    "source_url": "https://github.com/duckdb/duckdb-aws/tree/0a30cdb5ab6bf8cc6348487a80a24b465f674989",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/aws/0001-single-query-result-type.patch",
+        "sha256": "43a0cb12c44c6ab90acafa935e6ba3122398a2302b1f159265f8d4532e9470ed"
+      }
+    ]
+  }
+}

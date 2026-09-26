@@ -1,0 +1,45 @@
+{
+  "inventory": "lance",
+  "extension": "lance",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/lance.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/lance.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "other_platform_probes": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/linux_amd64/lance.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:35.056934+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/linux_amd64/lance.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:35.346478+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/lance.cmake",
+    "descriptor_sha256": "b8b45da644ef79b5ad73f9635681047bd52536e88983263c37120ece37708232",
+    "descriptor_text": "#if (NOT MINGW AND NOT ${WASM_ENABLED})\n#    duckdb_extension_load(lance\n#            GIT_URL https://github.com/lance-format/lance-duckdb\n#            GIT_TAG 4d9ecabf7dc8f3fd07b4ae4a77ff699018a8f4dc\n#            SUBMODULES extension-ci-tools\n#            LOAD_TESTS\n#            DONT_LINK\n#    )\n#endif()\n",
+    "repository": "https://github.com/lance-format/lance-duckdb",
+    "revision": "4d9ecabf7dc8f3fd07b4ae4a77ff699018a8f4dc",
+    "source_url": "https://github.com/lance-format/lance-duckdb/tree/4d9ecabf7dc8f3fd07b4ae4a77ff699018a8f4dc",
+    "engine_patch_files": []
+  }
+}

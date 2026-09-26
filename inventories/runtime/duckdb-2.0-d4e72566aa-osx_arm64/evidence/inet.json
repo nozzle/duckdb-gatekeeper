@@ -1,0 +1,71 @@
+{
+  "inventory": "inet",
+  "extension": "inet",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/inet.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/inet.duckdb_extension.gz",
+      "compressed_sha256": "123b2adf4d8d5f9106b4f5cb074205e2c6f83c9f93e275568c1573ff496a1784",
+      "decompressed_sha256": "21331ef3e4c8ee7eb432f980c093c482dcb1ab7cb5138d49311873511b93ea8e",
+      "compressed_bytes": 3451458,
+      "decompressed_bytes": 12250238,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "fe7f60bb60",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/inet.cmake",
+    "descriptor_sha256": "0cf61be4afd653b22821c7ab955a92ab6344835858544bb200366456b818f3e5",
+    "descriptor_text": "duckdb_extension_load(inet\n    LOAD_TESTS\n    GIT_URL https://github.com/duckdb/duckdb-inet\n    GIT_TAG fe7f60bb60245197680fb07ecd1629a1dc3d91c8\n    INCLUDE_DIR src/include\n    TEST_DIR test/sql\n    APPLY_PATCHES\n    )\n",
+    "repository": "https://github.com/duckdb/duckdb-inet",
+    "revision": "fe7f60bb60245197680fb07ecd1629a1dc3d91c8",
+    "source_url": "https://github.com/duckdb/duckdb-inet/tree/fe7f60bb60245197680fb07ecd1629a1dc3d91c8",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0001-applied-patch-fix-patch.patch",
+        "sha256": "7fb6771d38ce39c213ecd67b986a701e34b107677600fc04e4a7e669b1b487b3"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0002-wrap-bind-input.patch",
+        "sha256": "d0ac65ae4fc037bdf56b622e5ee38575ba0b26de2512c6b58818d75998613a72"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0003-fix-deprecated-to-unified-format.patch",
+        "sha256": "7488af42d74d72db2d005913510996ba51a67e6e4ec7165455c38b878bcd1e85"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0004-bound-expression-more-private-member-accessors.patch",
+        "sha256": "5cf7010b09229dbfcb90ef7c8d902c0343176db498abf97c13e7dc03bbe2d2a0"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0005-identifier-changes.patch",
+        "sha256": "2bf875627de7bc2dd298c643e83c7a3e23b49be6208d8b3bb0a17eeac5de18ff"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0006-ipaddress-cast-parameters-include.patch",
+        "sha256": "29ed07f50a52fb2d032dd544b0b52cf3e352e25e2b5158ad7c0fe32216bf47fb"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0007-mark-inet-arithmetic-fallible.patch",
+        "sha256": "1e04cec10d9e6775438f58754ab2cead3f7ec3fa6deb3b162d9a56ccb356614e"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/inet/0008-immutable-logical-type.patch",
+        "sha256": "4940b93a944f845fcbe6fbb6f573eee38c5a06c3922b909e10838ffee5c9761c"
+      }
+    ]
+  }
+}

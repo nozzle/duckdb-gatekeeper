@@ -60,7 +60,8 @@ void LocalRoutes(DuckDB &db) {
 	Run(host, "CREATE MACRO activation() AS TABLE SELECT * FROM gatekeeper_enforce()");
 	Run(host, "CREATE MACRO indirect_activation() AS TABLE "
 	          "SELECT * FROM query('SELECT * FROM gatekeeper_enforce()')");
-	Run(host, "CALL gatekeeper_configure(allowed_functions := ['activation', 'indirect_activation'])");
+	Run(host, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'activation'}, "
+	          "{schema_path:['main'],name:'indirect_activation'}])");
 	Connection agent(db);
 	Run(agent, "CALL gatekeeper_enforce()");
 	// Macro binding rethrows the catalog callback's Permission Error with a query location.

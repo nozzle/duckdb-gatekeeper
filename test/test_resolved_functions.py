@@ -22,7 +22,7 @@ def expressions(db):
     ("SELECT session_user", "session_user"), ("SELECT localtime", "current_localtime"),
 ])
 def test_synthesized_functions_obey_blocks_and_allowlist(expressions, sql, name):
-    for options in [{"blocked_functions": [name]}, {"allowed_functions": [name], "blocked_functions": [name]},
+    for options in [{"blocked_functions": [{"schema_path":["*"],"name":name}]}, {"allowed_functions": [{"schema_path": ["*"], "name": name}], "blocked_functions": [{"schema_path":["*"],"name":name}]},
                     {"use_default_functions": False}]:
         result = validate(expressions, sql, options)
         assert result["code"] == "forbidden" and result["error_message"] == "", result
@@ -30,11 +30,11 @@ def test_synthesized_functions_obey_blocks_and_allowlist(expressions, sql, name)
 
 
 def test_resolution_does_not_confuse_columns_with_functions(expressions):
-    options = {"use_default_functions": False, "blocked_functions": ["struct_extract", "current_schema"]}
+    options = {"use_default_functions": False, "blocked_functions": [{"schema_path":["*"],"name":n} for n in ["struct_extract", "current_schema"]]}
     assert validate(expressions, "SELECT t.x, current_schema FROM t", options)["allowed"]
-    assert validate(expressions, "SELECT arr[1] FROM t", {"allowed_functions": ["array_extract"],
+    assert validate(expressions, "SELECT arr[1] FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "array_extract"}],
                                                         "use_default_functions": False})["allowed"]
-    assert validate(expressions, "SELECT st.a FROM t", {"allowed_functions": ["struct_extract"],
+    assert validate(expressions, "SELECT st.a FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "struct_extract"}],
                                                       "use_default_functions": False})["allowed"]
 
 
@@ -42,32 +42,32 @@ def test_variant_indexing_resolves_to_variant_extract(expressions):
     # v['a'] on a VARIANT synthesizes variant_extract, a reviewed default; the synthesized name
     # still answers to blocks, to defaults being disabled, and to an explicit grant.
     assert validate(expressions, "SELECT v['a'] FROM t")["allowed"]
-    for options in [{"blocked_functions": ["variant_extract"]}, {"use_default_functions": False}]:
+    for options in [{"blocked_functions": [{"schema_path":["*"],"name":"variant_extract"}]}, {"use_default_functions": False}]:
         result = validate(expressions, "SELECT v['a'] FROM t", options)
         assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "variant_extract", result
-    configure(expressions, {"use_default_functions": False, "allowed_functions": ["variant_extract"]})
-    assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": ["variant_extract"]})["allowed"]
+    configure(expressions, {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "variant_extract"}]})
+    assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "variant_extract"}]})["allowed"]
     configure(expressions)
 
 
 def test_blocks_do_not_reach_into_trusted_expansions(expressions, tmp_path):
     # What a host macro or view uses is that definition's own; blocks govern what the caller writes and the
     # implementations it binds, and a caller-written use next to the definition is still the caller's.
-    configure(expressions, {"allowed_functions": ["trusted_abs"]})
-    assert validate(expressions, "SELECT trusted_abs(-1)", {"allowed_functions": ["trusted_abs"]})["allowed"]
+    configure(expressions, {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})
+    assert validate(expressions, "SELECT trusted_abs(-1)", {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})["allowed"]
     assert validate(expressions, "SELECT trusted_abs(-1)", {
-        "allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]})["allowed"]
+        "allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}], "blocked_functions": [{"schema_path":["*"],"name":"abs"}]})["allowed"]
     assert not validate(expressions, "SELECT trusted_abs(-1) + abs(-2)", {
-        "allowed_functions": ["trusted_abs"], "blocked_functions": ["abs"]})["allowed"]
+        "allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}], "blocked_functions": [{"schema_path":["*"],"name":"abs"}]})["allowed"]
     path = str(tmp_path / "trusted.parquet").replace("'", "''")
     expressions.execute(f"COPY (SELECT 1 x) TO '{path}' (FORMAT PARQUET)")
     expressions.execute(f"CREATE VIEW file_view AS SELECT * FROM read_parquet('{path}')")
     options = {"allowed_tables": [{"schema_path": ["main"], "table": "file_view"}]}
     assert validate(expressions, "SELECT * FROM file_view", options)["allowed"]
-    result = validate(expressions, "SELECT * FROM file_view", {**options, "blocked_functions": ["read_parquet"]})
+    result = validate(expressions, "SELECT * FROM file_view", {**options, "blocked_functions": [{"schema_path":["*"],"name":"read_parquet"}]})
     assert result["allowed"] and any(f["name"] == "read_parquet" for f in result["functions"]), result
     result = validate(expressions, f"SELECT * FROM file_view, read_parquet('{path}')",
-                      {**options, "allowed_functions": ["read_parquet"], "blocked_functions": ["read_parquet"]})
+                      {**options, "allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}], "blocked_functions": [{"schema_path":["*"],"name":"read_parquet"}]})
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
 
 
@@ -82,7 +82,7 @@ NEVER_BIND = ["query", "query_table", "json_execute_serialized_sql", "json_seria
 
 
 def never_bind_holds(db, name):
-    for options in [{"allowed_functions": [name]}, {"use_default_functions": False, "allowed_functions": [name]}]:
+    for options in [{"allowed_functions": [{"schema_path": ["*"], "name": name}]}, {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": name}]}]:
         configure(db, options)
         result = validate(db, f'SELECT "{name}"(1)', options)
         assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
@@ -123,29 +123,33 @@ def test_user_types_use_connection_search_path(db):
 def test_collations_need_no_name_permission(db, name):
     sql = f"SELECT 'a' COLLATE \"{name}\""
     assert validate(db, sql)["allowed"]
-    result = validate(db, sql, {"blocked_functions": [name]})
+    result = validate(db, sql, {"blocked_functions": [{"schema_path":["*"],"name":name}]})
     assert result["allowed"], result
     assert validate(db, sql, {"use_default_functions": False})["allowed"]
 
 
 def test_host_collations_in_comparisons_sorting_and_types(db):
+    from support.artifact import ENGINE_MAJOR
+    if ENGINE_MAJOR >= 2:
+        # The candidate renamed this ICU scalar; a new implementation name is not a reviewed default.
+        configure(db, {"allowed_functions":[{"catalog":"system","schema_path":["main"],"name":"collate_de","type":"scalar"}]})
     db.execute("CREATE TABLE collated(s VARCHAR COLLATE de); INSERT INTO collated VALUES ('b'), ('a')")
     for sql in ("SELECT s FROM collated ORDER BY s COLLATE de",
                 "SELECT s = 'a' COLLATE de FROM collated",
                 "SELECT CAST(s AS VARCHAR) COLLATE de FROM collated"):
-        assert validate(db, sql, {"use_default_functions": False})["allowed"], validate(db, sql)
+        assert validate(db, sql)["allowed"], validate(db, sql)
         db.execute(sql).fetchall()
 
 
 @pytest.mark.parametrize("collation,function", [("nocase", "lower"), ("noaccent", "strip_accents"), ("nfc", "nfc_normalize")])
 def test_collation_does_not_infer_function_call(db, collation, function):
-    result = validate(db, f"SELECT 'a' COLLATE {collation}", {"blocked_functions": [function]})
+    result = validate(db, f"SELECT 'a' COLLATE {collation}", {"blocked_functions": [{"schema_path":["*"],"name":function}]})
     assert result["allowed"], result
-    assert not validate(db, f"SELECT {function}('a')", {"blocked_functions": [function]})["allowed"]
+    assert not validate(db, f"SELECT {function}('a')", {"blocked_functions": [{"schema_path":["*"],"name":function}]})["allowed"]
     for sql in (f"SELECT 'a' COLLATE {collation} = 'A'",
                 f"SELECT s FROM (VALUES ('a'),('b')) v(s) ORDER BY s COLLATE {collation}"):
         assert validate(db, sql)["allowed"], validate(db, sql)
-        result = validate(db, sql, {"blocked_functions": [function]})
+        result = validate(db, sql, {"blocked_functions": [{"schema_path":["*"],"name":function}]})
         assert result["code"] == "forbidden", result
         assert any(v["rule"] == "function" and v["function_name"] == function
                    for v in result["violations"]), result
@@ -164,7 +168,7 @@ def test_json_type_needs_no_permission(db):
 
 def test_pivot_and_window_blocks(expressions):
     for sql in ["SELECT sum(x) OVER () FROM t", "PIVOT t ON x IN (1) USING sum(x)"]:
-        result = validate(expressions, sql, {"blocked_functions": ["sum"]})
+        result = validate(expressions, sql, {"blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
         assert result["code"] == "forbidden" and result["error_message"] == "", result
 
 
@@ -177,8 +181,8 @@ def test_named_pivot_enum_uses_host_type(db):
 
 def test_conservative_synthesis_overlap_with_trusted_macro(expressions):
     expressions.execute("CREATE MACRO hidden_extract(x) AS struct_extract(x, 'a')")
-    options = {"use_default_functions": False, "allowed_functions": ["hidden_extract"]}
-    configure(expressions, {"allowed_functions": ["hidden_extract"]})
+    options = {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "hidden_extract"}]}
+    configure(expressions, {"allowed_functions": [{"schema_path": ["*"], "name": "hidden_extract"}]})
     assert validate(expressions, "SELECT hidden_extract(st) FROM t", options)["allowed"]
     # The callback has no expression provenance: a qualified caller column marks
     # struct extraction as a possible implementation, including trusted expansions.
@@ -192,8 +196,8 @@ def test_default_non_compute_value_functions_require_opt_in(db):
                       ("current_setting('threads')", "current_setting"), ("getvariable('x')", "getvariable")]:
         result = validate(db, "SELECT " + sql)
         assert result["code"] == "forbidden", (name, result)
-        configure(db, {"allowed_functions": [name]})
-        assert validate(db, "SELECT " + sql, {"allowed_functions": [name]})["allowed"]
+        configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": name}]})
+        assert validate(db, "SELECT " + sql, {"allowed_functions": [{"schema_path": ["*"], "name": name}]})["allowed"]
         configure(db)
 
 
@@ -209,21 +213,21 @@ def test_host_can_disable_type_autoload(db):
 def test_whole_row_reference_requires_struct_pack(expressions):
     assert not validate(expressions, "SELECT t FROM t", {"use_default_functions": False})["allowed"]
     assert validate(expressions, "SELECT t FROM t", {
-        "use_default_functions": False, "allowed_functions": ["struct_pack"]})["allowed"]
+        "use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "struct_pack"}]})["allowed"]
 
 
 def test_function_child_arrow_can_still_be_json(expressions):
-    options = {"use_default_functions": False, "allowed_functions": ["coalesce"]}
+    options = {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "coalesce"}]}
     result = validate(expressions, "SELECT coalesce(j->'a', j) FROM t", options)
     assert result["code"] == "forbidden"
     assert any(v["function_name"] == "json_extract" for v in result["violations"])
     assert validate(expressions, "SELECT j->>'a' FROM t", {
-        "use_default_functions": False, "allowed_functions": ["json_extract_string"]})["allowed"]
+        "use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "json_extract_string"}]})["allowed"]
 
 
 def test_single_arrow_lambda_overlap_and_keyword_workaround(expressions):
     expressions.execute("SET lambda_syntax='ENABLE_SINGLE_ARROW'; CREATE VIEW v_json AS SELECT json_extract(j, 'a') z FROM t")
-    options = {"use_default_functions": False, "allowed_functions": ["list_transform", "+"]}
+    options = {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["list_transform", "+"]]}
     sql = "SELECT list_transform(arr, x -> x + 1), z FROM t, v_json"
     assert not validate(expressions, sql, options)["allowed"]
     assert validate(expressions, sql.replace("x ->", "lambda x:"), options)["allowed"]
@@ -236,8 +240,8 @@ def test_nonaggregate_windows_in_trusted_view(db, name):
     db.execute(f"CREATE VIEW w AS SELECT {name}() OVER () n")
     result = validate(db, "SELECT * FROM w")
     assert result["allowed"] and any(f["name"] == name and f["type"] == "window" for f in result["functions"])
-    assert validate(db, "SELECT * FROM w", {"blocked_functions": [name]})["allowed"]
-    result = validate(db, f"SELECT {name}() OVER () FROM w", {"blocked_functions": [name]})
+    assert validate(db, "SELECT * FROM w", {"blocked_functions": [{"schema_path":["*"],"name":name}]})["allowed"]
+    result = validate(db, f"SELECT {name}() OVER () FROM w", {"blocked_functions": [{"schema_path":["*"],"name":name}]})
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == name
 
 
@@ -254,13 +258,13 @@ def test_types_are_independent_of_table_policy(db):
 @pytest.mark.parametrize("defaults", [True, False])
 def test_defaults_combine_with_explicit_function_permissions(db, defaults):
     db.execute("CREATE MACRO custom(x) AS x")
-    options = {"use_default_functions": defaults, "allowed_functions": ["custom"]}
+    options = {"use_default_functions": defaults, "allowed_functions": [{"schema_path": ["*"], "name": "custom"}]}
     configure(db, options)
     assert validate(db, "SELECT custom(1)")["allowed"]
     assert validate(db, "SELECT abs(1)")["allowed"] is defaults
     assert validate(db, "SELECT custom(1), abs(1)", options)["allowed"] is defaults
     assert validate(db, "SELECT 1", {"use_default_functions": False, "allowed_functions": []})["allowed"]
     assert not validate(db, "SELECT custom(1)", {"use_default_functions": False, "allowed_functions": []})["allowed"]
-    assert not validate(db, "SELECT custom(1)", {"blocked_functions": ["custom"]})["allowed"]
-    configure(db, {**options, "blocked_functions": ["custom"]})
+    assert not validate(db, "SELECT custom(1)", {"blocked_functions": [{"schema_path":["*"],"name":"custom"}]})["allowed"]
+    configure(db, {**options, "blocked_functions": [{"schema_path":["*"],"name":"custom"}]})
     assert not validate(db, "SELECT custom(1)", {"blocked_functions": []})["allowed"]

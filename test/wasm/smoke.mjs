@@ -73,6 +73,14 @@ try {
       const rejects = (sql, message) => rejectsOn(con, sql, message);
       let d = await decision('SELECT 1');
       check('simple query', d.allowed && d.code === 'ok');
+      d = await decision('SELECT abs(-1)', ", use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'abs',type:'scalar'}]");
+      check('qualified scalar grant', d.allowed);
+      d = await decision('SELECT abs(-1)', ", use_default_functions := false, allowed_functions := [{catalog:'memory',schema_path:['main'],name:'abs'}]");
+      check('namespace mismatch refused', d.code === 'forbidden');
+      check('legacy function grants rejected', await rejects("CALL gatekeeper_configure(allowed_functions := ['abs'])", 'migrate'));
+      await con.query('CREATE MACRO main.abs(x) AS x');
+      check('default shadow refused', !(await decision('SELECT main.abs(-1)')).allowed);
+      await con.query('DROP MACRO main.abs');
       d = await decision('DROP TABLE t');
       check('write denied', !d.allowed && d.code === 'unsupported');
       d = await decision("SELECT * FROM read_parquet('/missing.parquet')");
@@ -83,17 +91,17 @@ try {
       d = await decision("SELECT 1 LIMIT len(repeat('x', 1000000))");
       check('bind-time computation denied', !d.allowed && d.violations.some(v => v.rule === 'bind_time_expression'));
       await con.query('CREATE VIEW unnested AS SELECT unnest([1,2]) x');
-      d = await decision('SELECT * FROM unnested', ", blocked_functions := ['unnest']");
+      d = await decision('SELECT * FROM unnested', ", blocked_functions := [{schema_path:['*'],name:'unnest'}]");
       check('UNNEST in trusted expansion is the view\'s, not blocked', d.allowed && d.functions.some(f => f.name === 'unnest'));
-      d = await decision('SELECT unnest([3]) FROM unnested', ", blocked_functions := ['unnest']");
+      d = await decision('SELECT unnest([3]) FROM unnested', ", blocked_functions := [{schema_path:['*'],name:'unnest'}]");
       check('caller UNNEST next to the view blocked', d.code === 'forbidden');
-      d = await decision("SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')", ", blocked_functions := ['lower']");
+      d = await decision("SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')", ", blocked_functions := [{schema_path:['*'],name:'lower'}]");
       check('lambda collation implementation blocked', d.code === 'forbidden');
-      d = await decision('SELECT list_sum([1,2])', ", blocked_functions := ['sum']");
+      d = await decision('SELECT list_sum([1,2])', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
       check('list aggregate implementation blocked', d.code === 'forbidden');
-      d = await decision('SELECT list_sum($1)', ", blocked_functions := ['sum']");
+      d = await decision('SELECT list_sum($1)', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
       check('deferred aggregate binding rejected', !d.allowed && d.code === 'binding' && d.functions.length === 0);
-      d = await decision('SELECT list_sum($1::INTEGER[])', ", blocked_functions := ['sum']");
+      d = await decision('SELECT list_sum($1::INTEGER[])', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
       check('typed aggregate parameter still blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])');
       check('list aggregate dependency', d.allowed && d.functions.some(f => f.name === 'sum' && f.type === 'aggregate'));
@@ -105,10 +113,10 @@ try {
       const prepared = await con.prepare('SELECT * FROM gatekeeper_validate(?)');
       try {
         check('host prepared validation', (await prepared.query('SELECT 1')).toArray()[0].allowed);
-        await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'], allowed_tables := [{schema_path:['main'], 'table':'t'}, {schema_path:['main'], 'table':'v'}])");
+        await con.query("CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}], allowed_tables := [{schema_path:['main'], 'table':'t'}, {schema_path:['main'], 'table':'v'}])");
         check('prepared validation observes new policy', !(await prepared.query("SELECT md5('x')")).toArray()[0].allowed);
       } finally {await prepared.close();}
-      d = await decision("SELECT md5('x')", ', blocked_functions := []::VARCHAR[]');
+      d = await decision("SELECT md5('x')", ', blocked_functions := []');
       check('function ceiling', !d.allowed && d.code === 'forbidden');
       check('denial dependencies empty', d.objects.length === 0 && d.functions.length === 0 && d.caller_objects.length === 0);
       d = await decision('SELECT * FROM secret', ", allowed_tables := [{schema_path:['main'], 'table':'secret'}]");
@@ -123,7 +131,7 @@ try {
       check('invalid replacement atomic', !(await decision("SELECT md5('x')")).allowed);
       await con.query('RESET gatekeeper_policy');
       check('RESET restores defaults', (await decision("SELECT md5('x')")).allowed);
-      await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'])");
+      await con.query("CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}])");
       await con.query('CALL gatekeeper_configure()');
       check('CALL replaces whole policy', (await decision("SELECT md5('x')")).allowed);
       await con.query("SET gatekeeper_policy = current_setting('gatekeeper_policy')");
@@ -154,7 +162,7 @@ try {
         check('setting changes are audit records', changes.length === 2 && changes[0].new_value === 'true' && changes[1].new_value === 'false');
       } finally {await agent.close();}
       await con.query('CALL disable_logging()');
-      await con.query("CALL gatekeeper_configure(blocked_functions := ['md5'])");
+      await con.query("CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}])");
       await con.query('SET lock_configuration = true');
       check('CALL respects lock', await rejects('CALL gatekeeper_configure()', 'locked'));
       check('RESET respects lock', await rejects('RESET gatekeeper_policy', 'locked'));

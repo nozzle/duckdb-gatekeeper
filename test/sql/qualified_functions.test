@@ -1,0 +1,140 @@
+# name: test/sql/qualified_functions.test
+# description: Qualified function grants, kind collisions, default shadows, and v2 migration.
+# group: [gatekeeper]
+
+require gatekeeper
+
+# A host same-leaf grant keeps eligibility open; intrinsic window alias attribution survives binding.
+statement ok
+CREATE SCHEMA window_host; CREATE MACRO window_host.rank_dense() AS 7;
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['window_host'],name:'rank_dense',type:'macro'}], blocked_functions := [{catalog:'system',schema_path:['main'],name:'rank_dense'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT window_host.rank_dense()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT rank_dense() OVER ()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT dense_rank() OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure();
+
+# Scoped blocks use the resolved namespace and kind, not the shared leaf.
+statement ok
+CREATE SCHEMA block_a; CREATE SCHEMA block_b; CREATE MACRO block_a.f(x) AS x; CREATE MACRO block_b.f(x) AS x;
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['*'],name:'f',type:'macro'}], blocked_functions := [{catalog:'memory',schema_path:['block_a'],name:'f',type:'macro'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT block_b.f(1)');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT block_a.f(1)', blocked_functions := []);
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(blocked_functions := [{catalog:'system',schema_path:['main'],name:'range',type:'table'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT range(3)');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM range(3)');
+----
+forbidden
+
+statement error
+CALL gatekeeper_configure(blocked_functions := ['range']);
+----
+requires STRUCT
+
+statement ok
+CALL gatekeeper_configure();
+
+statement ok
+CREATE SCHEMA host;
+
+statement ok
+CREATE MACRO host.abs(x) AS x;
+
+query TTT
+SELECT code, violations[1].catalog, violations[1].schema_path[1] FROM gatekeeper_validate('SELECT host.abs(1)');
+----
+forbidden	memory	host
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['host'],name:'abs',type:'macro'}]);
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT host.abs(1)');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT host.abs(1)', allowed_functions := [{catalog:'system',schema_path:['main'],name:'abs'}]);
+----
+forbidden
+
+statement error
+CALL gatekeeper_configure(allowed_functions := ['abs']);
+----
+migrate
+
+statement error
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'abs',type:'pragma'}]);
+----
+unsupported function type
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'range',type:'scalar'}]);
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT range(3)');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM range(3)');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'range'}]);
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM range(3)');
+----
+true
+
+statement ok
+SET gatekeeper_policy = current_setting('gatekeeper_policy');
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT range(3)');
+----
+true
+
+statement ok
+CALL gatekeeper_configure();
+
+statement ok
+DROP MACRO host.abs;
+
+statement ok
+DROP SCHEMA host;

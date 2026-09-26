@@ -2,6 +2,9 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -334,6 +337,7 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 // text, bind and plan phases: they have different inputs, and only the bind writes provenance. (The engine's
 // own duckdb::BindContext is the binder's table of bindings, hence the name.)
 struct PrivateBind {
+	ClientContext &context;
 	const gatekeeper::Layers &layers;
 	const gatekeeper::BindingPolicy &binding;
 	gatekeeper::Provenance &provenance;
@@ -474,15 +478,37 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			layers = {&scope->bind.layers.ceiling, &scope->bind.layers.policy};
 		else
 			layers = {enforced.get()};
-		auto canonical = gatekeeper::CanonicalFunction(resolution.name);
+		auto canonical = gatekeeper::Lower(resolution.name);
 		for (const auto *layer : layers) {
-			if (caller_written && !gatekeeper::FunctionAllowed(*layer, resolution.name)) {
-				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + canonical,
-				         canonical))
+			if (caller_written && !gatekeeper::FunctionEligible(*layer, resolution.name)) {
+				auto display = gatekeeper::CanonicalFunction(resolution.name);
+				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + display, display))
 					return std::move(resolution.ref);
 			}
 		}
+		auto &expression = resolution.ref->Cast<TableFunctionRef>().function->Cast<FunctionExpression>();
+		auto &entry = engine::ResolveReplacementFunction(context, expression);
+		gatekeeper::BindingPolicy reader_binding = binding ? *binding : gatekeeper::BindingPolicy{};
+		reader_binding.caller_functions.insert(canonical);
+		gatekeeper::Result reader_result;
+		try {
+			for (const auto *layer : layers)
+				AuthorizeObject({*layer, *layer}, reader_binding, entry, reader_result, caller_written);
+		} catch (const PermissionException &) {
+			if (scope) {
+				scope->bind.result.violations.insert(reader_result.violations.begin(), reader_result.violations.end());
+				throw;
+			}
+			MarkDenied(reader_result);
+			if (record(reader_result, enforced))
+				return std::move(resolution.ref);
+		}
 		if (scope) {
+			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
+			for (const auto &identity : reader_result.functions)
+				scope->bind.provenance.RecordFunction(identity, caller_written, GATEKEEPER_DUCKDB_MAJOR);
+			if (caller_written)
+				scope->bind.provenance.replacement_functions.insert(canonical);
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
 			scope->bind.result.objects.insert({"", {}, path, "replacement"});
 		}
@@ -520,7 +546,7 @@ void InstallReplacementScan(DBConfig &config) {
 // by the same walk, for the same reason: the body binds in the caller's binder, so the objects it reads can
 // only be recognized by name.
 static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &names,
-                           gatekeeper::WrittenNames *tables = nullptr) {
+                           gatekeeper::WrittenNames *tables = nullptr, gatekeeper::Names *targets = nullptr) {
 	auto node = make_uniq<SelectNode>();
 	for (auto &overload : macro.macros) {
 		node->select_list.push_back(overload->Cast<ScalarMacroFunction>().expression->Copy());
@@ -537,6 +563,8 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 		names.insert(set->begin(), set->end());
 	if (tables)
 		tables->insert(body.caller_table_names.begin(), body.caller_table_names.end());
+	if (targets)
+		targets->insert(body.dispatcher_targets.begin(), body.dispatcher_targets.end());
 	// A COLLATE in the body binds its collation's function (lower, icu_collate_de, ...) directly, never through
 	// the catalog callback, so there is no lookup to recognize here: the plan walk attributes a collation
 	// function to the caller only when the caller wrote COLLATE (BindingPolicy::caller_collates).
@@ -551,6 +579,22 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 // attributed to nothing, with one exception: Gatekeeper's control plane is refused on every route. A scalar
 // macro body binds in the caller's own binder, so its names and table references are learned from its
 // definition instead, and an object the caller's text names is the caller's wherever it binds.
+static void CheckAggregateDependency(ClientContext &context, const string &name, gatekeeper::Result &result) {
+	if (name != "min" && name != "max")
+		return;
+	auto dependency = name == "min" ? "arg_min" : "arg_max";
+	auto &target = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "", "", dependency);
+	auto &standard = target.Cast<StandardEntry>();
+	if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY ||
+	    engine::CatalogName(standard.schema.catalog) != "system" ||
+	    engine::SchemaPath(standard.schema) != gatekeeper::NamePath{"main"}) {
+		result.violations.emplace(gatekeeper::rules::FUNCTION, "implicit aggregate must resolve to system.main",
+		                          engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema), "",
+		                          dependency, -1, FunctionKind(target.type) ? FunctionKind(target.type) : "");
+		throw PermissionException("untrusted implicit aggregate");
+	}
+}
+
 struct LookupCallback {
 	shared_ptr<PrivateBind> bind;
 	bool trusted = false;
@@ -585,15 +629,100 @@ struct LookupCallback {
 				armed = true;
 			return;
 		}
-		auto canonical = gatekeeper::CanonicalFunction(engine::EntryName(entry));
+		auto canonical = gatekeeper::Lower(engine::EntryName(entry));
 		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
 		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
 		// bind in the same binder.
 		bool attributable = !trusted && !(s.provenance.trusted_names.count(canonical) &&
 		                                  !s.provenance.CallerCanName(s.binding, canonical));
-		AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
+		if (s.provenance.caller_expansions.count(canonical) || s.provenance.replacement_functions.count(canonical)) {
+			auto lookup_binding = s.binding;
+			lookup_binding.system_functions = s.provenance.caller_expansions;
+			if (s.provenance.replacement_functions.count(canonical))
+				lookup_binding.caller_functions.insert(canonical);
+			AuthorizeObject(s.layers, lookup_binding, entry, s.result, attributable);
+		} else
+			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
+		auto &function_entry = entry.Cast<StandardEntry>();
+		gatekeeper::Identity source{engine::CatalogName(function_entry.schema.catalog),
+		                            engine::SchemaPath(function_entry.schema), canonical, FunctionKind(entry.type)};
+		// 1.5 has no retained definition after native bind callbacks replace descriptors.
+		// Refuse this untrackable caller route before callbacks, rather than inferring
+		// origin from arbitrary output leaves or all functions in a namespace.
+		// Expression-replacement callbacks can replace the entire node on either engine,
+		// dropping even 2.0's retained descriptor; they need the same conservative refusal.
+		bool mutable_implementation = false;
+		if (attributable && !gatekeeper::SystemIdentity(source)) {
+			if (entry.type == CatalogType::SCALAR_FUNCTION_ENTRY)
+				for (const auto &item : entry.Cast<ScalarFunctionCatalogEntry>().functions.functions) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+					mutable_implementation |= item->HasBindExpressionCallback();
+#else
+					mutable_implementation |=
+					    item.HasBindCallback() || item.HasBindExtendedCallback() || item.HasBindExpressionCallback();
+#endif
+				}
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+			if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY)
+				for (const auto &overload : entry.Cast<AggregateFunctionCatalogEntry>().functions.functions)
+					mutable_implementation |= overload.HasBindCallback();
+#endif
+		}
+		if (mutable_implementation) {
+			s.result.violations.emplace(gatekeeper::rules::UNSUPPORTED_STRUCTURE,
+			                            "native function callback cannot retain definition provenance", source.catalog,
+			                            source.schema_path, "", source.name, -1, source.type);
+			throw PermissionException("untrackable native function bind callback");
+		}
+		if (attributable && source.type == "aggregate" && gatekeeper::SystemIdentity(source) &&
+		    s.binding.unsupported_quantiles.count(canonical)) {
+			s.result.violations.emplace(
+			    gatekeeper::rules::BIND_TIME_EXPRESSION,
+			    "quantile fraction/options require literals or bindable parameters in an unqualified positional call",
+			    source.catalog, source.schema_path, "", source.name, -1, source.type);
+			throw PermissionException("unsupported quantile arguments");
+		}
+		s.provenance.RecordFunction(source, attributable, GATEKEEPER_DUCKDB_MAJOR);
+		if (attributable && entry.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
+		    gatekeeper::DispatchingAggregators().count(canonical) && s.binding.caller_dispatchers.count(canonical) &&
+		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
+		    engine::SchemaPath(function_entry.schema) == gatekeeper::NamePath{"main"}) {
+			if (s.binding.unsupported_dispatchers.count(canonical)) {
+				s.result.violations.emplace(
+				    gatekeeper::rules::BIND_TIME_EXPRESSION,
+				    "aggregate dispatch requires an unqualified positional call and literal aggregate name", "system",
+				    gatekeeper::NamePath{"main"}, "", canonical, -1, "scalar");
+				throw PermissionException("unsupported aggregate dispatch");
+			}
+			auto targets = s.binding.dispatcher_targets_by_name.find(canonical);
+			if (targets == s.binding.dispatcher_targets_by_name.end())
+				throw BinderException("Missing aggregate dispatch targets");
+			for (const auto &name : targets->second) {
+				gatekeeper::Identity identity{"system", {"main"}, name, "aggregate"};
+				if (!s.layers.All(
+				        [&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
+					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
+					                            identity.catalog, identity.schema_path, "", identity.name, -1,
+					                            identity.type);
+					throw PermissionException("dispatched aggregate is not allowed");
+				}
+				CheckAggregateDependency(s.context, name, s.result);
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+			}
+			s.provenance.authorized_dispatchers.insert(canonical);
+		}
 		if (attributable)
 			s.provenance.caller_lookups.insert(canonical);
+		// Collated min/max directly resolve these dependencies through the search path on both engines.
+		// Refuse a shadow before min/max can bind, even when an explicit grant would admit the shadow.
+		if (attributable && entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY &&
+		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
+		    engine::SchemaPath(function_entry.schema) == gatekeeper::NamePath{"main"})
+			CheckAggregateDependency(s.context, canonical, s.result);
 		if (trusted)
 			return;
 		// A host table macro's body binds in the next child binder. So does what a table function a trusted
@@ -611,8 +740,32 @@ struct LookupCallback {
 		// and so is everything its body names.
 		if (!entry.internal || !attributable)
 			MacroBodyNames(macro, s.provenance.trusted_names, &s.provenance.trusted_table_names);
-		else
-			MacroBodyNames(macro, s.provenance.caller_expansions);
+		else {
+			gatekeeper::Names targets;
+			MacroBodyNames(macro, s.provenance.caller_expansions, nullptr, &targets);
+			for (const auto &name : targets) {
+				gatekeeper::Identity selected{"system", {"main"}, name, "aggregate"};
+				if (!s.layers.All([&](const gatekeeper::Policy &p) {
+					    return p.defaults || gatekeeper::FunctionAllowed(p, selected);
+				    })) {
+					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "default macro aggregate is not allowed",
+					                            selected.catalog, selected.schema_path, "", selected.name, -1,
+					                            selected.type);
+					throw PermissionException("default macro aggregate is not allowed");
+				}
+				s.provenance.caller_expansion_targets.insert(name);
+				CheckAggregateDependency(s.context, name, s.result);
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				auto &standard = target.Cast<StandardEntry>();
+				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
+				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
+				                              FunctionKind(target.type)};
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+			}
+		}
 	}
 };
 
@@ -630,7 +783,7 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 			continue;
 		auto deny = [&](const string &message) {
 			result.violations.emplace(gatekeeper::rules::FUNCTION, message, "system", gatekeeper::NamePath{"main"}, "",
-			                          "getvariable", parameter.second);
+			                          "getvariable", parameter.second, "scalar");
 			throw PermissionException("named parameter fallback is not allowed");
 		};
 		// This is a fixed engine capability, not an unqualified function lookup that a host macro can shadow.
@@ -638,7 +791,7 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 		// fallback authorizes both possibilities; evidence conservatively includes the capability even when the
 		// caller supplied an explicit value. DuckDB still chooses the value and preserves explicit precedence.
 		layers.Each([&](const gatekeeper::Policy &policy) {
-			if (!gatekeeper::FunctionAllowed(policy, "getvariable"))
+			if (!gatekeeper::FunctionAllowed(policy, {"system", {"main"}, "getvariable", "scalar"}))
 				deny("session-variable fallback requires system.main.getvariable permission");
 		});
 		result.functions.insert({"system", {"main"}, "getvariable", "scalar"});
@@ -651,6 +804,21 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
 	CheckParameterFallbacks(context, layers, unit.binding, parameters, true, result);
+	// PushVarcharCollation resolves only system.main collation entries, never scalar search-path shadows.
+	// Read their embedded scalar names without binding/evaluating anything. Only these exact capabilities
+	// may recover absent 1.5 stamps; on 2.0 they also attribute renamed ICU implementations. A familiar
+	// scalar leaf or ICU prefix by itself supplies no provenance.
+	for (const auto &collation : unit.binding.caller_collation_names) {
+		if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix")
+			continue;
+		for (const auto &part : StringUtil::Split(collation, ".")) {
+			auto &entry = engine::GetEntry(context, CatalogType::COLLATION_ENTRY, "system", "main", part);
+			if (entry.type != CatalogType::COLLATION_ENTRY)
+				throw BinderException("Unknown collation implementation");
+			unit.provenance.collation_functions.insert(
+			    gatekeeper::Lower(engine::FunctionName(entry.Cast<CollateCatalogEntry>().function)));
+		}
+	}
 	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;
@@ -658,7 +826,7 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	auto binder = Binder::CreateBinder(context);
 	binder->SetParameters(bound_parameters);
 	binder->SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{layers, unit.binding, unit.provenance, result});
+	auto bind = make_shared_ptr<PrivateBind>(PrivateBind{context, layers, unit.binding, unit.provenance, result});
 	binder->SetCatalogLookupCallback(LookupCallback(bind));
 	ValidationScope scope{context, *bind, {}};
 	BoundStatement bound;

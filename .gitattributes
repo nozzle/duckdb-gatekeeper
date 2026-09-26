@@ -1,0 +1,3 @@
+# Inventory evidence records SHA-256 values of the original JSON bytes.
+# Preserve those bytes on Windows checkouts with core.autocrlf enabled.
+/inventories/**/*.json text eol=lf
