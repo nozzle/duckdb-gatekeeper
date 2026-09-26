@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
-  "mode": "discovery",
-  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "collector_sha256": "46601d3211e03283284a282bbe6ef83fa44129812e737d4610c0221e6eeefcf0",
+  "evidence_kind": "collector_locked_replay",
   "extensions": {
     "autocomplete": "ok",
     "avro": "ok",
@@ -32,5 +33,7 @@
     "unity_catalog": "ok",
     "vortex": "unavailable",
     "vss": "ok"
-  }
+  },
+  "mode": "verified",
+  "schema_version": 2
 }

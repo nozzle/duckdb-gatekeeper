@@ -1,423 +1,35 @@
 {
-  "schema_version": 1,
-  "snapshot_type": "extension_delta",
-  "inventory": "quack",
-  "repository": "core",
-  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
-  "mode": "discovery",
-  "engine": {
-    "library_version": "v2.0.0-alpha42986",
-    "source_id": "d4e72566aa",
-    "codename": "Cyanoptera",
-    "python_package_version": "2.0.0.dev2609221243",
-    "python_version": "3.13.2",
-    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
-    "platform": "osx_arm64",
-    "extension_abi": "v2.0.0-alpha42986"
-  },
-  "resolved_name": "quack",
-  "initial_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    }
-  ],
-  "evidence": "evidence/quack.json",
-  "status": "ok",
-  "phase": "extension_capture",
+  "active_extension": "quack",
   "artifacts": [
     {
+      "bytes": 38946478,
+      "download_sha256": "f6a675a4a129d16d3ba1f34961c785bca7bb0f9c00fccd06b6fb29b837a0bfc1",
       "name": "quack",
       "repository": "core",
-      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/quack.duckdb_extension.gz",
-      "download_sha256": "f6a675a4a129d16d3ba1f34961c785bca7bb0f9c00fccd06b6fb29b837a0bfc1",
       "sha256": "0e73d74a2a878d3801fc331422653b3bd0232188fa2ae938a8b87065d3a756a8",
-      "bytes": 38946478,
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/quack.duckdb_extension.gz",
       "version": "fa3f82c53c"
     }
   ],
-  "install_names": [
-    "quack"
-  ],
-  "stages": [
+  "attempts": [
     {
-      "extension": "quack",
-      "status": "loaded",
-      "before_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        }
-      ],
-      "loaded_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "quack",
-          "version": "fa3f82c53c",
-          "install_mode": "CUSTOM_PATH"
-        }
-      ],
-      "functions": {
-        "added": [
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_active_connections",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_cancel",
-            "named_parameters": {},
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "quack_check_token",
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": "BOOLEAN",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_clear_cache",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "quack_connection_id",
-            "parameters": [
-              "VARCHAR"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_identify",
-            "named_parameters": {
-              "hostname": "VARCHAR",
-              "meta": "VARCHAR",
-              "name": "VARCHAR",
-              "provider": "VARCHAR",
-              "region": "VARCHAR"
-            },
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "quack_nop_authorization",
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_query",
-            "named_parameters": {
-              "client_id": "VARCHAR",
-              "disable_ssl": "BOOLEAN",
-              "heartbeat_timeout": "UBIGINT",
-              "token": "VARCHAR"
-            },
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_query_by_name",
-            "named_parameters": {
-              "refresh_catalog": "BOOLEAN",
-              "use_transaction": "BOOLEAN"
-            },
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_serve",
-            "named_parameters": {
-              "allow_other_hostname": "BOOLEAN",
-              "create_secret_if_not_exists": "BOOLEAN",
-              "disable_ssl": "BOOLEAN",
-              "secret": "VARCHAR",
-              "token": "VARCHAR"
-            },
-            "parameters": [
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_serve",
-            "named_parameters": {
-              "allow_other_hostname": "BOOLEAN",
-              "create_secret_if_not_exists": "BOOLEAN",
-              "disable_ssl": "BOOLEAN",
-              "secret": "VARCHAR",
-              "token": "VARCHAR"
-            },
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_server_list",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "quack_stop",
-            "named_parameters": {},
-            "parameters": [
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "quack_uri_parser",
-            "parameters": [
-              "VARCHAR",
-              "BOOLEAN"
-            ],
-            "returns": "STRUCT(host VARCHAR, port USMALLINT, ipv6 BOOLEAN, ssl BOOLEAN, url VARCHAR)",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": false,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "scan_data_from_quack_client",
-            "named_parameters": {
-              "ordered": "BOOLEAN"
-            },
-            "parameters": [
-              "VARCHAR",
-              "ANY"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table_macro",
-            "macro": "SELECT CAST(\"nullif\"(current_setting('whoami_name'), '') AS VARCHAR) AS \"name\", CAST(\"nullif\"(current_setting('whoami_provider'), '') AS VARCHAR) AS provider, CAST(\"nullif\"(current_setting('whoami_hostname'), '') AS VARCHAR) AS hostname, CAST(\"nullif\"(current_setting('whoami_region'), '') AS VARCHAR) AS region, to_microseconds((epoch_us(current_timestamp) - COALESCE(epoch_us(CAST(\"nullif\"(current_setting('whoami_started_at'), '') AS TIMESTAMPTZ)), CAST(current_setting('quack_loaded_at_us') AS BIGINT)))) AS uptime, current_timestamp AS ts_now, json_merge_patch(json_object('duckdb_version', \"version\"(), 'platform', (SELECT platform FROM pragma_platform())), COALESCE(TRY_CAST(current_setting('whoami_meta') AS \"JSON\"), CAST('{}' AS \"JSON\"))) AS meta",
-            "name": "whoami",
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          }
-        ],
-        "removed": [],
-        "changed": []
-      }
+      "phase": "extension_capture",
+      "status": "ok"
     }
   ],
-  "loaded_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "quack",
-      "version": "fa3f82c53c",
-      "install_mode": "CUSTOM_PATH"
-    }
-  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
   "function_count": 3223,
   "functions": {
     "added": [
@@ -697,300 +309,414 @@
         "varargs": null
       }
     ],
-    "removed": [],
-    "changed": []
+    "changed": [],
+    "removed": []
   },
-  "target_functions": {
-    "added": [
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_active_connections",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_cancel",
-        "named_parameters": {},
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "quack_check_token",
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": "BOOLEAN",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_clear_cache",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "quack_connection_id",
-        "parameters": [
-          "VARCHAR"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_identify",
-        "named_parameters": {
-          "hostname": "VARCHAR",
-          "meta": "VARCHAR",
-          "name": "VARCHAR",
-          "provider": "VARCHAR",
-          "region": "VARCHAR"
-        },
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "quack_nop_authorization",
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_query",
-        "named_parameters": {
-          "client_id": "VARCHAR",
-          "disable_ssl": "BOOLEAN",
-          "heartbeat_timeout": "UBIGINT",
-          "token": "VARCHAR"
-        },
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_query_by_name",
-        "named_parameters": {
-          "refresh_catalog": "BOOLEAN",
-          "use_transaction": "BOOLEAN"
-        },
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_serve",
-        "named_parameters": {
-          "allow_other_hostname": "BOOLEAN",
-          "create_secret_if_not_exists": "BOOLEAN",
-          "disable_ssl": "BOOLEAN",
-          "secret": "VARCHAR",
-          "token": "VARCHAR"
-        },
-        "parameters": [
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_serve",
-        "named_parameters": {
-          "allow_other_hostname": "BOOLEAN",
-          "create_secret_if_not_exists": "BOOLEAN",
-          "disable_ssl": "BOOLEAN",
-          "secret": "VARCHAR",
-          "token": "VARCHAR"
-        },
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_server_list",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "quack_stop",
-        "named_parameters": {},
-        "parameters": [
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "quack_uri_parser",
-        "parameters": [
-          "VARCHAR",
-          "BOOLEAN"
-        ],
-        "returns": "STRUCT(host VARCHAR, port USMALLINT, ipv6 BOOLEAN, ssl BOOLEAN, url VARCHAR)",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": false,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "scan_data_from_quack_client",
-        "named_parameters": {
-          "ordered": "BOOLEAN"
-        },
-        "parameters": [
-          "VARCHAR",
-          "ANY"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table_macro",
-        "macro": "SELECT CAST(\"nullif\"(current_setting('whoami_name'), '') AS VARCHAR) AS \"name\", CAST(\"nullif\"(current_setting('whoami_provider'), '') AS VARCHAR) AS provider, CAST(\"nullif\"(current_setting('whoami_hostname'), '') AS VARCHAR) AS hostname, CAST(\"nullif\"(current_setting('whoami_region'), '') AS VARCHAR) AS region, to_microseconds((epoch_us(current_timestamp) - COALESCE(epoch_us(CAST(\"nullif\"(current_setting('whoami_started_at'), '') AS TIMESTAMPTZ)), CAST(current_setting('quack_loaded_at_us') AS BIGINT)))) AS uptime, current_timestamp AS ts_now, json_merge_patch(json_object('duckdb_version', \"version\"(), 'platform', (SELECT platform FROM pragma_platform())), COALESCE(TRY_CAST(current_setting('whoami_meta') AS \"JSON\"), CAST('{}' AS \"JSON\"))) AS meta",
-        "name": "whoami",
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      }
-    ],
-    "removed": [],
-    "changed": []
-  },
-  "dependencies_loaded": [],
-  "process": {
-    "exit_code": 0,
-    "stdout": "",
-    "stderr": ""
-  },
-  "attempts": [
+  "initial_extensions": [
     {
-      "status": "ok",
-      "phase": "extension_capture"
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
     }
-  ]
+  ],
+  "install_names": [
+    "quack"
+  ],
+  "inventory": "quack",
+  "load_names": [
+    "quack"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "quack",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "fa3f82c53c"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "quack",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_active_connections",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_cancel",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "quack_check_token",
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": "BOOLEAN",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_clear_cache",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "quack_connection_id",
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_identify",
+            "named_parameters": {
+              "hostname": "VARCHAR",
+              "meta": "VARCHAR",
+              "name": "VARCHAR",
+              "provider": "VARCHAR",
+              "region": "VARCHAR"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "quack_nop_authorization",
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_query",
+            "named_parameters": {
+              "client_id": "VARCHAR",
+              "disable_ssl": "BOOLEAN",
+              "heartbeat_timeout": "UBIGINT",
+              "token": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_query_by_name",
+            "named_parameters": {
+              "refresh_catalog": "BOOLEAN",
+              "use_transaction": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_serve",
+            "named_parameters": {
+              "allow_other_hostname": "BOOLEAN",
+              "create_secret_if_not_exists": "BOOLEAN",
+              "disable_ssl": "BOOLEAN",
+              "secret": "VARCHAR",
+              "token": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_serve",
+            "named_parameters": {
+              "allow_other_hostname": "BOOLEAN",
+              "create_secret_if_not_exists": "BOOLEAN",
+              "disable_ssl": "BOOLEAN",
+              "secret": "VARCHAR",
+              "token": "VARCHAR"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_server_list",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "quack_stop",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "quack_uri_parser",
+            "parameters": [
+              "VARCHAR",
+              "BOOLEAN"
+            ],
+            "returns": "STRUCT(host VARCHAR, port USMALLINT, ipv6 BOOLEAN, ssl BOOLEAN, url VARCHAR)",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "scan_data_from_quack_client",
+            "named_parameters": {
+              "ordered": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "ANY"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT CAST(\"nullif\"(current_setting('whoami_name'), '') AS VARCHAR) AS \"name\", CAST(\"nullif\"(current_setting('whoami_provider'), '') AS VARCHAR) AS provider, CAST(\"nullif\"(current_setting('whoami_hostname'), '') AS VARCHAR) AS hostname, CAST(\"nullif\"(current_setting('whoami_region'), '') AS VARCHAR) AS region, to_microseconds((epoch_us(current_timestamp) - COALESCE(epoch_us(CAST(\"nullif\"(current_setting('whoami_started_at'), '') AS TIMESTAMPTZ)), CAST(current_setting('quack_loaded_at_us') AS BIGINT)))) AS uptime, current_timestamp AS ts_now, json_merge_patch(json_object('duckdb_version', \"version\"(), 'platform', (SELECT platform FROM pragma_platform())), COALESCE(TRY_CAST(current_setting('whoami_meta') AS \"JSON\"), CAST('{}' AS \"JSON\"))) AS meta",
+            "name": "whoami",
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "d19213f0b8011edaa16a8b4e9489b9b541fb256c4cd3b8588090e0f3888f9402",
+      "load_name": "quack",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "quack",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "fa3f82c53c"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "d7273ac769e3d07ffba216689015ebc3bea1d8e5f36ca3afccae367b14148971",
+  "status": "ok"
 }

@@ -1,31 +1,14 @@
 {
+  "aggregate_report_matches_preliminary": true,
+  "collector_source_hash_matches": true,
+  "dependency_attribution_checks": "passed",
+  "discovery_and_replay_stages_equal": true,
+  "historical_input_hashes": "unchanged",
+  "input_file_hashes_recorded": true,
   "inventories_checked": 29,
-  "successful_runtime_entries": 25,
-  "installed_binary_hashes_verified": {
-    "autocomplete": "5f796d26edbe414342c6a269bdf95b26cfd961a11e178079f327317b4226a51e",
-    "avro": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
-    "aws": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
-    "azure": "82530cd63e2c50d351d41b58c7fe808d0041fcf02cc7b27126746ceb1485216c",
-    "delta": "94e82e37ecbc70da17f20733d041692996dc579aecaf0eae42a23d0d09170fec",
-    "ducklake": "344d30fe9879fa28af5678bad54da6eb19f0c6110945871e88506efd65e6bc2f",
-    "encodings": "7977e5c3c49ef5361ceb0626591644c7240bbf94b1046ec29b301cfe516ae1aa",
-    "excel": "4817fc3e4e96c870d2d093f21832cf90a0dfc7bf34e588e6ddc1c1907e5a8d3f",
-    "fts": "a21477cd22c7030f4c64f318afba15fd6eb98943c9c29e8764c8843b92d66953",
-    "httpfs": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
-    "iceberg": "3d657a11cb6ed93e2ce133a9f3a1e6c40933a6a305fc23e31caa40dd5d58a135",
-    "inet": "21331ef3e4c8ee7eb432f980c093c482dcb1ab7cb5138d49311873511b93ea8e",
-    "mysql_scanner": "8a404c80eae753b6a7b4d27702966600f75bf44532750a211facb6c05c2fbe8d",
-    "odbc_scanner": "27c33ad5d3b300d0b9e5b7accdf7f92c2fb254a1ee69488a3e3537b57721aa1c",
-    "postgres_scanner": "9e05dfefc8cf39c4f9bf6aeed25f4f83dfff5d1d8428e0e29862ed457f4215db",
-    "quack": "0e73d74a2a878d3801fc331422653b3bd0232188fa2ae938a8b87065d3a756a8",
-    "spatial": "fa05cf9af56e4852e8a1ac53f572090a9cf042051ae3f7e8bce2aa6e2a69b5ff",
-    "sqlite_scanner": "bbfc1744fe7913920736fa758ff4eee220edebd793d6dc9aa946469abde8a6bb",
-    "tpcds": "1c9058182fe61ddc3b3e943c5fad5a8e52caa488b1348dab629d74b7a4a79642",
-    "tpch": "50734d1a7331785f477a7be18a7b55152ba8edb3c5f212bb3c4cb0628c723ca4",
-    "unity_catalog": "5a9c489dcd225e8a53cf428ae6c2093d9daa0379170c10b664398bad2f8c11b5",
-    "vss": "f53897a186e63e06c6d66780ff77c0f6b1a47ea4f6f57803369cb5f68f233c95"
-  },
-  "descriptor_source_prefixes_verified": [
+  "personal_absolute_path_scan": "passed",
+  "release_comparable_load_and_install_plans": [
+    "autocomplete",
     "avro",
     "aws",
     "azure",
@@ -36,22 +19,220 @@
     "fts",
     "httpfs",
     "iceberg",
+    "icu",
     "inet",
+    "json",
     "mysql",
     "odbc",
+    "parquet",
     "postgres",
     "quack",
     "spatial",
     "sqlite",
+    "tpcds",
+    "tpch",
     "unity_catalog",
     "vss"
   ],
-  "quack_fixture_compressed_hashes_match": [
-    "quack",
-    "httpfs"
-  ],
-  "base_identical_in_each_successful_process": true,
-  "dependency_stage_attribution_verified": true,
-  "all_child_processes_exited_cleanly": true,
-  "personal_absolute_path_and_secret_pattern_scan": "passed"
+  "stage_and_artifact_lock_checks": "passed",
+  "unavailable": 4,
+  "verified_registration_stages": 58,
+  "verified_runtime_setups": [
+    {
+      "dependencies_loaded": [],
+      "inventory": "autocomplete",
+      "load_names": [
+        "autocomplete"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "avro",
+      "load_names": [
+        "avro"
+      ]
+    },
+    {
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "inventory": "aws",
+      "load_names": [
+        "httpfs",
+        "aws"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "azure",
+      "load_names": [
+        "azure"
+      ]
+    },
+    {
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "inventory": "delta",
+      "load_names": [
+        "httpfs",
+        "delta"
+      ]
+    },
+    {
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "inventory": "ducklake",
+      "load_names": [
+        "httpfs",
+        "ducklake"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "encodings",
+      "load_names": [
+        "encodings"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "excel",
+      "load_names": [
+        "excel"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "fts",
+      "load_names": [
+        "fts"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "httpfs",
+      "load_names": [
+        "httpfs"
+      ]
+    },
+    {
+      "dependencies_loaded": [
+        "avro",
+        "aws",
+        "httpfs"
+      ],
+      "inventory": "iceberg",
+      "load_names": [
+        "httpfs",
+        "aws",
+        "avro",
+        "iceberg"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "icu",
+      "load_names": [
+        "icu"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "inet",
+      "load_names": [
+        "inet"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "json",
+      "load_names": [
+        "json"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "mysql",
+      "load_names": [
+        "mysql_scanner"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "odbc",
+      "load_names": [
+        "odbc_scanner"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "parquet",
+      "load_names": [
+        "parquet"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "postgres",
+      "load_names": [
+        "postgres_scanner"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "quack",
+      "load_names": [
+        "quack"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "spatial",
+      "load_names": [
+        "spatial"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "sqlite",
+      "load_names": [
+        "sqlite_scanner"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "tpcds",
+      "load_names": [
+        "tpcds"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "tpch",
+      "load_names": [
+        "tpch"
+      ]
+    },
+    {
+      "dependencies_loaded": [
+        "aws",
+        "httpfs"
+      ],
+      "inventory": "unity_catalog",
+      "load_names": [
+        "httpfs",
+        "aws",
+        "unity_catalog"
+      ]
+    },
+    {
+      "dependencies_loaded": [],
+      "inventory": "vss",
+      "load_names": [
+        "vss"
+      ]
+    }
+  ]
 }

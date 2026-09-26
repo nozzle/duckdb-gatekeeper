@@ -1,198 +1,35 @@
 {
-  "schema_version": 1,
-  "snapshot_type": "extension_delta",
-  "inventory": "tpch",
-  "repository": "core",
-  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
-  "mode": "discovery",
-  "engine": {
-    "library_version": "v2.0.0-alpha42986",
-    "source_id": "d4e72566aa",
-    "codename": "Cyanoptera",
-    "python_package_version": "2.0.0.dev2609221243",
-    "python_version": "3.13.2",
-    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
-    "platform": "osx_arm64",
-    "extension_abi": "v2.0.0-alpha42986"
-  },
-  "resolved_name": "tpch",
-  "initial_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    }
-  ],
-  "evidence": "evidence/tpch.json",
-  "status": "ok",
-  "phase": "extension_capture",
+  "active_extension": "tpch",
   "artifacts": [
     {
+      "bytes": 22084574,
+      "download_sha256": "be043f8499f75d04cfb7826bbbf195645524ee342d6785d536c8116a0b7f9cf4",
       "name": "tpch",
       "repository": "core",
-      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpch.duckdb_extension.gz",
-      "download_sha256": "be043f8499f75d04cfb7826bbbf195645524ee342d6785d536c8116a0b7f9cf4",
       "sha256": "50734d1a7331785f477a7be18a7b55152ba8edb3c5f212bb3c4cb0628c723ca4",
-      "bytes": 22084574,
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpch.duckdb_extension.gz",
       "version": "v2.0.0-alpha42986"
     }
   ],
-  "install_names": [
-    "tpch"
-  ],
-  "stages": [
+  "attempts": [
     {
-      "extension": "tpch",
-      "status": "loaded",
-      "before_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        }
-      ],
-      "loaded_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "tpch",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "CUSTOM_PATH"
-        }
-      ],
-      "functions": {
-        "added": [
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "dbgen",
-            "named_parameters": {
-              "catalog": "VARCHAR",
-              "children": "UINTEGER",
-              "overwrite": "BOOLEAN",
-              "schema": "VARCHAR",
-              "sf": "DOUBLE",
-              "step": "UINTEGER",
-              "suffix": "VARCHAR"
-            },
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "tpch_answers",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "tpch_queries",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          }
-        ],
-        "removed": [],
-        "changed": []
-      }
+      "phase": "extension_capture",
+      "status": "ok"
     }
   ],
-  "loaded_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "tpch",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "CUSTOM_PATH"
-    }
-  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
   "function_count": 3210,
   "functions": {
     "added": [
@@ -247,75 +84,189 @@
         "varargs": null
       }
     ],
-    "removed": [],
-    "changed": []
+    "changed": [],
+    "removed": []
   },
-  "target_functions": {
-    "added": [
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "dbgen",
-        "named_parameters": {
-          "catalog": "VARCHAR",
-          "children": "UINTEGER",
-          "overwrite": "BOOLEAN",
-          "schema": "VARCHAR",
-          "sf": "DOUBLE",
-          "step": "UINTEGER",
-          "suffix": "VARCHAR"
-        },
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "tpch_answers",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "tpch_queries",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      }
-    ],
-    "removed": [],
-    "changed": []
-  },
-  "dependencies_loaded": [],
-  "process": {
-    "exit_code": 0,
-    "stdout": "",
-    "stderr": ""
-  },
-  "attempts": [
+  "initial_extensions": [
     {
-      "status": "ok",
-      "phase": "extension_capture"
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
     }
-  ]
+  ],
+  "install_names": [
+    "tpch"
+  ],
+  "inventory": "tpch",
+  "load_names": [
+    "tpch"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "tpch",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "tpch",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "dbgen",
+            "named_parameters": {
+              "catalog": "VARCHAR",
+              "children": "UINTEGER",
+              "overwrite": "BOOLEAN",
+              "schema": "VARCHAR",
+              "sf": "DOUBLE",
+              "step": "UINTEGER",
+              "suffix": "VARCHAR"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "tpch_answers",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "tpch_queries",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "01d5352f29784b15d937b7a0b7685d021052532d77420479011f53f732288efb",
+      "load_name": "tpch",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "tpch",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "795e082ee6c89d63a8d14da3ccfa0ab24b99d719db8e2579d739d180b111d8f7",
+  "status": "ok"
 }

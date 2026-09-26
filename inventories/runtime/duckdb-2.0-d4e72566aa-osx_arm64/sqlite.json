@@ -1,202 +1,35 @@
 {
-  "schema_version": 1,
-  "snapshot_type": "extension_delta",
-  "inventory": "sqlite",
-  "repository": "core",
-  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
-  "mode": "discovery",
-  "engine": {
-    "library_version": "v2.0.0-alpha42986",
-    "source_id": "d4e72566aa",
-    "codename": "Cyanoptera",
-    "python_package_version": "2.0.0.dev2609221243",
-    "python_version": "3.13.2",
-    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
-    "platform": "osx_arm64",
-    "extension_abi": "v2.0.0-alpha42986"
-  },
-  "resolved_name": "sqlite_scanner",
-  "initial_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    }
-  ],
-  "evidence": "evidence/sqlite.json",
-  "status": "ok",
-  "phase": "extension_capture",
+  "active_extension": "sqlite_scanner",
   "artifacts": [
     {
+      "bytes": 39726022,
+      "download_sha256": "8527957f5f9ba2692ac086efc1efe61d07a13578f851b65784ff6780e2be2f1d",
       "name": "sqlite_scanner",
       "repository": "core",
-      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
-      "download_sha256": "8527957f5f9ba2692ac086efc1efe61d07a13578f851b65784ff6780e2be2f1d",
       "sha256": "bbfc1744fe7913920736fa758ff4eee220edebd793d6dc9aa946469abde8a6bb",
-      "bytes": 39726022,
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
       "version": "982cb44841"
     }
   ],
-  "install_names": [
-    "sqlite_scanner"
-  ],
-  "stages": [
+  "attempts": [
     {
-      "extension": "sqlite_scanner",
-      "status": "loaded",
-      "before_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        }
-      ],
-      "loaded_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "sqlite_scanner",
-          "version": "982cb44841",
-          "install_mode": "CUSTOM_PATH"
-        }
-      ],
-      "functions": {
-        "added": [
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "sqlite_attach",
-            "named_parameters": {
-              "overwrite": "BOOLEAN"
-            },
-            "parameters": [
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "sqlite_query",
-            "named_parameters": {
-              "params": "ANY"
-            },
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "sqlite_scan",
-            "named_parameters": {},
-            "parameters": [
-              "VARCHAR",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          }
-        ],
-        "removed": [],
-        "changed": []
-      }
+      "phase": "extension_capture",
+      "status": "ok"
     }
   ],
-  "loaded_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "sqlite_scanner",
-      "version": "982cb44841",
-      "install_mode": "CUSTOM_PATH"
-    }
-  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
   "function_count": 3210,
   "functions": {
     "added": [
@@ -255,79 +88,193 @@
         "varargs": null
       }
     ],
-    "removed": [],
-    "changed": []
+    "changed": [],
+    "removed": []
   },
-  "target_functions": {
-    "added": [
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "sqlite_attach",
-        "named_parameters": {
-          "overwrite": "BOOLEAN"
-        },
-        "parameters": [
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "sqlite_query",
-        "named_parameters": {
-          "params": "ANY"
-        },
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "sqlite_scan",
-        "named_parameters": {},
-        "parameters": [
-          "VARCHAR",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      }
-    ],
-    "removed": [],
-    "changed": []
-  },
-  "dependencies_loaded": [],
-  "process": {
-    "exit_code": 0,
-    "stdout": "",
-    "stderr": ""
-  },
-  "attempts": [
+  "initial_extensions": [
     {
-      "status": "ok",
-      "phase": "extension_capture"
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
     }
-  ]
+  ],
+  "install_names": [
+    "sqlite_scanner"
+  ],
+  "inventory": "sqlite",
+  "load_names": [
+    "sqlite_scanner"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "sqlite_scanner",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "982cb44841"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "sqlite_scanner",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_attach",
+            "named_parameters": {
+              "overwrite": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_query",
+            "named_parameters": {
+              "params": "ANY"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_scan",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "35b35497be2c7c2e47fcb07f2c79d938ee0c99583331290b57c1b393b1c1da4a",
+      "load_name": "sqlite_scanner",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "sqlite_scanner",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "982cb44841"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "8bb61f5d4ad139b2bd52dc50a4d5089aeccbdea8682d4da7eb184203d907886a",
+  "status": "ok"
 }

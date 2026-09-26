@@ -1,354 +1,35 @@
 {
-  "schema_version": 1,
-  "snapshot_type": "extension_delta",
-  "inventory": "odbc",
-  "repository": "core",
-  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
-  "mode": "discovery",
-  "engine": {
-    "library_version": "v2.0.0-alpha42986",
-    "source_id": "d4e72566aa",
-    "codename": "Cyanoptera",
-    "python_package_version": "2.0.0.dev2609221243",
-    "python_version": "3.13.2",
-    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
-    "platform": "osx_arm64",
-    "extension_abi": "v2.0.0-alpha42986"
-  },
-  "resolved_name": "odbc_scanner",
-  "initial_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    }
-  ],
-  "evidence": "evidence/odbc.json",
-  "status": "ok",
-  "phase": "extension_capture",
+  "active_extension": "odbc_scanner",
   "artifacts": [
     {
+      "bytes": 522190,
+      "download_sha256": "86b17a5ccaec25683b3b752f8efdb431857ee39273689e40923a31ff8a0c16bf",
       "name": "odbc_scanner",
       "repository": "core",
-      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/odbc_scanner.duckdb_extension.gz",
-      "download_sha256": "86b17a5ccaec25683b3b752f8efdb431857ee39273689e40923a31ff8a0c16bf",
       "sha256": "27c33ad5d3b300d0b9e5b7accdf7f92c2fb254a1ee69488a3e3537b57721aa1c",
-      "bytes": 522190,
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/odbc_scanner.duckdb_extension.gz",
       "version": "274a330734"
     }
   ],
-  "install_names": [
-    "odbc_scanner"
-  ],
-  "stages": [
+  "attempts": [
     {
-      "extension": "odbc_scanner",
-      "status": "loaded",
-      "before_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        }
-      ],
-      "loaded_extensions": [
-        {
-          "name": "core_functions",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "icu",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "json",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        },
-        {
-          "name": "odbc_scanner",
-          "version": "274a330734",
-          "install_mode": "CUSTOM_PATH"
-        },
-        {
-          "name": "parquet",
-          "version": "v2.0.0-alpha42986",
-          "install_mode": "STATICALLY_LINKED"
-        }
-      ],
-      "functions": {
-        "added": [
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_begin_transaction",
-            "parameters": [
-              "BIGINT"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_bind_params",
-            "parameters": [
-              "BIGINT",
-              "BIGINT",
-              "ANY"
-            ],
-            "returns": "BIGINT",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_close",
-            "parameters": [
-              "BIGINT"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_commit",
-            "parameters": [
-              "BIGINT"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_connect",
-            "parameters": [],
-            "returns": "BIGINT",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": "VARCHAR"
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "odbc_copy",
-            "named_parameters": {
-              "batch_size": "UINTEGER",
-              "close_connection": "BOOLEAN",
-              "column_quotes": "VARCHAR",
-              "column_types": "MAP(VARCHAR, VARCHAR)",
-              "commit_after_create_table": "BOOLEAN",
-              "copy_in_transaction": "BOOLEAN",
-              "create_table": "BOOLEAN",
-              "decimal_params_as_chars": "BOOLEAN",
-              "dest_query": "VARCHAR",
-              "dest_query_single": "VARCHAR",
-              "dest_table": "VARCHAR",
-              "dummy_table_name": "VARCHAR",
-              "integral_params_as_decimals": "BOOLEAN",
-              "max_records_in_transaction": "UBIGINT",
-              "source_conn_string": "VARCHAR",
-              "source_file": "VARCHAR",
-              "source_limit": "UBIGINT",
-              "source_queries": "VARCHAR[]",
-              "source_query": "VARCHAR",
-              "use_insert_all": "BOOLEAN",
-              "use_insert_union": "BOOLEAN"
-            },
-            "parameters": [
-              "ANY"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_create_params",
-            "parameters": [],
-            "returns": "BIGINT",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "odbc_list_data_sources",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "odbc_list_drivers",
-            "named_parameters": {},
-            "parameters": [],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "table",
-            "macro": null,
-            "name": "odbc_query",
-            "named_parameters": {
-              "close_connection": "BOOLEAN",
-              "decimal_columns_as_ard_type": "BOOLEAN",
-              "decimal_columns_as_chars": "BOOLEAN",
-              "decimal_columns_precision_through_ard": "BOOLEAN",
-              "decimal_params_as_chars": "BOOLEAN",
-              "enable_columns_binding": "BOOLEAN",
-              "ignore_exec_failure": "BOOLEAN",
-              "integral_params_as_decimals": "BOOLEAN",
-              "params": "ANY",
-              "params_handle": "BIGINT",
-              "reset_stmt_before_execute": "BOOLEAN",
-              "time_params_as_ss_time2": "BOOLEAN",
-              "timestamp_columns_as_timestamp_ns": "BOOLEAN",
-              "timestamp_columns_with_typename_date_as_date": "BOOLEAN",
-              "timestamp_max_fraction_precision": "UTINYINT",
-              "timestamp_params_as_sf_timestamp_ntz": "BOOLEAN",
-              "timestamptz_params_as_ss_timestampoffset": "BOOLEAN",
-              "var_len_data_single_part": "BOOLEAN",
-              "var_len_params_long_threshold_bytes": "UINTEGER"
-            },
-            "parameters": [
-              "ANY",
-              "VARCHAR"
-            ],
-            "returns": null,
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": null,
-            "varargs": null
-          },
-          {
-            "catalog": "system",
-            "kind": "scalar",
-            "macro": null,
-            "name": "odbc_rollback",
-            "parameters": [
-              "BIGINT"
-            ],
-            "returns": "VARCHAR",
-            "schema_path": [
-              "main"
-            ],
-            "side_effects": true,
-            "varargs": null
-          }
-        ],
-        "removed": [],
-        "changed": []
-      }
+      "phase": "extension_capture",
+      "status": "ok"
     }
   ],
-  "loaded_extensions": [
-    {
-      "name": "core_functions",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "icu",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "json",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    },
-    {
-      "name": "odbc_scanner",
-      "version": "274a330734",
-      "install_mode": "CUSTOM_PATH"
-    },
-    {
-      "name": "parquet",
-      "version": "v2.0.0-alpha42986",
-      "install_mode": "STATICALLY_LINKED"
-    }
-  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
   "function_count": 3218,
   "functions": {
     "added": [
@@ -559,231 +240,345 @@
         "varargs": null
       }
     ],
-    "removed": [],
-    "changed": []
+    "changed": [],
+    "removed": []
   },
-  "target_functions": {
-    "added": [
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_begin_transaction",
-        "parameters": [
-          "BIGINT"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_bind_params",
-        "parameters": [
-          "BIGINT",
-          "BIGINT",
-          "ANY"
-        ],
-        "returns": "BIGINT",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_close",
-        "parameters": [
-          "BIGINT"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_commit",
-        "parameters": [
-          "BIGINT"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_connect",
-        "parameters": [],
-        "returns": "BIGINT",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": "VARCHAR"
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "odbc_copy",
-        "named_parameters": {
-          "batch_size": "UINTEGER",
-          "close_connection": "BOOLEAN",
-          "column_quotes": "VARCHAR",
-          "column_types": "MAP(VARCHAR, VARCHAR)",
-          "commit_after_create_table": "BOOLEAN",
-          "copy_in_transaction": "BOOLEAN",
-          "create_table": "BOOLEAN",
-          "decimal_params_as_chars": "BOOLEAN",
-          "dest_query": "VARCHAR",
-          "dest_query_single": "VARCHAR",
-          "dest_table": "VARCHAR",
-          "dummy_table_name": "VARCHAR",
-          "integral_params_as_decimals": "BOOLEAN",
-          "max_records_in_transaction": "UBIGINT",
-          "source_conn_string": "VARCHAR",
-          "source_file": "VARCHAR",
-          "source_limit": "UBIGINT",
-          "source_queries": "VARCHAR[]",
-          "source_query": "VARCHAR",
-          "use_insert_all": "BOOLEAN",
-          "use_insert_union": "BOOLEAN"
-        },
-        "parameters": [
-          "ANY"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_create_params",
-        "parameters": [],
-        "returns": "BIGINT",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "odbc_list_data_sources",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "odbc_list_drivers",
-        "named_parameters": {},
-        "parameters": [],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "table",
-        "macro": null,
-        "name": "odbc_query",
-        "named_parameters": {
-          "close_connection": "BOOLEAN",
-          "decimal_columns_as_ard_type": "BOOLEAN",
-          "decimal_columns_as_chars": "BOOLEAN",
-          "decimal_columns_precision_through_ard": "BOOLEAN",
-          "decimal_params_as_chars": "BOOLEAN",
-          "enable_columns_binding": "BOOLEAN",
-          "ignore_exec_failure": "BOOLEAN",
-          "integral_params_as_decimals": "BOOLEAN",
-          "params": "ANY",
-          "params_handle": "BIGINT",
-          "reset_stmt_before_execute": "BOOLEAN",
-          "time_params_as_ss_time2": "BOOLEAN",
-          "timestamp_columns_as_timestamp_ns": "BOOLEAN",
-          "timestamp_columns_with_typename_date_as_date": "BOOLEAN",
-          "timestamp_max_fraction_precision": "UTINYINT",
-          "timestamp_params_as_sf_timestamp_ntz": "BOOLEAN",
-          "timestamptz_params_as_ss_timestampoffset": "BOOLEAN",
-          "var_len_data_single_part": "BOOLEAN",
-          "var_len_params_long_threshold_bytes": "UINTEGER"
-        },
-        "parameters": [
-          "ANY",
-          "VARCHAR"
-        ],
-        "returns": null,
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": null,
-        "varargs": null
-      },
-      {
-        "catalog": "system",
-        "kind": "scalar",
-        "macro": null,
-        "name": "odbc_rollback",
-        "parameters": [
-          "BIGINT"
-        ],
-        "returns": "VARCHAR",
-        "schema_path": [
-          "main"
-        ],
-        "side_effects": true,
-        "varargs": null
-      }
-    ],
-    "removed": [],
-    "changed": []
-  },
-  "dependencies_loaded": [],
-  "process": {
-    "exit_code": 0,
-    "stdout": "",
-    "stderr": ""
-  },
-  "attempts": [
+  "initial_extensions": [
     {
-      "status": "ok",
-      "phase": "extension_capture"
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
     }
-  ]
+  ],
+  "install_names": [
+    "odbc_scanner"
+  ],
+  "inventory": "odbc",
+  "load_names": [
+    "odbc_scanner"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "odbc_scanner",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "274a330734"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "odbc_scanner",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_begin_transaction",
+            "parameters": [
+              "BIGINT"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_bind_params",
+            "parameters": [
+              "BIGINT",
+              "BIGINT",
+              "ANY"
+            ],
+            "returns": "BIGINT",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_close",
+            "parameters": [
+              "BIGINT"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_commit",
+            "parameters": [
+              "BIGINT"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_connect",
+            "parameters": [],
+            "returns": "BIGINT",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": "VARCHAR"
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "odbc_copy",
+            "named_parameters": {
+              "batch_size": "UINTEGER",
+              "close_connection": "BOOLEAN",
+              "column_quotes": "VARCHAR",
+              "column_types": "MAP(VARCHAR, VARCHAR)",
+              "commit_after_create_table": "BOOLEAN",
+              "copy_in_transaction": "BOOLEAN",
+              "create_table": "BOOLEAN",
+              "decimal_params_as_chars": "BOOLEAN",
+              "dest_query": "VARCHAR",
+              "dest_query_single": "VARCHAR",
+              "dest_table": "VARCHAR",
+              "dummy_table_name": "VARCHAR",
+              "integral_params_as_decimals": "BOOLEAN",
+              "max_records_in_transaction": "UBIGINT",
+              "source_conn_string": "VARCHAR",
+              "source_file": "VARCHAR",
+              "source_limit": "UBIGINT",
+              "source_queries": "VARCHAR[]",
+              "source_query": "VARCHAR",
+              "use_insert_all": "BOOLEAN",
+              "use_insert_union": "BOOLEAN"
+            },
+            "parameters": [
+              "ANY"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_create_params",
+            "parameters": [],
+            "returns": "BIGINT",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "odbc_list_data_sources",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "odbc_list_drivers",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "odbc_query",
+            "named_parameters": {
+              "close_connection": "BOOLEAN",
+              "decimal_columns_as_ard_type": "BOOLEAN",
+              "decimal_columns_as_chars": "BOOLEAN",
+              "decimal_columns_precision_through_ard": "BOOLEAN",
+              "decimal_params_as_chars": "BOOLEAN",
+              "enable_columns_binding": "BOOLEAN",
+              "ignore_exec_failure": "BOOLEAN",
+              "integral_params_as_decimals": "BOOLEAN",
+              "params": "ANY",
+              "params_handle": "BIGINT",
+              "reset_stmt_before_execute": "BOOLEAN",
+              "time_params_as_ss_time2": "BOOLEAN",
+              "timestamp_columns_as_timestamp_ns": "BOOLEAN",
+              "timestamp_columns_with_typename_date_as_date": "BOOLEAN",
+              "timestamp_max_fraction_precision": "UTINYINT",
+              "timestamp_params_as_sf_timestamp_ntz": "BOOLEAN",
+              "timestamptz_params_as_ss_timestampoffset": "BOOLEAN",
+              "var_len_data_single_part": "BOOLEAN",
+              "var_len_params_long_threshold_bytes": "UINTEGER"
+            },
+            "parameters": [
+              "ANY",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "odbc_rollback",
+            "parameters": [
+              "BIGINT"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": true,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "d31f4d066c55a128f30307bf011a71601116f33c80f04984fc6d3de1acb9a433",
+      "load_name": "odbc_scanner",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "odbc_scanner",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "274a330734"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "f1b93da4e4f0da817ad5b8dc01a65a1300c28586f186e6463f1d07c9dade2fb0",
+  "status": "ok"
 }

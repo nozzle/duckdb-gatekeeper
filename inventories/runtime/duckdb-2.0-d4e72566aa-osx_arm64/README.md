@@ -3,9 +3,10 @@
 Engine: Python `2.0.0.dev2609221243`, DuckDB `v2.0.0-alpha42986`, source
 `d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143`, platform `osx_arm64`.
 
-All **29** inventoried extensions were attempted against the matching official
-archive: **22 loaded**, **3 already linked** (ICU, JSON, Parquet), and **4 unavailable**
-(Lance, MotherDuck, UI, Vortex). `core_functions` was also initially linked.
+Actual protocol-v2 discovery and locked replay covered all **29** inventories:
+**25 verified successful setups** (**22 dynamically loaded** targets and **3 already
+linked** targets: ICU, JSON, Parquet), and **4 unavailable** targets (Lance,
+MotherDuck, UI, Vortex). `core_functions` was also initially linked.
 The initial capture contains **3,207 signatures**. The union of the independent
 successful captures contains **3,667 signatures / 1,438 qualified identities**.
 
@@ -13,46 +14,58 @@ successful captures contains **3,667 signatures / 1,438 qualified identities**.
 
 - `base.json` retains the complete initial qualified catalog and exact engine identity,
   including the native Python module's SHA-256.
-- Each `<inventory>.json` uses the reusable collector's base/delta representation.
-  `functions` is the complete change from the initial base; `target_functions` is the
-  change after explicit dependency stages. `stages` preserves every boundary. For
-  example, Avro's four added signatures are not attributed to Iceberg.
+- Each `<inventory>.json` is byte-identical to the actual final reusable collector's
+  schema-2 replay output. `functions` is the complete change from the initial base;
+  the last entry of `stages` is the target-only delta after all explicit dependency
+  stages. Avro and AWS functions are not attributed to Iceberg. Stage hashes bind
+  the loaded-extension metadata, ordered deltas, and reconstructed function arrays.
 - `evidence/<inventory>.json` retains requested/final download URLs, HTTP outcomes,
   compressed/decompressed SHA-256, the parsed footer, source descriptor and full
   revision, plus hashes/URLs for the engine's extension patches. Engine descriptors
   and footer source prefixes agree for every available out-of-tree extension.
-- `lock.json` records the artifacts actually used by successful dynamic loads. The
+- `lock.json` is the actual protocol-v2 discovery lock used for replay. It records
+  separate `install_names` and ordered `load_names`, artifact hashes, and stage hashes. The
   downloaded linked-extension archives are additional provenance evidence, not the
   binaries executed by Python. Their initial runtime registrations remain in `base.json`.
 - `summary.json`, `collection.json`, `report.json`, and `evidence/validation.json`
   record coverage, isolation, drift, and integrity checks.
+- `evidence/discovery.json` preserves compact discovery outcomes and hashes without
+  duplicate catalogs. `evidence/preliminary-observations.json` labels the earlier
+  exploratory metadata and failure observations separately from final outcomes.
 
-The captures were made with an ignored exploratory runner and exported using
-`scripts/capture_extensions.py`'s `function_delta` and `digest` helpers. Capture-function
-and exploratory-runner source hashes are recorded in `collection.json`. Native loads used fresh
-processes, in-memory databases, HOME and extension/secret directories, an allowlisted
-environment, disabled automatic install/load, and a macOS network-denial sandbox.
-DuckDB's signature and metadata checks remained enabled. No connection, attachment,
-authentication, or server-starting functions were invoked.
+Final captures were made by `scripts/capture_extensions.py` at `a786b9b`, protocol
+`gatekeeper-isolated-staged-capture-v2`, and retain its exact source hash. Native
+loads used fresh processes, in-memory databases, HOME and extension/secret directories,
+an allowlisted environment, Python `-I -B`, and disabled automatic install/load.
+DuckDB's signature and metadata checks remained enabled. The final collector does
+not use the preliminary explorer's macOS network-denial sandbox. No external
+connection, attachment, authentication, or server-starting functions were invoked.
 
 ## Availability and load outcomes
 
 All available binaries came from
 `https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/`.
-For unavailable entries, both the version and `d4e72566aa` archive paths returned
-HTTP 404. Matching `linux_amd64` probes also returned 404; this is evidence of
+Final discovery requested each unavailable target and received HTTP 404. Locked
+replay returned `artifact_not_in_lock` for those targets without repeating their
+downloads or reaching LOAD. Lance's HTTPFS prerequisite was downloaded and installed
+before replay reached the missing target; it was not loaded. The preliminary
+version and `d4e72566aa` archive paths and matching `linux_amd64` probes also returned
+404. These retained observations are evidence of
 unavailability for these exact archive coordinates, not proof of universal platform
 support or lack of it.
 
 - **Lance:** the candidate engine's extension descriptor comments out its build.
 - **Vortex:** its descriptor defaults `VORTEX_ENABLED` to OFF while CopyFunction changes.
 - **MotherDuck and UI:** no matching artifact at the tested coordinates. Neither
-  entrypoint was loaded; MotherDuck's absence is not an authentication/load failure.
-- **Iceberg:** the first attempt failed because Avro was absent. A fresh process
-  loaded Avro, captured its delta, then loaded Iceberg successfully (**35** Iceberg
-  signatures). A separate exploratory run with Avro and HTTPFS also succeeded;
-  the final collection uses the minimal observed dependency, Avro. The original
-  missing-dependency error is retained.
+  entrypoint was loaded; MotherDuck was unavailable rather than skipped or an
+  authentication/load failure.
+- **Iceberg:** final discovery and locked replay both succeeded with ordered
+  `httpfs → aws → avro → iceberg` loads (**35** target-added signatures). The old
+  missing-Avro error and successful minimal-preload retry are retained as preliminary
+  observations, not final replay failures. Other explicit final setups are
+  `httpfs → aws`, `httpfs → delta`, `httpfs → ducklake`, and
+  `httpfs → aws → unity_catalog`. Preloads are setup choices, not proof each is
+  mandatory for loading the target.
 - **ODBC:** `odbc_scanner` is an engine-recognized alias. The matching archive's
   footer is `C_STRUCT / v1.2.0`, which means the stable C API version, not a DuckDB
   engine mismatch. The candidate engine's `ParseExtensionMetaData` and C API load
@@ -87,3 +100,35 @@ The historical Python baseline comparison is name/signature-only: that baseline 
 unqualified and loads fewer extensions. Its additions cannot all be called new 2.0
 functions. This collection is a candidate, not a replacement baseline or a review of
 new implementations. Historical classifications, provenance, and grants are preserved.
+
+## Validation and reproduction
+
+All **25 successful discovery/replay setups** have identical locked artifact records,
+load plans, and stage hashes. Offline reconstruction verified **58 registration stages**,
+including their initial boundaries, preserved overload multiplicity, checked artifact
+hashes against the footer/source supplements, and confirmed the aggregate report is
+unchanged. Final replay has **zero load failures, skips, crashes, or timeouts**; the
+four unavailable results remain incomplete runtime coverage.
+All 25 successful targets have the same explicit install/load plans as the final
+1.5.5 collection, providing comparable loaded setups across the two engines.
+
+From the repository root:
+
+```sh
+python inventories/runtime/duckdb-2.0-d4e72566aa-osx_arm64/reconstruct.py
+```
+
+To repeat the actual locked collection with the exact Python runtime/native module
+recorded in `base.json`, choose a new ignored output directory:
+
+```sh
+python scripts/capture_extensions.py collect --allow-install \
+  --python /path/to/matching/venv/bin/python \
+  --output build/inventory-candidate/replay-new \
+  --lock inventories/runtime/duckdb-2.0-d4e72566aa-osx_arm64/lock.json
+```
+
+The collector exits nonzero for the four unavailable targets. Inspect
+`summary.json` for all outcomes. The inventory audit agrees with the regenerated
+report. Historical baseline, classifications, and default-map hashes are checked
+by `reconstruct.py`; full build/test validation is coordinated by the parent task.
