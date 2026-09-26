@@ -222,6 +222,20 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	};
 	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true,
 	                    gatekeeper::Identity definition = {}) {
+		// 2.0's retained definition proves an actual source-to-implementation edge.
+		// Qualified occurrence names or locations are never used as origin evidence.
+		auto source = provenance.function_entries.find(gatekeeper::FunctionKey(definition));
+		if (source != provenance.function_entries.end() &&
+		    gatekeeper::FunctionImplementations(*source, GATEKEEPER_DUCKDB_MAJOR)
+		        .count(gatekeeper::Lower(identity.name))) {
+			if (identity.catalog.empty() && identity.schema_path.empty()) {
+				identity.catalog = source->catalog;
+				identity.schema_path = source->schema_path;
+			}
+			if (gatekeeper::FunctionKey(identity).catalog == source->catalog &&
+			    gatekeeper::FunctionKey(identity).schema_path == source->schema_path)
+				identity.internal = source->internal;
+		}
 		// A bound descriptor (including a retained 2.0 definition) carries a qualified name,
 		// not CatalogEntry::internal. Restore that fact only from an exact observed entry
 		// or reviewed implementation edge. Unknown substitutions stay unknown, even when

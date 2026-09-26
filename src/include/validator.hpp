@@ -199,8 +199,9 @@ struct Provenance {
 	Names collation_functions;
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
-	// Source-reviewed implementation edges from exact entries observed by this bind. Preserve origin
-	// separately: a trusted body's substitution is not a caller capability just because its leaf changed.
+	// 1.5 conservatively includes possible reviewed replacements; it has no immutable
+	// definition evidence after binding. 2.0 records only exact entries here and uses
+	// the bound descriptor's retained definition for actual replacement attribution.
 	std::set<Identity> caller_implementations, trusted_implementations;
 	void RecordFunction(const Identity &identity, bool caller, int engine_major);
 	Names replacement_functions;

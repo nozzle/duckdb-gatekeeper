@@ -1,0 +1,46 @@
+# name: test/sql/substitution_wrappers.test
+# description: No-op casts, coalesce and identity macros cannot erase replacement blocks.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE MACRO passthrough(x) AS x;
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'passthrough',type:'macro'}], blocked_functions := [{schema_path:['main'],name:'arg_min'}, {schema_path:['main'],name:'arg_max'}, {schema_path:['main'],name:'epoch'}, {schema_path:['main'],name:'quantile_disc'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT min(x COLLATE nocase)::VARCHAR FROM (VALUES (''a'')) t(x)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT coalesce(max(x COLLATE nocase), NULL) FROM (VALUES (''a'')) t(x)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT passthrough(min(x COLLATE nocase)) FROM (VALUES (''a'')) t(x)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT (min(x COLLATE nocase) OVER ())::VARCHAR FROM (VALUES (''a'')) t(x)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01'')::DOUBLE');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT quantile(x, 0.5)::BIGINT FROM (VALUES (1::BIGINT)) t(x)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT passthrough(coalesce(quantile(x, 0.5) OVER (), NULL)) FROM (VALUES (1)) t(x)');
+----
+forbidden

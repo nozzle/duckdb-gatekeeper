@@ -95,6 +95,13 @@ int main() {
 	Check(provenance.function_entries.find(function_key)->internal == false);
 	Check(provenance.caller_implementations.count(function_key));
 	Check(mixed.catalog == "MiXeD" && mixed.name == "FuNc");
+	Provenance legacy, retained;
+	Identity minimum{"system", {"main"}, "min", "aggregate", true};
+	legacy.RecordFunction(minimum, true, 1);
+	retained.RecordFunction(minimum, true, 2);
+	Check(legacy.caller_implementations.count({"system", {"main"}, "arg_min", "aggregate"}));
+	Check(!retained.caller_implementations.count({"system", {"main"}, "arg_min", "aggregate"}));
+	Check(retained.caller_implementations.count(minimum));
 	auto finance = ObjectKey("memory", {"finance", "reports"}, "orders");
 	auto sales = ObjectKey("memory", {"sales", "reports"}, "orders");
 	provenance.caller_objects.insert(finance);

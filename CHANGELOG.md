@@ -12,6 +12,10 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Keep function replacement blocks effective through no-op casts, `coalesce`, and identity
+  macros. DuckDB 1.5 conservatively refuses ambiguous mixed caller/trusted replacement
+  names; 2.0 uses retained definitions to avoid unrelated replacement attribution.
+
 - Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
   including cross-namespace replacements, without attributing ordinary casts to unrelated
   caller functions. Refuse caller non-system callbacks whose expression origin cannot be

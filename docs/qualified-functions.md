@@ -109,8 +109,9 @@ Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.
 
 ### Binder substitutions and specialization
 
-On both supported engines, an observed internal `system.main` definition records source-backed
-possible implementation identities, preserving whether the definition was caller-attributable or trusted:
+Source review defines the following possible implementation identities. DuckDB 1.5 records
+them conservatively at lookup; 2.0 attributes an actual replacement through the bound
+descriptor's retained source definition:
 
 | Selected definition | Possible replacement | Kind |
 | --- | --- | --- |
@@ -129,6 +130,25 @@ disabled, in addition to the source grant. For example, strict collated `min` ne
 Other caller syntax still needs its own grants, such as `list_value` for a list fraction.
 Substitutions solely inside a trusted view or granted host macro retain that body's trust;
 an identity reached by both caller and trusted routes remains caller-attributable.
+
+**Known 1.5 limitation:** the engine does not retain immutable source-definition or
+occurrence evidence after binding. Expression locations and aliases are not such evidence:
+no-op casts, `coalesce`, and macro expansion can overwrite or erase them. Gatekeeper does
+not use occurrence tags. To keep genuine replacements blockable through those wrappers,
+1.5 treats possible source-reviewed replacements as caller-attributable query-wide. Thus
+plain caller `min` beside a trusted view's `arg_min` is conservatively refused under an
+`arg_min` block even though each expression is allowed separately. The same applies to
+`max`, `quantile`, and the 1.5 `date_part` targets `epoch`/`julian`, including same-leaf host
+macro scopes. This false denial is intentional fail-closed behavior, not a fully precise
+origin guarantee. Resolving it needs stronger engine provenance, not expression-location
+heuristics or trusted-entry precedence that could hide a genuine caller substitution.
+
+On 2.0 `BoundAggregateFunction::GetDefinition()` is retained across implementation
+replacement and descriptor mutation; scalar descriptors retain their source too. Exact
+definition identity is matched against the private bind's observed entries. Plain `min`
+does not acquire `arg_min` ownership merely because that is a possible replacement, and
+an unrelated `date_part` does not claim every unary date function. Cast/coalesce/identity
+macro wrappers still retain the executable descriptor and its caller definition.
 
 Engine aggregate binders can replace a catalog overload with a factory implementation, losing
 its namespace. Gatekeeper recovers an unstamped aggregate only from a matching system
