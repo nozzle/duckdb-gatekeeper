@@ -1,0 +1,25 @@
+{
+  "artifact_name": "motherduck",
+  "compressed_bytes": 3998811,
+  "compressed_sha256": "8763242ab74fd656b480c56698c6ffbe76434ac694e2ce677b1b7a520ea9eb96",
+  "decompressed_bytes": 10922230,
+  "decompressed_sha256": "ec176e5ae01d27b7f4dbc24208d8edbb0dbe8557d147e253f358a171c1eef528",
+  "extension": "motherduck",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/motherduck.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "v1.5.5-2026-09-355",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:18.445722+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/motherduck.duckdb_extension.gz"
+}

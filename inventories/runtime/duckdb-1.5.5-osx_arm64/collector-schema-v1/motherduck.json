@@ -1,0 +1,70 @@
+{
+  "active_extension": "motherduck",
+  "artifacts": [
+    {
+      "bytes": 10922230,
+      "download_sha256": "8763242ab74fd656b480c56698c6ffbe76434ac694e2ce677b1b7a520ea9eb96",
+      "name": "motherduck",
+      "repository": "core",
+      "sha256": "ec176e5ae01d27b7f4dbc24208d8edbb0dbe8557d147e253f358a171c1eef528",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/motherduck.duckdb_extension.gz",
+      "version": "v1.5.5-2026-09-355"
+    }
+  ],
+  "attempts": [
+    {
+      "error": {
+        "code": "runtime_service_required_network_denied"
+      },
+      "phase": "load",
+      "status": "failed"
+    }
+  ],
+  "base_sha256": "8acd806ddb7b6ddd50fded11407841aae5977eed7f9de6fb6916d51427db9eee",
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "error": {
+    "code": "runtime_service_required_network_denied"
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "motherduck"
+  ],
+  "inventory": "motherduck",
+  "mode": "discovery",
+  "phase": "load",
+  "repository": "core",
+  "resolved_name": "motherduck",
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "status": "failed"
+}

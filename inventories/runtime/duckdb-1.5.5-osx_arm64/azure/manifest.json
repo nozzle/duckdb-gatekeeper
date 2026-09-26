@@ -1,0 +1,30 @@
+{
+  "artifact": "artifact.json",
+  "dependency_artifacts": [],
+  "extension": "azure",
+  "historical_inventory": "inventories/extensions/azure.json",
+  "load_result": "load.json",
+  "report": "report.json",
+  "schema_version": 1,
+  "snapshots": {
+    "after": {
+      "function_rows": 2903,
+      "path": "../snapshots/f4518c99b11db07edddd72b70c33898329aca39bc467ebbd9538b4f38e00d182.json",
+      "qualified_identity_count": 913,
+      "sha256": "f4518c99b11db07edddd72b70c33898329aca39bc467ebbd9538b4f38e00d182"
+    },
+    "base": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    },
+    "before": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    }
+  },
+  "status": "loaded"
+}

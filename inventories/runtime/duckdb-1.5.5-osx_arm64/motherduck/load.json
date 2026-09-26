@@ -1,0 +1,15 @@
+{
+  "error": "Invalid Input Error: Initialization function \"motherduck_duckdb_cpp_init\" from file \"<worktree>/build/inventory-release/artifacts/motherduck.duckdb_extension\" threw an exception: \"Failed to download \"http://api.motherduck.com/extension_version\" (attempt 5): Could not establish connection\"",
+  "error_type": "InvalidInputException",
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "motherduck"
+    }
+  ],
+  "status": "load_failed",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

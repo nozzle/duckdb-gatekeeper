@@ -1,0 +1,323 @@
+{
+  "added_default_names_at_ungranted_identities": [],
+  "downloaded_artifacts_with_both_hashes_and_footer": 28,
+  "extensions": {
+    "autocomplete": {
+      "added_identities": 4,
+      "added_signature_rows": 4,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "avro": {
+      "added_identities": 1,
+      "added_signature_rows": 2,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "aws": {
+      "added_identities": 1,
+      "added_signature_rows": 2,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "azure": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "delta": {
+      "added_identities": 11,
+      "added_signature_rows": 12,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "ducklake": {
+      "added_identities": 22,
+      "added_signature_rows": 27,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "encodings": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "excel": {
+      "added_identities": 3,
+      "added_signature_rows": 3,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "fts": {
+      "added_identities": 1,
+      "added_signature_rows": 1,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "httpfs": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "iceberg": {
+      "added_identities": 16,
+      "added_signature_rows": 31,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "icu": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": true,
+      "unclassified_added_names": []
+    },
+    "inet": {
+      "added_identities": 9,
+      "added_signature_rows": 12,
+      "artifact_status": "downloaded",
+      "changed_identities": 2,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "json": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": true,
+      "unclassified_added_names": []
+    },
+    "lance": {
+      "added_identities": 12,
+      "added_signature_rows": 14,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "motherduck": {
+      "artifact_status": "downloaded",
+      "status": "load_failed"
+    },
+    "mysql": {
+      "added_identities": 5,
+      "added_signature_rows": 5,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "odbc": {
+      "artifact_status": "unavailable",
+      "status": "unavailable"
+    },
+    "parquet": {
+      "added_identities": 0,
+      "added_signature_rows": 0,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": true,
+      "unclassified_added_names": []
+    },
+    "postgres": {
+      "added_identities": 10,
+      "added_signature_rows": 10,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "quack": {
+      "added_identities": 12,
+      "added_signature_rows": 13,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "spatial": {
+      "added_identities": 164,
+      "added_signature_rows": 284,
+      "artifact_status": "downloaded",
+      "changed_identities": 1,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "sqlite": {
+      "added_identities": 3,
+      "added_signature_rows": 3,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "tpcds": {
+      "added_identities": 3,
+      "added_signature_rows": 3,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "tpch": {
+      "added_identities": 3,
+      "added_signature_rows": 3,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "ui": {
+      "added_identities": 5,
+      "added_signature_rows": 5,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "unity_catalog": {
+      "added_identities": 2,
+      "added_signature_rows": 2,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    },
+    "vortex": {
+      "added_identities": 3,
+      "added_signature_rows": 5,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": [
+        "vortex_version"
+      ]
+    },
+    "vss": {
+      "added_identities": 4,
+      "added_signature_rows": 4,
+      "artifact_status": "downloaded",
+      "changed_identities": 0,
+      "removed_signature_rows": 0,
+      "source_compute_names_not_observed": [],
+      "status": "loaded",
+      "target_already_loaded_in_base": false,
+      "unclassified_added_names": []
+    }
+  },
+  "source_compute_names_not_observed": {},
+  "status_counts": {
+    "load_failed": 1,
+    "loaded": 27,
+    "unavailable": 1
+  },
+  "unclassified_added_names": [
+    "vortex_version"
+  ],
+  "unique_full_snapshots": 37
+}

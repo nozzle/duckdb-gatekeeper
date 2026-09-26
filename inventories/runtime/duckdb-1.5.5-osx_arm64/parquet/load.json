@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "parquet"
+    },
+    {
+      "action": "load_target",
+      "name": "parquet"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

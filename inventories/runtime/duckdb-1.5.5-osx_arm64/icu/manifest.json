@@ -1,0 +1,30 @@
+{
+  "artifact": "artifact.json",
+  "dependency_artifacts": [],
+  "extension": "icu",
+  "historical_inventory": "inventories/extensions/icu.json",
+  "load_result": "load.json",
+  "report": "report.json",
+  "schema_version": 1,
+  "snapshots": {
+    "after": {
+      "function_rows": 2903,
+      "path": "../snapshots/638b3d6c0f5d136477b03d1e47151c84229548f507f758b39ae81c401b49cd7e.json",
+      "qualified_identity_count": 913,
+      "sha256": "638b3d6c0f5d136477b03d1e47151c84229548f507f758b39ae81c401b49cd7e"
+    },
+    "base": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    },
+    "before": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    }
+  },
+  "status": "loaded"
+}

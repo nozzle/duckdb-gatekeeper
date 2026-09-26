@@ -1,0 +1,25 @@
+{
+  "artifact_name": "sqlite_scanner",
+  "compressed_bytes": 8440967,
+  "compressed_sha256": "d7514249b0cce24bb63856b4c752a889ef2f739c6fd821109988e4e13afd7058",
+  "decompressed_bytes": 27038870,
+  "decompressed_sha256": "a3548846bd643cb717265a0a11352af2e830a466ca068f4cae2552af658879f2",
+  "extension": "sqlite",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "f79b1db",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:22.923351+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/sqlite_scanner.duckdb_extension.gz"
+}

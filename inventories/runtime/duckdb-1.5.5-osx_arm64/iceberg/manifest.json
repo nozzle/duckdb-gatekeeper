@@ -1,0 +1,53 @@
+{
+  "artifact": "artifact.json",
+  "dependency_artifacts": [
+    "../httpfs/artifact.json",
+    "../aws/artifact.json",
+    "../avro/artifact.json"
+  ],
+  "extension": "iceberg",
+  "historical_inventory": "inventories/extensions/iceberg.json",
+  "initial_load_result": "initial-load.json",
+  "load_result": "load.json",
+  "report": "report.json",
+  "schema_version": 1,
+  "snapshots": {
+    "after": {
+      "function_rows": 2938,
+      "path": "../snapshots/e7feb76acc86cc8b3c2e20f0bdacac284f1954f09d73ddebd2f9336235e992a3.json",
+      "qualified_identity_count": 931,
+      "sha256": "e7feb76acc86cc8b3c2e20f0bdacac284f1954f09d73ddebd2f9336235e992a3"
+    },
+    "base": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    },
+    "before": {
+      "function_rows": 2907,
+      "path": "../snapshots/b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22.json",
+      "qualified_identity_count": 915,
+      "sha256": "b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22"
+    },
+    "dependency-avro": {
+      "function_rows": 2907,
+      "path": "../snapshots/b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22.json",
+      "qualified_identity_count": 915,
+      "sha256": "b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22"
+    },
+    "dependency-aws": {
+      "function_rows": 2905,
+      "path": "../snapshots/a5add8a45a05e712a419ba1316ce60af61ec39917a97926d9a899718b3ae57ae.json",
+      "qualified_identity_count": 914,
+      "sha256": "a5add8a45a05e712a419ba1316ce60af61ec39917a97926d9a899718b3ae57ae"
+    },
+    "dependency-httpfs": {
+      "function_rows": 2903,
+      "path": "../snapshots/9bad8c7eea897e1ec496b6cd81576fb3873adefdbf7ee19a04655ec03399f50d.json",
+      "qualified_identity_count": 913,
+      "sha256": "9bad8c7eea897e1ec496b6cd81576fb3873adefdbf7ee19a04655ec03399f50d"
+    }
+  },
+  "status": "loaded"
+}

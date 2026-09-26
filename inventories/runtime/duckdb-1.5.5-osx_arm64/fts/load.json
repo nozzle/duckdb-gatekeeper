@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "fts"
+    },
+    {
+      "action": "load_target",
+      "name": "fts"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

@@ -1,0 +1,25 @@
+{
+  "artifact_name": "unity_catalog",
+  "compressed_bytes": 7627272,
+  "compressed_sha256": "b1b157f1292ffa661d2fbe6cc8ff2d2fe7081810ab3352a590a8fdb8a788a292",
+  "decompressed_bytes": 25394854,
+  "decompressed_sha256": "e51f0388555c9b4833bba392c09690817194914a7576441acda09dece63c2b2a",
+  "extension": "unity_catalog",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/unity_catalog.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "fd85147",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:24.244340+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/unity_catalog.duckdb_extension.gz"
+}

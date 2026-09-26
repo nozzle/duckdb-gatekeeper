@@ -1,0 +1,30 @@
+{
+  "artifact": "artifact.json",
+  "dependency_artifacts": [],
+  "extension": "excel",
+  "historical_inventory": "inventories/extensions/excel.json",
+  "load_result": "load.json",
+  "report": "report.json",
+  "schema_version": 1,
+  "snapshots": {
+    "after": {
+      "function_rows": 2906,
+      "path": "../snapshots/77a0da1615dc6d883f9f9449784598d707ac4182aca52d267d7313253e9785bd.json",
+      "qualified_identity_count": 916,
+      "sha256": "77a0da1615dc6d883f9f9449784598d707ac4182aca52d267d7313253e9785bd"
+    },
+    "base": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    },
+    "before": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    }
+  },
+  "status": "loaded"
+}

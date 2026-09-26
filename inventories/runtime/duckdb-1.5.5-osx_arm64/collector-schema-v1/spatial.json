@@ -1,0 +1,4608 @@
+{
+  "artifacts": [
+    {
+      "bytes": 59591422,
+      "download_sha256": "49e17088e4c8a25a5c949be0d4acb25336da8afed3865079e614454fd2b3795f",
+      "name": "spatial",
+      "repository": "core",
+      "sha256": "81b73514ef95301f0e8b3229bdbdf7946827600dfd63a42d3b3193fa322c4c5a",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/spatial.duckdb_extension.gz",
+      "version": "eb1e57c"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "8acd806ddb7b6ddd50fded11407841aae5977eed7f9de6fb6916d51427db9eee",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 3187,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "DuckDB_PROJ_Compiled_Version",
+        "parameters": [],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "DuckDB_Proj_Version",
+        "parameters": [],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Affine",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Affine",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area_Spheroid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Area_Spheroid",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsGeoJSON",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "JSON",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsHEXWKB",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_AsMVT",
+        "parameters": [
+          "ANY",
+          "VARCHAR",
+          "INTEGER",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_AsMVT",
+        "parameters": [
+          "ANY",
+          "VARCHAR",
+          "INTEGER",
+          "VARCHAR"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_AsMVT",
+        "parameters": [
+          "ANY",
+          "VARCHAR",
+          "INTEGER"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_AsMVT",
+        "parameters": [
+          "ANY",
+          "VARCHAR"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_AsMVT",
+        "parameters": [
+          "ANY"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsMVTGeom",
+        "parameters": [
+          "GEOMETRY",
+          "BOX_2D",
+          "BIGINT",
+          "BIGINT",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsMVTGeom",
+        "parameters": [
+          "GEOMETRY",
+          "BOX_2D",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsMVTGeom",
+        "parameters": [
+          "GEOMETRY",
+          "BOX_2D",
+          "BIGINT"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsMVTGeom",
+        "parameters": [
+          "GEOMETRY",
+          "BOX_2D"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_AsSVG",
+        "parameters": [
+          "GEOMETRY",
+          "BOOLEAN",
+          "INTEGER"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Azimuth",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Azimuth",
+        "parameters": [
+          "POINT_2D",
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Boundary",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Buffer",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "INTEGER",
+          "VARCHAR",
+          "VARCHAR",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Buffer",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "INTEGER"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Buffer",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_BuildArea",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "BOX_2DF"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Centroid",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ClosestPoint",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Collect",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CollectionExtract",
+        "parameters": [
+          "GEOMETRY",
+          "INTEGER"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CollectionExtract",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ConcaveHull",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Contains",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Contains",
+        "parameters": [
+          "POLYGON_2D",
+          "POINT_2D"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ContainsProperly",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ConvexHull",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageClean",
+        "parameters": [
+          "GEOMETRY[]",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageClean",
+        "parameters": [
+          "GEOMETRY[]",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageClean",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageInvalidEdges",
+        "parameters": [
+          "GEOMETRY[]",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageInvalidEdges",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_CoverageInvalidEdges_Agg",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_CoverageInvalidEdges_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageSimplify",
+        "parameters": [
+          "GEOMETRY[]",
+          "DOUBLE",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageSimplify",
+        "parameters": [
+          "GEOMETRY[]",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_CoverageSimplify_Agg",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_CoverageSimplify_Agg",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoverageUnion",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_CoverageUnion_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_CoveredBy",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Covers",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Crosses",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_DWithin",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_DWithin_GEOS",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_DWithin_Spheroid",
+        "parameters": [
+          "POINT_2D",
+          "POINT_2D",
+          "DOUBLE"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Difference",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Dimension",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Disjoint",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance",
+        "parameters": [
+          "LINESTRING_2D",
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance",
+        "parameters": [
+          "POINT_2D",
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance",
+        "parameters": [
+          "POINT_2D",
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance_GEOS",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance_Sphere",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance_Sphere",
+        "parameters": [
+          "POINT_2D",
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Distance_Spheroid",
+        "parameters": [
+          "POINT_2D",
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_Drivers",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Dump",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "STRUCT(geom GEOMETRY, path INTEGER[])[]",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_EndPoint",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_EndPoint",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Envelope",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_Envelope_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Equals",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Expand",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Extent",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOX_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_Extent_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Extent_Approx",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOX_2DF",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ExteriorRing",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ExteriorRing",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_FlipCoordinates",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "BOX_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_FlipCoordinates",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_FlipCoordinates",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_FlipCoordinates",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_FlipCoordinates",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "POLYGON_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Force2D",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Force3DM",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Force3DZ",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Force4D",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_GeneratePoints",
+        "named_parameters": {},
+        "parameters": [
+          "BOX_2D",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_GeneratePoints",
+        "named_parameters": {},
+        "parameters": [
+          "BOX_2D",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromGeoJSON",
+        "parameters": [
+          "JSON"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromGeoJSON",
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromHEXEWKB",
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromHEXWKB",
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromText",
+        "parameters": [
+          "VARCHAR",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeomFromText",
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeometryType",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "ANY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeometryType",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "ANY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeometryType",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "ANY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_GeometryType",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "ANY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_HasM",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_HasZ",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Hilbert",
+        "parameters": [
+          "BOX_2D",
+          "BOX_2D"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Hilbert",
+        "parameters": [
+          "BOX_2DF",
+          "BOX_2DF"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Hilbert",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "BOX_2D"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Hilbert",
+        "parameters": [
+          "GEOMETRY",
+          "BOX_2D"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Hilbert",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_InteriorRingN",
+        "parameters": [
+          "GEOMETRY",
+          "BIGINT"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_InteriorRingN",
+        "parameters": [
+          "POLYGON_2D",
+          "BIGINT"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_InterpolatePoint",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Intersection",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_Intersection_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Intersects",
+        "parameters": [
+          "BOX_2D",
+          "BOX_2D"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Intersects",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsClosed",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsEmpty",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsEmpty",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsEmpty",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsRing",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsSimple",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_IsValid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Length",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Length",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Length_Spheroid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Length_Spheroid",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineInterpolatePoint",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineInterpolatePoints",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineLocatePoint",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineMerge",
+        "parameters": [
+          "GEOMETRY",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineMerge",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineString2DFromWKB",
+        "parameters": [
+          "BLOB"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LineSubstring",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LocateAlong",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LocateAlong",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LocateBetween",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_LocateBetween",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_M",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MMax",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MMin",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakeBox2D",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOX_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakeEnvelope",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakeLine",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakeLine",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakePoint",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_4D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakePoint",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_3D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakePoint",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakePolygon",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakePolygon",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MakeValid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MaximumInscribedCircle",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "STRUCT(center GEOMETRY, nearest GEOMETRY, radius DOUBLE)",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MaximumInscribedCircle",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "STRUCT(center GEOMETRY, nearest GEOMETRY, radius DOUBLE)",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_MemUnion_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_MinimumRotatedRectangle",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Multi",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NGeometries",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NInteriorRings",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NInteriorRings",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NPoints",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NPoints",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NPoints",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NPoints",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NPoints",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Node",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Normalize",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumGeometries",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumInteriorRings",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumInteriorRings",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumPoints",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumPoints",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "UINTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumPoints",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumPoints",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_NumPoints",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "UBIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Overlaps",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Perimeter",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Perimeter",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Perimeter",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Perimeter_Spheroid",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Perimeter_Spheroid",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Point",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Point2D",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Point2DFromWKB",
+        "parameters": [
+          "BLOB"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Point3D",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_3D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Point4D",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE",
+          "DOUBLE"
+        ],
+        "returns": "POINT_4D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_PointN",
+        "parameters": [
+          "GEOMETRY",
+          "INTEGER"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_PointN",
+        "parameters": [
+          "LINESTRING_2D",
+          "INTEGER"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_PointOnSurface",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Points",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Polygon2DFromWKB",
+        "parameters": [
+          "BLOB"
+        ],
+        "returns": "POLYGON_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Polygonize",
+        "parameters": [
+          "GEOMETRY[]"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_QuadKey",
+        "parameters": [
+          "DOUBLE",
+          "DOUBLE",
+          "INTEGER"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_QuadKey",
+        "parameters": [
+          "GEOMETRY",
+          "INTEGER"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_Read",
+        "named_parameters": {
+          "allowed_drivers": "VARCHAR[]",
+          "keep_wkb": "BOOLEAN",
+          "layer": "VARCHAR",
+          "max_batch_size": "INTEGER",
+          "open_options": "VARCHAR[]",
+          "sibling_files": "VARCHAR[]"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_ReadOSM",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_ReadSHP",
+        "named_parameters": {
+          "encoding": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_Read_Meta",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ST_Read_Meta",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ReducePrecision",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_RemoveRepeatedPoints",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_RemoveRepeatedPoints",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_RemoveRepeatedPoints",
+        "parameters": [
+          "LINESTRING_2D",
+          "DOUBLE"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_RemoveRepeatedPoints",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "LINESTRING_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Reverse",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_rotatez(geom, radians)",
+        "name": "ST_Rotate",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, 1, 0, 0, 0, cos(radians), -(sin(radians)), 0, sin(radians), cos(radians), 0, 0, 0)",
+        "name": "ST_RotateX",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, cos(radians), 0, sin(radians), 0, 1, 0, -(sin(radians)), 0, cos(radians), 0, 0, 0)",
+        "name": "ST_RotateY",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, cos(radians), -(sin(radians)), 0, sin(radians), cos(radians), 0, 0, 0, 1, 0, 0, 0)",
+        "name": "ST_RotateZ",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, xs, 0, 0, 0, ys, 0, 0, 0, 1, 0, 0, 0)",
+        "name": "ST_Scale",
+        "parameters": [
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, xs, 0, 0, 0, ys, 0, 0, 0, zs, 0, 0, 0)",
+        "name": "ST_Scale",
+        "parameters": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ShortestLine",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Simplify",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_SimplifyPreserveTopology",
+        "parameters": [
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Snap",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY",
+          "DOUBLE"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_StartPoint",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_StartPoint",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_SymDifference",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_TileEnvelope",
+        "parameters": [
+          "INTEGER",
+          "INTEGER",
+          "INTEGER"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Touches",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, xs, 0, 0, 0, ys, 0, 0, 0, 1, (dx * xs), (dy * ys), 0)",
+        "name": "ST_TransScale",
+        "parameters": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "BOX_2D",
+          "VARCHAR",
+          "VARCHAR",
+          "BOOLEAN"
+        ],
+        "returns": "BOX_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "BOX_2D",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "BOX_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "GEOMETRY",
+          "VARCHAR",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "GEOMETRY",
+          "VARCHAR",
+          "VARCHAR",
+          "BOOLEAN"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "GEOMETRY",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "GEOMETRY",
+          "VARCHAR"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "POINT_2D",
+          "VARCHAR",
+          "VARCHAR",
+          "BOOLEAN"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Transform",
+        "parameters": [
+          "POINT_2D",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "POINT_2D",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, 1, 0, dx, 0, 1, dy, 0, 0, 1, 0, 0, 0)",
+        "name": "ST_Translate",
+        "parameters": [
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "st_affine(geom, 1, 0, dx, 0, 1, dy, 0, 0, 1, dz, 0, 0)",
+        "name": "ST_Translate",
+        "parameters": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Union",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "aggregate",
+        "macro": null,
+        "name": "ST_Union_Agg",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_VoronoiDiagram",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "GEOMETRY",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Within",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Within",
+        "parameters": [
+          "POINT_2D",
+          "POLYGON_2D"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_WithinProperly",
+        "parameters": [
+          "GEOMETRY",
+          "GEOMETRY"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_X",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_X",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "BOX_2DF"
+        ],
+        "returns": "FLOAT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMax",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "BOX_2DF"
+        ],
+        "returns": "FLOAT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_XMin",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Y",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Y",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "BOX_2DF"
+        ],
+        "returns": "FLOAT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMax",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "BOX_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "BOX_2DF"
+        ],
+        "returns": "FLOAT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "LINESTRING_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "POINT_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_YMin",
+        "parameters": [
+          "POLYGON_2D"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_Z",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ZMFlag",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "UTINYINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ZMax",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "ST_ZMin",
+        "parameters": [
+          "GEOMETRY"
+        ],
+        "returns": "DOUBLE",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "pragma_rtree_index_info",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "rtree_index_dump",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "rtree_index_scan",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "shapefile_meta",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "shapefile_meta",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [
+      {
+        "after": [
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "BOX_2D"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "GEOMETRY"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "LINESTRING_2D"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "POINT_2D"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "POLYGON_2D"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          }
+        ],
+        "before": [
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "st_astext",
+            "parameters": [
+              "GEOMETRY"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          }
+        ]
+      }
+    ],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "spatial"
+  ],
+  "inventory": "spatial",
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "spatial",
+      "version": "eb1e57c"
+    }
+  ],
+  "mode": "discovery",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "spatial",
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "status": "ok"
+}

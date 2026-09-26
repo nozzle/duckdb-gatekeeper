@@ -1,0 +1,21 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_and_load_dependency",
+      "name": "httpfs"
+    },
+    {
+      "action": "install_target",
+      "name": "lance"
+    },
+    {
+      "action": "load_target",
+      "name": "lance"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

@@ -1,0 +1,25 @@
+{
+  "artifact_name": "azure",
+  "compressed_bytes": 4857768,
+  "compressed_sha256": "1cd2eb0c523f2d1ddd862c493f8b4c27f99da17771523e81353566855b48dcfb",
+  "decompressed_bytes": 12606510,
+  "decompressed_sha256": "3eba9d7c57ccdbd036cd96166db7412828d0decd94fbe901cc0aa636ce8acde2",
+  "extension": "azure",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/azure.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "003214c",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:14.573214+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/azure.duckdb_extension.gz"
+}

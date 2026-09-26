@@ -1,0 +1,1811 @@
+{
+  "added_default_names_at_ungranted_identities": [],
+  "dependency_delta": {
+    "added": [],
+    "baseline_qualified": true,
+    "candidate_qualified": true,
+    "changed": [],
+    "default_names_at_ungranted_identities": [],
+    "defaults_not_observed": [],
+    "removed": []
+  },
+  "historical_baseline_signature_report": {
+    "added": [
+      "read_avro"
+    ],
+    "changed": [],
+    "extensions_changed": true,
+    "removed": [],
+    "version_changed": false
+  },
+  "loaded_extension_origins": [
+    {
+      "artifact": "../avro/artifact.json",
+      "name": "avro",
+      "origin": "Official repository artifact installed and loaded locally",
+      "present_in_base": false,
+      "version": "f9d5902"
+    },
+    {
+      "name": "core_functions",
+      "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+      "present_in_base": true,
+      "version": "v1.5.5"
+    },
+    {
+      "name": "icu",
+      "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+      "present_in_base": true,
+      "version": "v1.5.5"
+    },
+    {
+      "name": "json",
+      "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+      "present_in_base": true,
+      "version": "v1.5.5"
+    },
+    {
+      "name": "parquet",
+      "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+      "present_in_base": true,
+      "version": "v1.5.5"
+    }
+  ],
+  "note": "Target LOAD delta is relative to dependency-complete before. Base and dependency registrations are not target ownership claims. Historical baseline is unqualified and not a complete extension signature baseline.",
+  "qualified_source_mapping_report": {
+    "added": [
+      {
+        "catalog": "system",
+        "name": "read_avro",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      }
+    ],
+    "baseline_qualified": true,
+    "candidate_qualified": true,
+    "changed": [],
+    "default_names_at_ungranted_identities": [
+      {
+        "catalog": "system",
+        "name": "cume_dist",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "dense_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "fill",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "first_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "lag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "last_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "lead",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "nth_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "ntile",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "percent_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "rank_dense",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "row_number",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      }
+    ],
+    "defaults_not_observed": [
+      {
+        "catalog": "system",
+        "name": "<<=",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": ">>=",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "broadcast",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "check_peg_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "cume_dist",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "dense_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "duckdb_proj_compiled_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "duckdb_proj_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "excel_text",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "family",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "fill",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "first_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "host",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "html_escape",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "html_unescape",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_bucket",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_truncate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "lag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "last_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "lead",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "murmur3_32",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "netmask",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "network",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "nth_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "ntile",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "parse_delta_filter_logline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "percent_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_hstore_get",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_hstore_to_json",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_check_token",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_nop_authorization",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_uri_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "rank_dense",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "round_even",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "roundbankers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "row_number",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "st_affine",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_area",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_area_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asgeojson",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ashexwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asmvt",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asmvtgeom",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_assvg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_azimuth",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_boundary",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_buffer",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_buildarea",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_centroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_closestpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_collect",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_collectionextract",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_concavehull",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_contains",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_containsproperly",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_convexhull",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageclean",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageinvalidedges",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageinvalidedges_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveragesimplify",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveragesimplify_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageunion",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageunion_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveredby",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_covers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_crosses",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_difference",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dimension",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_disjoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_geos",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_sphere",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dump",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin_geos",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_endpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_envelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_envelope_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_equals",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_expand",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent_approx",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_exteriorring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_flipcoordinates",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force3dm",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force3dz",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force4d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_generatepoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geometrytype",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromgeojson",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromhexewkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromhexwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromtext",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hasm",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hasz",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hilbert",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_interiorringn",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_interpolatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersection",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersection_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersects",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isclosed",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isempty",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_issimple",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isvalid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_length",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_length_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_lineinterpolatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_lineinterpolatepoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linelocatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linemerge",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linestring2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linesubstring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_locatealong",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_locatebetween",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_m",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makebox2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makeenvelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makeline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makepolygon",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makevalid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_maximuminscribedcircle",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_memunion_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_minimumrotatedrectangle",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_mmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_mmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_multi",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ngeometries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ninteriorrings",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_node",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_normalize",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_npoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numgeometries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numinteriorrings",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numpoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_overlaps",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_perimeter",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_perimeter_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point3d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point4d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_pointn",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_pointonsurface",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_points",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_polygon2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_polygonize",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_quadkey",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_reduceprecision",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_removerepeatedpoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_reverse",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatex",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatey",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatez",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_scale",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_shortestline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_simplify",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_simplifypreservetopology",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_snap",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_startpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_symdifference",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_tileenvelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_touches",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_translate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_transscale",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_union",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_union_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_voronoidiagram",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_within",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_withinproperly",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_x",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_xmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_xmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_y",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ymax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ymin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_z",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmflag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "stem",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "text",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "tpcds_answers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpcds_queries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpch_answers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpch_queries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "unnest",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      }
+    ],
+    "removed": []
+  },
+  "source_compute_names_not_observed": [],
+  "source_compute_names_present_before_target_load": [],
+  "target_delta": {
+    "added": [
+      {
+        "catalog": "system",
+        "name": "read_avro",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      }
+    ],
+    "added_signature_rows": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": [],
+    "removed_signature_rows": []
+  },
+  "unclassified_added_names": []
+}

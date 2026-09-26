@@ -1,0 +1,25 @@
+{
+  "artifact_name": "quack",
+  "compressed_bytes": 7777084,
+  "compressed_sha256": "a551db5ca9db6964a48f3c1f77076be0875bbdb0f335b139f77798c8fa92df51",
+  "decompressed_bytes": 25945838,
+  "decompressed_sha256": "80ef881b569105f8a0733a4b41298b7219e074ca8637880261fc1ac1e42a9f28",
+  "extension": "quack",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/quack.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "c154811",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:22.459331+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/quack.duckdb_extension.gz"
+}

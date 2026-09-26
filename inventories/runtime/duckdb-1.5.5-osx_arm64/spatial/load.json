@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "spatial"
+    },
+    {
+      "action": "load_target",
+      "name": "spatial"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

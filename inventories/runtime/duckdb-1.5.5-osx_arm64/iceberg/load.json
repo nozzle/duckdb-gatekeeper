@@ -1,0 +1,29 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_and_load_dependency",
+      "name": "httpfs"
+    },
+    {
+      "action": "install_and_load_dependency",
+      "name": "aws"
+    },
+    {
+      "action": "install_and_load_dependency",
+      "name": "avro"
+    },
+    {
+      "action": "install_target",
+      "name": "iceberg"
+    },
+    {
+      "action": "load_target",
+      "name": "iceberg"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

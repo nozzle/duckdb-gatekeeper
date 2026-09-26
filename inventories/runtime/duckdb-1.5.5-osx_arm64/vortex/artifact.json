@@ -1,0 +1,25 @@
+{
+  "artifact_name": "vortex",
+  "compressed_bytes": 18059371,
+  "compressed_sha256": "3d167ee9312b156a5c65d25a878d9739eeae4b04e974bae3865347bc3a6c2d56",
+  "decompressed_bytes": 57183710,
+  "decompressed_sha256": "341e77acaba45f065e6febdca16b01ae860bede890b024a58ca345217b19903f",
+  "extension": "vortex",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vortex.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "9a8eb67",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:24.493969+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vortex.duckdb_extension.gz"
+}

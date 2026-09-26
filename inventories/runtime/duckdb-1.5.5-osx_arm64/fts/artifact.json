@@ -1,0 +1,25 @@
+{
+  "artifact_name": "fts",
+  "compressed_bytes": 1552256,
+  "compressed_sha256": "b6b8d0a13e0457f3ce368e4e7c2ff8de48637eea5ca61e5ff983c05018e7f315",
+  "decompressed_bytes": 5483438,
+  "decompressed_sha256": "11b2be6278306c44bc2af7fd9c0fd6c4f0762a8235cbfa6208433ff33cd3db53",
+  "extension": "fts",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/fts.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "6814ec9",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:16.773283+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/fts.duckdb_extension.gz"
+}

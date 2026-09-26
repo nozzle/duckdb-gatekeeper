@@ -1,0 +1,25 @@
+{
+  "artifact_name": "lance",
+  "compressed_bytes": 57503872,
+  "compressed_sha256": "9c4e51633101be4e51d6a790859a2464d115784eda767608708e23ea5e955b19",
+  "decompressed_bytes": 198277054,
+  "decompressed_sha256": "b0753f592047d3016465ad661275ba45def627b566461b54eb842e27dd5fb85a",
+  "extension": "lance",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/lance.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "2f167ea",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:18.391514+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/lance.duckdb_extension.gz"
+}

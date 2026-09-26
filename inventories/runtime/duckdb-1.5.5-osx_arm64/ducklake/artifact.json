@@ -1,0 +1,25 @@
+{
+  "artifact_name": "ducklake",
+  "compressed_bytes": 8416561,
+  "compressed_sha256": "d89175054de53a830e9b2682655b640d29c9a74120f28a310fccc4bef981a0bd",
+  "decompressed_bytes": 27580398,
+  "decompressed_sha256": "1b72fc42164dbf21948e5a912cefc383b24071852f9e70209874ebd0a73b7caa",
+  "extension": "ducklake",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ducklake.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "d8a1881e",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:15.268259+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ducklake.duckdb_extension.gz"
+}

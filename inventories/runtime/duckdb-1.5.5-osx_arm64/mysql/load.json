@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "mysql_scanner"
+    },
+    {
+      "action": "load_target",
+      "name": "mysql_scanner"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

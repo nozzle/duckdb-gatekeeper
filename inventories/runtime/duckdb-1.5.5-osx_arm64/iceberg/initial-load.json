@@ -1,0 +1,23 @@
+{
+  "error": "Invalid Input Error: Initialization function \"iceberg_duckdb_cpp_init\" from file \"<worktree>/build/inventory-release/artifacts/iceberg.duckdb_extension\" threw an exception: \"An error occurred while trying to automatically install the required extension 'avro':\nExtension \"<worktree>/build/inventory-release/homes/iceberg/extensions/v1.5.5/osx_arm64/avro.duckdb_extension\" not found.\nExtension \"avro\" is an existing extension.\n\nInstall it first using \"INSTALL avro\".\"",
+  "error_type": "InvalidInputException",
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_and_load_dependency",
+      "name": "httpfs"
+    },
+    {
+      "action": "install_and_load_dependency",
+      "name": "aws"
+    },
+    {
+      "action": "install_target",
+      "name": "iceberg"
+    }
+  ],
+  "status": "load_failed",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

@@ -1,0 +1,38 @@
+{
+  "artifact": "artifact.json",
+  "dependency_artifacts": [
+    "../httpfs/artifact.json"
+  ],
+  "extension": "delta",
+  "historical_inventory": "inventories/extensions/delta.json",
+  "load_result": "load.json",
+  "report": "report.json",
+  "schema_version": 1,
+  "snapshots": {
+    "after": {
+      "function_rows": 2915,
+      "path": "../snapshots/278a1d0bbb40f7f49c1227e311eee63f407b588d2db51122351130805f53e320.json",
+      "qualified_identity_count": 924,
+      "sha256": "278a1d0bbb40f7f49c1227e311eee63f407b588d2db51122351130805f53e320"
+    },
+    "base": {
+      "function_rows": 2903,
+      "path": "../snapshots/713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c.json",
+      "qualified_identity_count": 913,
+      "sha256": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+    },
+    "before": {
+      "function_rows": 2903,
+      "path": "../snapshots/2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b.json",
+      "qualified_identity_count": 913,
+      "sha256": "2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b"
+    },
+    "dependency-httpfs": {
+      "function_rows": 2903,
+      "path": "../snapshots/2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b.json",
+      "qualified_identity_count": 913,
+      "sha256": "2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b"
+    }
+  },
+  "status": "loaded"
+}

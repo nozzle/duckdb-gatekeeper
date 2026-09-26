@@ -1,0 +1,25 @@
+{
+  "artifact_name": "spatial",
+  "compressed_bytes": 20203982,
+  "compressed_sha256": "49e17088e4c8a25a5c949be0d4acb25336da8afed3865079e614454fd2b3795f",
+  "decompressed_bytes": 59591422,
+  "decompressed_sha256": "81b73514ef95301f0e8b3229bdbdf7946827600dfd63a42d3b3193fa322c4c5a",
+  "extension": "spatial",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/spatial.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "eb1e57c",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:22.636423+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/spatial.duckdb_extension.gz"
+}

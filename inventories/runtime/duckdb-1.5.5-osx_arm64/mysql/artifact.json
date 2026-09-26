@@ -1,0 +1,25 @@
+{
+  "artifact_name": "mysql_scanner",
+  "compressed_bytes": 10214509,
+  "compressed_sha256": "653cdf0780e0a399017f9accc011998ace3055c5e86bf742537bacf3748e9b70",
+  "decompressed_bytes": 30898918,
+  "decompressed_sha256": "0aced636acf1da9d742edb11fc10556356302b9e7bc424107a69b4f481b500b1",
+  "extension": "mysql",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "7267164",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:19.090252+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension.gz"
+}

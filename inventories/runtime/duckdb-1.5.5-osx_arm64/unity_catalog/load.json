@@ -1,0 +1,25 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_and_load_dependency",
+      "name": "httpfs"
+    },
+    {
+      "action": "install_and_load_dependency",
+      "name": "aws"
+    },
+    {
+      "action": "install_target",
+      "name": "unity_catalog"
+    },
+    {
+      "action": "load_target",
+      "name": "unity_catalog"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

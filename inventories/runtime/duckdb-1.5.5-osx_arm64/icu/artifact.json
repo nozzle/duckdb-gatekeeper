@@ -1,0 +1,25 @@
+{
+  "artifact_name": "icu",
+  "compressed_bytes": 4626928,
+  "compressed_sha256": "491b00aa8148f10720481ca1890c1a58fdb1290de0b0a8632ece8ecaa258d014",
+  "decompressed_bytes": 15248014,
+  "decompressed_sha256": "c8471011daf059fb98173ba5b5bc66803dde3e95b660542d4e65ac9c46111fec",
+  "extension": "icu",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/icu.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "v1.5.5",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:17.246534+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/icu.duckdb_extension.gz"
+}

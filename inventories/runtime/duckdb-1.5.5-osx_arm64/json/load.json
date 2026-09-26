@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "stages": [
+    {
+      "action": "install_target",
+      "name": "json"
+    },
+    {
+      "action": "load_target",
+      "name": "json"
+    }
+  ],
+  "status": "loaded",
+  "stderr": "",
+  "stdout": "",
+  "timeout_seconds": 90
+}

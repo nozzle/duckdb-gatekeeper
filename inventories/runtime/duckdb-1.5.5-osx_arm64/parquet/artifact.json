@@ -1,0 +1,25 @@
+{
+  "artifact_name": "parquet",
+  "compressed_bytes": 3814752,
+  "compressed_sha256": "7e2ec1543664fd7ee4ee10997686b49c35c22385f6e21f1f616ae0eb729844b8",
+  "decompressed_bytes": 13064654,
+  "decompressed_sha256": "62c63f98e65a3ad91375f9a24f35575fd26cc2aba36d67a6ba30bd65cdc13edf",
+  "extension": "parquet",
+  "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/parquet.duckdb_extension.gz",
+  "footer": {
+    "abi": "CPP",
+    "engine_or_c_api_version": "v1.5.5",
+    "extension_version": "v1.5.5",
+    "magic": "4",
+    "platform": "osx_arm64",
+    "remaining_fields": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "http_status": 200,
+  "retrieved_at": "2026-09-26T05:03:20.971066+00:00",
+  "status": "downloaded",
+  "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/parquet.duckdb_extension.gz"
+}
