@@ -333,11 +333,17 @@ int main() {
 #endif
 	// A handle prepared before enforcement must re-authorize the implementation, not
 	// just the original catalog name, after a host policy change.
-	for (const auto &item :
-	     vector<pair<string, string>>{{"SELECT min(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_min"},
-	                                  {"SELECT max(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_max"},
-	                                  {"SELECT date_part('epoch', DATE '2020-01-01')", "epoch"},
-	                                  {"SELECT quantile(x, 0.5) FROM (VALUES (1)) t(x)", "quantile_disc"}}) {
+	for (const auto &item : vector<pair<string, string>>{
+	         {"SELECT min(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_min"},
+	         {"SELECT max(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_max"},
+	         {"SELECT date_part('epoch', DATE '2020-01-01')", "epoch"},
+	         {"SELECT quantile(x, 0.5) FROM (VALUES (1)) t(x)", "quantile_disc"},
+	         {"SELECT min(x COLLATE nocase)::VARCHAR FROM (VALUES ('a')) t(x)", "arg_min"},
+	         {"SELECT coalesce(max(x COLLATE nocase), NULL) FROM (VALUES ('a')) t(x)", "arg_max"},
+	         {"SELECT (min(x COLLATE nocase) OVER ())::VARCHAR FROM (VALUES ('a')) t(x)", "arg_min"},
+	         {"SELECT date_part('epoch', DATE '2020-01-01')::DOUBLE", "epoch"},
+	         {"SELECT quantile(x, 0.5)::BIGINT FROM (VALUES (1::BIGINT)) t(x)", "quantile_disc"},
+	         {"SELECT coalesce(quantile(x, 0.5) OVER (), NULL) FROM (VALUES (1)) t(x)", "quantile_disc"}}) {
 		Query(connection, "CALL gatekeeper_configure()");
 		Connection prepared_agent(database);
 		auto handle = prepared_agent.Prepare(item.first);
