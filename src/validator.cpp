@@ -265,6 +265,13 @@ Identity FunctionKey(Identity identity) {
 void Provenance::RecordFunction(const Identity &source, bool caller, int engine_major) {
 	auto identity = FunctionKey(source);
 	function_entries.insert(identity);
+	// 2.0 retains immutable source definitions in bound scalar/aggregate descriptors.
+	// 1.5 does not: keep its conservative possible-target attribution, independent
+	// of expression locations/aliases that wrappers may overwrite or erase.
+	if (engine_major >= 2) {
+		(caller ? caller_implementations : trusted_implementations).insert(identity);
+		return;
+	}
 	for (const auto &name : FunctionImplementations(identity, engine_major))
 		(caller ? caller_implementations : trusted_implementations)
 		    .insert({identity.catalog, identity.schema_path, name, identity.type, identity.internal});
