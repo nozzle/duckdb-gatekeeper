@@ -8,7 +8,7 @@ DuckDB itself refuses to run anything the policy denies (`CALL gatekeeper_enforc
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
-| **Function ACL** | Only the functions you allow, starting from 919 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
+| **Function ACL** | Only the functions you allow, starting from 921 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
 | **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -134,11 +134,12 @@ global policy and binds the submitted SQL again.
 | `json` mixed with typed options, or non-string `json` | DuckDB error at bind | DuckDB error at bind |
 | NULL `json`, malformed JSON, or invalid policy document | `code = 'invalid_input'` | Raises; policy unchanged |
 
-Empty option lists accept any element type, since DuckDB resolves untyped `[]` to
-`INTEGER[]` before table-function binding. All-NULL lists also pass the element-type
-check regardless of their declared type: `[NULL]` and `[NULL]::DOUBLE[]` both return
-`invalid_input` at execution. Lists with non-NULL members require the documented
-element types. Typed STRUCT lists have their field names checked even when empty.
+Untyped empty option lists (`[]`) are accepted even though DuckDB resolves them to
+`INTEGER[]`. Empty or all-NULL lists otherwise bypass the element-type check, except
+legacy function `VARCHAR[]`, which is rejected even when empty. `[NULL]` and
+`[NULL]::DOUBLE[]` return `invalid_input` at execution. Lists with non-NULL members
+require the documented element types. Typed STRUCT lists have their field names
+checked even when empty. See the [policy v2 migration guide](docs/policy-migration.md).
 
 ### Options
 
@@ -146,8 +147,8 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 919 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-| `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Exact leaf; `'*'` names multiplication. Defaults grant reviewed `system.main` identities only. See [matching and migration](docs/qualified-functions.md). |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 921 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Required exact leaf; `'*'` names multiplication, not all functions. Defaults grant reviewed `system.main` identities only. See [matching rules](docs/qualified-functions.md). |
 | `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
@@ -248,7 +249,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type`, `object_type` (other fields VARCHAR, in this order). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -265,8 +266,18 @@ identify the denied capability, using the same kinds as `functions[].type`. For 
 `function_type = ''` when the kind is unresolved or the violation is not about a function.
 Pre-resolution refusals do not infer a kind from the written call's syntax. Denied identities
 remain in `violations` even though the `functions` evidence list is empty on failure.
+
+For a resolved catalog object, `catalog`, `schema_path`, `table`, and `object_type`
+identify the denied table or view. `object_type` is `table` or `view` for allowlist misses,
+explicit blocks, and internal-object denials; `rule = 'table'` alone does not distinguish
+a table from a view. `object_type = ''` for unresolved objects and function-only or other
+nonobject violations, including replacement-reader denials whose `table` holds a written
+path. No kind is guessed from SQL syntax. The `objects`, `functions`, and `caller_objects`
+evidence lists remain empty on every failure.
+
 The same shape is returned in `duckdb_logs_parsed('Gatekeeper')` for validation, enforced,
-and log-only decisions.
+and log-only decisions. Consumers that pin the violation STRUCT schema must include both
+trailing fields, `function_type VARCHAR` and `object_type VARCHAR`.
 
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
@@ -290,13 +301,14 @@ error text. Project the first violation's fields to display them as columns:
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
        violations[1].message AS message, violations[1].catalog AS catalog,
-       violations[1].schema_path AS schema_path, violations[1]."table" AS "table"
+       violations[1].schema_path AS schema_path, violations[1]."table" AS "table",
+       violations[1].object_type AS object_type
 FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := []);
 ```
 
-| allowed | code | rule | message | catalog | schema_path | table |
-| --- | --- | --- | --- | --- | --- | --- |
-| false | forbidden | table | object is not allowed | memory | [reporting] | orders |
+| allowed | code | rule | message | catalog | schema_path | table | object_type |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| false | forbidden | table | object is not allowed | memory | [reporting] | orders | table |
 
 **Function denied:** `md5` is a default, but `current_setting` (configuration inspection) is not.
 
@@ -351,6 +363,10 @@ body, so this list is neither exact lexical dependencies nor universally safe to
 to untrusted callers. Applications may expose a minimal decision or a separately reviewed
 projection. See [secure views and host-only evidence](docs/security.md#secure-views-and-host-only-evidence).
 
+`functions` remains combined host-facing evidence of caller-attributable functions and
+trusted dependencies. A public `caller_functions` evidence field is explicitly deferred and
+is not implemented; `caller_objects` is the existing conservative catalog-table/view subset.
+
 ## Table ACL
 
 > [!IMPORTANT]
@@ -394,6 +410,8 @@ schema identity is `[]`.
 This is a breaking change: replace `schema: 's'` with `schema_path: ['s']` in typed policies,
 canonical settings, and result consumers. JSON documents require `version: 2` and the v2
 schema URL (if supplied); v1 documents and the old `schema` field are rejected.
+Use the [policy v2 migration guide](docs/policy-migration.md) to update both table and
+function rules together.
 
 Table policy applies to what the caller names. Trusted **views, macros, and attached tables**
 are opaque to it, as they are to function policy: the caller must be allowed the view, table,
@@ -412,8 +430,10 @@ under that name. A host definition that selects its table from a caller argument
 > Wildcards also match objects created or attached **later**, and `catalog: '*'` matches
 > temporary shadow tables. Prefer explicit catalog names when that scope is not intended.
 
-Internal objects (`duckdb_*`, `information_schema.*`) need exact schema and table names, and
-schema-wide `SHOW` is denied under any table restriction. The complete matching rules, layer
+Internal tables/views, identified by the actual catalog entry's `internal` flag, need exact
+schema components and an exact table name in each layer. Catalog may be omitted, NULL, or `*`;
+block wildcards still match. A name or the `system` catalog alone does not establish internal
+status. Schema-wide `SHOW` is denied under any table restriction. The complete matching rules, layer
 by layer, are in [table ACL matching](docs/security.md#table-acl-matching). Table rules govern
 tables and views only; types and collations are the host's, though function policy still
 applies to what they bind ([callback bypasses](docs/security.md#callback-bypasses)).
@@ -449,6 +469,18 @@ flowchart LR
   [function enforcement and trusted expansion](docs/security.md#function-enforcement-and-trusted-expansion).
 - The global policy and the request must each grant a function; a request cannot add
   one the global policy denies.
+
+Configurable grants and blocks match **exact catalog-entry names**, without alias
+canonicalization: Parquet readers, JSON extraction aliases, and window aliases each need
+their own rules. Source-defined parser/binder rewriting determines the operation or entry
+being checked; it does not grant general semantic equivalence between spellings.
+
+An explicit internal-function grant requires exact schema components; catalog may be omitted,
+NULL, or `*`. The actual entry's `internal` flag controls this, so non-internal entries in
+`system.main` can use schema patterns. Unknown internal origin cannot use a schema-wildcard
+grant. Block namespace wildcards still match internal functions. Every function rule requires
+an explicit `name`; `name: '*'` means multiplication, and schema-wide function permission is
+unsupported. See [qualified function rules](docs/qualified-functions.md).
 
 Blocks also cover the implementations DuckDB binds for the caller's own expressions:
 `lower` introduced by a `COLLATE nocase` the caller wrote, `sum` dispatched by a
@@ -492,9 +524,12 @@ Admitting one permits its resource access; `allowed_tables` does not restrict fi
 
 | Shorthand | Reader that must be allowed |
 | --- | --- |
-| `FROM 'x.parquet'` | `read_parquet` or `parquet_scan` (one shared permission) |
+| `FROM 'x.parquet'` | `parquet_scan` (`read_parquet` alone is not enough) |
 | `FROM 'x.csv'` | `read_csv_auto` (`read_csv` alone is not enough) |
 | `FROM 'x.json'` | `read_json_auto` (`read_json` alone is not enough) |
+
+These are `system.main` table-function entries. Direct calls to `read_parquet` and
+`parquet_scan` have separate grants and blocks; cover both explicitly when intended.
 
 The decision is made before the reader binds, so a denied path is never opened. Allowed
 paths appear in `objects` with type `replacement`. Host-language scans (DataFrames,

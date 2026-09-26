@@ -132,7 +132,7 @@ def test_placeholder_plans_require_resolved_parameters(db, sql):
 
 
 def test_admitted_dispatch_uses_actual_aggregate(db):
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}], "blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "list_aggregate"}], "blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
     assert validate(db, "SELECT list_aggregate([1,2], 'min')")["allowed"]
     result = validate(db, "SELECT list_aggregate([1,2], 'sum')")
     assert result["code"] == "forbidden", result
@@ -155,13 +155,13 @@ STRICT = {"use_default_functions": False,
 def test_caller_written_dispatch_target_must_be_allowed(db, dispatcher):
     """The aggregate a caller selects by name is caller-chosen text: a strict allowlist that admits only the
     dispatcher must not reach every unblocked aggregate. Folding the name does not evade the bound check."""
-    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("sum", "||")})
-    concat = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("||")}
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("sum", "||", schema_path=("main",))})
+    concat = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("||", schema_path=("main",))}
     for name in ("'sum'", "'su' || 'm'"):
         result = validate(db, f"SELECT {dispatcher}([1,2], {name})", concat)
         assert result["code"] == "forbidden", result
         assert result["violations"][0]["rule"] == ("function" if name == "'sum'" else "bind_time_expression"), result
-    granted = {**concat, "allowed_functions": concat["allowed_functions"] + grants("sum")}
+    granted = {**concat, "allowed_functions": concat["allowed_functions"] + grants("sum", schema_path=("main",))}
     assert validate(db, f"SELECT {dispatcher}([1,2], 'su' || 'm')", granted)["code"] == "forbidden"
     result = validate(db, f"SELECT {dispatcher}([1,2], 'sum')", granted)
     assert result["allowed"], result
@@ -176,18 +176,18 @@ def test_dispatch_target_check_is_scoped_to_caller_written_dispatchers(db):
     once the caller writes a dispatcher, the allowlist check applies query-wide like other ambiguous caller
     syntax."""
     db.execute("CREATE VIEW v AS SELECT list_aggregate([1,2], 'sum') AS s")
-    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count")})
+    configure(db, {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count", schema_path=("main",))})
     assert validate(db, "SELECT list_distinct([1,2])", STRICT)["allowed"]
     assert validate(db, "SELECT s FROM v", STRICT)["allowed"]
     # The view's dispatched aggregate is the view's: a block on it does not reach into the body.
     assert validate(db, "SELECT s FROM v", {**STRICT, "blocked_functions": [{"schema_path":["*"],"name":"sum"}]})["allowed"]
-    request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count")}
+    request = {**STRICT, "allowed_functions": STRICT["allowed_functions"] + grants("count", schema_path=("main",))}
     assert validate(db, "SELECT list_aggregate([1], 'count')", request)["allowed"]
     # The view's own dispatch is bound into the same plan, so the caller's dispatcher makes it subject to the check.
     result = validate(db, "SELECT list_aggregate([1], 'count') FROM v", request)
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum", result
     # With defaults on, an admitted dispatcher reaches default aggregates but not elevated ones.
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "list_aggregate"}]})
     assert validate(db, "SELECT list_aggregate([1,2], 'sum')")["allowed"]
     result = validate(db, "SELECT list_aggregate([1,2], 'histogram')")
     assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "histogram", result
@@ -211,7 +211,8 @@ LAMBDA_CALLS = {
 def test_list_lambda_function_names_match_the_engine():
     """The fail-closed lambda inspection covers exactly DuckDB's list-lambda builtins and their aliases, so a
     renamed or added alias in the engine cannot leave a lambda body uninspected without failing this test."""
-    source = ROOT / "duckdb/extension/core_functions/scalar/list/functions.json"
+    from support.artifact import ENGINE_SOURCE
+    source = ENGINE_SOURCE / "extension/core_functions/scalar/list/functions.json"
     if not source.is_file():
         pytest.skip("engine source checkout not present (distributed-artifact test run)")
     functions = json.loads(source.read_text())

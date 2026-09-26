@@ -93,7 +93,7 @@ def test_failure_never_exposes_partial_caller_evidence(chain, sql, options):
 def test_replacement_capabilities_are_not_catalog_inputs(db, tmp_path):
     path = str(tmp_path / "input.parquet").replace("'", "''")
     db.execute(f"COPY (SELECT 1 AS id) TO '{path}' (FORMAT PARQUET)")
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "parquet_scan"}]})
     result = validate(db, f"SELECT * FROM '{path}'")
     assert result["allowed"] and result["caller_objects"] == []
     assert any(o["type"] == "replacement" for o in result["objects"])

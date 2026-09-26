@@ -23,6 +23,7 @@ def test_resolved_function_identity_in_validation_and_audit(db, sql, kind, log_o
         "function_name": "range", "function_type": kind,
     }
     assert expected["objects"] == expected["functions"] == expected["caller_objects"] == []
+    assert violation["object_type"] == ""
     [validation] = decisions(db, "mode = 'validate'")
     assert validation["violations"] == expected["violations"]
     assert validation["functions"] == []
@@ -47,6 +48,7 @@ def test_pre_resolution_refusals_do_not_guess_function_kind(db, sql):
     [violation] = result["violations"]
     assert violation["rule"] == "function" and violation["function_name"] == name
     assert (violation["catalog"], violation["schema_path"], violation["function_type"]) == ("", [], "")
+    assert violation["object_type"] == ""
     [record] = decisions(db)
     assert record["violations"] == result["violations"]
 

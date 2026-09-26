@@ -59,6 +59,29 @@ def test_hidden_reader_and_caller_function_are_distinguished(secure):
             agent.execute(sql)
 
 
+@pytest.mark.parametrize("schema,allowed", [("*", False), ("main", True)])
+def test_internal_caller_function_needs_exact_schema_grant(secure, schema, allowed):
+    configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])], "use_default_functions": False,
+                       "allowed_functions": function_rules("md5", schema_path=[schema], type="scalar")})
+    # The host-owned body remains trusted even though a wildcard cannot grant its internal function to callers.
+    assert validate(secure, "SELECT * FROM exposed.direct")["allowed"]
+    sql = "SELECT md5(s) FROM exposed.direct"
+    result = validate(secure, sql)
+    assert result["allowed"] is allowed, result
+    if not allowed:
+        [violation] = result["violations"]
+        assert (violation["catalog"], violation["schema_path"], violation["function_name"],
+                violation["function_type"], violation["object_type"]) == ("system", ["main"], "md5", "scalar", "")
+        assert result["objects"] == result["functions"] == result["caller_objects"] == []
+    with secure.cursor() as agent:
+        enforce(agent)
+        if allowed:
+            assert agent.execute(sql).fetchall() == secure.execute(sql).fetchall()
+        else:
+            with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied"):
+                agent.execute(sql)
+
+
 @pytest.mark.parametrize("sql", [
     "SELECT * FROM exposed.direct, hidden.payload",
     # No direct lookup of hidden.payload: the CTE reference alone matches the hidden table query-wide.
@@ -68,7 +91,7 @@ def test_caller_objects_is_conservative_not_a_public_diagnostics_projection(secu
     denied = validate(secure, sql)
     assert denied["code"] == "forbidden"
     assert denied["objects"] == denied["functions"] == denied["caller_objects"] == []
-    assert any(v["table"] == "payload" for v in denied["violations"])
+    assert any(v["table"] == "payload" and v["object_type"] == "table" for v in denied["violations"])
     configure(secure, {"allowed_tables": [rule(schema_path=["exposed"]), rule(schema_path=["hidden"])],
                        "blocked_functions": function_rules("md5")})
     result = validate(secure, sql)
@@ -157,6 +180,7 @@ def test_secure_view_substitution_origin_and_violation_audit(db, expression, tar
     assert denied["objects"] == denied["functions"] == denied["caller_objects"] == []
     assert any(v["function_name"] == target and v["function_type"] == kind
                and v["catalog"] == "system" and v["schema_path"] == ["main"]
+               and v["object_type"] == ""
                for v in denied["violations"]), denied
     enable(db, "debug")
     db.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
@@ -184,6 +208,7 @@ def test_missing_dependency_diagnostics_remain_host_only(secure, log_only):
         secure.execute(sql)
     result = validate(secure, sql)
     assert result["code"] == "binding", result
+    assert result["violations"] == []
     assert result["objects"] == result["functions"] == result["caller_objects"] == []
     enable(secure, "debug")
     secure.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
@@ -196,6 +221,7 @@ def test_missing_dependency_diagnostics_remain_host_only(secure, log_only):
         [record] = decisions(secure, "mode = 'log_only'")
         assert record["error_message"] == result["error_message"]
         assert record["code"] == "binding"
+        assert record["violations"] == []
     else:
         # In enforcement mode engine binding failures propagate without becoming policy decisions.
         assert decisions(secure, "mode = 'enforce'") == []

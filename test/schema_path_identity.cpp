@@ -20,20 +20,22 @@ int main() {
 	                               {"system", {"main"}, "*", "scalar"},
 	                               {"system", {"main"}, "read_parquet", "table"}};
 	Check(FunctionEligible(functions, "f"));
-	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar"}));
-	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
-	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports", "deep"}, "f", "scalar"}));
-	Check(!FunctionAllowed(functions, {"lake", {"finance.reports"}, "f", "scalar"}));
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar", true}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports", "deep"}, "f", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance.reports"}, "f", "scalar", false}));
 	Check(FunctionAllowed(functions, {"system", {"main"}, "*", "scalar"}));
 	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
-	Check(FunctionAllowed(functions, {"system", {"main"}, "parquet_scan", "table"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "parquet_scan", "table"}));
 	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
 	functions.allowed_functions.insert({"memory", {"main"}, "read_parquet", ""});
 	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
 	functions.allowed_functions.insert({"", {"finance", "reports"}, "f", ""});
 	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
 	functions.blocked_functions.insert({"system", {"main"}, "parquet_scan", "table"});
-	Check(!FunctionAllowed(functions, {"system", {"main"}, "read_parquet", "table"}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "read_parquet", "table"}));
 	functions.allowed_functions.insert({"*", {"*"}, "nextval", ""});
 	Check(!FunctionEligible(functions, "nextval"));
 	Policy blocks;
@@ -41,8 +43,8 @@ int main() {
 	blocks.allowed_functions = {{"*", {"a", "*"}, "f", ""}};
 	blocks.blocked_functions = {{"*", {"a", "b"}, "f", ""}};
 	Check(FunctionEligible(blocks, "f"));
-	Check(!FunctionAllowed(blocks, {"host", {"a", "b"}, "f", "scalar"}));
-	Check(FunctionAllowed(blocks, {"host", {"a", "c"}, "f", "scalar"}));
+	Check(!FunctionAllowed(blocks, {"host", {"a", "b"}, "f", "scalar", false}));
+	Check(FunctionAllowed(blocks, {"host", {"a", "c"}, "f", "scalar", false}));
 	Check(!FunctionBlocked(blocks, {"host", {"a", "b", "c"}, "f", "scalar"}));
 	Check(!FunctionAllowed(blocks, {"", {}, "f", "scalar"}));
 	blocks.blocked_functions.clear();
@@ -77,6 +79,13 @@ int main() {
 	Check(!NamesObject({{"memory", "finance", "reports", "orders"}}, "lake", {"finance", "reports"}, "orders"));
 
 	Provenance provenance;
+	Identity mixed{"MiXeD", {"FiNaNcE", "RePoRtS"}, "FuNc", "ScAlAr", false};
+	provenance.RecordFunction(mixed, true, 2);
+	auto function_key = FunctionKey({"MIXED", {"finance", "REPORTS"}, "FUNC", "scalar"});
+	Check(provenance.function_entries.count(function_key));
+	Check(provenance.function_entries.find(function_key)->internal == false);
+	Check(provenance.caller_implementations.count(function_key));
+	Check(mixed.catalog == "MiXeD" && mixed.name == "FuNc");
 	auto finance = ObjectKey("memory", {"finance", "reports"}, "orders");
 	auto sales = ObjectKey("memory", {"sales", "reports"}, "orders");
 	provenance.caller_objects.insert(finance);

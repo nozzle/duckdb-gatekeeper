@@ -16,10 +16,11 @@ def test_named_prepared_options_and_result_columns(db):
     assert rows[0][0] is False and rows[0][1] == "forbidden"
     assert rows[0][2][0]["function_name"] == "md5"
     assert list(rows[0][2][0]) == [
-        "rule", "message", "catalog", "schema_path", "table", "function_name", "position", "function_type"
+        "rule", "message", "catalog", "schema_path", "table", "function_name", "position", "function_type", "object_type"
     ]
     # This wildcard block refuses before catalog resolution, so its kind is unknown.
     assert rows[0][2][0]["function_type"] == ""
+    assert rows[0][2][0]["object_type"] == ""
 
 
 def test_table_projection_filter_and_join(db):
@@ -125,6 +126,7 @@ def test_structured_object_and_limit_diagnostics(db):
     assert (violation["catalog"],violation["schema_path"],violation["table"])==("memory",["secret"],"t")
     assert violation["function_name"]==""
     assert violation["function_type"]==""
+    assert violation["object_type"]=="table"
     result=validate(db,"SELECT 1;SELECT 2")
     assert result["code"]=="forbidden" and result["violations"][0]["rule"]=="limit"
     result=validate(db,"SELECT md5('x')",{"blocked_functions":function_rules("md5")})
@@ -236,8 +238,8 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
         assert result["code"] == "forbidden" and result["error_message"] == "", (name, result)
         violation = result["violations"][0]
         assert violation["rule"] == "function" and violation["table"] == name
-        assert violation["function_name"] in {"read_parquet", "read_csv_auto"}
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["parquet_scan", "read_csv_auto"]]})
+        assert violation["function_name"] in {"parquet_scan", "read_csv_auto"}
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": n} for n in ["parquet_scan", "read_csv_auto"]]})
     for name, function in [("data.parquet", "parquet_scan"), ("data.csv", "read_csv_auto")]:
         result = validate(db, f"SELECT * FROM '{name}'")
         assert result["allowed"], (name, result)
@@ -254,7 +256,7 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     result = validate(db, "SELECT * FROM 'data.parquet'", {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # allowed_tables governs catalog objects, not reader capabilities, matching range().
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "parquet_scan"}], "allowed_tables": [],
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "parquet_scan"}], "allowed_tables": [],
                    "blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "*"}]})
     assert validate(db, "SELECT * FROM 'data.parquet'")["allowed"]
 
@@ -308,15 +310,15 @@ def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypat
         result = validate(db, sql)
         assert result["code"] == "forbidden", (sql, result)
         assert result["violations"][0]["rule"] == "function", (sql, result)
-        assert result["violations"][0]["function_name"] == "read_parquet", (sql, result)
+        assert result["violations"][0]["function_name"] == "parquet_scan", (sql, result)
     # A caller-written name that is a different file does not borrow the view's exemption either.
     db.execute("COPY (SELECT 2 AS x) TO 'other.parquet'")
     result = validate(db, "SELECT * FROM v, 'other.parquet'")
-    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet"
+    assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "parquet_scan"
     # Admitting the reader restores every spelling, and the collision case lists both objects. The upper-case
     # spelling is denied by name (provenance is case-folded) but names a file only case-insensitive filesystems
     # have, so once admitted its outcome is the filesystem's: a bind error there is not a denial.
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "parquet_scan"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "parquet_scan"}]})
     for sql in denied:
         result = validate(db, sql)
         assert result["allowed"] or (sql == "SELECT * FROM 'DATA.PARQUET'" and result["code"] == "binding"), (sql, result)

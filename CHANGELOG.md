@@ -6,6 +6,10 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+- Keep DuckDB 1.5 `first`/`last` window calls available under defaults with two explicit
+  source-backed window identities, and preserve non-internal native function provenance
+  across mixed-case catalog, schema, and function names.
+
 ### Changed
 
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
@@ -20,31 +24,48 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   retained (native bind/extended-bind callbacks on 1.5; expression-replacement callbacks on both engines).
   Lambda-type callbacks alone remain permitted.
 
-- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR`, also
+- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR` followed
+  by `object_type VARCHAR`, also
   observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
   Known denied functions retain their complete catalog/schema/name/kind identity even when
   the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
-  denials are distinguishable. Unresolved kinds and nonfunction violations use `''`.
-  Update consumers that pin the violation STRUCT schema to accept the new field.
+  denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
+  `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
+  Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
+  The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
+  Update consumers that pin the violation STRUCT schema to include both trailing fields.
 
 - Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
-  intrinsic expression kind. Scoped system window blocks cannot be bypassed by a same-leaf
-  host macro grant; window alias equivalence is restricted to `system.main` kind `window`.
+  intrinsic expression kind: authorize the parsed spelling without inventing a second canonical
+  permission. Parser/binder rewriting is separate from configurable policy matching.
 
 - **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
-  String rules are rejected with migration guidance. Catalog/schema wildcards follow table rules;
-  the leaf is exact (`*` is multiplication). Optional kinds are scalar, aggregate, table, macro,
+  Legacy string rules and `schema` fields receive consistent actionable diagnostics; see the
+  [policy v2 migration guide](docs/policy-migration.md), including typed empty lists and canonical settings.
+  Catalog/schema wildcards follow table rules;
+  the leaf is required and exact (`*` is multiplication); schema-wide function permission is unsupported.
+  Optional kinds are scalar, aggregate, table, macro,
   table_macro, and window. Both policy layers authorize resolved entries before callbacks on the
   private binder's catalog path. Defaults contain explicit reviewed catalog/schema/name/kind identities;
   same-name functions of another kind do not inherit defaults. Host shadows and `system.pg_catalog`
-  compatibility macros need explicit grants. Reviewed aliases apply to both grants and blocks only
-  within their reviewed system namespace and kind. Scoped blocks wait for actual catalog resolution;
+  compatibility macros need explicit grants. Configurable grants and blocks match exact catalog-entry
+  names without alias canonicalization, including Parquet readers, JSON extraction aliases, and window
+  aliases. Cover each intended entry explicitly; Parquet file shorthand requires `parquet_scan`, not
+  `read_parquet`. Scoped blocks wait for actual catalog resolution;
   blocks covering every eligible identity retain early no-bind refusal.
+- Internal table/view and function grants require exact schema components; table/view grants also
+  require an exact table name. Catalog may be omitted, NULL, or `*`, and block namespace wildcards
+  still match internal entries. The actual entry's `internal` flag controls this, not its catalog name;
+  non-internal entries can use schema patterns. Unknown bound-function internal origin cannot use
+  schema-wildcard grants. Reviewed defaults already name exact identities.
 - Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
   caller implementation identities fail closed. Selected aggregate specializations on both engines may retain
   an unambiguous system definition recorded by the same authorizing bind; see
   [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+  `functions` remains combined host-facing evidence of caller-attributable functions and trusted
+  dependencies. A public `caller_functions` evidence field is explicitly deferred and is not implemented;
+  `caller_objects` remains the existing conservative catalog-table/view subset of `objects`.
 - Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
   `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian` on 1.5 or every constant
   unary date part on 2.0, and `quantile` to

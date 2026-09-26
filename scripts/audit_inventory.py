@@ -243,23 +243,43 @@ def verify_collection_report(path, root=ROOT, report_path=None):
 
 
 def verify_historical_report(path, report):
-    """Recheck aggregate claims in the two committed historical report formats.
+    """Verify immutable historical evidence independently of today's policy map.
 
-    Exploratory origin annotations and historical name comparisons remain evidence;
-    the qualified report is the reproducible replacement for per-stage policy checks.
+    These reports were checked against the 919-identity policy in commit 318b831.
+    Their recorded policy claims cannot be recomputed against later grants. Pin the
+    complete original JSON content (independent of checkout line endings); current
+    qualified reports still recompute every field against hash-verified captures
+    and the current source map. Observation-only
+    aggregate claims below remain independently comparable across policy revisions.
     """
-    old = json.loads((Path(path) / "report.json").read_text())
+    raw = (Path(path) / "report.json").read_bytes()
+    old = json.loads(raw)
+    expected_hash = ("9cd399f7d9eebb931cda27c2f1f286f142f6fdf8d5946a7edb14fa7b27a52eca"
+                     if "qualified_source_mapping" in old else
+                     "4e523753240b73f7de4d6be36a269f0c8c526ac7589788724fb70f5efb80c466")
+    require(digest(old) == expected_hash, "Historical report evidence hash mismatch")
     if "qualified_source_mapping" in old:
-        for field in ("defaults_not_observed", "default_names_at_ungranted_identities"):
-            require(old["qualified_source_mapping"][field] == report[field], f"Historical report {field} mismatch")
-        require(old["reporting_discrepancies"] == report["reporting_discrepancies"], "Historical reporting discrepancy mismatch")
         require(old["unclassified_added_names"] == report["unclassified_runtime_names"], "Historical unclassified names mismatch")
     else:
-        for field in ("compiled_defaults", "union_signatures", "union_qualified_identities", "defaults_not_observed",
-                      "default_names_at_ungranted_identities", "unclassified_runtime_names"):
+        for field in ("union_signatures", "union_qualified_identities", "unclassified_runtime_names"):
             require(old[field] == report[field], f"Historical report {field} mismatch")
-        require(old["observed_default_identities"] == len(report["observed_default_identities"]),
-                "Historical observed default count mismatch")
+
+
+def verify_historical_input(repo, relative, expected):
+    """Policy input hashes describe capture-time files, not the current source map.
+
+    The original map is in 69198e3149916532390f5d9876cfc2b04fc1ee6c at the
+    recorded path. Pin its recorded hash without requiring Git history in shallow
+    CI/source archives. Capture data and unchanged input files are still rehashed;
+    historical report content is separately pinned by verify_historical_report.
+    """
+    if relative == "inventories/default_identities.json":
+        require(expected == "97a6e894d3a18fd568dc7b59d8d384bdfdf9c75ac879b19e8949899c8bc081f5",
+                "Historical default mapping hash mismatch")
+    else:
+        import hashlib
+        require(hashlib.sha256((Path(repo) / relative).read_bytes()).hexdigest() == expected,
+                "Historical input hash mismatch: " + relative)
 
 
 def main():

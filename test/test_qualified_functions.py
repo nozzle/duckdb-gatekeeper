@@ -6,6 +6,7 @@ import pytest
 
 from support.typed_helpers import configure, grants, policy, validate
 from support.enforcement import enforce, DENIED
+from support.artifact import ENGINE_MAJOR
 
 
 def test_default_shadow_and_host_macro_trust(db):
@@ -42,6 +43,27 @@ def test_host_alias_names_are_not_equivalent(db):
     configure(db, {"allowed_functions": grants("read_parquet", catalog="memory", schema_path=("main",), type="macro")})
     assert validate(db, "SELECT memory.main.read_parquet(1)")["allowed"]
     assert not validate(db, "SELECT memory.main.parquet_scan(1)")["allowed"]
+
+
+@pytest.mark.parametrize("left,right", [("json_extract", "json_extract_path"),
+                                        ("json_extract_string", "json_extract_path_text"),
+                                        ("json_extract_string", "->>")])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_json_entry_grants_and_blocks_are_exact_in_both_directions(db, left, right, reverse):
+    admitted, other = (right, left) if reverse else (left, right)
+    def sql(name):
+        return f'SELECT "{name}"(\'{{"x":1}}\', \'x\')'
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants(admitted, schema_path=("main",), type="scalar"),
+                   "blocked_functions": grants(other, schema_path=("*",), type="scalar")})
+    result = validate(db, sql(admitted))
+    assert result["allowed"], result
+    assert [f["name"] for f in result["functions"]] == [admitted]
+    assert validate(db, sql(other))["code"] == "forbidden"
+    # No block is needed to prove a grant cannot authorize the other entry.
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants(admitted, schema_path=("main",), type="scalar")})
+    assert validate(db, sql(other))["code"] == "forbidden"
 
 
 def test_canonical_roundtrip_and_json_v2(db):
@@ -81,26 +103,35 @@ def test_deferred_window_alias_blocks(db, alias, canonical, args, block_alias, k
     assert validate(db, f"SELECT host.{alias}()")["allowed"]
     for spelling in (alias, canonical):
         sql = f"SELECT {spelling}({args}) OVER ()"
-        assert validate(db, sql)["code"] == "forbidden"
-        assert validate(db, sql, {"blocked_functions": []})["code"] == "forbidden"
+        # 2.0 PEG rewrites first/last OVER; both 1.5 parsers retain the spelling.
+        parsed = canonical if spelling in {"first", "last"} and ENGINE_MAJOR >= 2 else spelling
+        denied = parsed == blocked[0]["name"]
+        assert validate(db, sql)["allowed"] is not denied
+        assert validate(db, sql, {"blocked_functions": []})["allowed"] is not denied
         with db.cursor() as agent:
             enforce(agent)
             assert agent.execute(f"SELECT host.{alias}()").fetchone() == (7,)
-            with pytest.raises(duckdb.PermissionException):
-                agent.execute(sql)
+            if denied:
+                with pytest.raises(duckdb.PermissionException):
+                    agent.execute(sql)
+            else:
+                agent.execute(sql).fetchall()
 
 
 @pytest.mark.parametrize("alias,canonical,args", [
     ("rank_dense", "dense_rank", ""), ("first", "first_value", "1"), ("last", "last_value", "1"),
 ])
-def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args):
+@pytest.mark.parametrize("grant_alias", [False, True])
+def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args, grant_alias):
     # 1.5 also looks up first/last's real aggregate entry while binding the intrinsic
     # alias; grant that separate dependency explicitly rather than inventing a default.
     dependencies = grants(alias, catalog="system", schema_path=("main",), type="aggregate") if alias in {"first", "last"} else []
+    granted = alias if grant_alias else canonical
     configure(db, {"use_default_functions": False,
-                   "allowed_functions": grants(alias, catalog="system", schema_path=("main",), type="window") + dependencies})
+                   "allowed_functions": grants(granted, catalog="system", schema_path=("main",), type="window") + dependencies})
     for spelling in (alias, canonical):
-        assert validate(db, f"SELECT {spelling}({args}) OVER ()")["allowed"]
+        parsed = canonical if spelling in {"first", "last"} and ENGINE_MAJOR >= 2 else spelling
+        assert validate(db, f"SELECT {spelling}({args}) OVER ()")["allowed"] is (parsed == granted)
     db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{alias}() AS 1; CREATE MACRO host.{canonical}() AS 2")
     configure(db, {"allowed_functions": grants(alias, catalog="memory", schema_path=("host",), type="macro"),
                    "blocked_functions": grants(canonical, catalog="memory", schema_path=("host",))})
@@ -109,6 +140,15 @@ def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args
     if alias in {"first", "last"}:
         configure(db, {"blocked_functions": grants(canonical, catalog="system", schema_path=("main",), type="window")})
         assert validate(db, f"SELECT {alias}(x) FROM (VALUES (1)) t(x)")["allowed"]
+
+
+@pytest.mark.parametrize("name", ["first", "last", "first_value", "last_value"])
+def test_window_spellings_have_explicit_defaults(db, name):
+    sql = f"SELECT {name}(1) OVER ()"
+    assert validate(db, sql)["allowed"]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute(sql).fetchone() == (1,)
 
 
 @pytest.mark.parametrize("global_block", [False, True])

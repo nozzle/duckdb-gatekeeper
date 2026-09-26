@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from audit_inventory import (collection_report, compare, identity_coverage, qualified_identities,
-                             verify_collection_report, verify_historical_report)
+                             verify_collection_report, verify_historical_report, verify_historical_input)
 from inventory import ROOT, identity_key, load, load_default_identities, load_default_mapping
 from inventory_capture import apply_delta, reconstruct_collection, snapshot
 
@@ -75,21 +75,47 @@ def test_version_specific_intrinsics_and_reporting_labels_remain_explicit(collec
     _, base, _, report = collection
     missing = {identity_key(row) for row in report["defaults_not_observed"]}
     windows = {identity_key(row) for row in load_default_identities() if row["type"] == "window"}
+    spelling_intrinsics = {("system", ("main",), n, "window") for n in ("first", "last")}
     scalar_unnest = {("system", ("main",), "unnest", "scalar")}
     if base["duckdb_version"] == "v1.5.5":
         expected = scalar_unnest | windows | {("system", ("main",), n, "scalar")
                                              for n in ("round_even", "roundbankers")}
         assert {identity_key(row) for row in report["default_names_at_ungranted_identities"]} == {
-            (c, s, n, "aggregate") for c, s, n, _ in windows}
-        assert set(report["reporting_discrepancies"][0]["names"]) == {row[2] for row in windows}
+            (c, s, n, "aggregate") for c, s, n, _ in windows - spelling_intrinsics}
+        assert set(report["reporting_discrepancies"][0]["names"]) == {row[2] for row in windows - spelling_intrinsics}
     else:
-        expected = scalar_unnest | {("system", ("main",), n, "macro") for n in ("round_even", "roundbankers")} | {
+        expected = scalar_unnest | spelling_intrinsics | {("system", ("main",), n, "macro") for n in ("round_even", "roundbankers")} | {
             ("system", ("main",), n, "scalar") for n in ("icu_collate_yue", "icu_collate_yue_cn", "st_snap")}
         assert report["reporting_discrepancies"] == []
         assert report["default_names_at_ungranted_identities"] == []
     assert missing == expected
     grants = {identity_key(row) for row in load_default_identities()}
     assert {identity_key(row) for row in report["observed_default_identities"]} == grants - expected
+
+
+def test_historical_policy_claims_do_not_follow_new_defaults(collection):
+    path, _, _, current = collection
+    assert current["compiled_defaults"] == 921
+    historical = json.loads((path / "report.json").read_text())
+    historical_missing = historical.get("qualified_source_mapping", historical)["defaults_not_observed"]
+    additions = {("system", ("main",), n, "window") for n in ("first", "last")}
+    assert {identity_key(row) for row in current["defaults_not_observed"]} == {
+        identity_key(row) for row in historical_missing} | additions
+    verify_historical_report(path, current)
+
+
+def test_historical_policy_input_hash_is_pinned_not_current(tmp_path):
+    expected = "97a6e894d3a18fd568dc7b59d8d384bdfdf9c75ac879b19e8949899c8bc081f5"
+    # Offline/source-archive verification needs neither a Git checkout nor the current map.
+    verify_historical_input(tmp_path, "inventories/default_identities.json", expected)
+    with pytest.raises(ValueError, match="mapping hash mismatch"):
+        verify_historical_input(tmp_path, "inventories/default_identities.json", "0" * 64)
+
+
+def test_historical_report_hash_is_checkout_line_ending_independent(collection, tmp_path):
+    path, _, _, current = collection
+    (tmp_path / "report.json").write_bytes((path / "report.json").read_bytes().replace(b"\n", b"\r\n"))
+    verify_historical_report(tmp_path, current)
 
 
 def test_excel_equal_count_wrong_kind_and_unknown_addition_are_not_grants(collection):

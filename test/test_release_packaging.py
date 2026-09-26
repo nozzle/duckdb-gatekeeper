@@ -30,6 +30,11 @@ def checkout(tmp_path, monkeypatch, edits=()):
         target = root / source
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / source, target)
+        if source == "community/description.yml":
+            # Development-only documentation links use main until the release exists.
+            # This fixture models the release descriptor, whose links are all pinned.
+            text = target.read_text()
+            target.write_text(text.replace("/blob/main/", f"/blob/{TAG}/"))
         for filename, old, new in edits:
             if filename == source:
                 text = target.read_text()
