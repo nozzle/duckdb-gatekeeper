@@ -5,6 +5,14 @@ describes the **checked local binding**, not recursively complete remote lineage
 no allow-remote override and no evidence-completeness field. Decisions and audit evidence are
 host-only; they may disclose trusted definitions and must not be forwarded to untrusted callers.
 
+Trusted definitions retain their general table/function allowlist, block, and caller never-bind
+exemptions. Those exemptions do not expand the **supported execution scope** or bypass
+Gatekeeper's control-plane restrictions. The private catalog callback checks unsupported Quack
+scope regardless of caller attribution, so allowing a view or macro cannot admit opaque remote
+delegation. That private check is not an interception point for an earlier engine bind: deferred
+trusted-body binding can already have executed remotely when the refusal arrives.
+See [trusted expansion](security.md#function-enforcement-and-trusted-expansion) for the origin rules.
+
 ## Support matrix
 
 | Route | DuckDB 1.5.5 / Quack c154811 | DuckDB 2.0 / Quack fa3f82c + engine patches |
@@ -12,11 +20,12 @@ host-only; they may disclose trusted definitions and must not be forwarded to un
 | Attached base table | Explicit refusal | Local-binding route, with `remote_pushdown` disabled and table bind identity present |
 | Local trusted view over attached base table | Explicit refusal | Same requirements; view is caller object, attached table is local dependency evidence |
 | Caller-written `quack_query`, `quack_query_by_name`, `.query()` in submitted SQL | Never-bind refusal, even if granted | Same |
-| Remote view or trusted body containing remote SQL | Private validation/nonparameterized submission refuses before transmission; deferred bind is unsupported (see below) | Same |
+| Remote view or trusted body containing remote SQL, when reached by private validation/nonparameterized submission | Private catalog callback refuses unsupported scope before transmission, regardless of caller attribution | Same |
+| Deferred binding of a remote view or trusted body containing remote SQL | Unsupported: engine binding can execute remotely before the private callback's later refusal | Same |
 | Native Prepare with constant opaque remote SQL | Unsupported: preparation may transmit before any text hook | Text gate refuses caller-written delegation |
 | Parameterized native handle with caller-written remote function and unresolved SQL argument | Execution refuses before transmission | Same |
 | Whole-query / partial SQL pushdown | Feature absent | Refused before planning when any remote-capable catalog is attached and remote pushdown is enabled |
-| CONNECT | Feature absent | Unsupported local enforcement deployment; see #106's pre-callback boundary |
+| CONNECT | Feature absent | Unsupported local enforcement deployment; see [the pre-callback boundary](security.md#connect-mode-and-native-host-state) |
 | Server-created connections | No automatic enforcement | No automatic enforcement |
 | Log-only | Records refusals, permits execution | Same except CONNECT/DISCONNECT remain refused to preserve local routing |
 
@@ -39,8 +48,10 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
   Ordinary caller-function blocks use qualified rules, for example
   `blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]`.
   A matching block wins over a grant and cannot be cleared by request options; it does not
-  reach inside a trusted local view. The independent remote-scope refusal still applies to
-  that view's Quack dependencies. See [qualified function rules](qualified-functions.md).
+  reach inside a trusted local view. The independent remote-scope check still applies to
+  that view's Quack dependencies: it refuses opaque delegation and remote views on both engines,
+  and all attached Quack objects on 1.5. A trusted local view over a 2.0 base table can use the
+  supported local-binding route in the matrix. See [qualified function rules](qualified-functions.md).
 * **Deferred trusted-body binding is unsupported.** For example, a host view containing
   `quack_query_by_name(...)`, a remote view, or the attachment's `.query()` macro can execute
   remotely when a parameterized statement binds it before Gatekeeper's private check. The final

@@ -166,13 +166,18 @@ docs:
 
     Allow the outer view/table or macro to expose it as a host-controlled capability.
     Its dependencies are **opaque to table and function policy**, including blocks and
-    the never-bind list; Gatekeeper's control plane remains refused on every route.
+    the caller's never-bind list. Independent control-plane and supported-execution-scope
+    checks still apply: Gatekeeper's control plane remains refused on every route, and
+    private catalog authorization refuses unsupported Quack dependencies even inside trusted
+    bodies. Deferred binding can execute remotely before that refusal; see the
+    [Quack support matrix](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/quack.md).
 
     - Allowing a view admits its underlying tables. Block the view itself to withdraw it.
     - A caller's separate reference to an underlying table or function is still checked.
     - A macro forwarding a caller argument to `query_table(n)` delegates table selection;
       caller table restrictions do not constrain that selection.
     - `objects` and `functions` still report transitive dependencies as host binding evidence.
+      For Quack, this is checked local binding, not recursively complete remote lineage.
       `caller_objects` is conservative query-wide attribution, not exact lexical dependencies:
       a caller-written name can attribute a matching hidden object inside a trusted body.
     - Validation results and audit diagnostics, including all evidence lists, violations and engine
@@ -238,6 +243,9 @@ docs:
     isolate the filesystem, or impose memory and time limits.
 
     - **Binding can perform I/O.** Prepared statements may bind before enforcement hooks run.
+      Unsupported deferred Quack bodies and native DuckDB 1.5 preparation of constant remote
+      SQL can execute remotely before a later refusal; see
+      [remote scope and preparation limits](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/quack.md).
     - **Parsing can have side effects.** DuckDB evaluates some `PRAGMA` arguments before
       enforcement; validate complete text first if your host cannot accept that residual.
     - **The host controls the environment.** Restrict external access and autoloading where

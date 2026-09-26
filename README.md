@@ -327,6 +327,8 @@ the comparison contract and conservative name-attribution rules.
 their underlying tables, whether or not policy was applied to those (see
 [Table ACL](#table-acl)); CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
+For Quack, this evidence describes checked local binding, not recursively complete remote
+lineage; see the [remote support matrix](docs/quack.md).
 
 Validation results and audit diagnostics are **privileged host information**, including
 `objects`, `functions`, `caller_objects`, violations, and engine errors. On DuckDB 2.0,
@@ -392,6 +394,8 @@ reporting.orders` is checked on `reporting.orders`, and so is a CTE or alias the
 under that name. A host definition that selects its table from a caller argument
 (`query_table(n)` in a macro body) hands that selection to the caller; see
 [trusted definitions](docs/security.md#function-enforcement-and-trusted-expansion).
+This policy exemption does not expand the supported execution scope: Quack dependencies
+must still meet the [remote authorization requirements](docs/quack.md).
 
 > [!IMPORTANT]
 > Only a whole-component `'*'` is a wildcard. `sales_*`, `?`, and `%` are literal names.
@@ -425,9 +429,12 @@ flowchart LR
   their definitions introduce is theirs, not the caller's: exempt from the allowlist,
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
   `read_parquet(...)`, a file path (`FROM 'x.parquet'`), `duckdb_tables()`, or the scan
-  an attached catalog uses. Only Gatekeeper's own control plane (below) is refused
-  inside a body. Table policy governs the view or table itself, and a macro must
-  itself be allowed; what their bodies read is theirs too ([Table ACL](#table-acl)).
+  an attached catalog uses. Independent control-plane and supported-execution-scope
+  checks still apply inside bodies: Gatekeeper's own control plane (below) is refused,
+  and private catalog authorization refuses unsupported Quack dependencies. Deferred
+  trusted-body binding can execute remotely before that refusal; see the
+  [Quack support matrix](docs/quack.md). Table policy governs the view or table itself,
+  and a macro must itself be allowed; what their bodies read is theirs too ([Table ACL](#table-acl)).
   The exemption is by origin, not by name: the same function written
   by the caller next to the view is the caller's, and ambiguous caller syntax such as
   `t.x` or `list[i]` triggers a query-wide implementation check that can also reach a
@@ -476,11 +483,14 @@ outside function policy like any other trusted expansion.
 Denied regardless of options, in every layer, wherever the caller's text reaches them:
 dynamic SQL (`query`, `query_table`, ...), metadata readers (`duckdb_tables`,
 `information_schema.*`, `SHOW TABLES`), and sequence and storage functions. A host view or
-macro that uses one of these is the host's decision to expose it and is admitted when the view
-is. The one exception is Gatekeeper's own control plane, `gatekeeper_configure`,
+macro that uses one of these is the host's decision to expose it and is exempt from the
+caller never-bind rule. One independent restriction covers Gatekeeper's own control plane, `gatekeeper_configure`,
 `gatekeeper_enforce`, `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and
 `write_log`, which is refused on every route, views and macros included: a definition over one
-of these would let a `SELECT` rewrite the policy or erase the audit trail. The full list, with
+of these would let a `SELECT` rewrite the policy or erase the audit trail. Unsupported Quack
+dependencies are also refused by private catalog authorization, even inside trusted bodies;
+this does not prevent remote execution during an earlier deferred bind. See
+[remote scope and its preparation limits](docs/quack.md). The full list, with
 the source review behind each entry, is in
 [never-bind functions](docs/security.md#never-bind-functions).
 
@@ -779,7 +789,8 @@ network posture remain host settings; see
 
 On an enforced connection, steps 1 to 5 run inside DuckDB's own query hooks with the
 global policy as both layers, and step 5 runs once more on the plan the engine is about to
-execute. A failure at any step raises; nothing executes.
+execute. A failure at any step raises before local plan execution; it cannot undo bind-time
+work, including remote execution on [unsupported Quack routes](docs/quack.md).
 
 > [!CAUTION]
 > Binding **can perform I/O** through trusted catalogs and explicitly admitted readers.
@@ -869,6 +880,9 @@ it **executes**. It does not:
   or before a denial of a prepared statement, which the engine binds before Gatekeeper's plan
   check decides it (on DuckDB 1.5, before any Gatekeeper hook runs at all; see
   [Compatibility and review](docs/security.md#compatibility-and-review) for the 2.0 prepare);
+- prevent remote execution during unsupported deferred binding of opaque Quack bodies,
+  or native DuckDB 1.5 preparation of constant remote SQL; a later refusal is not proof of
+  zero remote I/O. See the [Quack support matrix](docs/quack.md);
 - stop DuckDB's statement preprocessor from evaluating `PRAGMA` argument expressions during
   parsing, before any extension hook, which can run any scalar function the connection can see,
   `write_log` into the audit log included;
