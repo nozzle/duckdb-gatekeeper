@@ -89,7 +89,7 @@ CREATE VIEW unnested AS SELECT unnest([1,2]) AS x;
 query T
 SELECT code FROM gatekeeper_validate('SELECT list_sum($1)', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
-binding
+forbidden
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT list_sum($1::INTEGER[])', blocked_functions := [{schema_path:['*'],name:'sum'}]);

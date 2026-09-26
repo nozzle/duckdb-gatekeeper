@@ -54,11 +54,13 @@ def release_version(tag):
         descriptor_ref_next = None
     if descriptor_ref_next is not None and descriptor_ref_next != f"v{version}":
         raise ValueError(f"Community descriptor ref_next {descriptor_ref_next} and release v{version} must agree")
-    # The descriptor's documentation links pin the release they describe; one left at the previous tag would
-    # show duckdb.org readers documentation for a binary that does not have the feature, or the reverse.
-    stale = sorted(set(re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/([^/]+)/", descriptor)) - {f"v{version}"})
+    # Tagged releases pin documentation to their version. PR/main packaging also accepts main for
+    # documentation of unreleased features, but never another release or arbitrary branch.
+    allowed_refs = {f"v{version}"} if tag else {f"v{version}", "main"}
+    stale = sorted(set(re.findall(r"github\.com/nozzle/duckdb-gatekeeper/blob/([^/]+)/", descriptor)) - allowed_refs)
     if stale:
-        raise ValueError(f"Community descriptor links refer to {stale}; every blob/ link must name v{version}")
+        suffix = "" if tag else " or main for a non-tag build"
+        raise ValueError(f"Community descriptor links refer to {stale}; every blob/ link must name v{version}{suffix}")
     if tag and tag != f"v{version}":
         raise ValueError(f"Tag {tag!r} and version {version} must agree")
     sections = changelog_sections((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
