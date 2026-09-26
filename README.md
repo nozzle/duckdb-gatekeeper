@@ -418,7 +418,9 @@ flowchart LR
 ```
 
 - Caller-written scalar, aggregate, window, and table functions (`FROM range(...)`,
-  `FROM read_parquet(...)`) all use the same qualified identity policy; blocks remain leaf-wide.
+  `FROM read_parquet(...)`) all use the same qualified identity policy for grants and blocks.
+  Omitting a block's `type` covers every supported function kind within its namespace pattern,
+  not unrelated functions with the same leaf name in other namespaces.
 - Trusted **views, macros, and attached tables** are opaque to function policy. What
   their definitions introduce is theirs, not the caller's: exempt from the allowlist,
   from `blocked_functions`, and from the never-bind list alike, whether an explicit
