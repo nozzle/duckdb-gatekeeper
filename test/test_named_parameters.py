@@ -25,7 +25,7 @@ def test_fallback_requires_exact_system_scalar_capability(db, wrong):
 
 
 def test_ordinary_explicit_parameters_and_missing_inputs(db):
-    configure(db, {"blocked_functions": ["getvariable"]})
+    configure(db, {"blocked_functions": [CAPABILITY]})
     assert validate(db, "SELECT $missing")["code"] == "binding"
     assert validate(db, "SELECT * FROM range($missing)")["code"] == "binding"
     assert validate(db, "SELECT $missing::INTEGER")["allowed"]
@@ -41,7 +41,7 @@ def test_ordinary_explicit_parameters_and_missing_inputs(db):
 def test_v1_collision_keeps_explicit_input_precedence(db):
     db.execute("SET VARIABLE x = 42")
     assert validate(db, "SELECT $x")["code"] == "binding"
-    configure(db, {"blocked_functions": ["getvariable"]})
+    configure(db, {"blocked_functions": [CAPABILITY]})
     enforce(db)
     assert db.execute("SELECT $x", {"x": 7}).fetchall() == [(7,)]
 
@@ -60,11 +60,11 @@ def test_fallback_requires_both_layers_and_records_fixed_identity(db):
     db.execute("CREATE MACRO main.getvariable(n) AS 999")
     result = validate(db, "SELECT $x, $X")
     assert result["allowed"] and result["functions"] == [CAPABILITY], result
-    for options in [{"allowed_functions": []}, {"blocked_functions": ["getvariable"]}]:
+    for options in [{"allowed_functions": []}, {"blocked_functions": [CAPABILITY]}]:
         assert validate(db, "SELECT $x", options)["code"] == "forbidden"
     db.execute("SET VARIABLE x = NULL")
     assert validate(db, "SELECT $x")["functions"] == [CAPABILITY]
-    configure(db, {"allowed_functions": [CAPABILITY], "blocked_functions": ["getvariable"]})
+    configure(db, {"allowed_functions": [CAPABILITY], "blocked_functions": [CAPABILITY]})
     assert validate(db, "SELECT $x")["code"] == "forbidden"
 
 
@@ -137,7 +137,7 @@ def test_present_null_variable_is_a_granted_fallback(db):
 def test_trusted_view_is_not_a_caller_reference(db):
     db.execute("SET VARIABLE x = 42; CREATE VIEW v AS SELECT $x AS n")
     db.execute("CREATE MACRO m(a) AS a")
-    configure(db, {"allowed_functions": [{"schema_path":["main"],"name":"m","type":"macro"}], "blocked_functions": ["getvariable"]})
+    configure(db, {"allowed_functions": [{"schema_path":["main"],"name":"m","type":"macro"}], "blocked_functions": [CAPABILITY]})
     assert validate(db, "SELECT * FROM v")["allowed"]
     assert validate(db, "SELECT m($x)")["code"] == "forbidden"
     assert validate(db, "SELECT $x FROM v")["code"] == "forbidden"
@@ -154,7 +154,7 @@ def test_variable_and_policy_changes_rechecked_in_validation(db):
     db.execute("SET VARIABLE x = 1")
     assert validate(db, "SELECT $x")["functions"] == [CAPABILITY]
     db.execute("SET VARIABLE x = 2")
-    configure(db, {"blocked_functions": ["getvariable"]})
+    configure(db, {"blocked_functions": [CAPABILITY]})
     assert validate(db, "SELECT $x")["code"] == "forbidden"
     db.execute("RESET VARIABLE x")
     assert validate(db, "SELECT $x")["code"] == "binding"

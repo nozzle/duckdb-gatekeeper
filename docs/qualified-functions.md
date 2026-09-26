@@ -1,6 +1,6 @@
-# Qualified function grants (policy v2)
+# Qualified function rules (policy v2)
 
-`allowed_functions` accepts only STRUCT/object grants:
+`allowed_functions` and `blocked_functions` accept only STRUCT/object rules:
 
 ```sql
 CALL gatekeeper_configure(allowed_functions := [
@@ -19,11 +19,14 @@ aggregates have kind `aggregate`; standalone window functions have kind `window`
 
 Both layers must authorize the resolved identity. Eligibility of a written leaf merely allows
 resolution; it cannot grant a namespace. Never-bind and control-plane rules keep their origin
-semantics. Blocks stay VARCHAR[] and deny alias-canonicalized leaves across namespaces.
-Reviewed Parquet and JSON grant aliases apply only to their intended system table/scalar
+semantics. Blocks use the same namespace, exact-depth path, leaf and optional kind matcher as grants;
+either layer's matching block wins. Reviewed Parquet and JSON aliases apply only to their intended system table/scalar
 identities, never to a host function or macro with an alias-like name.
 
-Defaults cover reviewed `system.main` identities, including reviewed extension functions there.
+Defaults are explicit `{catalog, schema_path, name, type}` identities, including reviewed extension functions.
+Every default has an exact kind; a host native table function registered in `system.main` under a
+reviewed scalar name does not inherit that scalar's permission. No runtime kind discovery or any-kind
+default is used. Generation embeds the reviewed inventory identities without inferring kinds.
 They do not cover host shadows or PostgreSQL compatibility macros in `system.pg_catalog`.
 The inventory's historical classifications and source reviews remain unchanged. Explicit host
 macro grants continue to authorize opaque bodies, including forwarded arguments; caller code
@@ -31,10 +34,14 @@ sharing their names remains conservatively caller-attributed.
 
 ## Migration
 
-0.3.0 shipped JSON v1. Migrate once to v2, changing both table schema fields and function grants.
+0.3.0 shipped JSON v1. Migrate once to v2, changing table schema fields and both function rule lists.
 Replace `"allowed_functions":["abs"]` with
 `"allowed_functions":[{"catalog":"system","schema_path":["main"],"name":"abs"}]`.
-There is no string-grant compatibility or mixed-list format. Empty lists still work. Canonical
+Replace `"blocked_functions":["md5"]` with
+`"blocked_functions":[{"catalog":"system","schema_path":["main"],"name":"md5","type":"scalar"}]`.
+To deliberately cover all catalogs and all one-component schemas, use `catalog:"*", schema_path:["*"]`;
+that rule does not cover deeper schema paths. There is no string-rule compatibility or mixed-list format.
+Empty lists still work. Canonical
 settings have all four fields and are NULL-free: empty catalog/type mean unrestricted catalog/kind.
 Read-modify-write the canonical setting rather than constructing a partial STRUCT that DuckDB
 could cast lossily. JSON schema and typed decoding enforce the same shape.
@@ -98,6 +105,12 @@ so this is not a pre-callback interception guarantee for collation code.
 ### Timing limits and unresolved engine hooks
 
 The private binder's ordinary catalog callback is a real pre-bind authorization boundary.
+Before resolution, a leaf can be refused only when no eligible identity survives: defaults retain
+their exact kinds and explicit grants retain their namespace/kind patterns. A blanket block covering
+all eligible identities therefore preserves early refusal, including before unrelated bind callbacks.
+A scoped block that leaves another eligible namespace or kind must wait for the actual catalog entry;
+the lookup callback then checks it before the selected implementation's bind callback or macro expansion.
+Blocks never authorize an identity and cannot supply missing caller provenance.
 It is **not** a universal zero-callback guarantee. Parameterized enforcement can bind in DuckDB
 before private authorization; 1.5 Prepare binds before a usable statement hook. Execution rebinds
 under current policy, preventing stale grants, but cannot undo earlier callbacks. Log-only records

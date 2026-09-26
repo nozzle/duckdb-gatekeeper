@@ -14,7 +14,7 @@ def test_default_shadow_and_host_macro_trust(db):
     assert denied["code"] == "forbidden"
     assert denied["violations"][0]["schema_path"] == ["host"]
     configure(db, {"allowed_functions": grants("abs", catalog="memory", schema_path=("host",), type="macro"),
-                   "blocked_functions": ["md5"]})
+                   "blocked_functions": [{"schema_path":["*"],"name":"md5"}]})
     assert validate(db, "SELECT host.abs(1)")["allowed"]
     assert not validate(db, "SELECT host.abs(1), md5('x')")["allowed"]
 
@@ -66,6 +66,69 @@ def test_unknown_kind_and_missing_namespace(db):
                   {"schema_path":["main"],"name":"abs","type":"pragma"}]:
         with pytest.raises(duckdb.BinderException):
             configure(db, {"allowed_functions": [entry]})
+
+
+@pytest.mark.parametrize("global_block", [False, True])
+def test_scoped_blocks_resolve_namespace_and_layers(db, global_block):
+    db.execute("CREATE SCHEMA a; CREATE SCHEMA b; CREATE MACRO a.f(x) AS x; CREATE MACRO b.f(x) AS x")
+    allowed = grants("f", catalog="memory", schema_path=("*",), type="macro")
+    blocked = grants("f", catalog="memory", schema_path=("a",), type="macro")
+    configure(db, {"allowed_functions": allowed, "blocked_functions": blocked if global_block else []})
+    request = {"blocked_functions": [] if global_block else blocked}
+    assert validate(db, "SELECT b.f(1)", request)["allowed"]
+    denied = validate(db, "SELECT a.f(1)", request)
+    assert denied["code"] == "forbidden"
+    assert denied["violations"][0]["catalog"] == "memory"
+    assert denied["violations"][0]["schema_path"] == ["a"]
+
+
+@pytest.mark.parametrize("kind,scalar,table", [("scalar", False, True), ("table", True, False)])
+def test_scoped_block_kind_collision(db, kind, scalar, table):
+    configure(db, {"blocked_functions": grants("range", catalog="system", schema_path=("main",), type=kind)})
+    assert validate(db, "SELECT range(3)")["allowed"] is scalar
+    assert validate(db, "SELECT * FROM range(3)")["allowed"] is table
+
+
+def test_block_aliases_do_not_canonicalize_host_names(db):
+    db.execute("CREATE MACRO read_parquet(x) AS x; CREATE MACRO parquet_scan(x) AS x")
+    configure(db, {"allowed_functions": grants("read_parquet", "parquet_scan", catalog="memory", schema_path=("main",)),
+                   "blocked_functions": grants("read_parquet", schema_path=("*",))})
+    assert validate(db, "SELECT memory.main.parquet_scan(1)")["allowed"]
+    assert validate(db, "SELECT memory.main.read_parquet(1)")["code"] == "forbidden"
+
+
+@pytest.mark.parametrize("name,sql,kind", [
+    ("lower", "SELECT 'a' COLLATE nocase = 'A'", "scalar"),
+    ("sum", "SELECT list_aggregate([1,2], 'sum')", "aggregate"),
+    ("sum", "SELECT list_sum([1,2])", "aggregate"),
+])
+def test_collation_and_dispatch_blocks_keep_namespace_and_kind(db, name, sql, kind):
+    for catalog, blocked_kind, denied in [("memory", kind, False), ("system", "table", False), ("system", kind, True)]:
+        configure(db, {"allowed_functions": grants("list_aggregate", catalog="system", schema_path=("main",), type="scalar"),
+                       "blocked_functions": grants(name, catalog=catalog, schema_path=("main",), type=blocked_kind)})
+        assert validate(db, sql)["allowed"] is not denied
+
+
+def test_prepared_validation_rechecks_qualified_block(db):
+    db.execute("CREATE SCHEMA a; CREATE SCHEMA b; CREATE MACRO a.f(x) AS x; CREATE MACRO b.f(x) AS x")
+    allowed = grants("f", catalog="memory", schema_path=("*",), type="macro")
+    configure(db, {"allowed_functions": allowed})
+    with db.cursor() as agent:
+        agent.execute("PREPARE a_handle AS SELECT allowed FROM gatekeeper_validate('SELECT a.f(1)')")
+        agent.execute("PREPARE b_handle AS SELECT allowed FROM gatekeeper_validate('SELECT b.f(2)')")
+        configure(db, {"allowed_functions": allowed,
+                       "blocked_functions": grants("f", catalog="memory", schema_path=("a",), type="macro")})
+        assert agent.execute("EXECUTE b_handle").fetchone() == (True,)
+        assert agent.execute("EXECUTE a_handle").fetchone() == (False,)
+
+
+@pytest.mark.parametrize("entry", ["abs", {"name":"abs"}, {"schema_path":[],"name":"abs"},
+                                   {"schema_path":["main"],"name":"abs","type":"any"}])
+def test_invalid_block_shapes_fail_closed(db, entry):
+    with pytest.raises(duckdb.Error):
+        configure(db, {"blocked_functions": [entry]})
+    result = validate(db, "SELECT 1", {"json": json.dumps({"version":2,"options":{"blocked_functions":[entry]}})})
+    assert result["code"] == "invalid_input"
 
 
 def test_implicit_shadow_is_refused_even_if_granted(db):
@@ -158,7 +221,7 @@ def test_subquery_count_intrinsic_matches_host_and_loadable_evidence(db):
         actual = db.execute("SELECT functions FROM duckdb_logs_parsed('Gatekeeper') "
                             "WHERE mode='enforce' AND statement=?", [sql]).fetchone()[0]
         assert actual == expected["functions"]
-        configure(db, {"blocked_functions":["count_star"]})
+        configure(db, {"blocked_functions":[{"schema_path":["*"],"name":"count_star"}]})
         assert validate(db, sql)["code"] == "forbidden"
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
@@ -210,7 +273,7 @@ def test_collation_system_capability_and_scalar_shadow(db, collation, name):
     assert result["allowed"], result
     assert {"catalog":"system","schema_path":["main"],"name":name,"type":"scalar"} in result["functions"]
     assert validate(db, f'SELECT main."{name}"(\'a\')')["code"] == "forbidden"
-    assert validate(db, sql, {"blocked_functions":[name]})["code"] == "forbidden"
+    assert validate(db, sql, {"blocked_functions":[{"schema_path":["*"],"name":name}]})["code"] == "forbidden"
     assert validate(db, sql, {"allowed_functions":grants(name, catalog="memory", schema_path=("main",))})["code"] == "forbidden"
     assert validate(db, sql, {"allowed_functions":grants(name, catalog="system", schema_path=("main",), type="table")})["code"] == "forbidden"
     with db.cursor() as agent:

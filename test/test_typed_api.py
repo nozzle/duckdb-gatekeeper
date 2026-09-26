@@ -3,11 +3,11 @@ import pytest
 
 from support.artifact import by_parser
 from support.enforcement import engine_code
-from support.typed_helpers import configure, validate
+from support.typed_helpers import configure, function_rules, validate
 
 
 def test_named_prepared_options_and_result_columns(db):
-    result = db.execute("SELECT * FROM gatekeeper_validate(?, blocked_functions := ?)", ["SELECT md5('x')", ["md5"]])
+    result = db.execute("SELECT * FROM gatekeeper_validate(?, blocked_functions := ?)", ["SELECT md5('x')", function_rules("md5")])
     assert [column[0] for column in result.description] == [
         "allowed", "code", "violations", "error_type", "error_message", "position", "objects", "functions", "caller_objects"
     ]
@@ -28,7 +28,7 @@ def test_table_projection_filter_and_join(db):
 @pytest.mark.parametrize("argument", ["sql_text", "'SELECT 1', blocked_functions := blocks"])
 def test_lateral_arguments_rejected(db, argument):
     with pytest.raises(duckdb.BinderException):
-        db.execute("SELECT v.* FROM (VALUES ('SELECT 1', ['md5'])) q(sql_text, blocks), "
+        db.execute("SELECT v.* FROM (VALUES ('SELECT 1', [{schema_path:['*'],name:'md5'}])) q(sql_text, blocks), "
                    "LATERAL gatekeeper_validate(" + argument + ") v")
 
 
@@ -49,14 +49,14 @@ def test_all_null_lists_return_invalid_input(db, name, value):
                                      ("SELECT md5('x')", "forbidden"), ("SELECT * FROM", "parser"),
                                      ("SELECT * FROM missing", "binding"), (None, "invalid_input")])
 def test_exactly_one_row_for_each_outcome(db, sql, code):
-    rows = db.execute("SELECT allowed, code FROM gatekeeper_validate(?, blocked_functions := ['md5'])",
+    rows = db.execute("SELECT allowed, code FROM gatekeeper_validate(?, blocked_functions := [{schema_path:['*'],name:'md5'}])",
                       [sql]).fetchall()
     assert rows == [(code == "ok", code)]
 
 
 def test_prepared_parameters_rebind_sql_and_options(db):
     db.execute("PREPARE validation AS SELECT allowed, code FROM gatekeeper_validate($1, blocked_functions := $2)")
-    for args, expected in [("'SELECT md5(''x'')', ['md5']", (False, "forbidden")),
+    for args, expected in [("'SELECT md5(''x'')', [{schema_path:['*'],name:'md5'}]", (False, "forbidden")),
                            ("'SELECT md5(''x'')', []", (True, "ok")),
                            ("NULL, []", (False, "invalid_input")),
                            ("'DROP TABLE t', []", (False, "unsupported"))]:
@@ -76,7 +76,8 @@ def test_preparing_does_not_validate_submitted_sql(db):
     "unknown := true", "use_default_functions := 'false'", "use_default_functions := 1",
     "allowed_functions := 'sum'", "allowed_functions := [1,2]", "allowed_tables := [1]",
     "allowed_tables := ['main.t']",
-    "blocked_functions := [], blocked_functions := ['md5']",
+    "blocked_functions := [], blocked_functions := [{schema_path:['*'],name:'md5'}]",
+    "blocked_functions := ['md5']",  # Removed legacy shape, not an implicit wildcard rule.
     "blocked_tables := [1]", "blocked_tables := ['main.t']",
 ])
 def test_rejected_signatures(db,args):
@@ -87,7 +88,7 @@ def test_rejected_signatures(db,args):
 
 
 @pytest.mark.parametrize("options", [
-    {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":[""]},
+    {"blocked_functions":None}, {"blocked_functions":[None]}, {"blocked_functions":function_rules("")},
     {"allowed_tables":[None]}, {"allowed_tables":[{"table":"t"}]}, {"allowed_tables":[{"schema_path":["main"],"table":"t","extra":"x"}]},
 ])
 def test_invalid_typed_values(db,options):
@@ -96,7 +97,7 @@ def test_invalid_typed_values(db,options):
 
 
 def test_configure_replacement_and_independent_options(db):
-    assert configure(db,{"blocked_functions":["md5"]})
+    assert configure(db,{"blocked_functions":function_rules("md5")})
     assert validate(db,"SELECT 1", {"use_default_functions":False})["allowed"]
     assert not validate(db,"SELECT md5('x')")["allowed"]
     assert not validate(db,"SELECT md5('x')", {"blocked_functions":[]})["allowed"]
@@ -120,7 +121,7 @@ def test_structured_object_and_limit_diagnostics(db):
     assert violation["function_name"]==""
     result=validate(db,"SELECT 1;SELECT 2")
     assert result["code"]=="forbidden" and result["violations"][0]["rule"]=="limit"
-    result=validate(db,"SELECT md5('x')",{"blocked_functions":["md5"]})
+    result=validate(db,"SELECT md5('x')",{"blocked_functions":function_rules("md5")})
     assert result["violations"][0]["position"]==7
     result=validate(db,"SELECT * FROM")
     # The parser's own error location: the default parser reports the end of the input, the PEG parser the
@@ -137,7 +138,7 @@ def test_file_backed_view_requires_own_permission(db,tmp_path):
     result = validate(db, f"SELECT * FROM read_parquet('{path}')")
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
     # The view's reader is the view's: neither the allowlist nor a block on it reaches into the body.
-    assert validate(db, "SELECT * FROM v", {"blocked_functions": ["read_parquet"]})["allowed"]
+    assert validate(db, "SELECT * FROM v", {"blocked_functions": function_rules("read_parquet")})["allowed"]
 
 
 def test_view_is_authorized_by_its_own_identity(db):
@@ -242,7 +243,7 @@ def test_replacement_scan_authorizes_resolved_reader_without_prebind_io(db, tmp_
     assert not validate(db, "SELECT * FROM 'data.parquet'", {
         "use_default_functions": False, "allowed_functions": []
     })["allowed"]
-    assert not validate(db, "SELECT * FROM 'data.parquet'", {"blocked_functions": ["parquet_scan"]})["allowed"]
+    assert not validate(db, "SELECT * FROM 'data.parquet'", {"blocked_functions": function_rules("parquet_scan")})["allowed"]
     configure(db)
     result = validate(db, "SELECT * FROM 'data.parquet'", {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
     assert result["code"] == "forbidden" and result["violations"][0]["rule"] == "function"
@@ -262,21 +263,21 @@ def test_replacement_scan_inside_view_is_a_trusted_expansion(db, tmp_path, monke
     assert {(o["table"], o["type"]) for o in result["objects"]} == {("v", "view"), ("data.parquet", "replacement")}
     # A block under either Parquet alias, in either layer, does not reach into the body.
     for blocked in ["read_parquet", "parquet_scan"]:
-        assert validate(db, "SELECT * FROM v", {"blocked_functions": [blocked]})["allowed"]
-    configure(db, {"blocked_functions": ["read_parquet"]})
+        assert validate(db, "SELECT * FROM v", {"blocked_functions": function_rules(blocked)})["allowed"]
+    configure(db, {"blocked_functions": function_rules("read_parquet")})
     assert validate(db, "SELECT * FROM v")["allowed"]
     configure(db, {})
     # The view still needs its own permission; the reader's exemption does not grant the object.
     assert not validate(db, "SELECT * FROM v", {"allowed_tables": []})["allowed"]
     # Nesting keeps the trust: a view over the view, a CTE or subquery inside the body, a table macro body.
     db.execute("CREATE VIEW outer_v AS WITH c AS (SELECT * FROM (SELECT * FROM 'data.parquet')) SELECT c.x FROM c, v")
-    assert validate(db, "SELECT * FROM outer_v", {"blocked_functions": ["read_parquet"]})["allowed"]
+    assert validate(db, "SELECT * FROM outer_v", {"blocked_functions": function_rules("read_parquet")})["allowed"]
     db.execute("CREATE MACRO m() AS TABLE SELECT * FROM 'data.parquet'")
     assert validate(db, "SELECT * FROM m()")["code"] == "forbidden"  # the macro itself is caller-written
     configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "m"}]})
     assert validate(db, "SELECT * FROM m()")["allowed"]
-    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["read_parquet"]})["allowed"]
-    assert validate(db, "SELECT * FROM m()", {"blocked_functions": ["m"]})["code"] == "forbidden"
+    assert validate(db, "SELECT * FROM m()", {"blocked_functions": function_rules("read_parquet")})["allowed"]
+    assert validate(db, "SELECT * FROM m()", {"blocked_functions": function_rules("m")})["code"] == "forbidden"
     configure(db, {})
 
 

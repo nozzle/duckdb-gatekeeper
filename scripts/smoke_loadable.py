@@ -142,9 +142,9 @@ def main(argv):
         result = validate(db, f"SELECT * FROM {view}")
         expect(result["allowed"] and any(f["name"] == "lower" for f in result["functions"]),
                f"{view}: lambda body implementation not observed: {result}")
-        result = validate(db, f"SELECT * FROM {view}", {"blocked_functions": ["lower"]})
+        result = validate(db, f"SELECT * FROM {view}", {"blocked_functions": [{"schema_path":["*"],"name":"lower"}]})
         expect(result["allowed"], f"{view}: block reached the view's own lambda body: {result}")
-        result = validate(db, f"SELECT {expression}", {"blocked_functions": ["lower"]})
+        result = validate(db, f"SELECT {expression}", {"blocked_functions": [{"schema_path":["*"],"name":"lower"}]})
         expect(result["code"] == "forbidden" and
                (result["violations"][0]["function_name"] == "lower" or result["violations"][0]["rule"] == "bind_time_expression"),
                f"{view}: block did not reach the caller's lambda body: {result}")
@@ -153,10 +153,10 @@ def main(argv):
     result = validate(db, "SELECT * FROM dispatched")
     expect(result["allowed"] and any(f["name"] == "sum" and f["type"] == "aggregate" for f in result["functions"]),
            f"dispatched aggregate not observed: {result}")
-    result = validate(db, "SELECT * FROM dispatched", {"blocked_functions": ["sum"]})
+    result = validate(db, "SELECT * FROM dispatched", {"blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
     expect(result["allowed"], f"block reached the view's own dispatched aggregate: {result}")
     db.execute("CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}])")
-    result = validate(db, "SELECT list_aggregate([1, 2], 'sum')", {"blocked_functions": ["sum"]})
+    result = validate(db, "SELECT list_aggregate([1, 2], 'sum')", {"blocked_functions": [{"schema_path":["*"],"name":"sum"}]})
     expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "sum",
            f"block did not reach the caller's dispatched aggregate: {result}")
     db.execute("CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'list_aggregate'}, {'catalog':'system','schema_path':['main'],'name':'list_value'}])")
@@ -165,10 +165,10 @@ def main(argv):
            f"caller-written dispatch target escaped the allowlist: {result}")
     db.execute("RESET gatekeeper_policy")
 
-    result = validate(db, "SELECT * FROM unnested", {"blocked_functions": ["unnest"]})
+    result = validate(db, "SELECT * FROM unnested", {"blocked_functions": [{"schema_path":["*"],"name":"unnest"}]})
     expect(result["allowed"] and any(f["name"] == "unnest" for f in result["functions"]),
            f"block reached unnest inside a view, or unnest not observed: {result}")
-    result = validate(db, "SELECT unnest([1, 2])", {"blocked_functions": ["unnest"]})
+    result = validate(db, "SELECT unnest([1, 2])", {"blocked_functions": [{"schema_path":["*"],"name":"unnest"}]})
     expect(result["code"] == "forbidden", f"block did not reach the caller's unnest: {result}")
 
     # Replacement scans are decided in Gatekeeper's callback before the host's reader binds.
@@ -187,9 +187,9 @@ def main(argv):
     # The policy setting round-trips through the host's DBConfig and prepared executions re-read it.
     db.execute("PREPARE p AS SELECT allowed FROM gatekeeper_validate('SELECT md5(s) FROM t')")
     expect(db.execute("EXECUTE p").fetchone() == (True,), "prepared validation did not allow md5")
-    db.execute("CALL gatekeeper_configure(blocked_functions := ['md5'])")
+    db.execute("CALL gatekeeper_configure(blocked_functions := [{catalog:'system',schema_path:['main'],name:'md5',type:'scalar'}])")
     expect(db.execute("EXECUTE p").fetchone() == (False,), "prepared validation did not re-read the policy")
-    expect(db.execute("SELECT current_setting('gatekeeper_policy').blocked_functions").fetchone() == (["md5"],),
+    expect(db.execute("SELECT current_setting('gatekeeper_policy').blocked_functions").fetchone() == ([{"catalog":"system","schema_path":["main"],"name":"md5","type":"scalar"}],),
            "policy readback disagrees with the configured value")
     db.execute("SET lock_configuration = true")
     try:

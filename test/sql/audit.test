@@ -24,7 +24,7 @@ CALL enable_logging('Gatekeeper');
 # A host change to the policy is a record carrying the canonical value and its hash.
 
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 'reporting_orders'}, {schema_path: ['main'], 'table': 'totals'}], blocked_functions := ['md5']);
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 'reporting_orders'}, {schema_path: ['main'], 'table': 'totals'}], blocked_functions := [{schema_path:['*'],name:'md5'}]);
 
 query III
 SELECT event, new_value IS NOT NULL, length(policy_hash) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'policy_changed';

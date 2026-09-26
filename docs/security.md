@@ -672,10 +672,19 @@ treated as functions. `->>` and JSON path aliases share canonical extraction blo
 Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
 explicit blocks and the never-bind list take precedence for what the caller writes.
+`blocked_functions` has the same STRUCT/object shape as grants: optional catalog, required
+exact-depth `schema_path`, exact `name`, and optional `type`. Namespace wildcards are explicit;
+the leaf `*` is multiplication. Defaults carry exact catalog/schema/name/kind identities from
+the reviewed inventory, so another kind in the same namespace cannot borrow a default.
+Pre-resolution refusal requires that blocks cover every eligible identity for the leaf; a scoped
+block leaving another eligible identity waits for the actual catalog entry, before its bind callback.
+Unknown attributable provenance fails closed; absence of a matching block is never authorization.
+Never-bind and control-plane restrictions remain separate pre-resolution checks with their existing
+origin rules. See [qualified function rules](qualified-functions.md) for direct-binding and preparation limits.
 
-The system.main Parquet readers `read_parquet` and `parquet_scan` share grant permission;
-their leaf names share block
-permission. This explicit pair is source-reviewed in
+The system.main table readers `read_parquet` and `parquet_scan` share grant and block permission
+only in that reviewed namespace and kind. A host function with an alias-like leaf keeps its exact
+identity. This explicit pair is source-reviewed in
 `duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
 `ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
 discovery. CSV/JSON reader names are not grouped. Parquet violations use the canonical

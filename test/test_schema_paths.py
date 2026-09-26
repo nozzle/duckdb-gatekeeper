@@ -17,7 +17,7 @@ def table(path, name="orders", catalog="memory"):
 @pytest.mark.parametrize("path", [None, "main", [], [None], [1], [""], ["a\0b"], ["main", None]])
 @pytest.mark.parametrize("option", ["allowed_tables", "blocked_tables"])
 def test_invalid_paths_fail_closed_in_both_input_encodings(db, path, option):
-    configure(db, {"blocked_functions": ["md5"]})
+    configure(db, {"blocked_functions": [{"schema_path":["*"],"name":"md5"}]})
     before = policy(db)
     options = {option: [table(path)]}
     for arguments in [options, {"json": json.dumps({"version": 2, "options": options})}]:

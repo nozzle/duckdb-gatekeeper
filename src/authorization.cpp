@@ -51,7 +51,7 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	auto &name = identity.name;
 	auto canonical = gatekeeper::CanonicalFunction(name);
 	bool implicit = binding.synthesized_functions.count(canonical) || binding.literal_constructors.count(canonical);
-	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
+	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, identity)) ||
 	    (grant && attributable && !gatekeeper::FunctionAllowed(policy, identity)) ||
 	    (!grant && attributable && !gatekeeper::SystemIdentity(identity)) ||
 	    (binding.system_functions.count(canonical) && !gatekeeper::SystemIdentity(identity)) ||

@@ -86,7 +86,7 @@ def test_random_option_types(db):
 
 
 def test_filtered_table_result(db):
-    for blocks, allowed_count in [([], 6666), (["md5"], 0)]:
+    for blocks, allowed_count in [([], 6666), ([{"schema_path":["*"],"name":"md5"}], 0)]:
         result = db.execute("""SELECT count(*) FILTER (WHERE r.allowed), count(*)
             FROM range(10000) t(i) CROSS JOIN gatekeeper_validate('SELECT md5(''x'')',
                 blocked_functions := ?) r WHERE i%3!=0""", [blocks]).fetchone()
@@ -98,5 +98,5 @@ def test_literal_path_and_quoted_cte_names(db):
         ident = '"' + name.replace('"', '""') + '"'
         assert validate(db, f"WITH {ident} AS (SELECT 1) SELECT * FROM {ident}", {"allowed_tables": []})["allowed"]
     assert not validate(db, "SELECT * FROM read_parquet(main.list_value('s3://bucket/file'))", {
-        "blocked_functions": ["read_parquet"]
+        "blocked_functions": [{"schema_path":["*"],"name":"read_parquet"}]
     })["allowed"]

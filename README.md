@@ -8,7 +8,7 @@ DuckDB itself refuses to run anything the policy denies (`CALL gatekeeper_enforc
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
-| **Function ACL** | Only the functions you allow, starting from 953 reviewed defaults, with exact-name allow and block lists. |
+| **Function ACL** | Only the functions you allow, starting from 932 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
 | **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -146,9 +146,9 @@ element types. Typed STRUCT lists have their field names checked even when empty
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 953 reviewed defaults **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 932 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Exact leaf; `'*'` names multiplication. Defaults grant reviewed `system.main` identities only. See [matching and migration](docs/qualified-functions.md). |
-| `blocked_functions` | VARCHAR[] | `[]` | Always wins over the allowlist for what the caller writes and the implementations DuckDB binds for it. Does not reach inside trusted views, macros, or attached tables. |
+| `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 
 Validation accepts exactly one nonempty statement. DuckDB ignores empty semicolon
 segments, so `SELECT 1;`, `SELECT 1;;`, and `;SELECT 1` are accepted. Empty,
@@ -157,7 +157,7 @@ return `forbidden` with violation rule `limit`. The statement cap is fixed inter
 like the AST caps.
 
 ```sql
-SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := ['md5']);
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''hello'')', blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]);
 ```
 
 | allowed |
@@ -188,7 +188,7 @@ when a typed option is empty or NULL.
   "version": 2,
   "options": {
     "allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-    "blocked_functions": ["md5"]
+    "blocked_functions": [{"catalog":"system", "schema_path":["main"], "name":"md5", "type":"scalar"}]
   }
 }
 ```
@@ -219,7 +219,7 @@ The decoder routes through the same typed option validation and policy applicati
 ```sql
 SELECT allowed FROM gatekeeper_validate(
     'SELECT md5(''hello'')',
-    json := '{"version": 2, "options": {"blocked_functions": ["md5"]}}'
+    json := '{"version": 2, "options": {"blocked_functions": [{"catalog":"system", "schema_path":["main"], "name":"md5", "type":"scalar"}]}}'
 );
 ```
 
@@ -500,7 +500,7 @@ flowchart TB
 ```sql
 CALL gatekeeper_configure(
     allowed_tables := [{catalog: 'memory', schema_path: ['reporting'], 'table': '*'}],
-    blocked_functions := ['md5']
+    blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]
 );
 ```
 
@@ -524,7 +524,7 @@ SELECT current_setting('gatekeeper_policy').blocked_functions AS blocked_functio
 
 | blocked_functions |
 | --- |
-| [md5] |
+| [{'catalog': 'system', 'schema_path': ['main'], 'name': 'md5', 'type': 'scalar'}] |
 
 A request that tries to widen access does not error; it simply cannot authorize anything
 the global policy denies. Grant capabilities (such as readers) in
@@ -548,7 +548,7 @@ the global policy denies. Grant capabilities (such as readers) in
 Prefer `CALL gatekeeper_configure`: it validates option names, types, and nested identity
 fields before DuckDB's casts. `SET gatekeeper_policy = <STRUCT>` also works but requires
 the **complete canonical STRUCT**: every option plus the `restrict_tables` flag, with no
-NULL at any depth. `SET gatekeeper_policy = {blocked_functions: ['md5']}` fails with
+NULL at any depth. `SET gatekeeper_policy = {blocked_functions: []}` fails with
 `NULL policy field: use_default_functions`; start from
 `current_setting('gatekeeper_policy')` and `struct_update` it instead.
 

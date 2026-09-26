@@ -8,14 +8,16 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
-- **Breaking (#108):** `allowed_functions` is now a list of qualified grants
+- **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
-  String grants are rejected with migration guidance. Catalog/schema wildcards follow table rules;
+  String rules are rejected with migration guidance. Catalog/schema wildcards follow table rules;
   the leaf is exact (`*` is multiplication). Optional kinds are scalar, aggregate, table, macro,
   table_macro, and window. Both policy layers authorize resolved entries before callbacks on the
-  private binder's catalog path. Defaults grant reviewed `system.main` identities only; host shadows
-  and `system.pg_catalog` compatibility macros need explicit grants. Reviewed grant aliases apply
-  only to their system implementations; blocks remain alias-canonicalized leaf-wide denies.
+  private binder's catalog path. Defaults contain explicit reviewed catalog/schema/name/kind identities;
+  same-name functions of another kind do not inherit defaults. Host shadows and `system.pg_catalog`
+  compatibility macros need explicit grants. Reviewed aliases apply to both grants and blocks only
+  within their reviewed system namespace and kind. Scoped blocks wait for actual catalog resolution;
+  blocks covering every eligible identity retain early no-bind refusal.
 - Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
   caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
   an unambiguous system definition recorded by the same authorizing bind; see

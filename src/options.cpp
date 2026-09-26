@@ -20,7 +20,7 @@ static const std::vector<OptionSpec> &Options() {
 	static const std::vector<OptionSpec> options = {
 	    {"use_default_functions", OptionKind::DEFAULTS, LogicalTypeId::BOOLEAN},
 	    {"allowed_functions", OptionKind::ALLOWED_FUNCTIONS, LogicalTypeId::STRUCT},
-	    {"blocked_functions", OptionKind::BLOCKED_FUNCTIONS, LogicalTypeId::VARCHAR},
+	    {"blocked_functions", OptionKind::BLOCKED_FUNCTIONS, LogicalTypeId::STRUCT},
 	    {"allowed_tables", OptionKind::ALLOWED_TABLES, LogicalTypeId::STRUCT},
 	    {"blocked_tables", OptionKind::BLOCKED_TABLES, LogicalTypeId::STRUCT}};
 	return options;
@@ -52,8 +52,8 @@ void CheckOptionShape(const std::string &name, const Value &value) {
 		return;
 	}
 	auto message = name + (element == LogicalTypeId::VARCHAR ? " requires VARCHAR[]" : " requires STRUCT[]");
-	if (name == "allowed_functions")
-		message += "; migrate to policy v2 {catalog?, schema_path, name, type?} grants";
+	if (name == "allowed_functions" || name == "blocked_functions")
+		message += "; migrate to policy v2 {catalog?, schema_path, name, type?} rules";
 	if (value.type().id() != LogicalTypeId::LIST)
 		throw std::invalid_argument(message);
 	// Empty and all-NULL lists have no value that can violate the element shape. DuckDB
@@ -64,20 +64,6 @@ void CheckOptionShape(const std::string &name, const Value &value) {
 				throw std::invalid_argument(message);
 }
 
-static Names Strings(const Value &value, bool lower) {
-	if (value.type().id() != LogicalTypeId::LIST)
-		throw std::invalid_argument("expected VARCHAR[]");
-	Names result;
-	for (const auto &item : duckdb::ListValue::GetChildren(value)) {
-		if (item.IsNull() || item.type().id() != LogicalTypeId::VARCHAR)
-			throw std::invalid_argument("expected non-NULL string");
-		auto text = item.GetValue<std::string>();
-		if (text.empty() || text.find('\0') != std::string::npos)
-			throw std::invalid_argument("names must be nonempty and NUL-free");
-		result.insert(lower ? Lower(text) : text);
-	}
-	return result;
-}
 static NamePath SchemaPath(const Value &value) {
 	if (value.IsNull() || value.type().id() != LogicalTypeId::LIST)
 		throw std::invalid_argument("schema_path requires a nonempty VARCHAR[]");
@@ -140,7 +126,7 @@ static std::vector<std::pair<std::string, Json *>> JsonObject(Json *object, cons
 
 static Value JsonOption(const std::string &name, Json *value) {
 	auto element = FindOption(name).element;
-	const bool functions = name == "allowed_functions";
+	const bool functions = name == "allowed_functions" || name == "blocked_functions";
 	const std::string leaf = functions ? "name" : "table";
 	if (yyjson_is_null(value))
 		return Value(); // Let the shared decoder report NULL options.
@@ -172,7 +158,7 @@ static Value JsonOption(const std::string &name, Json *value) {
 			entries.emplace_back(JsonString(entry, path));
 		else {
 			if (functions && yyjson_is_str(entry))
-				throw std::invalid_argument(path + ": migrate allowed_functions to policy v2 qualified objects");
+				throw std::invalid_argument(path + ": migrate " + name + " to policy v2 qualified objects");
 			duckdb::vector<Value> fields(functions ? 4 : 3, Value(LogicalType::VARCHAR));
 			fields[1] = Value(LogicalType::LIST(LogicalType::VARCHAR));
 			bool schema = false, table = false;
@@ -265,10 +251,10 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			throw std::invalid_argument("NULL option: " + name);
 		if (kind == OptionKind::DEFAULTS) {
 			policy.defaults = value.GetValue<bool>();
-		} else if (kind == OptionKind::BLOCKED_FUNCTIONS)
-			policy.blocked_functions = Strings(value, true);
-		else {
-			const bool functions = kind == OptionKind::ALLOWED_FUNCTIONS;
+		} else {
+			const bool functions = kind == OptionKind::ALLOWED_FUNCTIONS || kind == OptionKind::BLOCKED_FUNCTIONS;
+			auto &function_rules =
+			    kind == OptionKind::ALLOWED_FUNCTIONS ? policy.allowed_functions : policy.blocked_functions;
 			std::string leaf = functions ? "name" : "table";
 			if (value.type().id() != LogicalTypeId::LIST)
 				throw std::invalid_argument(name + " requires a list of structs");
@@ -288,7 +274,7 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				policy.tables = true;
 			auto &identities = kind == OptionKind::ALLOWED_TABLES ? policy.allowed_tables : policy.blocked_tables;
 			if (functions)
-				policy.allowed_functions.clear();
+				function_rules.clear();
 			else
 				identities.clear();
 			for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
@@ -329,7 +315,7 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				if (!fields.count("schema_path") || !fields.count(leaf))
 					throw std::invalid_argument(leaf + " entries require schema_path and " + leaf);
 				if (functions)
-					policy.allowed_functions.insert({table.catalog, table.schema_path, table.table, function_type});
+					function_rules.insert({table.catalog, table.schema_path, table.table, function_type});
 				else
 					identities.insert(table);
 			}
@@ -342,15 +328,12 @@ Value PolicyValue(const Policy &policy) {
 	                                          {"schema_path", LogicalType::LIST(LogicalType::VARCHAR)},
 	                                          {"name", LogicalType::VARCHAR},
 	                                          {"type", LogicalType::VARCHAR}});
-	duckdb::vector<Value> functions;
-	for (const auto &entry : policy.allowed_functions)
-		functions.push_back(Value::STRUCT(
-		    function_type, {Value(entry.catalog), PathValue(entry.schema_path), Value(entry.name), Value(entry.type)}));
-	auto strings = [](const Names &names) {
+	auto functions = [&](const std::set<FunctionGrant> &rules) {
 		duckdb::vector<Value> values;
-		for (const auto &name : names)
-			values.emplace_back(name);
-		return Value::LIST(LogicalType::VARCHAR, values);
+		for (const auto &entry : rules)
+			values.push_back(Value::STRUCT(function_type, {Value(entry.catalog), PathValue(entry.schema_path),
+			                                               Value(entry.name), Value(entry.type)}));
+		return Value::LIST(function_type, values);
 	};
 	auto identities = [](const std::set<Table> &entries, const std::string &leaf) {
 		auto type = LogicalType::STRUCT({{"catalog", LogicalType::VARCHAR},
@@ -366,8 +349,8 @@ Value PolicyValue(const Policy &policy) {
 		return Value::LIST(type, values);
 	};
 	return Value::STRUCT({{"use_default_functions", Value::BOOLEAN(policy.defaults)},
-	                      {"allowed_functions", Value::LIST(function_type, functions)},
-	                      {"blocked_functions", strings(policy.blocked_functions)},
+	                      {"allowed_functions", functions(policy.allowed_functions)},
+	                      {"blocked_functions", functions(policy.blocked_functions)},
 	                      {"allowed_tables", identities(policy.allowed_tables, "table")},
 	                      {"blocked_tables", identities(policy.blocked_tables, "table")},
 	                      {"restrict_tables", Value::BOOLEAN(policy.tables)}});
@@ -388,7 +371,8 @@ static Value CanonicalIdentities(const std::string &name, const Value &value) {
 			if (values[i].IsNull())
 				throw std::invalid_argument("NULL policy field: " + name + "." + field);
 			// The canonical any-catalog spelling is '', which request decoding expresses as NULL.
-			if ((field == "catalog" || (name == "allowed_functions" && field == "type")) &&
+			if ((field == "catalog" ||
+			     ((name == "allowed_functions" || name == "blocked_functions") && field == "type")) &&
 			    values[i].GetValue<std::string>().empty())
 				values[i] = Value(LogicalType::VARCHAR);
 		}
@@ -412,7 +396,8 @@ Policy ReadPolicy(const Value &value) {
 			throw std::invalid_argument("NULL policy field: " + name);
 		if (name == "restrict_tables")
 			tables = values[i].GetValue<bool>();
-		else if (name == "allowed_tables" || name == "blocked_tables" || name == "allowed_functions")
+		else if (name == "allowed_tables" || name == "blocked_tables" || name == "allowed_functions" ||
+		         name == "blocked_functions")
 			options.emplace_back(name, CanonicalIdentities(name, values[i]));
 		else
 			options.emplace_back(name, values[i]);

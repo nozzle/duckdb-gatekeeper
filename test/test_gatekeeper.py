@@ -5,7 +5,7 @@ import duckdb
 import pytest
 
 from support.artifact import by_parser, connect
-from support.typed_helpers import configure, validate
+from support.typed_helpers import configure, function_rules, validate
 
 
 @pytest.fixture
@@ -72,14 +72,14 @@ def test_validation_binds_without_executing(db, tmp_path):
 @pytest.mark.parametrize("sql,opts,allowed", [
     ("SELECT custom(1)", {}, False),
     ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "CUSTOM"}]}, False),
-    ("SELECT md5('x')", {"blocked_functions": ["MD5"]}, False),
-    ("SELECT md5('x')", {"allowed_functions": [{"schema_path": ["*"], "name": "md5"}], "blocked_functions": ["md5"]}, False),
+    ("SELECT md5('x')", {"blocked_functions": function_rules("MD5")}, False),
+    ("SELECT md5('x')", {"allowed_functions": [{"schema_path": ["*"], "name": "md5"}], "blocked_functions": function_rules("md5")}, False),
     ("SELECT sum(x) FROM t", {"use_default_functions": False}, False),
     ("SELECT sum(y) FROM t", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "sum"}]}, True),
-    ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "custom"}], "blocked_functions": ["custom"]}, False),
+    ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "custom"}], "blocked_functions": function_rules("custom")}, False),
     ("SELECT * FROM read_parquet('local')", {}, False),
-    ("SELECT 2*3", {"blocked_functions": ["*"]}, False),
-    ("SELECT sum(y) FROM t", {"blocked_functions": ["*"]}, True),
+    ("SELECT 2*3", {"blocked_functions": function_rules("*")}, False),
+    ("SELECT sum(y) FROM t", {"blocked_functions": function_rules("*")}, True),
     ("SELECT lower('x')", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "*"}]}, False),
     ("SELECT md5('x')", {"allowed_functions": [{"schema_path": ["*"], "name": "md*"}]}, True),
     ("SELECT custom(1)", {"allowed_functions": [{"schema_path": ["*"], "name": "cust*"}]}, False),
@@ -87,8 +87,8 @@ def test_validation_binds_without_executing(db, tmp_path):
     ("SELECT range(3)", {}, True),
     ("SELECT * FROM range(3)", {"use_default_functions": False}, False),
     ("SELECT * FROM range(3)", {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "range"}]}, True),
-    ("SELECT * FROM range(3)", {"blocked_functions": ["range"]}, False),
-    ("SELECT range(3)", {"blocked_functions": ["range"]}, False),
+    ("SELECT * FROM range(3)", {"blocked_functions": function_rules("range")}, False),
+    ("SELECT range(3)", {"blocked_functions": function_rules("range")}, False),
     ("SELECT * FROM query_table('t')", {"allowed_functions": [{"schema_path": ["*"], "name": "query_table"}]}, False),
     ("SELECT json_serialize_plan('SELECT 1')", {"allowed_functions": [{"schema_path": ["*"], "name": "json_serialize_plan"}]}, False),
     ("SELECT * FROM query('SELECT 1')", {"allowed_functions": [{"schema_path": ["*"], "name": "query"}]}, False),
@@ -100,7 +100,7 @@ def test_functions(populated, sql, opts, allowed):
 
 
 def test_occurrences(db):
-    result = validate(db, "SELECT md5('x'), md5('y')", {"blocked_functions": ["md5"]})
+    result = validate(db, "SELECT md5('x'), md5('y')", {"blocked_functions": function_rules("md5")})
     assert len(result["violations"]) == 1
     assert "2 occurrences" in result["violations"][0]["message"]
 
@@ -121,7 +121,7 @@ def test_occurrences(db):
 ])
 def test_function_position_is_the_earliest_occurrence(db, sql, position):
     name = "md5" if "md5" in sql else "list_value"
-    [violation] = validate(db, sql, {"blocked_functions": [name]})["violations"]
+    [violation] = validate(db, sql, {"blocked_functions": function_rules(name)})["violations"]
     assert violation["function_name"] == name and "2 occurrences" in violation["message"], violation
     assert violation["position"] == position
 
@@ -170,7 +170,7 @@ def test_ctes(db, sql, allowed):
 def test_recursive_cte_obeys_function_and_table_policy(db):
     sql = "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t WHERE n<3) SELECT * FROM t"
     assert validate(db, sql, {"allowed_tables": []})["allowed"]
-    assert not validate(db, sql, {"blocked_functions": ["+"]})["allowed"]
+    assert not validate(db, sql, {"blocked_functions": function_rules("+")})["allowed"]
     db.execute("CREATE TABLE secret(n INT)")
     assert not validate(db, sql.replace("SELECT 1 AS n", "SELECT n FROM secret"), {"allowed_tables": []})["allowed"]
 
@@ -239,8 +239,8 @@ def test_configure_interleaved_with_validate():
     with connect() as db:
         db.execute("CREATE TABLE a(x INT); CREATE TABLE b(x INT)")
         policies = [
-            {"allowed_tables": [{"schema_path": ["main"], "table": "a"}], "blocked_functions": ["sum"]},
-            {"allowed_tables": [{"schema_path": ["main"], "table": "b"}], "blocked_functions": ["count"]},
+            {"allowed_tables": [{"schema_path": ["main"], "table": "a"}], "blocked_functions": function_rules("sum")},
+            {"allowed_tables": [{"schema_path": ["main"], "table": "b"}], "blocked_functions": function_rules("count")},
         ]
         stop = False
         configure(db, policies[0])  # never validate against the built-in defaults

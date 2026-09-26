@@ -42,7 +42,7 @@ struct FunctionGrant {
 struct Policy {
 	bool defaults = true, tables = false;
 	std::set<FunctionGrant> allowed_functions;
-	Names blocked_functions;
+	std::set<FunctionGrant> blocked_functions;
 	std::set<Table> allowed_tables, blocked_tables;
 };
 // The two layers every authorization consults: the global ceiling the host set, and the request layer, which is

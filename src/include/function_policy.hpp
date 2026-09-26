@@ -111,16 +111,10 @@ inline bool ControlPlane(const std::string &name) {
 // The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
 // implementations binding derives from it, and the readers its file paths choose. A host view, macro, or
 // attached table is a trusted definition; nothing inside one is subject to blocks.
-inline bool FunctionBlocked(const Policy &policy, const std::string &name) {
-	auto canonical = CanonicalFunction(name);
-	for (const auto &blocked : policy.blocked_functions)
-		if (CanonicalFunction(blocked) == canonical)
-			return true;
-	return false;
-}
+bool FunctionBlocked(const Policy &policy, const Identity &identity);
 
-inline bool FunctionDenied(const Policy &policy, const std::string &name) {
-	return NeverBind(name) || FunctionBlocked(policy, name);
+inline bool FunctionDenied(const Policy &policy, const Identity &identity) {
+	return NeverBind(identity.name) || FunctionBlocked(policy, identity);
 }
 
 // Functions DuckDB binds for a collation (function.cpp: nocase, noaccent, nfc; the ICU extension registers

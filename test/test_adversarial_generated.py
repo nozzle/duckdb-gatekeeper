@@ -1,7 +1,7 @@
 """Deterministic generated combinations with independently specified outcomes."""
 import random
 
-from support.typed_helpers import configure, validate
+from support.typed_helpers import configure, function_rules, validate
 
 
 def test_generated_nested_reference_positions(db):
@@ -37,15 +37,15 @@ def test_generated_function_obfuscation(db):
             f"SELECT system.main.{name}('x')",
             f"SELECT CASE WHEN true THEN {name}('x') ELSE '' END",
         ])
-        result = validate(db, sql, {"blocked_functions": ["md5"]})
+        result = validate(db, sql, {"blocked_functions": function_rules("md5")})
         assert not result["allowed"] and result["code"] == "forbidden", (sql, result)
 
 
 def test_prepared_policy_overrides_and_nulls(db):
-    configure(db,{"blocked_functions":["md5"]})
-    for sql, blocks, code in [(None, ["md5"], "invalid_input"),
+    configure(db,{"blocked_functions":function_rules("md5")})
+    for sql, blocks, code in [(None, function_rules("md5"), "invalid_input"),
                               ("SELECT md5('x')", [], "forbidden"),
-                              ("SELECT md5('x')", ["md5"], "forbidden")]:
+                              ("SELECT md5('x')", function_rules("md5"), "forbidden")]:
         result = db.execute("SELECT code, allowed FROM gatekeeper_validate(?, blocked_functions := ?)",
                             [sql, blocks]).fetchall()
         assert result == [(code, False)]
@@ -59,7 +59,7 @@ def test_limits_at_edges_and_recovery(db):
 
 def test_embedded_nul_policy_does_not_truncate(db):
     for key in ["allowed_functions", "blocked_functions"]:
-        policy = {key: [{"schema_path":["main"], "name":"md5\0suffix"}] if key == "allowed_functions" else ["md5\0suffix"]}
+        policy = {key: function_rules("md5\0suffix")}
         result = validate(db, "SELECT md5('x')", policy)
         assert result["code"] == "invalid_input"
     for field in ["catalog", "schema_path", "table"]:

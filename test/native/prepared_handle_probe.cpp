@@ -144,7 +144,7 @@ void CheckParameterHandles(Connection &catalog) {
 	variables[Identifier("x")] = Value::BIGINT(99);
 	expect_value(empty, Value::BIGINT(99));
 	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
-	             "blocked_functions := ['getvariable'])");
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	parameter_bind_calls = 0;
 	ExpectRefused(Drain(handle->Execute(empty)), "native handle implicit fallback");
 	ExpectRefused(Drain(handle->Execute(explicit_values)), "native handle ambiguous explicit input");
@@ -162,7 +162,7 @@ void CheckParameterHandles(Connection &catalog) {
 	// Validation can authorize a known fallback, but must refuse it before binding when blocked.
 	ClientConfig::GetConfig(*catalog.context).user_variables[Identifier("x")] = Value::BIGINT(42);
 	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
-	             "blocked_functions := ['getvariable'])");
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	auto validation =
 	    catalog.Query("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM parameter_probe($x)')");
 	if (validation->HasError())
@@ -180,7 +180,7 @@ void CheckParameterHandles(Connection &catalog) {
 	expect_value(empty, Value::BIGINT(99));
 	expect_value(explicit_values, Value::BIGINT(7));
 	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
-	             "blocked_functions := ['getvariable'])");
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	variables.erase(Identifier("x"));
 	ExpectRows(Drain(handle->Execute(explicit_values)), 0, "same handle after collision removed");
 	ExpectRows(Drain(agent.context->Query("SELECT * FROM parameter_probe($x)", direct_parameters)), 0,
