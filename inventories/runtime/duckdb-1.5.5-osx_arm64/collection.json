@@ -1,16 +1,19 @@
 {
   "aliases": {
     "mysql": "mysql_scanner",
+    "odbc": "odbc_scanner",
     "postgres": "postgres_scanner",
     "sqlite": "sqlite_scanner"
   },
   "baseline_sha256": "035ab73f72fef5cdbdfdc83ea7e4e5a35bdf33eddd6f79b3155f63e50f36749c",
   "capture_function": "scripts/audit_inventory.py:capture_functions",
   "capture_function_sha256": "110e9f68ccb0bc5fef61b5f02dc6f2bb8e413deeb7bb3a6ce249040129fa255d",
+  "capture_method": "Final collector locked replay. Earlier sandboxed exploratory observations are explicitly labeled in original-evidence.json.",
   "collection_date_utc": "2026-09-26",
   "default_mapping_sha256": "97a6e894d3a18fd568dc7b59d8d384bdfdf9c75ac879b19e8949899c8bc081f5",
   "download_repository": "https://extensions.duckdb.org/v1.5.5/osx_arm64/",
   "engine": "v1.5.5",
+  "evidence_representation": "Single shared collector base and final verified deltas; original exact snapshot metadata/hashes reference these same function arrays.",
   "extensions": [
     "autocomplete",
     "avro",
@@ -42,13 +45,47 @@
     "vortex",
     "vss"
   ],
-  "isolation": {
+  "final_capture_date_utc": "2026-09-26",
+  "final_collection_mode": "verified",
+  "final_collector_sha256": "46601d3211e03283284a282bbe6ef83fa44129812e737d4610c0221e6eeefcf0",
+  "final_isolation": {
     "automatic_install_and_load": false,
-    "environment": "Explicit non-secret allowlist; empty motherduck_token; AWS metadata disabled.",
-    "fresh_home_and_extension_directory_per_extension": true,
-    "fresh_process_and_memory_database_per_extension": true,
-    "load_timeout_seconds": 90,
-    "sandbox": "(version 1)(allow default)(deny network*)(deny process-fork)"
+    "credential_environment": "collector allowlist",
+    "fresh_home_store_process_database": true,
+    "motherduck": "INSTALL only; LOAD skipped by collector",
+    "network_sandbox": false,
+    "operations": "Official downloads, local INSTALL and ordered LOADs, registration metadata capture only; no attachments, authentication, or UI startup.",
+    "persistent_secrets": false,
+    "timeout_seconds": 90
+  },
+  "final_odbc_artifact_metadata": {
+    "artifact": {
+      "bytes": 522222,
+      "download_sha256": "ca183379aab564a465fe5a639de69cca96da21b66622edaa87763218bb9639f3",
+      "name": "odbc_scanner",
+      "repository": "core",
+      "sha256": "13305db5f0f58eb897cf95bd35090692136065b4e2b36b304c4ca293f8ab249a",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/odbc_scanner.duckdb_extension.gz",
+      "version": "274a330734"
+    },
+    "compressed_bytes": 181245,
+    "footer": {
+      "abi": "C_STRUCT",
+      "engine_or_c_api_version": "v1.2.0",
+      "extension_version": "274a330734",
+      "magic": "4",
+      "platform": "osx_arm64",
+      "remaining_fields": [
+        "",
+        "",
+        ""
+      ]
+    },
+    "retrieved_at": "2026-09-26T05:25:10.450354+00:00"
+  },
+  "final_status_counts": {
+    "ok": 28,
+    "skipped": 1
   },
   "known_dependencies": {
     "aws": [
@@ -73,13 +110,34 @@
       "aws"
     ]
   },
-  "notes": [
+  "original_full_snapshot_count": 37,
+  "original_function_array_count": 23,
+  "original_size": {
+    "bytes": 36322064,
+    "files": 188,
+    "lines": 1835558
+  },
+  "platform": "osx_arm64",
+  "preliminary_isolation": {
+    "automatic_install_and_load": false,
+    "environment": "Explicit non-secret allowlist; empty motherduck_token; AWS metadata disabled.",
+    "fresh_home_and_extension_directory_per_extension": true,
+    "fresh_process_and_memory_database_per_extension": true,
+    "load_timeout_seconds": 90,
+    "sandbox": "(version 1)(allow default)(deny network*)(deny process-fork)"
+  },
+  "preliminary_notes": [
     "Downloads occur separately before sandboxed local INSTALL/LOAD.",
     "Signed extensions only; allow_unsigned_extensions remains false.",
     "Python-linked base extensions are already loaded; repository artifacts for these are provenance evidence, not proof that the downloaded binary was executed.",
     "No attachments, auth, runtime network services, or UI functions invoked."
   ],
-  "platform": "osx_arm64",
+  "preliminary_status_counts": {
+    "load_failed": 1,
+    "loaded": 27,
+    "unavailable": 1
+  },
+  "reconstructed_original_function_array_count": 24,
   "retry_notes": {
     "iceberg": "Added required avro dependency; fresh process/database/home.",
     "ui": "Created empty HOME/.duckdb parent; fresh process/database/home."
@@ -99,9 +157,7 @@
     "source_id_precision": "PRAGMA version reports this exact abbreviated source ID.",
     "version": "1.5.5"
   },
-  "schema_note": "Per-extension manifest references content-addressed full audit_inventory.capture_functions snapshots; SHA256 is over stored JSON bytes. Reports are observations, not permissions or ownership assertions.",
   "schema_version": 1,
-  "snapshot_encoding": "UTF-8 JSON; indent=2, sort_keys=True, trailing newline",
   "special_load_evidence": {
     "motherduck": "https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/connecting-to-motherduck/",
     "ui": "https://github.com/duckdb/duckdb-ui/blob/26084e6e02cc7f47ba0361daef646d75974908d9/src/ui_extension.cpp"

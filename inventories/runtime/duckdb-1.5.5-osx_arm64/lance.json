@@ -1,0 +1,818 @@
+{
+  "active_extension": "lance",
+  "artifacts": [
+    {
+      "bytes": 16010974,
+      "download_sha256": "758acc0b0c4fbf09506f387ff6f52826b1038b7b6849ded39928d2f992945230",
+      "name": "httpfs",
+      "repository": "core",
+      "sha256": "10514b4ef19f80bf4ec4bf90c124f5d34625f2606263b40ae8ec7979905bb779",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/httpfs.duckdb_extension.gz",
+      "version": "827222f"
+    },
+    {
+      "bytes": 198277054,
+      "download_sha256": "9c4e51633101be4e51d6a790859a2464d115784eda767608708e23ea5e955b19",
+      "name": "lance",
+      "repository": "core",
+      "sha256": "b0753f592047d3016465ad661275ba45def627b566461b54eb842e27dd5fb85a",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/lance.duckdb_extension.gz",
+      "version": "2f167ea"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [
+    "httpfs"
+  ],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2917,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_cleanup_old_versions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_compact_files",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_exec",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "BLOB"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_namespace_scan",
+        "named_parameters": {
+          "api_key": "VARCHAR",
+          "bearer_token": "VARCHAR",
+          "explain_verbose": "BOOLEAN",
+          "token": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_optimize_index",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_scan",
+        "named_parameters": {
+          "explain_verbose": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_set_auto_cleanup",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "BIGINT",
+          "VARCHAR",
+          "BIGINT",
+          "BOOLEAN"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_show_auto_cleanup",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__lance_truncate_table",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "lance_fts",
+        "named_parameters": {
+          "filter": "VARCHAR",
+          "k": "BIGINT",
+          "prefilter": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "lance_hybrid_search",
+        "named_parameters": {
+          "alpha": "FLOAT",
+          "k": "BIGINT",
+          "nprobs": "BIGINT",
+          "oversample_factor": "INTEGER",
+          "prefilter": "BOOLEAN",
+          "refine_factor": "BIGINT",
+          "use_index": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "DOUBLE[]",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "lance_hybrid_search",
+        "named_parameters": {
+          "alpha": "FLOAT",
+          "k": "BIGINT",
+          "nprobs": "BIGINT",
+          "oversample_factor": "INTEGER",
+          "prefilter": "BOOLEAN",
+          "refine_factor": "BIGINT",
+          "use_index": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "FLOAT[]",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "lance_vector_search",
+        "named_parameters": {
+          "explain_verbose": "BOOLEAN",
+          "filter": "VARCHAR",
+          "k": "BIGINT",
+          "nprobs": "BIGINT",
+          "prefilter": "BOOLEAN",
+          "refine_factor": "BIGINT",
+          "use_index": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "DOUBLE[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "lance_vector_search",
+        "named_parameters": {
+          "explain_verbose": "BOOLEAN",
+          "filter": "VARCHAR",
+          "k": "BIGINT",
+          "nprobs": "BIGINT",
+          "prefilter": "BOOLEAN",
+          "refine_factor": "BIGINT",
+          "use_index": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "FLOAT[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "httpfs",
+    "lance"
+  ],
+  "inventory": "lance",
+  "load_names": [
+    "httpfs",
+    "lance"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "httpfs",
+      "version": "827222f"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "lance",
+      "version": "2f167ea"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "lance",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "load_name": "httpfs",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "httpfs",
+          "version": "827222f"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "dependency"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_cleanup_old_versions",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_compact_files",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_exec",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "BLOB"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_namespace_scan",
+            "named_parameters": {
+              "api_key": "VARCHAR",
+              "bearer_token": "VARCHAR",
+              "explain_verbose": "BOOLEAN",
+              "token": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_optimize_index",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_scan",
+            "named_parameters": {
+              "explain_verbose": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_set_auto_cleanup",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "BIGINT",
+              "VARCHAR",
+              "BIGINT",
+              "BOOLEAN"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_show_auto_cleanup",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__lance_truncate_table",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "lance_fts",
+            "named_parameters": {
+              "filter": "VARCHAR",
+              "k": "BIGINT",
+              "prefilter": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "lance_hybrid_search",
+            "named_parameters": {
+              "alpha": "FLOAT",
+              "k": "BIGINT",
+              "nprobs": "BIGINT",
+              "oversample_factor": "INTEGER",
+              "prefilter": "BOOLEAN",
+              "refine_factor": "BIGINT",
+              "use_index": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "DOUBLE[]",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "lance_hybrid_search",
+            "named_parameters": {
+              "alpha": "FLOAT",
+              "k": "BIGINT",
+              "nprobs": "BIGINT",
+              "oversample_factor": "INTEGER",
+              "prefilter": "BOOLEAN",
+              "refine_factor": "BIGINT",
+              "use_index": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "FLOAT[]",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "lance_vector_search",
+            "named_parameters": {
+              "explain_verbose": "BOOLEAN",
+              "filter": "VARCHAR",
+              "k": "BIGINT",
+              "nprobs": "BIGINT",
+              "prefilter": "BOOLEAN",
+              "refine_factor": "BIGINT",
+              "use_index": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "DOUBLE[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "lance_vector_search",
+            "named_parameters": {
+              "explain_verbose": "BOOLEAN",
+              "filter": "VARCHAR",
+              "k": "BIGINT",
+              "nprobs": "BIGINT",
+              "prefilter": "BOOLEAN",
+              "refine_factor": "BIGINT",
+              "use_index": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "FLOAT[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "aa0c9963a2377884dd664ac3c4e1e6ad0b85b7ad1a29682337c8d6f1b071e96b",
+      "load_name": "lance",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "httpfs",
+          "version": "827222f"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "lance",
+          "version": "2f167ea"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "44abc49b540c6aa150068438e7c26378605a02004200f6a9b907796e75818def",
+  "status": "ok"
+}

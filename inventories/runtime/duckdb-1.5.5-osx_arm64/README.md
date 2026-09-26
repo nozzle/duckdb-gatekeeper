@@ -1,143 +1,133 @@
-# DuckDB 1.5.5 macOS ARM64 runtime evidence
+# DuckDB 1.5.5 macOS ARM64: compact verified runtime evidence
 
-Collected **2026-09-26 UTC** using the existing Python `duckdb==1.5.5` runtime.
-`PRAGMA version` returned `v1.5.5`, source ID `d8cdaa33fd`, codename `Variegata`;
-`PRAGMA platform` returned `osx_arm64`. The native Python module SHA-256 is in
-[collection.json](collection.json). The source ID is recorded at the exact
-precision returned by the engine.
+**Final locked replay: 28 successful extensions, MotherDuck skipped; all 29
+inventories attempted.** Engine `v1.5.5`, source ID `d8cdaa33fd`, codename
+`Variegata`, platform `osx_arm64`, Python package `1.5.5`. See
+[summary.json](summary.json) and [collection.json](collection.json).
 
-## Outcomes
+## Final versus preliminary outcomes
 
-All **29** inventoried extensions received an official version/platform binary
-download attempt. **28** downloads succeeded, **27** target INSTALL/LOAD sequences
-succeeded, **1** target LOAD failed, and **1** binary was unavailable. There were
-**no crashes or timeouts**. See [summary.json](summary.json) for every outcome.
+The final records use `scripts/capture_extensions.py` schema 2, protocol
+`gatekeeper-isolated-staged-capture-v2`, in **verified** mode. They are actual
+locked replay results, not adapters labeled as verification. The preceding
+protocol-v2 discovery generated the lock, including explicit ordered
+`load_names`, separate `install_names`, artifact hashes, and stage hashes.
+All 28 successful captures matched their locked registration and metadata stages.
+There were no crashes or timeouts. MotherDuck installed with verified artifact
+hashes but its LOAD was skipped by the collector; runtime coverage is incomplete.
 
-- **ODBC:** the official `v1.5.5/osx_arm64/odbc.duckdb_extension.gz` URL returned
-  HTTP 404. No binary was available to install or load.
-- **MotherDuck:** the signed repository artifact installed, but LOAD attempted
-  `http://api.motherduck.com/extension_version`. The network-denying sandbox
-  prevented contact and LOAD failed. This is **runtime-service-required,
-  incomplete coverage**, not an empty function inventory. Authentication and
-  attachment were never attempted. Its footer reports
-  `v1.5.5-2026-09-355` verbatim; this artifact differs from the historical
-  implementation binary recorded in `inventories/extensions/motherduck.json`.
-  It does not establish provenance for that historical binary or its functions.
-- **Iceberg:** the first LOAD identified a missing `avro` dependency. A fresh
-  process/database/home with `httpfs`, `aws`, and `avro` loaded succeeded.
-- **UI:** the first LOAD needed an empty `HOME/.duckdb` parent directory. A fresh
-  process/database/home with that directory succeeded. No UI functions or server
-  startup were invoked. Both initial setup failures are retained as
-  `initial-load.json` alongside the final outcome.
-- **ICU, JSON, Parquet:** already statically linked and loaded in every clean
-  Python base. Their target LOADs are no-ops. Their downloaded artifacts have
-  hashes and footers, but those downloads are **not** claimed as the executed
-  implementations. The executed base provenance is the hashed Python native
-  module. `core_functions` is also statically linked.
+**Correction to preliminary ODBC evidence:** the old explorer requested
+`odbc.duckdb_extension.gz`, which returned 404. The engine registry resolves
+`odbc` to **`odbc_scanner`**. The correct official binary downloaded and loaded
+successfully in both final discovery and locked replay. Its footer reports the
+stable C ABI `v1.2.0`, extension version `274a330734`, and platform `osx_arm64`;
+this is not a 1.5.5 engine-version mismatch.
 
-## Registration observations
+The earlier exploratory run had 27 successes, one ODBC URL failure, and one
+MotherDuck LOAD failure. Those outcomes remain explicitly labeled in
+`original-evidence.json`. MotherDuck's exploratory LOAD tried to fetch
+`api.motherduck.com/extension_version`; the macOS network-denying sandbox blocked
+contact. No credential, authentication, attachment, or successful service contact
+occurred. **Final discovery and replay never invoked MotherDuck LOAD.** The
+exploratory Iceberg missing-Avro and UI missing-directory failures also remain
+recorded, along with their successful fresh-process retries.
 
-Relative to dependency-complete pre-target snapshots, successful target LOADs
-added **294 qualified identities** and **445 signature rows**, with no removed
-rows. These totals sum independent process observations, not a combined catalog.
+## Compact layout and reconstruction
 
-- The only added name absent from all current classifications is
-  **`system.main.vortex_version`**, kind **macro**, zero arguments, body
-  **`'0.86.1'`**. The Vortex artifact footer reports `9a8eb67`. This is an
-  observation, not approval of a new default.
-- INET adds overloads to `system.main.+` and `system.main.-` (scalar).
-- Spatial adds an overload to `system.main.st_astext` (scalar). Raw Spatial
-  registration case is retained; mapping comparisons normalize names to
-  lowercase, matching DuckDB identity handling.
-- No target-added default-name identity falls outside the source-backed grants.
-  Every compute name in each successfully loaded extension's historical
-  inventory was observed after loading. Presence in the pre-target snapshot is
-  reported separately and is not attributed to the target.
-- Full source-map reports retain the pre-existing synthetic window rows reported
-  as `aggregate` on 1.5.5, and missing `window` identities. These are the known
-  reporting discrepancy in `default_identities.json`, not new extension grants.
+- `base.json`: the **only full function array**, shared by all final captures.
+- `<inventory>.json`: all 29 final collector outcomes. Successful records contain
+  dependency/target stage deltas and metadata plus the collector's aggregate
+  base-to-after delta. `stages_sha256` binds the ordered stages.
+- `lock.json`: genuine protocol-v2 discovery lock used for the final replay.
+  `load_names` explicitly orders dependency preloads followed by the target.
+- `summary.json`: final statuses, collector source hash, base hash, and mode.
+- `report.json`: one aggregate source-map report and compact per-extension
+  findings. The aggregate is a union of independently observed registrations,
+  not a claim that all extensions were loaded together. Missing defaults are
+  listed once. Per-target findings exclude dependency and base registrations.
+- `original-evidence.json`: exact metadata and hashes for **37 original full
+  snapshots (23 distinct function arrays)**, references to their final
+  reconstructible function arrays, preliminary artifact metadata, and outcomes.
+  There are no duplicate exploratory full snapshots or raw/adapter trees.
+- `collection.json`: engine/native-module provenance, preliminary and final
+  isolation descriptions, artifact footer supplement for corrected ODBC, input
+  hashes, and original size for comparison.
+- `reconstruct.py`: offline, standard-library-only reconstruction and validation.
 
-The clean base has no name/signature drift from the historical Python baseline.
-That baseline is unqualified and lacks most optional extensions; comparison
-against it cannot establish historical qualified extension signature drift.
-Per-extension reports therefore retain both the historical comparison and the
-qualified before/after comparison. Historical inventories, baseline, and default
-map were not modified; their relevant hashes are recorded in `collection.json`.
+Run from the repository root:
 
-## Evidence layout
-
-- `collection.json`: engine/module identity, isolation, aliases, dependency setup,
-  capture-function and historical-input hashes, special-load documentation.
-- `<extension>/artifact.json`: exact official URL, final URL, UTC retrieval time,
-  HTTP outcome, compressed and decompressed SHA-256 and byte lengths, all parsed
-  footer metadata fields. All 28 successful downloads have complete hashes and
-  footers. No download redirected to another URL.
-- `<extension>/load.json`: bounded subprocess outcome, setup stages, sanitized
-  diagnostics, exit code; initial setup failures are retained separately.
-- `<extension>/manifest.json`: references to full base, dependency-stage,
-  pre-target, and post-target snapshots where available. There is no successful
-  post-target snapshot for MotherDuck or ODBC.
-- `snapshots/<sha256>.json`: **37** content-addressed full snapshots, including
-  all overload rows from `scripts/audit_inventory.py:capture_functions`, catalog,
-  complete `schema_path`, and kind. Hashes cover the stored UTF-8 JSON bytes.
-  Identical full captures share a file; each attempted load process captured its
-  own base before loading. Temporary paths in extension metadata are replaced
-  with placeholders; function registrations are preserved as captured.
-- `<extension>/report.json`: dependency and target deltas, raw added/removed
-  signatures, source-map comparison, and each loaded extension's origin.
-- `collector-schema-v1/`: adapter exports matching the reusable
-  `scripts/capture_extensions.py` schema: base, per-extension deltas, discovery
-  lock, and summary. These were adapted from the observed full snapshots using
-  its `digest` and `function_delta` helpers, not recollected by that tool.
-
-The reusable schema's extension delta is **base to after**, so it includes loaded
-dependencies. The detailed reports distinguish **base to before** (dependencies)
-from **before to after** (target LOAD). Neither delta proves implementation
-ownership. Collector exports use **discovery** mode; no locked replay is claimed.
-The lock records only downloaded non-base artifacts; supplementary downloaded
-ICU/JSON/Parquet provenance remains in their `artifact.json` files. Replaying a
-dependency-sensitive observation may require the recorded explicit preload order.
-
-## Collection constraints
-
-Downloads came only from `https://extensions.duckdb.org/v1.5.5/osx_arm64/`.
-They completed before native workers began. Each worker had a new process,
-in-memory database, HOME, temporary directory, and extension store, plus an
-explicit credential-free environment with empty `motherduck_token` and AWS
-instance metadata disabled. Automatic extension installation/loading was off.
-Only signed local artifacts were installed and loaded. Known dependencies had
-their own snapshots and artifact origins.
-
-Workers ran under macOS `sandbox-exec` with:
-
-```scheme
-(version 1)(allow default)(deny network*)(deny process-fork)
+```sh
+python inventories/runtime/duckdb-1.5.5-osx_arm64/reconstruct.py
 ```
 
-The network restriction was verified with a socket probe. Each worker had a
-90-second limit and a separate process group. No external databases were
-attached, credentials used, service connections established, or UI servers
-started. MotherDuck's denied service attempt is explicitly retained above.
+This verifies all final outcomes, artifact records against the lock, ordered
+stage hashes, and **65 final registration stages**, then reconstructs all 37
+original full-file SHA-256 values exactly. `functions_ref` identifies either the
+shared base, an extension's aggregate delta, or `name.json#stage=N` (zero-based,
+inclusive). Apply added/removed/changed signature groups as a multiset; preserve
+duplicate overload rows. Sort reconstructed rows by `json.dumps(row,
+sort_keys=True)`, combine them with the preserved exact metadata, serialize with
+`indent=2, sort_keys=True`, and append one newline. The result matches the
+original full snapshot byte hash, including sanitized original metadata paths.
 
-The exploratory collection, reporting, schema-export, and validation runners,
-downloaded binaries, and isolated homes are ignored under
-`build/inventory-release/`; they are not committed. Durable evidence contains
-only JSON and this documentation.
+The original 188-file tree occupied **36,322,064 bytes / 1,835,558 lines**.
+Compaction removes approximately **95%** of its bytes and lines. Only the new
+exploratory duplicates were removed; `inventories/baselines/duckdb-1.5.5.json`
+and the historical classifications/default map retain their original hashes.
+
+## Substantive observations
+
+- **`system.main.vortex_version`**, kind **macro**, zero arguments, body
+  **`'0.86.1'`**, is the only added name absent from all historical classifications.
+  The Vortex artifact footer/version is `9a8eb67`. No permission was added.
+- INET adds scalar overloads to `system.main.+` and `system.main.-`.
+- Spatial adds a scalar overload to `system.main.st_astext`. Raw registration
+  case is preserved, while source-map identity comparisons normalize case.
+- No target-added default-name identity falls outside the source-backed grants.
+  The report retains known synthetic 1.5.5 window-as-aggregate reporting rows
+  without granting aggregates or changing their raw labels.
+- ICU, JSON, Parquet and `core_functions` are already linked into the clean
+  Python base. Their executed provenance is the hashed native Python module;
+  downloaded ICU/JSON/Parquet artifacts are supplementary provenance, not claimed
+  as executed implementations. A base/dependency registration is not target
+  ownership. Explicit preloads are setup choices, not proof every dependency is
+  mandatory for LOAD.
+
+All successful preliminary artifact downloads retain compressed/decompressed
+hashes and footer metadata. Final non-base artifact hashes and installed
+versions are verified against the lock. The corrected ODBC footer/hash supplement
+is in `collection.json`. The historical MotherDuck proprietary implementation
+binary is distinct from the repository artifact observed here; no historical
+implementation provenance is inferred from its loader.
+
+## Reproduce the locked replay
+
+With the exact Python runtime/native module recorded in `base.json`, from the
+repository root (choose a new ignored output directory):
+
+```sh
+python scripts/capture_extensions.py collect --allow-install \
+  --python /path/to/matching/venv/bin/python \
+  --output build/inventory-release/replay-new \
+  --lock inventories/runtime/duckdb-1.5.5-osx_arm64/lock.json \
+  --timeout 90
+```
+
+The collector returns nonzero for incomplete coverage, including the intentional
+MotherDuck skip. Inspect all entries in `summary.json`; do not reinterpret a
+skip as a successful capture. Downloads use exact official engine/platform URLs,
+without redirects or proxy discovery. Each extension runs in a fresh process,
+database, HOME, temporary directory, and extension store with a credential-free
+environment; automatic install/load and persistent secrets are disabled. No
+external databases, auth services, or UI functions are invoked. The final
+collector does not claim the preliminary explorer's network-denying OS sandbox.
 
 ## Validation
 
-- Validated all 29 outcomes, 28 compressed/decompressed hash pairs, snapshot
-  hashes, qualified row fields, engine IDs, dependency/origin references, and
-  collector deltas against their full snapshots. Scanned JSON for personal or
-  temporary absolute paths. Historical baseline/default-map hashes still match.
-- `scripts/generate.py` passed using the main checkout's pinned engine source
-  and an isolated generated-output directory.
-- `scripts/audit_inventory.py --candidate <clean-base-snapshot>` passed; no
-  historical name/signature drift, with expected qualified-report limitations.
-- CMake build check for `gatekeeper_loadable_extension` in `build/v1` passed
-  (reconfigured for new inventory evidence; compiled target was up to date).
-- Full Python suite: **1,645 passed, 54 skipped, 2 xfailed, 7 failed**. All seven
-  failures are in `test_inventory_tooling.py`: they directly require the
-  worktree's uninitialized `duckdb/` submodule despite the external
-  `GATEKEEPER_ENGINE_SOURCE` setting. Failures concern missing serialization
-  fixtures/descriptors or source revision detection, not runtime evidence.
+Exact reconstruction and final lock/stage verification passed. The original
+27 successful post-load arrays match final replay byte-for-byte at the function
+array level; ODBC adds newly available runtime coverage. Build/generation and
+inventory audit checks use the pinned engine source in the main checkout.
+The earlier full-suite run had 1,645 passed, 54 skipped, 2 xfailed and seven
+tooling failures due to the worktree's uninitialized DuckDB submodule. Updated
+compaction validation results are recorded in `validation.json`.

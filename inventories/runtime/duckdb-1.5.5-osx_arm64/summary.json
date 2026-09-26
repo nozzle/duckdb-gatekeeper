@@ -1,323 +1,39 @@
 {
-  "added_default_names_at_ungranted_identities": [],
-  "downloaded_artifacts_with_both_hashes_and_footer": 28,
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "collector_sha256": "46601d3211e03283284a282bbe6ef83fa44129812e737d4610c0221e6eeefcf0",
+  "evidence_kind": "collector_locked_replay",
   "extensions": {
-    "autocomplete": {
-      "added_identities": 4,
-      "added_signature_rows": 4,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "avro": {
-      "added_identities": 1,
-      "added_signature_rows": 2,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "aws": {
-      "added_identities": 1,
-      "added_signature_rows": 2,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "azure": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "delta": {
-      "added_identities": 11,
-      "added_signature_rows": 12,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "ducklake": {
-      "added_identities": 22,
-      "added_signature_rows": 27,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "encodings": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "excel": {
-      "added_identities": 3,
-      "added_signature_rows": 3,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "fts": {
-      "added_identities": 1,
-      "added_signature_rows": 1,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "httpfs": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "iceberg": {
-      "added_identities": 16,
-      "added_signature_rows": 31,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "icu": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": true,
-      "unclassified_added_names": []
-    },
-    "inet": {
-      "added_identities": 9,
-      "added_signature_rows": 12,
-      "artifact_status": "downloaded",
-      "changed_identities": 2,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "json": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": true,
-      "unclassified_added_names": []
-    },
-    "lance": {
-      "added_identities": 12,
-      "added_signature_rows": 14,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "motherduck": {
-      "artifact_status": "downloaded",
-      "status": "load_failed"
-    },
-    "mysql": {
-      "added_identities": 5,
-      "added_signature_rows": 5,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "odbc": {
-      "artifact_status": "unavailable",
-      "status": "unavailable"
-    },
-    "parquet": {
-      "added_identities": 0,
-      "added_signature_rows": 0,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": true,
-      "unclassified_added_names": []
-    },
-    "postgres": {
-      "added_identities": 10,
-      "added_signature_rows": 10,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "quack": {
-      "added_identities": 12,
-      "added_signature_rows": 13,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "spatial": {
-      "added_identities": 164,
-      "added_signature_rows": 284,
-      "artifact_status": "downloaded",
-      "changed_identities": 1,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "sqlite": {
-      "added_identities": 3,
-      "added_signature_rows": 3,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "tpcds": {
-      "added_identities": 3,
-      "added_signature_rows": 3,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "tpch": {
-      "added_identities": 3,
-      "added_signature_rows": 3,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "ui": {
-      "added_identities": 5,
-      "added_signature_rows": 5,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "unity_catalog": {
-      "added_identities": 2,
-      "added_signature_rows": 2,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    },
-    "vortex": {
-      "added_identities": 3,
-      "added_signature_rows": 5,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": [
-        "vortex_version"
-      ]
-    },
-    "vss": {
-      "added_identities": 4,
-      "added_signature_rows": 4,
-      "artifact_status": "downloaded",
-      "changed_identities": 0,
-      "removed_signature_rows": 0,
-      "source_compute_names_not_observed": [],
-      "status": "loaded",
-      "target_already_loaded_in_base": false,
-      "unclassified_added_names": []
-    }
+    "autocomplete": "ok",
+    "avro": "ok",
+    "aws": "ok",
+    "azure": "ok",
+    "delta": "ok",
+    "ducklake": "ok",
+    "encodings": "ok",
+    "excel": "ok",
+    "fts": "ok",
+    "httpfs": "ok",
+    "iceberg": "ok",
+    "icu": "ok",
+    "inet": "ok",
+    "json": "ok",
+    "lance": "ok",
+    "motherduck": "skipped",
+    "mysql": "ok",
+    "odbc": "ok",
+    "parquet": "ok",
+    "postgres": "ok",
+    "quack": "ok",
+    "spatial": "ok",
+    "sqlite": "ok",
+    "tpcds": "ok",
+    "tpch": "ok",
+    "ui": "ok",
+    "unity_catalog": "ok",
+    "vortex": "ok",
+    "vss": "ok"
   },
-  "source_compute_names_not_observed": {},
-  "status_counts": {
-    "load_failed": 1,
-    "loaded": 27,
-    "unavailable": 1
-  },
-  "unclassified_added_names": [
-    "vortex_version"
-  ],
-  "unique_full_snapshots": 37
+  "mode": "verified",
+  "schema_version": 2
 }
