@@ -8,6 +8,71 @@ import schema_check
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def identity_key(identity):
+    return identity["catalog"], tuple(identity["schema_path"]), identity["name"], identity["type"]
+
+
+def load_default_mapping(root=ROOT):
+    """Validate the independently reviewed registration map, without consulting a runtime.
+
+    Every historical compute name must have a source-backed identity or an explicit exclusion.
+    Multiple kinds are allowed only when each is explicitly recorded; never infer one from a name.
+    """
+    entries, names = load(root)
+    mapping = json.loads((root / "inventories/default_identities.json").read_text())
+    schema = json.loads((root / "inventories/default_identities.schema.json").read_text())
+    try:
+        schema_check.validate(schema, mapping)
+    except schema_check.ValidationError as error:
+        raise ValueError("invalid default identity mapping: " + error.message) from error
+    known = set(names)
+    seen, excluded = set(), set()
+    used_evidence = set()
+    for group in mapping["grants"] + mapping["exclusions"]:
+        evidence = group["evidence"]
+        if evidence not in mapping["evidence"]:
+            raise ValueError("unknown identity evidence: " + evidence)
+        used_evidence.add(evidence)
+        members = group["names"]
+        if members != sorted(set(members)) or any(n != n.strip().lower() or "\0" in n for n in members):
+            raise ValueError("identity names must be sorted, unique and normalized: " + evidence)
+        if set(members) - known:
+            raise ValueError("identity mapping contains non-compute names: " + ", ".join(sorted(set(members) - known)))
+        owners = mapping["evidence"][evidence]["inventories"]
+        if any(owner not in entries for owner in owners):
+            raise ValueError("unknown identity evidence inventory: " + evidence)
+        if set(members) - {n for owner in owners for n in entries[owner]["compute"]}:
+            raise ValueError("identity evidence does not own compute names: " + evidence)
+        if "reason" in group:
+            if excluded & set(members):
+                raise ValueError("duplicate identity exclusion")
+            excluded.update(members)
+            continue
+        for name in members:
+            key = identity_key({**group, "name": name})
+            if key in seen:
+                raise ValueError("duplicate/conflicting default identity: " + repr(key))
+            seen.add(key)
+    granted = {key[2] for key in seen}
+    if granted & excluded:
+        raise ValueError("conflicting granted/excluded identity names: " + ", ".join(sorted(granted & excluded)))
+    missing = known - granted - excluded
+    if missing:
+        raise ValueError("missing default identity mapping: " + ", ".join(sorted(missing)))
+    if used_evidence != set(mapping["evidence"]):
+        raise ValueError("unused default identity evidence")
+    return mapping
+
+
+def load_default_identities(root=ROOT):
+    """Return sorted explicit {catalog, schema_path, name, type} grants (stdlib only)."""
+    mapping = load_default_mapping(root)
+    identities = [{"catalog": group["catalog"], "schema_path": list(group["schema_path"]),
+                   "name": name, "type": group["type"]}
+                  for group in mapping["grants"] for name in group["names"]]
+    return sorted(identities, key=identity_key)
+
+
 def check_sources(entries, root=ROOT, duckdb_source=None):
     """Optional provenance check against a checkout of the historical review engine."""
     source = duckdb_source if duckdb_source is not None else root / "duckdb"
