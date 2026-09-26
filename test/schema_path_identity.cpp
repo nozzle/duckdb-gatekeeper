@@ -10,7 +10,16 @@ static void Check(bool condition) {
 int main() {
 	using namespace gatekeeper;
 	Policy functions;
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", true}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions.insert({"system", {"main"}, "abs", "scalar"});
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
 	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions = {{"system", {"*"}, "abs", "scalar"}};
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions.clear();
 	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "table"}));
 	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "macro"}));
 	Check(!FunctionAllowed(functions, {"memory", {"main"}, "abs", "scalar"}));

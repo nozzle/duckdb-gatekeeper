@@ -587,10 +587,11 @@ static void CheckAggregateDependency(ClientContext &context, const string &name,
 	auto dependency = name == "min" ? "arg_min" : "arg_max";
 	auto &target = engine::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "", "", dependency);
 	auto &standard = target.Cast<StandardEntry>();
-	if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY ||
+	if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY || !target.internal ||
 	    engine::CatalogName(standard.schema.catalog) != "system" ||
 	    engine::SchemaPath(standard.schema) != gatekeeper::NamePath{"main"}) {
-		result.violations.emplace(gatekeeper::rules::FUNCTION, "implicit aggregate must resolve to system.main",
+		result.violations.emplace(gatekeeper::rules::FUNCTION,
+		                          "implicit aggregate must resolve to an internal system.main entry",
 		                          engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema), "",
 		                          dependency, -1, FunctionKind(target.type) ? FunctionKind(target.type) : "");
 		throw PermissionException("untrusted implicit aggregate");
@@ -758,7 +759,8 @@ struct LookupCallback {
 					throw BinderException("List aggregate target is not an aggregate");
 				gatekeeper::Identity selected{"system", {"main"}, name, "aggregate", target.internal};
 				if (!s.layers.All([&](const gatekeeper::Policy &p) {
-					    return p.defaults || gatekeeper::FunctionAllowed(p, selected);
+					    return !gatekeeper::FunctionBlocked(p, selected) &&
+						       ((p.defaults && selected.internal == true) || gatekeeper::FunctionAllowed(p, selected));
 				    })) {
 					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "default macro aggregate is not allowed",
 					                            selected.catalog, selected.schema_path, "", selected.name, -1,
@@ -823,8 +825,12 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 			auto &entry = engine::GetEntry(context, CatalogType::COLLATION_ENTRY, "system", "main", part);
 			if (entry.type != CatalogType::COLLATION_ENTRY)
 				throw BinderException("Unknown collation implementation");
-			unit.provenance.collation_functions.insert(
-			    gatekeeper::Lower(engine::FunctionName(entry.Cast<CollateCatalogEntry>().function)));
+			auto name = gatekeeper::Lower(engine::FunctionName(entry.Cast<CollateCatalogEntry>().function));
+			unit.provenance.collation_functions.insert(name);
+			// PushVarcharCollation selects the scalar embedded in the resolved collation
+			// entry, not a scalar search-path lookup. Carry that entry's actual origin.
+			unit.provenance.function_entries.insert(
+			    gatekeeper::FunctionKey({"system", {"main"}, name, "scalar", entry.internal}));
 		}
 	}
 	engine::ParameterMap parameter_data;

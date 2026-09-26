@@ -265,8 +265,12 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				if (entry.type == "scalar" && gatekeeper::Lower(entry.name) == gatekeeper::Lower(identity.name) &&
 				    !gatekeeper::SystemIdentity(entry))
 					competing = true;
-			if (!competing)
+			if (!competing) {
 				identity = {"system", {"main"}, identity.name, "scalar"};
+				auto entry = provenance.function_entries.find(gatekeeper::FunctionKey(identity));
+				if (entry != provenance.function_entries.end())
+					identity.internal = entry->internal;
+			}
 		}
 #endif
 		// Resolved origin wins over a raw caller leaf: a host read_parquet macro is not

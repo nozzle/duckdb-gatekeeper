@@ -244,8 +244,9 @@ bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	for (const auto &part : identity.schema_path)
 		if (part.empty())
 			return false;
-	if (policy.defaults && GetInventory().defaults.count({Lower(identity.catalog), FoldPath(identity.schema_path),
-	                                                      Lower(identity.name), identity.type}))
+	if (policy.defaults && identity.internal == true &&
+	    GetInventory().defaults.count(
+	        {Lower(identity.catalog), FoldPath(identity.schema_path), Lower(identity.name), identity.type}))
 		return true;
 	for (const auto &rule : policy.allowed_functions)
 		if (FunctionMatches(rule, identity, identity.internal.value_or(true)))
