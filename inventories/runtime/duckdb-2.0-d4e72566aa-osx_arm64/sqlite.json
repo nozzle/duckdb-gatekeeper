@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "sqlite",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "sqlite_scanner",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/sqlite.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "sqlite_scanner",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+      "download_sha256": "8527957f5f9ba2692ac086efc1efe61d07a13578f851b65784ff6780e2be2f1d",
+      "sha256": "bbfc1744fe7913920736fa758ff4eee220edebd793d6dc9aa946469abde8a6bb",
+      "bytes": 39726022,
+      "version": "982cb44841"
+    }
+  ],
+  "install_names": [
+    "sqlite_scanner"
+  ],
+  "stages": [
+    {
+      "extension": "sqlite_scanner",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "sqlite_scanner",
+          "version": "982cb44841",
+          "install_mode": "CUSTOM_PATH"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_attach",
+            "named_parameters": {
+              "overwrite": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_query",
+            "named_parameters": {
+              "params": "ANY"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "sqlite_scan",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "sqlite_scanner",
+      "version": "982cb44841",
+      "install_mode": "CUSTOM_PATH"
+    }
+  ],
+  "function_count": 3210,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_attach",
+        "named_parameters": {
+          "overwrite": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_query",
+        "named_parameters": {
+          "params": "ANY"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_scan",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_attach",
+        "named_parameters": {
+          "overwrite": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_query",
+        "named_parameters": {
+          "params": "ANY"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "sqlite_scan",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

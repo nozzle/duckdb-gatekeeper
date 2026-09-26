@@ -1,0 +1,1779 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "ducklake",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "ducklake",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/ducklake.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "ducklake",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/ducklake.duckdb_extension.gz",
+      "download_sha256": "d59a6c4109cc80e3d93159151bc461f1344c342bd1c03a3d4c01bb6066629947",
+      "sha256": "344d30fe9879fa28af5678bad54da6eb19f0c6110945871e88506efd65e6bc2f",
+      "bytes": 40488718,
+      "version": "e8924cfc9c"
+    }
+  ],
+  "install_names": [
+    "ducklake"
+  ],
+  "stages": [
+    {
+      "extension": "ducklake",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "ducklake",
+          "version": "e8924cfc9c",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_add_data_files",
+            "named_parameters": {
+              "allow_missing": "BOOLEAN",
+              "hive_partitioning": "BOOLEAN",
+              "ignore_extra_columns": "BOOLEAN",
+              "schema": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_add_data_files",
+            "named_parameters": {
+              "allow_missing": "BOOLEAN",
+              "hive_partitioning": "BOOLEAN",
+              "ignore_extra_columns": "BOOLEAN",
+              "schema": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_cleanup_old_files",
+            "named_parameters": {
+              "cleanup_all": "BOOLEAN",
+              "dry_run": "BOOLEAN",
+              "older_than": "TIMESTAMP WITH TIME ZONE"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_commit",
+            "named_parameters": {
+              "max_retry_count": "BIGINT",
+              "retry_backoff": "DOUBLE",
+              "retry_wait_ms": "BIGINT"
+            },
+            "parameters": [
+              "VARCHAR",
+              "BIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_current_snapshot",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_delete_orphaned_files",
+            "named_parameters": {
+              "cleanup_all": "BOOLEAN",
+              "dry_run": "BOOLEAN",
+              "older_than": "TIMESTAMP WITH TIME ZONE"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_expire_snapshots",
+            "named_parameters": {
+              "dry_run": "BOOLEAN",
+              "older_than": "TIMESTAMP WITH TIME ZONE",
+              "versions": "UBIGINT[]"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_flush_inlined_data",
+            "named_parameters": {
+              "schema_name": "VARCHAR",
+              "table_name": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_last_committed_snapshot",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_list_files",
+            "named_parameters": {
+              "schema": "VARCHAR",
+              "snapshot_time": "TIMESTAMP WITH TIME ZONE",
+              "snapshot_version": "BIGINT"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_merge_adjacent_files",
+            "named_parameters": {
+              "max_compacted_files": "UBIGINT",
+              "max_file_size": "UBIGINT",
+              "min_file_size": "UBIGINT",
+              "newer_than": "TIMESTAMP WITH TIME ZONE",
+              "schema": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_merge_adjacent_files",
+            "named_parameters": {
+              "max_compacted_files": "UBIGINT",
+              "max_file_size": "UBIGINT",
+              "min_file_size": "UBIGINT",
+              "newer_than": "TIMESTAMP WITH TIME ZONE"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_options",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_rewrite_data_files",
+            "named_parameters": {
+              "delete_threshold": "DOUBLE",
+              "max_compacted_files": "UBIGINT",
+              "schema": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_rewrite_data_files",
+            "named_parameters": {
+              "delete_threshold": "DOUBLE",
+              "max_compacted_files": "UBIGINT"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "schema": "ANY",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_set_commit_message",
+            "named_parameters": {
+              "extra_info": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_set_option",
+            "named_parameters": {
+              "schema": "VARCHAR",
+              "table_name": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "ANY"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_settings",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_snapshots",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "(SELECT i.snapshot_id, i.rowid, CASE  WHEN ((d.rowid IS NOT NULL)) THEN ('update_postimage') ELSE 'insert' END AS change_type, i.* FROM (ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i LEFT JOIN ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d ON (((i.snapshot_id = d.snapshot_id) AND (i.rowid = d.rowid))))) UNION ALL (SELECT d.snapshot_id, d.rowid, CASE  WHEN ((i.rowid IS NOT NULL)) THEN ('update_preimage') ELSE 'delete' END AS change_type, d.* FROM (ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d LEFT JOIN ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i ON (((d.snapshot_id = i.snapshot_id) AND (d.rowid = i.rowid)))))",
+            "name": "ducklake_table_changes",
+            "parameters": [
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_table_deletions",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR",
+              "BIGINT",
+              "BIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_table_deletions",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR",
+              "TIMESTAMP WITH TIME ZONE",
+              "TIMESTAMP WITH TIME ZONE"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_table_info",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_table_insertions",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR",
+              "BIGINT",
+              "BIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "ducklake_table_insertions",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR",
+              "TIMESTAMP WITH TIME ZONE",
+              "TIMESTAMP WITH TIME ZONE"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "murmur3_32",
+            "parameters": [
+              "ANY"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "ducklake",
+      "version": "e8924cfc9c",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "function_count": 3234,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_add_data_files",
+        "named_parameters": {
+          "allow_missing": "BOOLEAN",
+          "hive_partitioning": "BOOLEAN",
+          "ignore_extra_columns": "BOOLEAN",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_add_data_files",
+        "named_parameters": {
+          "allow_missing": "BOOLEAN",
+          "hive_partitioning": "BOOLEAN",
+          "ignore_extra_columns": "BOOLEAN",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_cleanup_old_files",
+        "named_parameters": {
+          "cleanup_all": "BOOLEAN",
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_commit",
+        "named_parameters": {
+          "max_retry_count": "BIGINT",
+          "retry_backoff": "DOUBLE",
+          "retry_wait_ms": "BIGINT"
+        },
+        "parameters": [
+          "VARCHAR",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_current_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_delete_orphaned_files",
+        "named_parameters": {
+          "cleanup_all": "BOOLEAN",
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_expire_snapshots",
+        "named_parameters": {
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE",
+          "versions": "UBIGINT[]"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_flush_inlined_data",
+        "named_parameters": {
+          "schema_name": "VARCHAR",
+          "table_name": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_last_committed_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_list_files",
+        "named_parameters": {
+          "schema": "VARCHAR",
+          "snapshot_time": "TIMESTAMP WITH TIME ZONE",
+          "snapshot_version": "BIGINT"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_merge_adjacent_files",
+        "named_parameters": {
+          "max_compacted_files": "UBIGINT",
+          "max_file_size": "UBIGINT",
+          "min_file_size": "UBIGINT",
+          "newer_than": "TIMESTAMP WITH TIME ZONE",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_merge_adjacent_files",
+        "named_parameters": {
+          "max_compacted_files": "UBIGINT",
+          "max_file_size": "UBIGINT",
+          "min_file_size": "UBIGINT",
+          "newer_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_options",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_rewrite_data_files",
+        "named_parameters": {
+          "delete_threshold": "DOUBLE",
+          "max_compacted_files": "UBIGINT",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_rewrite_data_files",
+        "named_parameters": {
+          "delete_threshold": "DOUBLE",
+          "max_compacted_files": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "schema": "ANY",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_set_commit_message",
+        "named_parameters": {
+          "extra_info": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_set_option",
+        "named_parameters": {
+          "schema": "VARCHAR",
+          "table_name": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_settings",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_snapshots",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "(SELECT i.snapshot_id, i.rowid, CASE  WHEN ((d.rowid IS NOT NULL)) THEN ('update_postimage') ELSE 'insert' END AS change_type, i.* FROM (ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i LEFT JOIN ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d ON (((i.snapshot_id = d.snapshot_id) AND (i.rowid = d.rowid))))) UNION ALL (SELECT d.snapshot_id, d.rowid, CASE  WHEN ((i.rowid IS NOT NULL)) THEN ('update_preimage') ELSE 'delete' END AS change_type, d.* FROM (ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d LEFT JOIN ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i ON (((d.snapshot_id = i.snapshot_id) AND (d.rowid = i.rowid)))))",
+        "name": "ducklake_table_changes",
+        "parameters": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_deletions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_deletions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "TIMESTAMP WITH TIME ZONE",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_info",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_insertions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_insertions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "TIMESTAMP WITH TIME ZONE",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "murmur3_32",
+        "parameters": [
+          "ANY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_add_data_files",
+        "named_parameters": {
+          "allow_missing": "BOOLEAN",
+          "hive_partitioning": "BOOLEAN",
+          "ignore_extra_columns": "BOOLEAN",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_add_data_files",
+        "named_parameters": {
+          "allow_missing": "BOOLEAN",
+          "hive_partitioning": "BOOLEAN",
+          "ignore_extra_columns": "BOOLEAN",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_cleanup_old_files",
+        "named_parameters": {
+          "cleanup_all": "BOOLEAN",
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_commit",
+        "named_parameters": {
+          "max_retry_count": "BIGINT",
+          "retry_backoff": "DOUBLE",
+          "retry_wait_ms": "BIGINT"
+        },
+        "parameters": [
+          "VARCHAR",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_current_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_delete_orphaned_files",
+        "named_parameters": {
+          "cleanup_all": "BOOLEAN",
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_expire_snapshots",
+        "named_parameters": {
+          "dry_run": "BOOLEAN",
+          "older_than": "TIMESTAMP WITH TIME ZONE",
+          "versions": "UBIGINT[]"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_flush_inlined_data",
+        "named_parameters": {
+          "schema_name": "VARCHAR",
+          "table_name": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_last_committed_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_list_files",
+        "named_parameters": {
+          "schema": "VARCHAR",
+          "snapshot_time": "TIMESTAMP WITH TIME ZONE",
+          "snapshot_version": "BIGINT"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_merge_adjacent_files",
+        "named_parameters": {
+          "max_compacted_files": "UBIGINT",
+          "max_file_size": "UBIGINT",
+          "min_file_size": "UBIGINT",
+          "newer_than": "TIMESTAMP WITH TIME ZONE",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_merge_adjacent_files",
+        "named_parameters": {
+          "max_compacted_files": "UBIGINT",
+          "max_file_size": "UBIGINT",
+          "min_file_size": "UBIGINT",
+          "newer_than": "TIMESTAMP WITH TIME ZONE"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_options",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_rewrite_data_files",
+        "named_parameters": {
+          "delete_threshold": "DOUBLE",
+          "max_compacted_files": "UBIGINT",
+          "schema": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_rewrite_data_files",
+        "named_parameters": {
+          "delete_threshold": "DOUBLE",
+          "max_compacted_files": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "schema": "ANY",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_set_commit_message",
+        "named_parameters": {
+          "extra_info": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_set_option",
+        "named_parameters": {
+          "schema": "VARCHAR",
+          "table_name": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_settings",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_snapshots",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "(SELECT i.snapshot_id, i.rowid, CASE  WHEN ((d.rowid IS NOT NULL)) THEN ('update_postimage') ELSE 'insert' END AS change_type, i.* FROM (ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i LEFT JOIN ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d ON (((i.snapshot_id = d.snapshot_id) AND (i.rowid = d.rowid))))) UNION ALL (SELECT d.snapshot_id, d.rowid, CASE  WHEN ((i.rowid IS NOT NULL)) THEN ('update_preimage') ELSE 'delete' END AS change_type, d.* FROM (ducklake_table_deletions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS d LEFT JOIN ducklake_table_insertions(\"catalog\", schema_name, table_name, start_snapshot, end_snapshot) AS i ON (((d.snapshot_id = i.snapshot_id) AND (d.rowid = i.rowid)))))",
+        "name": "ducklake_table_changes",
+        "parameters": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_deletions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_deletions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "TIMESTAMP WITH TIME ZONE",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_info",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_insertions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "BIGINT",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "ducklake_table_insertions",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR",
+          "TIMESTAMP WITH TIME ZONE",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "murmur3_32",
+        "parameters": [
+          "ANY"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

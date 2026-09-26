@@ -1,0 +1,1002 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "delta",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "delta",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/delta.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "delta",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/delta.duckdb_extension.gz",
+      "download_sha256": "c9b66825a4640d254556f9384da2e233ee829333e7d26de41905afe001ee5b0d",
+      "sha256": "94e82e37ecbc70da17f20733d041692996dc579aecaf0eae42a23d0d09170fec",
+      "bytes": 77730414,
+      "version": "d1b2ffd7de"
+    }
+  ],
+  "install_names": [
+    "delta"
+  ],
+  "stages": [
+    {
+      "extension": "delta",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "delta",
+          "version": "d1b2ffd7de",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT write_blob((dst_dir || filename[(length(src_dir) + 1):]), \"content\") FROM read_blob((src_dir || '/**'))",
+            "name": "copy_dir",
+            "parameters": [
+              null,
+              null
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_domain_metadata",
+            "named_parameters": {
+              "version": "UBIGINT"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT l1.message AS query_string, parse_delta_filter_logline(l2.message)['type'] AS filter_type, parse_delta_filter_logline(l2.message)['files_before'] AS files_before, parse_delta_filter_logline(l2.message)['files_after'] AS files_after, parse_delta_filter_logline(l2.message)['filters_before'] AS filters_before, parse_delta_filter_logline(l2.message)['filters_after'] AS filters_after, parse_delta_filter_logline(l2.message)['path'] AS path FROM (duckdb_logs AS l1 INNER JOIN duckdb_logs AS l2 ON ((l1.transaction_id = l2.transaction_id))) WHERE ((l2.\"type\" = 'delta.FilterPushdown') AND (l1.\"type\" = 'QueryLog')) ORDER BY l1.transaction_id",
+            "name": "delta_filter_pushdown_log",
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT query_nr AS tpcds_query, filter_type, files_before, files_after, filters_before, filters_after, path FROM (delta_filter_pushdown_log() INNER JOIN tpcds_queries() AS tpcds_queries ON ((tpcds_queries.query = query_string)))",
+            "name": "delta_filter_pushdown_log_tpcds",
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_get_transaction_version",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_list_files",
+            "named_parameters": {
+              "delete_count": "BOOLEAN",
+              "transform_expression": "BOOLEAN",
+              "version": "UBIGINT"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+              "max_catalog_version": "BIGINT",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "pushdown_filters": "VARCHAR",
+              "pushdown_partition_info": "BOOLEAN",
+              "timestamp": "TIMESTAMP WITH TIME ZONE",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "UBIGINT"
+            },
+            "parameters": [
+              "ANY[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+              "max_catalog_version": "BIGINT",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "pushdown_filters": "VARCHAR",
+              "pushdown_partition_info": "BOOLEAN",
+              "timestamp": "TIMESTAMP WITH TIME ZONE",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "UBIGINT"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+              "max_catalog_version": "BIGINT",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "pushdown_filters": "VARCHAR",
+              "pushdown_partition_info": "BOOLEAN",
+              "timestamp": "TIMESTAMP WITH TIME ZONE",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "UBIGINT"
+            },
+            "parameters": [
+              "VARIANT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "delta_set_transaction_version",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "UBIGINT",
+              "UBIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "get_delta_test_expression",
+            "parameters": [],
+            "returns": "VARCHAR[]",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "macro",
+            "macro": "CAST(x AS STRUCT(path VARCHAR, \"type\" VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, files_after BIGINT))",
+            "name": "parse_delta_filter_logline",
+            "parameters": [
+              null
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "write_blob",
+            "parameters": [
+              "VARCHAR",
+              "BLOB"
+            ],
+            "returns": "BOOLEAN",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "delta",
+      "version": "d1b2ffd7de",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "function_count": 3220,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT write_blob((dst_dir || filename[(length(src_dir) + 1):]), \"content\") FROM read_blob((src_dir || '/**'))",
+        "name": "copy_dir",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_domain_metadata",
+        "named_parameters": {
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT l1.message AS query_string, parse_delta_filter_logline(l2.message)['type'] AS filter_type, parse_delta_filter_logline(l2.message)['files_before'] AS files_before, parse_delta_filter_logline(l2.message)['files_after'] AS files_after, parse_delta_filter_logline(l2.message)['filters_before'] AS filters_before, parse_delta_filter_logline(l2.message)['filters_after'] AS filters_after, parse_delta_filter_logline(l2.message)['path'] AS path FROM (duckdb_logs AS l1 INNER JOIN duckdb_logs AS l2 ON ((l1.transaction_id = l2.transaction_id))) WHERE ((l2.\"type\" = 'delta.FilterPushdown') AND (l1.\"type\" = 'QueryLog')) ORDER BY l1.transaction_id",
+        "name": "delta_filter_pushdown_log",
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT query_nr AS tpcds_query, filter_type, files_before, files_after, filters_before, filters_after, path FROM (delta_filter_pushdown_log() INNER JOIN tpcds_queries() AS tpcds_queries ON ((tpcds_queries.query = query_string)))",
+        "name": "delta_filter_pushdown_log_tpcds",
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_get_transaction_version",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_list_files",
+        "named_parameters": {
+          "delete_count": "BOOLEAN",
+          "transform_expression": "BOOLEAN",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_set_transaction_version",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "UBIGINT",
+          "UBIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "get_delta_test_expression",
+        "parameters": [],
+        "returns": "VARCHAR[]",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "CAST(x AS STRUCT(path VARCHAR, \"type\" VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, files_after BIGINT))",
+        "name": "parse_delta_filter_logline",
+        "parameters": [
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "write_blob",
+        "parameters": [
+          "VARCHAR",
+          "BLOB"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT write_blob((dst_dir || filename[(length(src_dir) + 1):]), \"content\") FROM read_blob((src_dir || '/**'))",
+        "name": "copy_dir",
+        "parameters": [
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_domain_metadata",
+        "named_parameters": {
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT l1.message AS query_string, parse_delta_filter_logline(l2.message)['type'] AS filter_type, parse_delta_filter_logline(l2.message)['files_before'] AS files_before, parse_delta_filter_logline(l2.message)['files_after'] AS files_after, parse_delta_filter_logline(l2.message)['filters_before'] AS filters_before, parse_delta_filter_logline(l2.message)['filters_after'] AS filters_after, parse_delta_filter_logline(l2.message)['path'] AS path FROM (duckdb_logs AS l1 INNER JOIN duckdb_logs AS l2 ON ((l1.transaction_id = l2.transaction_id))) WHERE ((l2.\"type\" = 'delta.FilterPushdown') AND (l1.\"type\" = 'QueryLog')) ORDER BY l1.transaction_id",
+        "name": "delta_filter_pushdown_log",
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT query_nr AS tpcds_query, filter_type, files_before, files_after, filters_before, filters_after, path FROM (delta_filter_pushdown_log() INNER JOIN tpcds_queries() AS tpcds_queries ON ((tpcds_queries.query = query_string)))",
+        "name": "delta_filter_pushdown_log_tpcds",
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_get_transaction_version",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_list_files",
+        "named_parameters": {
+          "delete_count": "BOOLEAN",
+          "transform_expression": "BOOLEAN",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "log_tail": "STRUCT(file_name VARCHAR, \"timestamp\" BIGINT, file_size UBIGINT)[]",
+          "max_catalog_version": "BIGINT",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "pushdown_filters": "VARCHAR",
+          "pushdown_partition_info": "BOOLEAN",
+          "timestamp": "TIMESTAMP WITH TIME ZONE",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "UBIGINT"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "delta_set_transaction_version",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "UBIGINT",
+          "UBIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "get_delta_test_expression",
+        "parameters": [],
+        "returns": "VARCHAR[]",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "macro",
+        "macro": "CAST(x AS STRUCT(path VARCHAR, \"type\" VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, files_after BIGINT))",
+        "name": "parse_delta_filter_logline",
+        "parameters": [
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "write_blob",
+        "parameters": [
+          "VARCHAR",
+          "BLOB"
+        ],
+        "returns": "BOOLEAN",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

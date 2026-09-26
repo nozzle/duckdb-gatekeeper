@@ -1,0 +1,870 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "aws",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "aws",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/aws.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "aws",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+      "download_sha256": "2d182fc0de34aa96d208eb92c753d8faf4f9b4ae39086982819864a6c4ebdba3",
+      "sha256": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
+      "bytes": 49232110,
+      "version": "0a30cdb5ab"
+    }
+  ],
+  "install_names": [
+    "aws"
+  ],
+  "stages": [
+    {
+      "extension": "aws",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "aws",
+          "version": "0a30cdb5ab",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__aws__cloudformation__quack_on_ec2__create",
+            "named_parameters": {},
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__aws__cloudformation__quack_on_ec2__destroy",
+            "named_parameters": {},
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__aws__cloudformation__quack_on_ec2__list",
+            "named_parameters": {},
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "__aws__cloudformation__quack_on_ec2__status",
+            "named_parameters": {},
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_create_stack",
+            "named_parameters": {
+              "dry_run": "BOOLEAN",
+              "name": "VARCHAR",
+              "region": "VARCHAR",
+              "tags": "MAP(VARCHAR, VARCHAR)",
+              "template_parameters": "MAP(VARCHAR, VARCHAR)"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_delete_stack",
+            "named_parameters": {
+              "dry_run": "BOOLEAN"
+            },
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_describe_stack",
+            "named_parameters": {},
+            "parameters": [
+              "MAP(VARCHAR, VARCHAR)"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_describe_stacks",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_describe_stacks",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_describe_stacks",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "cloudformation_list_stacks",
+            "named_parameters": {
+              "status_filter": "VARCHAR[]"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "duckdb_aws_session_id",
+            "parameters": [],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "load_aws_credentials",
+            "named_parameters": {
+              "redact_secret": "BOOLEAN",
+              "set_region": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "load_aws_credentials",
+            "named_parameters": {
+              "redact_secret": "BOOLEAN",
+              "set_region": "BOOLEAN"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "aws",
+      "version": "0a30cdb5ab",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "function_count": 3221,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__create",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__destroy",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__list",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__status",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_create_stack",
+        "named_parameters": {
+          "dry_run": "BOOLEAN",
+          "name": "VARCHAR",
+          "region": "VARCHAR",
+          "tags": "MAP(VARCHAR, VARCHAR)",
+          "template_parameters": "MAP(VARCHAR, VARCHAR)"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_delete_stack",
+        "named_parameters": {
+          "dry_run": "BOOLEAN"
+        },
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stack",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_list_stacks",
+        "named_parameters": {
+          "status_filter": "VARCHAR[]"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "duckdb_aws_session_id",
+        "parameters": [],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__create",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__destroy",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__list",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "__aws__cloudformation__quack_on_ec2__status",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_create_stack",
+        "named_parameters": {
+          "dry_run": "BOOLEAN",
+          "name": "VARCHAR",
+          "region": "VARCHAR",
+          "tags": "MAP(VARCHAR, VARCHAR)",
+          "template_parameters": "MAP(VARCHAR, VARCHAR)"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_delete_stack",
+        "named_parameters": {
+          "dry_run": "BOOLEAN"
+        },
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stack",
+        "named_parameters": {},
+        "parameters": [
+          "MAP(VARCHAR, VARCHAR)"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_describe_stacks",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "cloudformation_list_stacks",
+        "named_parameters": {
+          "status_filter": "VARCHAR[]"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "duckdb_aws_session_id",
+        "parameters": [],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

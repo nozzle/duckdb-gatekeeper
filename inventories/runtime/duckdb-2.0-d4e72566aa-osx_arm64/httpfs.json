@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "httpfs",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "httpfs",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/httpfs.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "httpfs",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+      "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+      "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+      "bytes": 19246078,
+      "version": "0507d4ae49"
+    }
+  ],
+  "install_names": [
+    "httpfs"
+  ],
+  "stages": [
+    {
+      "extension": "httpfs",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "httpfs",
+          "version": "0507d4ae49",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "httpfs",
+      "version": "0507d4ae49",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "function_count": 3207,
+  "functions": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

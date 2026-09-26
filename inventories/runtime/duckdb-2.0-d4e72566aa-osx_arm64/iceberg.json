@@ -1,0 +1,2457 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "extension_delta",
+  "inventory": "iceberg",
+  "repository": "core",
+  "base_sha256": "a4edf464070f94d0f513682a140b8c378d0096d30bc045105c654e4ab23d515f",
+  "mode": "discovery",
+  "engine": {
+    "library_version": "v2.0.0-alpha42986",
+    "source_id": "d4e72566aa",
+    "codename": "Cyanoptera",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "extension_abi": "v2.0.0-alpha42986"
+  },
+  "resolved_name": "iceberg",
+  "initial_extensions": [
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "evidence": "evidence/iceberg.json",
+  "status": "ok",
+  "phase": "extension_capture",
+  "artifacts": [
+    {
+      "name": "avro",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+      "download_sha256": "d40bd9f818a4f82b359d56b1651a7fcd2f2c287ab5f2c8885e39b8a710c5a227",
+      "sha256": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
+      "bytes": 20442958,
+      "version": "36a4d8ac56"
+    },
+    {
+      "name": "iceberg",
+      "repository": "core",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension.gz",
+      "download_sha256": "0f82ef95556b2cfef254bc9ae5ba24203ac04c48c0751c6e4fa6eb19cdd9e431",
+      "sha256": "3d657a11cb6ed93e2ce133a9f3a1e6c40933a6a305fc23e31caa40dd5d58a135",
+      "bytes": 48331534,
+      "version": "61c948fb29"
+    }
+  ],
+  "install_names": [
+    "avro",
+    "iceberg"
+  ],
+  "stages": [
+    {
+      "extension": "avro",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "avro",
+          "version": "36a4d8ac56",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "avro_metadata",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "ANY[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARIANT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    },
+    {
+      "extension": "iceberg",
+      "status": "loaded",
+      "before_extensions": [
+        {
+          "name": "avro",
+          "version": "36a4d8ac56",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "loaded_extensions": [
+        {
+          "name": "avro",
+          "version": "36a4d8ac56",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "iceberg",
+          "version": "61c948fb29",
+          "install_mode": "CUSTOM_PATH"
+        },
+        {
+          "name": "icu",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "json",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        },
+        {
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986",
+          "install_mode": "STATICALLY_LINKED"
+        }
+      ],
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "BIGINT"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "BLOB"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "DATE"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "DECIMAL"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "TIME"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "TIMESTAMP WITH TIME ZONE"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "TIMESTAMP"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "TIMESTAMPTZ_NS"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "TIMESTAMP_NS"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "UUID"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_bucket",
+            "parameters": [
+              "INTEGER",
+              "VARCHAR"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_column_stats",
+            "named_parameters": {
+              "allow_moved_paths": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_load_table_response",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_metadata",
+            "named_parameters": {
+              "allow_moved_paths": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_partition_stats",
+            "named_parameters": {
+              "allow_moved_paths": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_rewrite_data_files",
+            "named_parameters": {
+              "max_file_size_bytes": "ANY",
+              "max_files_to_rewrite": "BIGINT",
+              "min_file_size_bytes": "ANY",
+              "min_input_files": "BIGINT",
+              "rewrite_all": "BOOLEAN",
+              "target_file_size_bytes": "ANY"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_rollback_to_snapshot",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "BIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_rollback_to_snapshot",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "UBIGINT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "allow_moved_paths": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "mode": "VARCHAR",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "ANY[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "allow_moved_paths": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "mode": "VARCHAR",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_scan",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "allow_moved_paths": "BOOLEAN",
+              "binary_as_string": "BOOLEAN",
+              "can_have_nan": "BOOLEAN",
+              "compression": "VARCHAR",
+              "debug_use_openssl": "BOOLEAN",
+              "encryption_config": "ANY",
+              "explicit_cardinality": "UBIGINT",
+              "file_row_number": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "metadata_compression_codec": "VARCHAR",
+              "mode": "VARCHAR",
+              "parquet_version": "VARCHAR",
+              "prefetch_strategy": "VARCHAR",
+              "snapshot_from_id": "UBIGINT",
+              "snapshot_from_timestamp": "TIMESTAMP_MS",
+              "union_by_name": "BOOLEAN",
+              "utf8_validation": "VARCHAR",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARIANT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_schema_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_snapshots",
+            "named_parameters": {
+              "metadata_compression_codec": "VARCHAR",
+              "version": "VARCHAR",
+              "version_name_format": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_table_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "iceberg_to_ducklake",
+            "named_parameters": {
+              "skip_tables": "VARCHAR[]"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_truncate",
+            "parameters": [
+              "INTEGER",
+              "BIGINT"
+            ],
+            "returns": "BIGINT",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_truncate",
+            "parameters": [
+              "INTEGER",
+              "BLOB"
+            ],
+            "returns": "BLOB",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_truncate",
+            "parameters": [
+              "INTEGER",
+              "DECIMAL"
+            ],
+            "returns": "DECIMAL",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_truncate",
+            "parameters": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "returns": "INTEGER",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "iceberg_truncate",
+            "parameters": [
+              "INTEGER",
+              "VARCHAR"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "remove_iceberg_schema_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "remove_iceberg_table_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "set_iceberg_schema_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "ANY"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "set_iceberg_table_properties",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "ANY"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "removed": [],
+        "changed": []
+      }
+    }
+  ],
+  "loaded_extensions": [
+    {
+      "name": "avro",
+      "version": "36a4d8ac56",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "iceberg",
+      "version": "61c948fb29",
+      "install_mode": "CUSTOM_PATH"
+    },
+    {
+      "name": "icu",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "json",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    },
+    {
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986",
+      "install_mode": "STATICALLY_LINKED"
+    }
+  ],
+  "function_count": 3246,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "avro_metadata",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "BIGINT"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "BLOB"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "DATE"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "DECIMAL"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "INTEGER"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIME"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMPTZ_NS"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP_NS"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "UUID"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "VARCHAR"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_column_stats",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_load_table_response",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_metadata",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_partition_stats",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rewrite_data_files",
+        "named_parameters": {
+          "max_file_size_bytes": "ANY",
+          "max_files_to_rewrite": "BIGINT",
+          "min_file_size_bytes": "ANY",
+          "min_input_files": "BIGINT",
+          "rewrite_all": "BOOLEAN",
+          "target_file_size_bytes": "ANY"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rollback_to_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rollback_to_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "UBIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_snapshots",
+        "named_parameters": {
+          "metadata_compression_codec": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_to_ducklake",
+        "named_parameters": {
+          "skip_tables": "VARCHAR[]"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "BIGINT"
+        ],
+        "returns": "BIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "BLOB"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "DECIMAL"
+        ],
+        "returns": "DECIMAL",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "INTEGER"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "VARCHAR"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "remove_iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "remove_iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "set_iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "set_iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "target_functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "BIGINT"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "BLOB"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "DATE"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "DECIMAL"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "INTEGER"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIME"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP WITH TIME ZONE"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMPTZ_NS"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "TIMESTAMP_NS"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "UUID"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_bucket",
+        "parameters": [
+          "INTEGER",
+          "VARCHAR"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_column_stats",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_load_table_response",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_metadata",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_partition_stats",
+        "named_parameters": {
+          "allow_moved_paths": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rewrite_data_files",
+        "named_parameters": {
+          "max_file_size_bytes": "ANY",
+          "max_files_to_rewrite": "BIGINT",
+          "min_file_size_bytes": "ANY",
+          "min_input_files": "BIGINT",
+          "rewrite_all": "BOOLEAN",
+          "target_file_size_bytes": "ANY"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rollback_to_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "BIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_rollback_to_snapshot",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "UBIGINT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_scan",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "allow_moved_paths": "BOOLEAN",
+          "binary_as_string": "BOOLEAN",
+          "can_have_nan": "BOOLEAN",
+          "compression": "VARCHAR",
+          "debug_use_openssl": "BOOLEAN",
+          "encryption_config": "ANY",
+          "explicit_cardinality": "UBIGINT",
+          "file_row_number": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "metadata_compression_codec": "VARCHAR",
+          "mode": "VARCHAR",
+          "parquet_version": "VARCHAR",
+          "prefetch_strategy": "VARCHAR",
+          "snapshot_from_id": "UBIGINT",
+          "snapshot_from_timestamp": "TIMESTAMP_MS",
+          "union_by_name": "BOOLEAN",
+          "utf8_validation": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_snapshots",
+        "named_parameters": {
+          "metadata_compression_codec": "VARCHAR",
+          "version": "VARCHAR",
+          "version_name_format": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "iceberg_to_ducklake",
+        "named_parameters": {
+          "skip_tables": "VARCHAR[]"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "BIGINT"
+        ],
+        "returns": "BIGINT",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "BLOB"
+        ],
+        "returns": "BLOB",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "DECIMAL"
+        ],
+        "returns": "DECIMAL",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "INTEGER"
+        ],
+        "returns": "INTEGER",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "iceberg_truncate",
+        "parameters": [
+          "INTEGER",
+          "VARCHAR"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "remove_iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "remove_iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "set_iceberg_schema_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "set_iceberg_table_properties",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "ANY"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "removed": [],
+    "changed": []
+  },
+  "dependencies_loaded": [
+    "avro"
+  ],
+  "process": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "attempts": [
+    {
+      "status": "needs_dependency",
+      "phase": "load",
+      "dependency": "avro",
+      "error": "Invalid Input Error: Initialization function \"iceberg_duckdb_cpp_init\" from file \"<worktree>/build/inventory-candidate/runs/iceberg/extensions/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension\" threw an exception: \"An error occurred while trying to automatically install the required extension 'avro:\nExtension \"<worktree>/build/inventory-candidate/runs/iceberg/extensions/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension\" not found.\nExtension \"avro\" is an existing extension.\n\nInstall it first using \"INSTALL avro\".\"",
+      "functions": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      }
+    },
+    {
+      "status": "ok",
+      "phase": "extension_capture"
+    }
+  ]
+}

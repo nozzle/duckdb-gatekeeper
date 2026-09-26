@@ -1,0 +1,33 @@
+{
+  "inventory": "json",
+  "extension": "json",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/json.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/json.duckdb_extension.gz",
+      "compressed_sha256": "38bc086c5a187af7aa192664095ce3962f7bc23f660f10e98422b6e566d90531",
+      "decompressed_sha256": "de6740f7dec544e0486be6ea7bceda9dae558d200378c05a750faaf1fe183d39",
+      "compressed_bytes": 11373064,
+      "decompressed_bytes": 38767278,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/json",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

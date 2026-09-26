@@ -1,0 +1,51 @@
+{
+  "inventory": "iceberg",
+  "extension": "iceberg",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension.gz",
+      "compressed_sha256": "0f82ef95556b2cfef254bc9ae5ba24203ac04c48c0751c6e4fa6eb19cdd9e431",
+      "decompressed_sha256": "3d657a11cb6ed93e2ce133a9f3a1e6c40933a6a305fc23e31caa40dd5d58a135",
+      "compressed_bytes": 15297849,
+      "decompressed_bytes": 48331534,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "61c948fb29",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/iceberg.cmake",
+    "descriptor_sha256": "1c7029e90d020d2fa6f2d5e2638a134f1c743f15a3b5fbc13638441584f2a342",
+    "descriptor_text": "# Windows tests for iceberg currently not working\nIF (NOT WIN32)\n  set(LOAD_ICEBERG_TESTS \"LOAD_TESTS\")\nelse ()\n  set(LOAD_ICEBERG_TESTS \"\")\nendif()\nif (NOT MINGW)\n  duckdb_extension_load(iceberg\n     #FIXME: restore autoloading tests ${LOAD_ICEBERG_TESTS}\n            GIT_URL https://github.com/duckdb/duckdb-iceberg\n            GIT_TAG 61c948fb29afd3ad107ae0e4107cb9f471bb6ff2\n            APPLY_PATCHES\n            )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-iceberg",
+    "revision": "61c948fb29afd3ad107ae0e4107cb9f471bb6ff2",
+    "source_url": "https://github.com/duckdb/duckdb-iceberg/tree/61c948fb29afd3ad107ae0e4107cb9f471bb6ff2",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/iceberg/0001-update-aws-c-io.patch",
+        "sha256": "dcd68c32df27ddb528801a737720c0619ab4369ab2be48a0a3562c32a7dfda3f"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/iceberg/0003-literal-constant-expression.patch",
+        "sha256": "fd012a802a129e4e65e21e05f3e62d058aaa3aa4a0347846247369a7981a656d"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/iceberg/0004-manifest-read-task-execute-step.patch",
+        "sha256": "dd91bdcc02a05c89baff530522c096d809f37a74617063965aef6cdf04b37c6e"
+      }
+    ]
+  }
+}

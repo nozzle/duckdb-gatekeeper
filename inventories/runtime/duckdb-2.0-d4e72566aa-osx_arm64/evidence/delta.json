@@ -1,0 +1,47 @@
+{
+  "inventory": "delta",
+  "extension": "delta",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/delta.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/delta.duckdb_extension.gz",
+      "compressed_sha256": "c9b66825a4640d254556f9384da2e233ee829333e7d26de41905afe001ee5b0d",
+      "decompressed_sha256": "94e82e37ecbc70da17f20733d041692996dc579aecaf0eae42a23d0d09170fec",
+      "compressed_bytes": 22694388,
+      "decompressed_bytes": 77730414,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "d1b2ffd7de",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/delta.cmake",
+    "descriptor_sha256": "c6354141c3c644bd54e40efcd05de9f26608a1a06893fbff672fd09155133448",
+    "descriptor_text": "if(NOT MINGW AND NOT ${WASM_ENABLED})\n  duckdb_extension_load(delta\n            GIT_URL https://github.com/duckdb/duckdb-delta\n            GIT_TAG d1b2ffd7de8acba19fe5151cbfcb5b0d12971aaa\n            SUBMODULES extension-ci-tools\n            APPLY_PATCHES\n  )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-delta",
+    "revision": "d1b2ffd7de8acba19fe5151cbfcb5b0d12971aaa",
+    "source_url": "https://github.com/duckdb/duckdb-delta/tree/d1b2ffd7de8acba19fe5151cbfcb5b0d12971aaa",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/delta/0004-columnref-expression-include.patch",
+        "sha256": "fc3a81796f9306a0bd20d128bd3270bcdc7684cf35c247718c8a064c62f28794"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/delta/0004-literal-constant-expression.patch",
+        "sha256": "7cef195146c26a1b013729203ad3deb96c6d4a5fe76f6ed6609b2d8fb050395f"
+      }
+    ]
+  }
+}
