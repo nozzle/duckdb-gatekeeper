@@ -1,4 +1,11 @@
 {
+  "record_scope": "Preliminary compaction-time validation; preserves the incomplete full-suite run before the pinned source was made available. Not the final PR validation.",
+  "subsequent_validation": {
+    "evidence": "https://github.com/nozzle/duckdb-gatekeeper/pull/113#issuecomment-5843594477",
+    "release_default": "1656 passed, 53 skipped, 2 xfailed; zero failures; inventory tooling included",
+    "release_peg": "1654 passed, 55 skipped, 2 xfailed; zero failures; inventory tooling included",
+    "candidate": "1645 passed, 13 skipped, 2 xfailed; zero failures; release-specific pin tooling excluded"
+  },
   "byte_reduction_percent": 94.665,
   "checks": {
     "audit": {
