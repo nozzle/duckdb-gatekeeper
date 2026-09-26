@@ -209,28 +209,18 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	auto attributable = [&](const string &name) {
 		return provenance.Attributable(binding, name) || provenance.collation_functions.count(gatekeeper::Lower(name));
 	};
-	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true) {
-		// Preserve attribution even when a substitution loses its namespace. A foreign
-		// caller callback can rename its implementation arbitrarily; absent stamps cannot
-		// establish that such a result is trusted, so ambiguous incomplete plans fail closed.
-		if (!provenance.unattributed && (identity.catalog.empty() || identity.schema_path.empty()))
-			for (const auto &entry : provenance.caller_implementations)
-				if ((entry.name == identity.name && entry.type == identity.type) ||
-				    (!gatekeeper::SystemIdentity(entry) && entry.type == identity.type &&
-				     (entry.type == "scalar" || entry.type == "aggregate")))
-					callers = true;
+	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true,
+	                    gatekeeper::Identity definition = {}) {
 		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::Lower(identity.name)) ||
 		                         provenance.caller_expansion_targets.count(gatekeeper::Lower(identity.name))))
 			grant = true;
 		// Engine aggregate binders can replace a stamped overload with a factory specialization.
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
 		// policy leaf match, a runtime catalog lookup, or evidence inserted by this plan walk.
-		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "aggregate") {
+		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "aggregate" &&
+		    (definition.name.empty() || gatekeeper::SystemIdentity(definition))) {
 			const gatekeeper::Identity *definition = nullptr;
 			bool ambiguous = false;
-			for (const auto &entry : provenance.caller_implementations)
-				if (entry.type == identity.type && !gatekeeper::SystemIdentity(entry))
-					ambiguous = true;
 			for (const auto *entries : {&provenance.caller_implementations, &provenance.trusted_implementations})
 				for (const auto &entry : *entries) {
 					if (gatekeeper::Lower(entry.name) != gatekeeper::Lower(identity.name) ||
@@ -261,15 +251,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		    !binding.literal_constructors.count(identity.name) && !provenance.collation_functions.count(identity.name))
 			callers = false;
 		callers = callers || provenance.caller_implementations.count(identity);
-		// Foreign executable callbacks may replace their function descriptor. A changed
-		// leaf within an observed caller namespace is still caller code, not a trusted macro.
-		// This fallback applies only without exact trusted evidence; sharing a namespace
-		// with a caller function does not change a trusted definition's recorded origin.
-		for (const auto &entry : provenance.caller_implementations)
-			if (!provenance.trusted_implementations.count(identity) && !gatekeeper::SystemIdentity(entry) &&
-			    (entry.type == "scalar" || entry.type == "aggregate") && entry.type == identity.type &&
-			    entry.catalog == identity.catalog && entry.schema_path == identity.schema_path)
-				callers = true;
+		// A caller definition stays caller code even if its callback replaces the leaf,
+		// namespace, or entire implementation. A trusted implementation identity cannot
+		// launder a replacement selected by a caller definition. Uncatalogued engine helpers
+		// (including casts) have no observed caller definition and gain no such attribution.
+		if (provenance.caller_implementations.count(definition)) {
+			callers = true;
+			if (!gatekeeper::SystemIdentity(definition) || !provenance.caller_implementations.count(identity))
+				grant = true;
+		}
 		if (callers && !policy.defaults && provenance.caller_implementations.count(identity))
 			grant = true;
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
@@ -318,7 +308,8 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			function(engine::FunctionIdentity(implementation, "scalar"), attributable(name),
 			         binding.caller_functions.count(gatekeeper::Lower(name)) ||
 			             provenance.collation_functions.count(gatekeeper::Lower(name)) ||
-			             (binding.caller_collates && gatekeeper::CollationFunction(name)));
+			             (binding.caller_collates && gatekeeper::CollationFunction(name)),
+			         engine::DefinitionIdentity(implementation, "scalar"));
 			auto lambda = dynamic_cast<ListLambdaBindData *>(engine::BindInfo(bound).get());
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
@@ -345,13 +336,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &name = engine::FunctionName(child.Cast<BoundAggregateExpression>());
 			auto identity = engine::AggregateIdentity(child.Cast<BoundAggregateExpression>());
-			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::Lower(name)));
+			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::Lower(name)),
+			         engine::AggregateDefinition(child.Cast<BoundAggregateExpression>()));
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = child.Cast<BoundWindowExpression>();
 			if (auto aggregate = engine::WindowAggregate(window)) {
 				auto &name = engine::FunctionName(*aggregate);
-				function(engine::FunctionIdentity(*aggregate, "aggregate"), attributable(name));
+				function(engine::FunctionIdentity(*aggregate, "aggregate"), attributable(name), true,
+				         engine::DefinitionIdentity(*aggregate, "aggregate"));
 			} else {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 				if (!window.WindowFunction())

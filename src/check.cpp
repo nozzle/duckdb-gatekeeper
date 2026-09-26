@@ -2,7 +2,9 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -644,6 +646,34 @@ struct LookupCallback {
 		auto &function_entry = entry.Cast<StandardEntry>();
 		gatekeeper::Identity source{engine::CatalogName(function_entry.schema.catalog),
 		                            engine::SchemaPath(function_entry.schema), canonical, FunctionKind(entry.type)};
+		// 1.5 has no retained definition after native bind callbacks replace descriptors.
+		// Refuse this untrackable caller route before callbacks, rather than inferring
+		// origin from arbitrary output leaves or all functions in a namespace.
+		// Expression-replacement callbacks can replace the entire node on either engine,
+		// dropping even 2.0's retained descriptor; they need the same conservative refusal.
+		bool mutable_implementation = false;
+		if (attributable && !gatekeeper::SystemIdentity(source)) {
+			if (entry.type == CatalogType::SCALAR_FUNCTION_ENTRY)
+				for (const auto &item : entry.Cast<ScalarFunctionCatalogEntry>().functions.functions) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+					mutable_implementation |= item->HasBindExpressionCallback();
+#else
+					mutable_implementation |= item.HasBindCallback() || item.HasBindExtendedCallback() ||
+					                          item.HasBindExpressionCallback() || item.HasBindLambdaCallback();
+#endif
+				}
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+			if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY)
+				for (const auto &overload : entry.Cast<AggregateFunctionCatalogEntry>().functions.functions)
+					mutable_implementation |= overload.HasBindCallback();
+#endif
+		}
+		if (mutable_implementation) {
+			s.result.violations.emplace(gatekeeper::rules::UNSUPPORTED_STRUCTURE,
+			                            "native function callback cannot retain definition provenance", source.catalog,
+			                            source.schema_path, "", source.name, -1, source.type);
+			throw PermissionException("untrackable native function bind callback");
+		}
 		if (attributable && source.type == "aggregate" && gatekeeper::SystemIdentity(source) &&
 		    s.binding.unsupported_quantiles.count(canonical)) {
 			s.result.violations.emplace(

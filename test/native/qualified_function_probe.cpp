@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "probe_database.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -17,6 +18,12 @@ static idx_t binds = 0;
 static idx_t aggregate_binds = 0;
 static idx_t fraction_calls = 0;
 static bool keep_stamp = false;
+static bool change_namespace = false;
+static idx_t replacement_binds = 0;
+static unique_ptr<Expression> ReplaceExpression(FunctionBindExpressionInput &) {
+	++replacement_binds;
+	return make_uniq<BoundConstantExpression>(Value::DOUBLE(0.5));
+}
 static void FractionProbe(DataChunk &, ExpressionState &, Vector &result) {
 	++fraction_calls;
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -24,14 +31,20 @@ static void FractionProbe(DataChunk &, ExpressionState &, Vector &result) {
 }
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 static unique_ptr<FunctionData> LoseAggregateStamp(BindAggregateFunctionInput &input) {
-	if (keep_stamp)
+	++replacement_binds;
+	if (change_namespace)
+		input.GetBoundFunction().SetQualifiedName(QualifiedName("memory", "other", "g"));
+	else if (keep_stamp)
 		input.GetBoundFunction().SetName("unrecognized_substitution");
 	else
 		input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
 	return nullptr;
 }
 static unique_ptr<FunctionData> LoseScalarStamp(BindScalarFunctionInput &input) {
-	if (keep_stamp)
+	++replacement_binds;
+	if (change_namespace)
+		input.GetBoundFunction().SetQualifiedName(QualifiedName("memory", "other", "g"));
+	else if (keep_stamp)
 		input.GetBoundFunction().SetName("unrecognized_substitution");
 	else
 		input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
@@ -40,20 +53,32 @@ static unique_ptr<FunctionData> LoseScalarStamp(BindScalarFunctionInput &input) 
 #else
 static unique_ptr<FunctionData> LoseAggregateStamp(ClientContext &, AggregateFunction &function,
                                                    vector<unique_ptr<Expression>> &) {
+	++replacement_binds;
 	if (!keep_stamp) {
 		function.catalog_name.clear();
 		function.schema_name.clear();
 	}
 	function.name = "unrecognized_substitution";
+	if (change_namespace) {
+		function.catalog_name = "memory";
+		function.schema_name = "other";
+		function.name = "g";
+	}
 	return nullptr;
 }
 static unique_ptr<FunctionData> LoseScalarStamp(ClientContext &, ScalarFunction &function,
                                                 vector<unique_ptr<Expression>> &) {
+	++replacement_binds;
 	if (!keep_stamp) {
 		function.catalog_name.clear();
 		function.schema_name.clear();
 	}
 	function.name = "unrecognized_substitution";
+	if (change_namespace) {
+		function.catalog_name = "memory";
+		function.schema_name = "other";
+		function.name = "g";
+	}
 	return nullptr;
 }
 #endif
@@ -98,6 +123,21 @@ static Value Cell(Connection &connection, const string &sql) {
 	return chunk->GetValue(0, 0);
 }
 
+static void CheckReplacementDenial(Connection &connection, const string &sql, const string &kind) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto condition = "code='forbidden' AND violations[1].catalog='memory' AND "
+	                 "violations[1].schema_path=['other'] AND violations[1].function_name='g' AND "
+	                 "violations[1].function_type='" +
+	                 kind + "'";
+#else
+	auto condition = "code='forbidden' AND violations[1].rule='unsupported_structure' AND "
+	                 "violations[1].function_type='" +
+	                 kind + "'";
+#endif
+	if (!Cell(connection, "SELECT " + condition + " FROM gatekeeper_validate('" + sql + "')").GetValue<bool>())
+		std::exit(47);
+}
+
 static void Register(Connection &connection, const string &schema) {
 	Query(connection, "BEGIN");
 	Query(connection, "CREATE TABLE " + schema + ".registration_marker(i INTEGER)");
@@ -115,12 +155,14 @@ static void Register(Connection &connection, const string &schema) {
 
 // Two distinct stamped native entries in one namespace: only the caller's entry
 // is policy-controlled; the other's exact trusted provenance must beat fallback.
-static void CheckNativeOrigins(Connection &connection) {
+static void CheckNativeOrigins(Connection &connection, DuckDB &database) {
 	Query(connection, "CREATE SCHEMA origins; BEGIN; CREATE TABLE origins.marker(i INTEGER)");
-	for (const auto &name : {"scalar_f", "scalar_g", "scalar_rename"}) {
+	for (const auto &name : {"scalar_f", "scalar_g", "scalar_rename", "expression_replace"}) {
 		ScalarFunction function(name, {}, LogicalType::DOUBLE, FractionProbe);
 		if (string(name) == "scalar_rename")
 			function.SetBindCallback(LoseScalarStamp);
+		if (string(name) == "expression_replace")
+			function.SetBindExpressionCallback(ReplaceExpression);
 		CreateScalarFunctionInfo info(function);
 		info.internal = false;
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
@@ -150,6 +192,14 @@ static void CheckNativeOrigins(Connection &connection) {
 		Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, info);
 	}
 	Query(connection, "COMMIT");
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['origins'],name:'expression_replace',type:'scalar'}])");
+	if (!Cell(connection, "SELECT code='forbidden' AND violations[1].rule='unsupported_structure' AND "
+	                      "violations[1].function_type='scalar' "
+	                      "FROM gatekeeper_validate('SELECT origins.expression_replace()')")
+	         .GetValue<bool>() ||
+	    replacement_binds != 0)
+		std::exit(43);
 	for (const auto &kind : {"scalar", "aggregate"}) {
 		auto args = string(kind) == "scalar" ? "" : "1";
 		auto f = string("origins.") + kind + "_f(" + args + ")";
@@ -173,11 +223,50 @@ static void CheckNativeOrigins(Connection &connection) {
 	                  "[{catalog:'memory',schema_path:['origins'],name:'scalar_rename',type:'scalar'}])");
 	for (bool preserve : {false, true}) {
 		keep_stamp = preserve;
-		if (Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT origins.scalar_rename()')").ToString() !=
-		    "forbidden")
+		if (Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT origins.scalar_rename()')")
+		        .GetValue<bool>())
 			std::exit(38);
 	}
 	keep_stamp = false;
+	change_namespace = true;
+	for (bool block : {false, true}) {
+		Query(connection,
+		      string("CALL gatekeeper_configure(allowed_functions := ") +
+		          "[{catalog:'memory',schema_path:['origins'],name:'scalar_rename',type:'scalar'}]" +
+		          (block ? ", blocked_functions := [{catalog:'memory',schema_path:['other'],name:'g',type:'scalar'}]"
+		                 : "") +
+		          ")");
+		CheckReplacementDenial(connection, "SELECT origins.scalar_rename()", "scalar");
+	}
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+	if (replacement_binds != 0)
+		std::exit(45);
+#endif
+	{
+		Connection agent(database);
+		auto held = agent.Prepare("SELECT origins.scalar_rename()");
+		if (held->HasError())
+			std::exit(49);
+		Query(agent, "CALL gatekeeper_enforce()");
+		if (!held->Execute()->HasError() || !agent.Query("SELECT origins.scalar_rename()")->HasError())
+			std::exit(50);
+	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['origins'],name:'scalar_rename',type:'scalar'},"
+	                  "{catalog:'memory',schema_path:['other'],name:'g',type:'scalar'}])");
+	if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT origins.scalar_rename()')").GetValue<bool>())
+		std::exit(44);
+#endif
+	change_namespace = false;
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['origins'],name:'scalar_f',type:'scalar'},"
+	                  "{catalog:'memory',schema_path:['origins'],name:'aggregate_f',type:'aggregate'}])");
+	for (const auto &sql :
+	     {"SELECT CAST(origins.scalar_f() AS VARCHAR)", "SELECT origins.scalar_f() + 1::DECIMAL(10,2)",
+	      "SELECT CAST(origins.aggregate_f(1) AS VARCHAR)"})
+		if (!Cell(connection, string("SELECT allowed FROM gatekeeper_validate('") + sql + "')").GetValue<bool>())
+			std::exit(41);
 	Query(connection, "CALL gatekeeper_configure()");
 }
 
@@ -211,14 +300,23 @@ int main() {
 				if (result.ToString() != "forbidden" || fraction_calls != 0)
 					return 34;
 			}
-	for (const auto &name : {"list_aggregate", "list_aggr", "array_aggregate", "array_aggr", "aggregate"})
-		for (const auto &args : {"name:=CAST(fraction_probe() AS VARCHAR), list:=[1]",
-		                         "list:=[1], name:=CAST(fraction_probe() AS VARCHAR)"}) {
+	for (const auto &name : {"list_aggregate", "list_aggr", "array_aggregate", "array_aggr", "aggregate"}) {
+		Query(connection, string("CALL gatekeeper_configure(allowed_functions := ") +
+		                      "[{catalog:'system',schema_path:['main'],name:'fraction_probe',type:'scalar'},"
+		                      "{catalog:'system',schema_path:['main'],name:'" +
+		                      name + "',type:'scalar'}])");
+		for (const auto &args : {"function_name:=CAST(fraction_probe() AS VARCHAR), list:=[1]",
+		                         "list:=[1], function_name:=CAST(fraction_probe() AS VARCHAR)"}) {
 			auto sql = string("SELECT ") + name + "(" + args + ")";
-			auto result = Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')");
-			if (result.ToString() != "forbidden" || fraction_calls != 0)
+			auto result =
+			    Cell(connection, "SELECT code='forbidden' AND violations[1].rule='bind_time_expression' "
+				                 "AND violations[1].function_type='scalar' AND violations[1].catalog='system' "
+				                 "FROM gatekeeper_validate('" +
+				                     sql + "')");
+			if (!result.GetValue<bool>() || fraction_calls != 0)
 				return 35;
 		}
+	}
 #endif
 	// A handle prepared before enforcement must re-authorize the implementation, not
 	// just the original catalog name, after a host policy change.
@@ -244,7 +342,8 @@ int main() {
 		Query(connection, "SET GLOBAL gatekeeper_log_only=false");
 	}
 	Query(connection, "CALL gatekeeper_configure()");
-	CheckNativeOrigins(connection);
+	CheckNativeOrigins(connection, database);
+	replacement_binds = 0;
 	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
 	// A host alias grant keeps eligibility open: the scoped system block must still win.
 	Query(connection, "CREATE SCHEMA window_host");
@@ -383,10 +482,13 @@ int main() {
 	if (denied.ToString() != "forbidden" || aggregate_binds != 0)
 		return 6;
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
-	for (const auto &args : {"name:=''dispatch_counter'', list:=[1]", "list:=[1], name:=''dispatch_counter''"}) {
-		denied =
-		    Cell(connection, string("SELECT code FROM gatekeeper_validate('SELECT list_aggregate(") + args + ")')");
-		if (denied.ToString() != "forbidden" || aggregate_binds != 0)
+	for (const auto &args :
+	     {"function_name:=''dispatch_counter'', list:=[1]", "list:=[1], function_name:=''dispatch_counter''"}) {
+		denied = Cell(connection, string("SELECT code='forbidden' AND violations[1].rule='bind_time_expression' "
+		                                 "AND violations[1].function_type='scalar' AND violations[1].catalog='system' "
+		                                 "FROM gatekeeper_validate('SELECT list_aggregate(") +
+		                              args + ")')");
+		if (!denied.GetValue<bool>() || aggregate_binds != 0)
 			return 39;
 	}
 #endif
@@ -424,8 +526,14 @@ int main() {
 		aggregate_binds = 0;
 		allowed = Cell(connection, string("SELECT allowed FROM gatekeeper_validate('SELECT admitted.") + name +
 		                               "(x) FROM (VALUES (1)) t(x)')");
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
 		if (!allowed.GetValue<bool>() || aggregate_binds == 0)
 			return 10;
+#else
+		// 1.5 refuses caller native bind callbacks without retained definitions.
+		if (allowed.GetValue<bool>() || aggregate_binds != 0)
+			return 10;
+#endif
 		// The system implementation and a default macro selecting it still reject that helper shadow.
 		for (const auto &sql :
 		     {string("SELECT system.main.") + name + "(1)", string("SELECT list_") + name + "([1])"}) {
@@ -461,10 +569,33 @@ int main() {
 	for (bool preserve : {false, true}) {
 		keep_stamp = preserve;
 		denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
-		if (denied.ToString() != "forbidden")
+		if (denied.ToString() != "forbidden" && denied.ToString() != "unsupported")
 			return 12;
 	}
 	keep_stamp = false;
+	change_namespace = true;
+	for (bool block : {false, true}) {
+		Query(connection,
+		      string("CALL gatekeeper_configure(allowed_functions := ") +
+		          "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'}]" +
+		          (block ? ", blocked_functions := [{catalog:'memory',schema_path:['other'],name:'g',type:'aggregate'}]"
+		                 : "") +
+		          ")");
+		CheckReplacementDenial(connection, "SELECT admitted.unstamped_host(1)", "aggregate");
+	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'},"
+	                  "{catalog:'memory',schema_path:['other'],name:'g',type:'aggregate'}])");
+	if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')")
+	         .GetValue<bool>())
+		return 48;
+#endif
+	change_namespace = false;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+	if (replacement_binds != 0)
+		return 46;
+#endif
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 	// A same-name host aggregate observed in this bind must make stamp-loss recovery ambiguous.
 	Query(connection, "BEGIN");

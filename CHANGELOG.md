@@ -8,6 +8,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
+  including cross-namespace replacements, without attributing ordinary casts to unrelated
+  caller functions. Refuse caller non-system callbacks whose expression origin cannot be
+  retained (native bind callbacks on 1.5; expression-replacement callbacks on both engines).
+
 - **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR`, also
   observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
   Known denied functions retain their complete catalog/schema/name/kind identity even when

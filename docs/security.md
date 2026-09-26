@@ -60,6 +60,30 @@ bind the submitted SQL again; preparing a call does not cache an authorization d
 Validation also rejects non-null placeholder plans with unresolved parameter types;
 otherwise execution could rebind to an implementation the validator never authorized.
 
+Native scalar/aggregate substitutions use retained definition provenance on DuckDB 2.0:
+the original definition's qualified identity determines caller origin even if its bind
+callback changes the surviving implementation's name or namespace. That implementation
+must satisfy caller policy too. Identity comparisons do not rely on callback pointers
+across the host/loadable engine boundary. Engine-generated casts do not inherit origin
+from unrelated caller functions, and exact trusted-body-only identities remain trusted.
+
+DuckDB 1.5 does not retain the original definition after a native bind callback replaces
+its descriptor. Gatekeeper therefore refuses caller-attributable non-system scalar entries
+with bind, extended-bind, lambda-bind, or expression-bind callbacks, and non-system
+aggregate entries with bind callbacks, before invoking them. The check covers every
+overload because the catalog hook precedes overload selection. On both engines, caller
+non-system scalar expression-bind callbacks are refused because they can replace the
+entire expression and discard descriptor provenance. These refusals report `forbidden`
+with the `unsupported_structure` rule; explicit grants cannot supply missing provenance.
+Ordinary native functions without these
+callbacks and callbacks reached only inside trusted definitions remain usable.
+
+This is a surviving-plan authorization boundary, not a sandbox for native extension code:
+native code and the engine are trusted to preserve their provenance metadata. It does not
+undo effects of a callback that runs before the plan check, and malicious native code can
+forge metadata or execute outside a returned expression. The existing native-prepare and
+other early bind-time timing limits still apply.
+
 On DuckDB 2.0, caller-written `$name` references with a same-named session variable require the
 fixed `system.main.getvariable` capability before validation binds anything. Both policy layers
 must allow it; blocks win. Successful validation includes `{catalog: 'system', schema_path: ['main'],
