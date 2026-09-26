@@ -19,6 +19,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -273,6 +274,7 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 		deny("statement does not return a query result");
 	auto &provenance = unit.provenance;
 	if (origin == PlanOrigin::PRIVATE) {
+		RecordSelectedImplementations(provenance, plan);
 		provenance.validated_scans.clear();
 		provenance.validated_function_scans.clear();
 	}
@@ -507,7 +509,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		if (scope) {
 			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
 			for (const auto &identity : reader_result.functions)
-				scope->bind.provenance.RecordFunction(identity, caller_written, GATEKEEPER_DUCKDB_MAJOR);
+				scope->bind.provenance.RecordFunction(identity, caller_written);
 			if (caller_written)
 				scope->bind.provenance.replacement_functions.insert(canonical);
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
@@ -691,7 +693,7 @@ struct LookupCallback {
 			    source.catalog, source.schema_path, "", source.name, -1, source.type);
 			throw PermissionException("unsupported quantile arguments");
 		}
-		s.provenance.RecordFunction(source, attributable, GATEKEEPER_DUCKDB_MAJOR);
+		s.provenance.RecordFunction(source, attributable);
 		if (attributable && entry.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
 		    gatekeeper::DispatchingAggregators().count(canonical) && s.binding.caller_dispatchers.count(canonical) &&
 		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
@@ -720,7 +722,7 @@ struct LookupCallback {
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
 				CheckAggregateDependency(s.context, name, s.result, s.provenance);
-				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+				s.provenance.RecordFunction(identity, true);
 			}
 			s.provenance.authorized_dispatchers.insert(canonical);
 		}
@@ -773,7 +775,7 @@ struct LookupCallback {
 				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
 				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
 				                              FunctionKind(target.type), target.internal};
-				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+				s.provenance.RecordFunction(identity, true);
 			}
 		}
 	}
@@ -809,7 +811,39 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 #endif
 }
 
-// Binds statement, the unit's own or a copy of it, against the unit's text record; fills the unit's provenance.
+// Source locations are non-semantic metadata. Tag a private copy after the text check,
+// never stored definitions or the engine's execution AST. ExpressionBinder::Bind carries
+// scalar locations to the bound node; aggregate/window binding returns a located
+// BoundColumnRef to the actual slot. Only 1.5 needs this; 2.0 retains definitions.
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+static void MarkFunctionOccurrences(QueryNode &node, gatekeeper::Provenance &provenance) {
+	std::function<void(ParsedExpression &)> visit = [&](ParsedExpression &expr) {
+		string name;
+		if (expr.GetExpressionClass() == ExpressionClass::FUNCTION)
+			name = engine::FunctionName(expr.Cast<FunctionExpression>());
+		else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+			name = expr.Cast<WindowExpression>().function_name;
+		}
+		static const gatekeeper::Names substituting = {"min", "max", "quantile", "date_part", "datepart"};
+		if (substituting.count(gatekeeper::Lower(name))) {
+			// Real input is bounded by MAX_AST_BYTES; stored definitions cannot carry
+			// locations in this reserved range through SQL parsing.
+			auto location = (uint64_t(1) << 60) + provenance.function_occurrences.size();
+			provenance.function_occurrences.emplace(location, gatekeeper::Lower(name));
+			expr.SetQueryLocation(optional_idx(location));
+		}
+		if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY)
+			MarkFunctionOccurrences(*engine::Subquery(expr.Cast<SubqueryExpression>()).node, provenance);
+		ParsedExpressionIterator::EnumerateChildren(expr, visit);
+	};
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
+		if (expr)
+			visit(*expr);
+	});
+}
+#endif
+
+// Bind a private statement copy against the unit's text record and fill provenance.
 static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers &layers, SQLStatement &statement,
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
@@ -846,7 +880,18 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	BoundStatement bound;
 	{
 		ScopeGuard guard(scope);
-		bound = binder->Bind(statement);
+		auto private_statement = statement.Copy();
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+		if (private_statement->type == StatementType::SELECT_STATEMENT)
+			MarkFunctionOccurrences(*private_statement->Cast<SelectStatement>().node, unit.provenance);
+		else if (PivotEnumStatement(*private_statement))
+			MarkFunctionOccurrences(*private_statement->Cast<CreateStatement>()
+			                             .info->Cast<CreateTypeInfo>()
+			                             .query->Cast<SelectStatement>()
+			                             .node,
+			                        unit.provenance);
+#endif
+		bound = binder->Bind(*private_statement);
 	}
 	// Unlike Planner::CreatePlan, never turn ParameterNotResolved into a partial success.
 	// parameters.rebind is a cache hint, not incomplete binding.

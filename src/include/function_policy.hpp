@@ -90,7 +90,8 @@ inline std::string WindowImplementationName(std::string name) {
 
 bool SystemIdentity(const Identity &identity);
 
-// Implementation substitutions, not policy aliases. These edges require an observed system entry.
+// Possible implementation substitutions, not observed provenance or policy aliases.
+// A bound occurrence/retained definition must prove which edge was actually selected.
 // minmax.cpp BindMinMax, date_part.cpp DatePartBind, quantile.cpp DiscreteQuantile{List,}Function::Bind
 // on both supported engines. No catalog discovery or arbitrary same-leaf host inference.
 inline Names FunctionImplementations(const Identity &source, int engine_major) {

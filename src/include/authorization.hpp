@@ -21,4 +21,5 @@ void AuthorizeObject(const gatekeeper::Layers &layers, const gatekeeper::Binding
 // ceiling's walk.
 void AuthorizePlan(const gatekeeper::Layers &layers, const gatekeeper::BindingPolicy &binding,
                    const gatekeeper::Provenance &provenance, LogicalOperator &root, gatekeeper::Result &result);
+void RecordSelectedImplementations(gatekeeper::Provenance &provenance, LogicalOperator &root);
 } // namespace duckdb

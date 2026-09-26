@@ -3,11 +3,14 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "engine_api.hpp"
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
@@ -214,6 +217,90 @@ static gatekeeper::Identity ListAggregateImplementation(const BoundFunctionExpre
 	return identity;
 }
 
+// Resolve tagged aggregate references through actual plan bindings, not argument-text
+// guesses (collations can come from a column type or session setting). Scalar nodes
+// carry their own occurrence tags. No callback is invoked by this walk.
+void RecordSelectedImplementations(gatekeeper::Provenance &provenance, LogicalOperator &root) {
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+	std::map<std::pair<idx_t, idx_t>, Expression *> aggregates;
+	vector<LogicalOperator *> operators{&root};
+	vector<Expression *> expressions;
+	while (!operators.empty()) {
+		auto op = operators.back();
+		operators.pop_back();
+		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			auto &aggregate = op->Cast<LogicalAggregate>();
+			for (idx_t i = 0; i < op->expressions.size(); ++i) {
+				aggregates[{aggregate.aggregate_index, i}] = op->expressions[i].get();
+			}
+		}
+		if (op->type == LogicalOperatorType::LOGICAL_WINDOW) {
+			auto &window = op->Cast<LogicalWindow>();
+			for (idx_t i = 0; i < op->expressions.size(); ++i)
+				aggregates[{window.window_index, i}] = op->expressions[i].get();
+		}
+		for (auto &child : op->children)
+			operators.push_back(child.get());
+		LogicalOperatorVisitor::EnumerateExpressions(*op, [&](unique_ptr<Expression> *expr) {
+			if (*expr)
+				expressions.push_back(expr->get());
+		});
+	}
+	while (!expressions.empty()) {
+		auto expr = expressions.back();
+		expressions.pop_back();
+		ExpressionIterator::EnumerateChildren(*expr, [&](Expression &child) { expressions.push_back(&child); });
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+			auto lambda =
+			    dynamic_cast<ListLambdaBindData *>(engine::BindInfo(expr->Cast<BoundFunctionExpression>()).get());
+			if (lambda && lambda->lambda_expr)
+				expressions.push_back(lambda->lambda_expr.get());
+		}
+		optional_idx location = expr->GetQueryLocation();
+		if (!location.IsValid())
+			continue;
+		auto occurrence = provenance.function_occurrences.find(location.GetIndex());
+		if (occurrence == provenance.function_occurrences.end())
+			continue;
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &ref = expr->Cast<BoundColumnRefExpression>();
+			auto binding = ref.binding;
+			auto slot = aggregates.find({binding.table_index, binding.column_index});
+			if (slot == aggregates.end())
+				continue;
+			expr = slot->second;
+		}
+		gatekeeper::Identity identity;
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION)
+			identity = engine::FunctionIdentity(engine::Function(expr->Cast<BoundFunctionExpression>()), "scalar");
+		else if (expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE)
+			identity = engine::AggregateIdentity(expr->Cast<BoundAggregateExpression>());
+		else if (expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
+			auto aggregate = engine::WindowAggregate(expr->Cast<BoundWindowExpression>());
+			if (aggregate)
+				identity = engine::FunctionIdentity(*aggregate, "aggregate");
+		}
+		if (identity.name.empty())
+			continue;
+		for (const auto &source : provenance.function_entries) {
+			if (source.name != occurrence->second || source.type != identity.type ||
+			    !provenance.caller_implementations.count(source) ||
+			    !gatekeeper::FunctionImplementations(source, GATEKEEPER_DUCKDB_MAJOR).count(identity.name))
+				continue;
+			if (identity.catalog.empty() && identity.schema_path.empty()) {
+				identity.catalog = source.catalog;
+				identity.schema_path = source.schema_path;
+			}
+			if (gatekeeper::FunctionKey(identity).catalog != source.catalog ||
+			    gatekeeper::FunctionKey(identity).schema_path != source.schema_path)
+				continue;
+			identity.internal = source.internal;
+			provenance.caller_implementations.insert(gatekeeper::FunctionKey(identity));
+		}
+	}
+#endif
+}
+
 static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekeeper::BindingPolicy &binding,
                                  const gatekeeper::Provenance &provenance, LogicalOperator &root,
                                  gatekeeper::Result &result) {
@@ -222,6 +309,20 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	};
 	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true,
 	                    gatekeeper::Identity definition = {}) {
+		// 2.0 retains the source definition even when a bind callback changes its
+		// descriptor. Only this actual edge may transfer caller ownership and origin.
+		auto source = provenance.function_entries.find(gatekeeper::FunctionKey(definition));
+		if (source != provenance.function_entries.end() &&
+		    gatekeeper::FunctionImplementations(*source, GATEKEEPER_DUCKDB_MAJOR)
+		        .count(gatekeeper::Lower(identity.name))) {
+			if (identity.catalog.empty() && identity.schema_path.empty()) {
+				identity.catalog = source->catalog;
+				identity.schema_path = source->schema_path;
+			}
+			if (gatekeeper::FunctionKey(identity).catalog == source->catalog &&
+			    gatekeeper::FunctionKey(identity).schema_path == source->schema_path)
+				identity.internal = source->internal;
+		}
 		// A bound descriptor (including a retained 2.0 definition) carries a qualified name,
 		// not CatalogEntry::internal. Restore that fact only from an exact observed entry
 		// or reviewed implementation edge. Unknown substitutions stay unknown, even when
@@ -293,6 +394,20 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		}
 		if (callers && !policy.defaults && provenance.caller_implementations.count(key))
 			grant = true;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+		// Internal macro bodies are generated after occurrence tagging. On 1.5 they
+		// have no retained definition either. Keep the established conservative rule
+		// for these unlocated caller expansions; a trusted same-leaf target cannot
+		// hide a replacement introduced by a caller-reached default macro.
+		for (const auto &entry : provenance.function_entries) {
+			if (!provenance.caller_expansions.count(entry.name) || !provenance.caller_implementations.count(entry) ||
+			    entry.type != key.type || entry.catalog != key.catalog || entry.schema_path != key.schema_path ||
+			    !gatekeeper::FunctionImplementations(entry, GATEKEEPER_DUCKDB_MAJOR).count(key.name))
+				continue;
+			callers = true;
+			grant = grant || !policy.defaults;
+		}
+#endif
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
 		result.functions.insert(identity);
 	};

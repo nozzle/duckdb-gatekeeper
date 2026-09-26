@@ -262,12 +262,10 @@ Identity FunctionKey(Identity identity) {
 	return identity;
 }
 
-void Provenance::RecordFunction(const Identity &source, bool caller, int engine_major) {
+void Provenance::RecordFunction(const Identity &source, bool caller) {
 	auto identity = FunctionKey(source);
 	function_entries.insert(identity);
-	for (const auto &name : FunctionImplementations(identity, engine_major))
-		(caller ? caller_implementations : trusted_implementations)
-		    .insert({identity.catalog, identity.schema_path, name, identity.type, identity.internal});
+	(caller ? caller_implementations : trusted_implementations).insert(identity);
 }
 
 bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
