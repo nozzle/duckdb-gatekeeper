@@ -12,9 +12,6 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
-- Attribute binder replacements to actual caller selections, so plain `min`/`max` and
-  unrelated `date_part` calls do not apply blocks to a trusted sibling's functions.
-
 - Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
   including cross-namespace replacements, without attributing ordinary casts to unrelated
   caller functions. Refuse caller non-system callbacks whose expression origin cannot be

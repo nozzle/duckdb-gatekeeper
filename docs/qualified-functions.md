@@ -109,8 +109,8 @@ Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.
 
 ### Binder substitutions and specialization
 
-Source review defines these possible replacements. Catalog lookup records the exact entry,
-not every possible replacement as caller-owned:
+On both supported engines, an observed internal `system.main` definition records source-backed
+possible implementation identities, preserving whether the definition was caller-attributable or trusted:
 
 | Selected definition | Possible replacement | Kind |
 | --- | --- | --- |
@@ -129,22 +129,6 @@ disabled, in addition to the source grant. For example, strict collated `min` ne
 Other caller syntax still needs its own grants, such as `list_value` for a list fraction.
 Substitutions solely inside a trusted view or granted host macro retain that body's trust;
 an identity reached by both caller and trusted routes remains caller-attributable.
-
-For 1.5 caller-written occurrences, Gatekeeper tags source-location metadata on a private AST
-copy after text validation. `ExpressionBinder::Bind` preserves scalar locations;
-aggregate/window calls return located `BoundColumnRefExpression` references to
-`LogicalAggregate`/`LogicalWindow` slots. The private plan walk follows those bindings to record only the implementation actually
-selected. This handles collations supplied by column types and session settings without
-guessing from argument text. The engine's execution AST and stored definitions are not tagged.
-On 2.0, retained definitions identify actual replacement edges directly. Thus plain `min`
-does not claim a trusted sibling's `arg_min`, and one date part does not claim every unary
-date function. Genuine selected replacements still obey blocks and strict grants.
-
-1.5 default-macro expansions generated during binding have neither caller occurrence tags
-nor retained definitions. For those expansions only, possible source-reviewed replacements
-retain the conservative query-wide attribution rule; mixed trusted uses of those same
-targets can still be refused. Direct caller functions and 2.0 retained definitions do not
-need that fallback.
 
 Engine aggregate binders can replace a catalog overload with a factory implementation, losing
 its namespace. Gatekeeper recovers an unstamped aggregate only from a matching system

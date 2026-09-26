@@ -195,17 +195,14 @@ bool NamesObject(const WrittenNames &written, const std::string &catalog, const 
 // Objects: the identities the caller's own binders retrieved, and the identities the caller's text names.
 // Everything else in the plan came from a trusted definition.
 struct Provenance {
-	// Private-bind-only source locations assigned to caller function occurrences.
-	// Unlike SQL byte offsets, these cannot collide with stored definition locations.
-	std::map<uint64_t, std::string> function_occurrences;
 	// Exact scalar capabilities carried by the caller's system collation entries (1.5 has no stamps).
 	Names collation_functions;
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
-	// Exact entries observed by origin. Possible binder replacements are not inserted:
-	// occurrence/retained-definition evidence must identify the actual selected implementation.
+	// Source-reviewed implementation edges from exact entries observed by this bind. Preserve origin
+	// separately: a trusted body's substitution is not a caller capability just because its leaf changed.
 	std::set<Identity> caller_implementations, trusted_implementations;
-	void RecordFunction(const Identity &identity, bool caller);
+	void RecordFunction(const Identity &identity, bool caller, int engine_major);
 	Names replacement_functions;
 	Names authorized_dispatchers;
 	// Case-folded raw function names the caller's binders retrieved from the catalog.
