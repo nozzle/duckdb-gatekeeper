@@ -22,9 +22,12 @@ Gatekeeper allowlist or mandatory inventory audit.
 All compiled defaults grant explicit `system.main` identities and concrete kinds, including
 reviewed extension functions registered there. Host shadows and `system.pg_catalog` macros
 require explicit grants. Runtime discovery remains a maintenance report and never creates
-permissions. All 953 historical compute names are accounted for: 913 names contribute 932
+permissions. All 953 historical compute names are accounted for: 913 names contribute 919
 identities; 40 pg_catalog-only names are explicitly excluded without reclassification. The audit
 reports reviewed names, compiled names, compiled identities, exclusions and qualified drift.
+`reporting_discrepancies` records the historical 1.5.5 synthetic window rows labeled
+`aggregate`; executable window intrinsics grant only kind `window`. Snapshot labels remain
+unchanged and aggregate collisions remain ungranted, even when a discrepancy explains the label.
 
 Move exact normalized names between `compute` and `elevated` after source review.
 Only compute names with explicit registration identities are compiled into defaults. Update

@@ -31,7 +31,7 @@ def test_complete_default_inventory(db):
     assert len(names) == 953
     defaults = load_default_identities()
     excluded = {name for group in load_default_mapping()["exclusions"] for name in group["names"]}
-    assert len(defaults) == 932 and len({identity["name"] for identity in defaults}) == 913
+    assert len(defaults) == 919 and len({identity["name"] for identity in defaults}) == 913
     assert len(excluded) == 40
     for name in names:
         quoted = '"' + name.replace('"', '""') + '"'

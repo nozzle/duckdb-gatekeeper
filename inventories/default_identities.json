@@ -31,13 +31,15 @@
       ],
       "notes": ["SELECT-list unnest is a source-defined binder intrinsic, not a scalar catalog row. Gatekeeper assigns its intrinsic system.main scalar identity explicitly; the separately registered table form is not evidence for arbitrary scalar grants."]
     },
-    "windows-1.5": {
+    "windows": {
       "inventories": ["core"],
       "sources": [
         "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/parser/expression/window_expression.cpp",
-        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/table/system/duckdb_functions.cpp"
+        "https://github.com/duckdb/duckdb/blob/d8cdaa33fda8df955cc76ef58a280f68f4cd43fa/src/function/table/system/duckdb_functions.cpp",
+        "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/window",
+        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/register_function_list.cpp"
       ],
-      "notes": ["internal_window_functions defines the 1.5 intrinsic names. ExtractWindowFunctionData uses system.DEFAULT_SCHEMA and WindowFunctionExtractor reports aggregate. first/last already have aggregate registrations and need no duplicate grant."]
+      "notes": ["internal_window_functions defines the 1.5 executable window intrinsics, represented by Gatekeeper as system.main window identities. duckdb_functions.cpp:194-220 constructs temporary reporting entries with OID 0 and labels them aggregate, explicitly noting that the label should be window. Those synthetic rows are NOT aggregate registrations and cannot authorize aggregate collisions. The 2.0 rows/ranking/values functions.json inputs register the same 13 names as window_function, including rank_dense. first/last have independent real aggregate registrations. Historical reporting discrepancies are recorded separately without rewriting snapshots or expanding permissions."]
     },
     "rounding-2.0": {
       "inventories": ["core"],
@@ -46,14 +48,6 @@
         "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/register_function_list.cpp"
       ],
       "notes": ["The 2.0 registration explicitly defines round_even as scalar_function_set with roundbankers alias. Keep these concrete scalar identities alongside the historical macro identities; existing implementation classifications remain trusted."]
-    },
-    "windows-2.0": {
-      "inventories": ["core"],
-      "sources": [
-        "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/window",
-        "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/src/function/register_function_list.cpp"
-      ],
-      "notes": ["The 2.0 rows/ranking/values functions.json registrations explicitly use window_function (rank_dense aliases dense_rank). Both reviewed kinds remain explicit; no runtime kind expansion. first/last remain aggregate aliases handled by the engine."]
     },
     "json": {
       "inventories": ["core", "json"],
@@ -195,8 +189,10 @@
     {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "tpch", "names": ["tpch_answers", "tpch_queries"]},
     {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "unnest-intrinsic", "names": ["unnest"]},
     {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "rounding-2.0", "names": ["round_even", "roundbankers"]},
-    {"catalog": "system", "schema_path": ["main"], "type": "aggregate", "evidence": "windows-1.5", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]},
-    {"catalog": "system", "schema_path": ["main"], "type": "window", "evidence": "windows-2.0", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
+    {"catalog": "system", "schema_path": ["main"], "type": "window", "evidence": "windows", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
+  ],
+  "reporting_discrepancies": [
+    {"duckdb_version": "v1.5.5", "catalog": "system", "schema_path": ["main"], "reported_type": "aggregate", "type": "window", "evidence": "windows", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
   ],
   "exclusions": [
     {"evidence": "core-macros", "reason": "Source registers these compute macros only in system.pg_catalog. The default namespace is system.main; explicit host grants are required. No main identity is inferred.", "names": [

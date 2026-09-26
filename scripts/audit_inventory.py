@@ -152,6 +152,29 @@ def coverage(snapshot, entries):
     return {"unclassified_runtime_names": sorted(names - known)}
 
 
+def reporting_discrepancies(snapshot, mapping):
+    """Explain historical synthetic labels without relabeling rows or hiding collisions.
+
+    Old snapshots have no OIDs/qualification: matching a name and kind is an explanation
+    of the source's reporting convention, never proof that an arbitrary row is intrinsic.
+    Qualified aggregate rows still appear in the ungranted-identity report.
+    """
+    result = []
+    for group in mapping["reporting_discrepancies"]:
+        if snapshot["duckdb_version"] != group["duckdb_version"]:
+            continue
+        observed = {row["name"].lower() for row in snapshot["functions"]
+                    if row.get("kind") == group["reported_type"]
+                    and row.get("catalog", group["catalog"]).lower() == group["catalog"]
+                    and row.get("schema_path", group["schema_path"]) == group["schema_path"]}
+        names = sorted(observed & set(group["names"]))
+        if names:
+            result.append({**group, "names": names,
+                           "note": "Synthetic reporting convention; rows unchanged. This is not an aggregate grant "
+                                   "or proof of row provenance. Qualified aggregate collisions remain ungranted."})
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--capture", type=Path, help="write a candidate snapshot, without approving it")
@@ -182,6 +205,8 @@ def main():
               "reviewed_compute_name_count": len(names),
               "compiled_default_name_count": len({identity["name"] for identity in defaults}),
               "default_exclusions": mapping["exclusions"], "qualified_drift": qualified,
+              "reporting_discrepancies": {"baseline": reporting_discrepancies(baseline, mapping),
+                                          "candidate": reporting_discrepancies(candidate, mapping)},
               "default_namespace": {"catalog": "system", "schema_path": ["main"]}}
     print(json.dumps(report, indent=2))
     if args.strict and (any(delta.values()) or report["unclassified_runtime_names"]

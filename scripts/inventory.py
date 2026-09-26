@@ -61,6 +61,17 @@ def load_default_mapping(root=ROOT):
         raise ValueError("missing default identity mapping: " + ", ".join(sorted(missing)))
     if used_evidence != set(mapping["evidence"]):
         raise ValueError("unused default identity evidence")
+    discrepancies = set()
+    for group in mapping["reporting_discrepancies"]:
+        if group["evidence"] not in used_evidence or group["names"] != sorted(set(group["names"])):
+            raise ValueError("invalid reporting discrepancy evidence/names")
+        for name in group["names"]:
+            actual = identity_key({**group, "name": name})
+            reported = (*actual[:3], group["reported_type"])
+            key = group["duckdb_version"], reported
+            if actual not in seen or reported in seen or key in discrepancies:
+                raise ValueError("conflicting reporting discrepancy: " + name)
+            discrepancies.add(key)
     return mapping
 
 

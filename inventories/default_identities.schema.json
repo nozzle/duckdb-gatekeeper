@@ -3,7 +3,7 @@
   "title": "Source-backed default function identities",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "evidence", "grants", "exclusions"],
+  "required": ["format", "evidence", "grants", "exclusions", "reporting_discrepancies"],
   "properties": {
     "format": {"const": 1},
     "evidence": {
@@ -27,6 +27,22 @@
         "properties": {
           "catalog": {"const": "system"},
           "schema_path": {"const": ["main"]},
+          "type": {"type": "string", "pattern": "^(scalar|aggregate|table|macro|table_macro|window)$"},
+          "evidence": {"type": "string", "minLength": 1},
+          "names": {"$ref": "#/$defs/strings"}
+        }
+      }
+    },
+    "reporting_discrepancies": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["duckdb_version", "catalog", "schema_path", "reported_type", "type", "evidence", "names"],
+        "properties": {
+          "duckdb_version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+          "catalog": {"const": "system"},
+          "schema_path": {"const": ["main"]},
+          "reported_type": {"type": "string", "pattern": "^(scalar|aggregate|table|macro|table_macro|window)$"},
           "type": {"type": "string", "pattern": "^(scalar|aggregate|table|macro|table_macro|window)$"},
           "evidence": {"type": "string", "minLength": 1},
           "names": {"$ref": "#/$defs/strings"}

@@ -1,14 +1,14 @@
 # Default function identity provenance
 
 `inventories/default_identities.json` translates the **953 historically reviewed compute
-names** into **932 explicit identities covering 913 names**, with **40 explicit namespace
+names** into **919 explicit identities covering 913 names**, with **40 explicit namespace
 exclusions**. There are **zero unresolved names**. Historical classifications, implementation
 review notes and `baselines/duckdb-1.5.5.json` remain unchanged.
 
 | Kind | Explicit defaults |
 | --- | ---: |
 | scalar | 728 |
-| aggregate | 96 |
+| aggregate | 83 |
 | macro | 76 |
 | table | 19 |
 | window | 13 |
@@ -59,21 +59,28 @@ classification remains trusted, but does not justify a fabricated `system.main` 
 
 ## Intrinsics and supported kind transitions
 
-- DuckDB 1.5's `internal_window_functions` parser table defines the window intrinsics.
-  `ExtractWindowFunctionData` attributes them to `system.main`, and the historical
-  runtime reports kind `aggregate`. Thirteen names have explicit aggregate identities;
-  `first` and `last` already have aggregate registrations.
+- DuckDB 1.5's `internal_window_functions` parser table defines executable window
+  intrinsics, represented by Gatekeeper as `system.main` with kind `window`.
+  `duckdb_functions.cpp:194-220` constructs temporary reporting entries (OID zero) and
+  labels them `aggregate`, with an explicit FIXME that the label should be `window`.
+  These are not executable aggregate registrations. No aggregate grants are justified
+  by those rows. `first` and `last` have independent real aggregate registrations.
 - DuckDB 2.0's window registration inputs explicitly register those thirteen names
-  as `window`, including `rank_dense`. Both reviewed kinds are retained as explicit
-  grants; runtime discovery never broadens the kind set.
+  as `window`, including `rank_dense`. The same window-only grants cover both engines;
+  runtime reporting never broadens the kind set.
 - `unnest` has a registered table identity and a source-defined SELECT-list binder
   intrinsic represented by Gatekeeper as `system.main.unnest` of kind `scalar`.
   Both are explicit. A table registration never implicitly authorizes scalar dispatch.
 - `round_even` and its `roundbankers` alias change from historical macros to explicit
   scalar registrations in the pinned 2.0 math registration inputs. Both kinds are recorded.
 - `range`, `generate_series`, and `repeat` each have independently registered scalar
-  and table forms. These plus the thirteen windows, scalar `unnest`, and two rounding
-  transitions explain the 19 identities beyond the 913 granted names.
+  and table forms. These plus scalar `unnest` and two rounding transitions explain the
+  six identities beyond the 913 granted names.
+
+The 13 removed synthetic aggregate grants are `cume_dist`, `dense_rank`, `fill`,
+`first_value`, `lag`, `last_value`, `lead`, `nth_value`, `ntile`, `percent_rank`, `rank`,
+`rank_dense`, and `row_number`. All retain window grants. A native aggregate registered
+under any of these names needs its own explicit grant.
 
 ## Runtime cross-check and limitations
 
@@ -82,6 +89,11 @@ extensions are core_functions, ICU, JSON and Parquet. It has no catalog/schema f
 none are retroactively invented. ICU locale scalar names remain an explicit historical
 list: source determines the `icu_collate_` naming/kind registration, and the historical
 snapshot cross-checks the reviewed locale entries. New runtime locales grant nothing.
+The map's version-specific `reporting_discrepancies` explicitly records all 13 historical
+aggregate/window mismatches. Audit reports show those explanations alongside unchanged
+raw labels. A matching name/label is not proof of intrinsic provenance: qualified aggregate
+rows still appear as ungranted identities, so a native collision cannot be hidden by this
+explanation. The historical snapshot is never rewritten to make the kinds match.
 
 Autocomplete, Delta, DuckLake, Excel, FTS, Iceberg, INET, PostgreSQL, Quack, Spatial,
 TPC-DS and TPC-H have registration-source evidence even though absent from that
