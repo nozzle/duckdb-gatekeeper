@@ -79,6 +79,13 @@ int main() {
 	Check(!NamesObject({{"memory", "finance", "reports", "orders"}}, "lake", {"finance", "reports"}, "orders"));
 
 	Provenance provenance;
+	Identity mixed{"MiXeD", {"FiNaNcE", "RePoRtS"}, "FuNc", "ScAlAr", false};
+	provenance.RecordFunction(mixed, true, 2);
+	auto function_key = FunctionKey({"MIXED", {"finance", "REPORTS"}, "FUNC", "scalar"});
+	Check(provenance.function_entries.count(function_key));
+	Check(provenance.function_entries.find(function_key)->internal == false);
+	Check(provenance.caller_implementations.count(function_key));
+	Check(mixed.catalog == "MiXeD" && mixed.name == "FuNc");
 	auto finance = ObjectKey("memory", {"finance", "reports"}, "orders");
 	auto sales = ObjectKey("memory", {"sales", "reports"}, "orders");
 	provenance.caller_objects.insert(finance);

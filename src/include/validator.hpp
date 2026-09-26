@@ -116,6 +116,8 @@ struct Identity {
 		       std::tie(other.catalog, other.schema_path, other.name, other.type);
 	}
 };
+// Keys used by every provenance set: display identities remain as the engine supplied them.
+Identity FunctionKey(Identity identity);
 // Shared namespace matcher. Function leaves are always exact, including '*'.
 bool NamespaceMatches(const std::string &catalog, const NamePath &schema_path, const std::string &actual_catalog,
                       const NamePath &actual_schema_path, bool exact_schema = false);

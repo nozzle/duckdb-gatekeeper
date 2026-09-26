@@ -4,17 +4,18 @@
 // Included by qualified_function_probe.cpp after its shared native callbacks.
 // Native registration is essential here: SQL-created macros cannot choose internal=true.
 static void CheckInternalFunctions(Connection &connection, DuckDB &database) {
-	Query(connection, "CREATE SCHEMA internal_cases");
-	for (const auto &catalog : {"memory", "system"}) {
-		const string schema = string(catalog) == "memory" ? "internal_cases" : "main";
+	Query(connection, "CREATE SCHEMA InTeRnAl_CaSeS; ATTACH ':memory:' AS MiXeD_CaTaLoG; "
+	                  "CREATE SCHEMA MiXeD_CaTaLoG.InTeRnAl_CaSeS");
+	for (const auto &catalog : {"memory", "system", "MiXeD_CaTaLoG"}) {
+		const string schema = string(catalog) != "system" ? "InTeRnAl_CaSeS" : "main";
 		Query(connection, "BEGIN");
-		if (string(catalog) == "memory")
-			Query(connection, "CREATE TABLE internal_cases.registration_marker(i INTEGER)");
+		if (string(catalog) != "system")
+			Query(connection, "CREATE TABLE " + string(catalog) + ".internal_cases.registration_marker(i INTEGER)");
 		for (bool internal : {false, true}) {
 			// DuckDB disallows internal=true registrations outside the system catalog.
 			if (internal && string(catalog) != "system")
 				continue;
-			const auto name = internal ? "origin_internal" : "origin_external";
+			const auto name = internal ? "OrIgIn_InTeRnAl" : "OrIgIn_ExTeRnAl";
 			CreateScalarFunctionInfo info(ScalarFunction(name, {}, LogicalType::DOUBLE, FractionProbe));
 			// Ordinary catalog creation forbids non-internal system entries. The native
 			// fixture changes the actual flag afterwards to prove policy reads the entry,
@@ -43,6 +44,11 @@ static void CheckInternalFunctions(Connection &connection, DuckDB &database) {
 				if (Cell(connection, "SELECT allowed FROM gatekeeper_validate('" + sql + "')").GetValue<bool>() !=
 				    expected)
 					std::exit(60);
+				if (expected && !Cell(connection, "SELECT functions[1].name = '" +
+				                                      string(internal ? "OrIgIn_InTeRnAl" : "OrIgIn_ExTeRnAl") +
+				                                      "' FROM gatekeeper_validate('" + sql + "')")
+				                     .GetValue<bool>())
+					std::exit(65); // Provenance keys must not lowercase the displayed catalog entry.
 				Connection agent(database);
 				auto held = agent.Prepare(sql);
 				if (held->HasError())

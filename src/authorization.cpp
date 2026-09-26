@@ -228,10 +228,10 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		const bool intrinsic_origin = identity.internal.has_value();
 		for (const auto *entries :
 		     {&provenance.trusted_implementations, &provenance.caller_implementations, &provenance.function_entries}) {
-			auto found = entries->find(identity);
+			auto found = entries->find(gatekeeper::FunctionKey(identity));
 			if (!intrinsic_origin && found != entries->end())
 				identity.internal = found->internal;
-			auto source = entries->find(definition);
+			auto source = entries->find(gatekeeper::FunctionKey(definition));
 			if (source != entries->end())
 				definition.internal = source->internal;
 		}
@@ -271,20 +271,22 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 #endif
 		// Resolved origin wins over a raw caller leaf: a host read_parquet macro is not
 		// the system reader a trusted body wrote as parquet_scan (and vice versa).
-		if (provenance.trusted_implementations.count(identity) && !binding.synthesized_functions.count(identity.name) &&
-		    !binding.literal_constructors.count(identity.name) && !provenance.collation_functions.count(identity.name))
+		auto key = gatekeeper::FunctionKey(identity);
+		auto definition_key = gatekeeper::FunctionKey(definition);
+		if (provenance.trusted_implementations.count(key) && !binding.synthesized_functions.count(key.name) &&
+		    !binding.literal_constructors.count(key.name) && !provenance.collation_functions.count(key.name))
 			callers = false;
-		callers = callers || provenance.caller_implementations.count(identity);
+		callers = callers || provenance.caller_implementations.count(key);
 		// A caller definition stays caller code even if its callback replaces the leaf,
 		// namespace, or entire implementation. A trusted implementation identity cannot
 		// launder a replacement selected by a caller definition. Uncatalogued engine helpers
 		// (including casts) have no observed caller definition and gain no such attribution.
-		if (provenance.caller_implementations.count(definition)) {
+		if (provenance.caller_implementations.count(definition_key)) {
 			callers = true;
-			if (!gatekeeper::SystemIdentity(definition) || !provenance.caller_implementations.count(identity))
+			if (!gatekeeper::SystemIdentity(definition) || !provenance.caller_implementations.count(key))
 				grant = true;
 		}
-		if (callers && !policy.defaults && provenance.caller_implementations.count(identity))
+		if (callers && !policy.defaults && provenance.caller_implementations.count(key))
 			grant = true;
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
 		result.functions.insert(identity);
@@ -294,7 +296,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		// 1.5's WindowFunctions maps parsed spellings to an intrinsic node, without
 		// selecting a canonical catalog entry. Authorize the actual parsed spelling(s),
 		// not an invented second capability. 2.0's catalog windows take the normal path.
-		auto written = binding.intrinsic_windows.find(identity.name);
+		auto written = binding.intrinsic_windows.find(gatekeeper::Lower(identity.name));
 		if (gatekeeper::SystemIdentity(identity) && written != binding.intrinsic_windows.end()) {
 			for (const auto &name : written->second)
 				function({identity.catalog, identity.schema_path, name, "window", true}, true);

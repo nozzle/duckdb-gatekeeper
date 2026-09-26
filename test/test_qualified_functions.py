@@ -106,10 +106,6 @@ def test_deferred_window_alias_blocks(db, alias, canonical, args, block_alias, k
         # 2.0 PEG rewrites first/last OVER; both 1.5 parsers retain the spelling.
         parsed = canonical if spelling in {"first", "last"} and ENGINE_MAJOR >= 2 else spelling
         denied = parsed == blocked[0]["name"]
-        # 1.5's original parser also probes first/last's aggregate entry, but the
-        # host-only grant does not grant an intrinsic first/last window capability.
-        if spelling in {"first", "last"} and ENGINE_MAJOR < 2:
-            denied = True
         assert validate(db, sql)["allowed"] is not denied
         assert validate(db, sql, {"blocked_functions": []})["allowed"] is not denied
         with db.cursor() as agent:
@@ -144,6 +140,15 @@ def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args
     if alias in {"first", "last"}:
         configure(db, {"blocked_functions": grants(canonical, catalog="system", schema_path=("main",), type="window")})
         assert validate(db, f"SELECT {alias}(x) FROM (VALUES (1)) t(x)")["allowed"]
+
+
+@pytest.mark.parametrize("name", ["first", "last", "first_value", "last_value"])
+def test_window_spellings_have_explicit_defaults(db, name):
+    sql = f"SELECT {name}(1) OVER ()"
+    assert validate(db, sql)["allowed"]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute(sql).fetchone() == (1,)
 
 
 @pytest.mark.parametrize("global_block", [False, True])

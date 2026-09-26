@@ -597,9 +597,9 @@ static void CheckAggregateDependency(ClientContext &context, const string &name,
 	}
 	// This preflight proves the dependency's actual flag, not that the binder used it.
 	// Attribution comes from min/max's reviewed implementation edge if it appears in the plan.
-	provenance.function_entries.insert({engine::CatalogName(standard.schema.catalog),
-	                                    engine::SchemaPath(standard.schema), engine::EntryName(target), "aggregate",
-	                                    target.internal});
+	provenance.function_entries.insert(
+	    gatekeeper::FunctionKey({engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema),
+		                         engine::EntryName(target), "aggregate", target.internal}));
 }
 
 struct LookupCallback {

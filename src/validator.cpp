@@ -253,7 +253,16 @@ bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	return false;
 }
 
-void Provenance::RecordFunction(const Identity &identity, bool caller, int engine_major) {
+Identity FunctionKey(Identity identity) {
+	identity.catalog = Lower(std::move(identity.catalog));
+	identity.schema_path = FoldPath(std::move(identity.schema_path));
+	identity.name = Lower(std::move(identity.name));
+	identity.type = Lower(std::move(identity.type));
+	return identity;
+}
+
+void Provenance::RecordFunction(const Identity &source, bool caller, int engine_major) {
+	auto identity = FunctionKey(source);
 	function_entries.insert(identity);
 	for (const auto &name : FunctionImplementations(identity, engine_major))
 		(caller ? caller_implementations : trusted_implementations)

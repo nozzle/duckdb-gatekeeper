@@ -8,6 +8,12 @@ require json
 
 require parquet
 
+# All four source-defined spellings work under fresh defaults, without policy aliasing.
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(1) OVER (), last(1) OVER (), first_value(1) OVER (), last_value(1) OVER ()');
+----
+ok
+
 # JSON aliases are distinct catalog entries, including the ->> operator entry.
 statement ok
 CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'json_extract_path',type:'scalar'}]);

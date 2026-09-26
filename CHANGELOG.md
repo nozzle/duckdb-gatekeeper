@@ -6,6 +6,10 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+- Keep DuckDB 1.5 `first`/`last` window calls available under defaults with two explicit
+  source-backed window identities, and preserve non-internal native function provenance
+  across mixed-case catalog, schema, and function names.
+
 ### Changed
 
 - Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,

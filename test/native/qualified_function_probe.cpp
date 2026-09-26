@@ -380,11 +380,7 @@ int main() {
 				if (name == "first" || name == "last")
 					parsed += "_value";
 #endif
-				// 1.5 first/last also probes the aggregate entry before the intrinsic.
 				bool denied = blocked == parsed;
-#if GATEKEEPER_DUCKDB_MAJOR < 2
-				denied = denied || name == "first" || name == "last";
-#endif
 				if ((Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() ==
 				     "forbidden") != denied ||
 				    window_agent.Query(sql)->HasError() != denied)
