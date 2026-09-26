@@ -16,12 +16,12 @@ COPY (SELECT 1 AS x) TO '__TEST_DIR__/data.csv';
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
 ----
-forbidden	function	read_parquet
+forbidden	function	parquet_scan
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''/definitely/missing.parquet''');
 ----
-forbidden	function	read_parquet
+forbidden	function	parquet_scan
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''');
@@ -35,7 +35,7 @@ forbidden	function	read_parquet
 
 # Granting the reader in the global policy admits the path; it appears as a replacement object.
 statement ok
-CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'read_parquet'}, {'schema_path':['main'],'name':'read_csv_auto'}]);
+CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'read_parquet'}, {'schema_path':['main'],'name':'parquet_scan'}, {'schema_path':['main'],'name':'read_csv_auto'}]);
 
 query TT
 SELECT code, objects[1].type FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
@@ -69,7 +69,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parqu
 ----
 true
 
-# read_parquet and parquet_scan share one permission; read_csv alone does not cover the CSV shorthand.
+# Each entry needs its own permission. Shorthand selects parquet_scan or read_csv_auto.
 statement ok
 CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'parquet_scan'}, {'schema_path':['main'],'name':'read_csv'}]);
 
@@ -81,7 +81,7 @@ true
 query I
 SELECT allowed FROM gatekeeper_validate('SELECT * FROM read_parquet(''__TEST_DIR__/data.parquet'')');
 ----
-true
+false
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.csv''');
@@ -129,12 +129,12 @@ forbidden
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM ''__TEST_DIR__/data.parquet''');
 ----
-forbidden	function	read_parquet
+forbidden	function	parquet_scan
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_path, ''__TEST_DIR__/data.parquet''');
 ----
-forbidden	function	read_parquet
+forbidden	function	parquet_scan
 
 statement ok
 CREATE MACRO by_macro() AS TABLE SELECT * FROM '__TEST_DIR__/data.parquet';

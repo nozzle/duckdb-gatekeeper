@@ -3,7 +3,9 @@
 # group: [gatekeeper]
 
 require gatekeeper
+
 require json
+
 require parquet
 
 # JSON aliases are distinct catalog entries, including the ->> operator entry.

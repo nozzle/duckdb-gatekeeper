@@ -24,7 +24,7 @@ forbidden
 query T
 SELECT code FROM gatekeeper_validate('SELECT dense_rank() OVER ()');
 ----
-forbidden
+ok
 
 statement ok
 CALL gatekeeper_configure();

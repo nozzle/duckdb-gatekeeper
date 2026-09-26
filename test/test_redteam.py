@@ -127,8 +127,8 @@ def test_preflight_denies_before_reader_binding(db):
     sql = "SELECT * FROM read_parquet('missing-gatekeeper-test.parquet')"
     result = validate(db, sql)
     assert result["code"] == "forbidden" and not result["error_message"]
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
-    result = validate(db, sql, {"allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "read_parquet"}]})
+    result = validate(db, sql, {"allowed_functions": [{"schema_path": ["main"], "name": "read_parquet"}]})
     assert not result["allowed"] and result["code"] == "binding"
 
 

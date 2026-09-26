@@ -4,6 +4,8 @@
 
 require gatekeeper
 
+require parquet
+
 statement ok
 CREATE TABLE object_t(i INTEGER);
 
@@ -71,7 +73,7 @@ validate	forbidden	object_v	view	VARCHAR	0	0	0	false
 
 # Explicit blocks retain the same actual kinds as allowlist misses.
 statement ok
-CALL gatekeeper_configure(blocked_tables := [{schema_path:['main'], table:'object_t'}, {schema_path:['main'], table:'object_v'}]);
+CALL gatekeeper_configure(blocked_tables := [{schema_path:['main'], 'table':'object_t'}, {schema_path:['main'], 'table':'object_v'}]);
 
 query IIIIII
 SELECT violations[1].rule, violations[1].message, violations[1].object_type,
@@ -95,7 +97,7 @@ FROM gatekeeper_validate('SELECT * FROM duckdb_tables');
 internal_object	system	[main]	duckdb_tables	view	true
 
 statement ok
-CALL gatekeeper_configure(blocked_tables := [{catalog:'system', schema_path:['main'], table:'duckdb_tables'}]);
+CALL gatekeeper_configure(blocked_tables := [{catalog:'system', schema_path:['main'], 'table':'duckdb_tables'}]);
 
 query III
 SELECT violations[1].rule, violations[1].message, violations[1].object_type

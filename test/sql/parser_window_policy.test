@@ -3,6 +3,7 @@
 # group: [gatekeeper]
 
 require gatekeeper
+
 require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
 
 # PEG TransformFunctionExpression rewrites first/last OVER before catalog lookup.
