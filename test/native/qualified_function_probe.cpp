@@ -84,9 +84,102 @@ int main() {
 	DuckDB database(nullptr, &config);
 	LoadProbeArtifact(database);
 	Connection connection(database);
+	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
+	// A host alias grant keeps eligibility open: the scoped system block must still win.
+	Query(connection, "CREATE SCHEMA window_host");
+	for (const auto &alias : {"rank_dense", "first", "last"}) {
+		auto canonical = string(alias) == "rank_dense" ? "dense_rank" : string(alias) + "_value";
+		auto args = string(alias) == "rank_dense" ? "" : "1";
+		Query(connection, string("CREATE MACRO window_host.") + alias + "() AS 7");
+		for (const auto &blocked : {string(alias), string(canonical)}) {
+			Query(connection,
+			      string("CALL gatekeeper_configure(allowed_functions := ") +
+			          "[{catalog:'memory',schema_path:['window_host'],name:'" + alias + "',type:'macro'}], " +
+			          "blocked_functions := [{catalog:'system',schema_path:['main'],name:'" + blocked + "'}])");
+			Connection window_agent(database);
+			Query(window_agent, "CALL gatekeeper_enforce()");
+			Query(window_agent, string("SELECT window_host.") + alias + "()");
+			for (const auto &name : {string(alias), string(canonical)}) {
+				auto sql = "SELECT " + name + "(" + args + ") OVER ()";
+				if (Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() != "forbidden" ||
+				    !window_agent.Query(sql)->HasError())
+					return 29;
+			}
+		}
+	}
+	Query(connection, "CALL gatekeeper_configure()");
 	Query(connection, "CREATE SCHEMA admitted; CREATE SCHEMA denied");
 	Register(connection, "admitted");
 	Register(connection, "denied");
+	Query(connection, "CREATE MACRO admitted.f(x) AS x; CREATE MACRO denied.f(x) AS x");
+	Query(
+	    connection,
+	    "CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['*'],name:'f',type:'macro'}])");
+	{
+		Connection prepared_agent(database);
+		auto admitted_handle = prepared_agent.Prepare("SELECT admitted.f(1)");
+		auto denied_handle = prepared_agent.Prepare("SELECT denied.f(1)");
+		if (admitted_handle->HasError() || denied_handle->HasError())
+			return 26;
+		Query(prepared_agent, "CALL gatekeeper_enforce()");
+		Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+		                  "[{catalog:'memory',schema_path:['*'],name:'f',type:'macro'}], "
+		                  "blocked_functions := [{catalog:'memory',schema_path:['denied'],name:'f',type:'macro'}])");
+		if (admitted_handle->Execute()->HasError() || !denied_handle->Execute()->HasError())
+			return 27;
+	}
+	// Both namespaces are eligible. A block may deny only the resolved namespace, before its callback.
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['*'],name:'probe',type:'table'}], blocked_functions := "
+	                  "[{catalog:'memory',schema_path:['denied'],name:'probe',type:'table'}])");
+	if (Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT * FROM denied.probe()')").ToString() !=
+	        "forbidden" ||
+	    binds != 0)
+		return 20;
+	if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT * FROM admitted.probe()')")
+	         .GetValue<bool>() ||
+	    binds == 0)
+		return 21;
+	binds = 0;
+	// A request cannot erase the ceiling's qualified block.
+	if (Cell(connection,
+	         "SELECT code FROM gatekeeper_validate('SELECT * FROM denied.probe()', blocked_functions := [])")
+	            .ToString() != "forbidden" ||
+	    binds != 0)
+		return 22;
+	// Covering every eligible md5 identity refuses the entire text before another table can bind.
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['admitted'],name:'probe',type:'table'}], blocked_functions := "
+	                  "[{catalog:'system',schema_path:['main'],name:'md5',type:'scalar'}])");
+	if (Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT md5(''x'') FROM admitted.probe()')")
+	            .ToString() != "forbidden" ||
+	    binds != 0)
+		return 28;
+	// A block of a different kind must not deny the table implementation sharing its leaf.
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['*'],name:'probe',type:'table'}], blocked_functions := "
+	                  "[{catalog:'memory',schema_path:['*'],name:'probe',type:'scalar'}])");
+	if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT * FROM denied.probe()')").GetValue<bool>())
+		return 23;
+	// abs is reviewed as scalar, never as a table function. Namespace alone cannot confer a default.
+	Query(connection, "BEGIN");
+	CreateTableFunctionInfo collision(TableFunction("abs", {}, ScanProbe, BindProbe));
+	Catalog::GetSystemCatalog(*connection.context).CreateTableFunction(*connection.context, collision);
+	Query(connection, "COMMIT");
+	Query(connection, "CALL gatekeeper_configure()");
+	binds = 0;
+	if (Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT * FROM system.main.abs()')").ToString() !=
+	        "forbidden" ||
+	    binds != 0)
+		return 24;
+	// Explicitly granting that different kind is a deliberate host decision.
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'system',schema_path:['main'],name:'abs',type:'table'}])");
+	if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT * FROM system.main.abs()')")
+	         .GetValue<bool>() ||
+	    binds == 0)
+		return 25;
+	binds = 0;
 	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
 	                  "[{catalog:'memory',schema_path:['admitted'],name:'probe',type:'table'}])");
 	auto denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT * FROM denied.probe()')");

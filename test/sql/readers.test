@@ -111,12 +111,12 @@ SELECT code FROM gatekeeper_validate('SELECT * FROM by_call');
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', blocked_functions := ['parquet_scan']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_path', blocked_functions := [{schema_path:['*'],name:'parquet_scan'}]);
 ----
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM by_call', blocked_functions := ['parquet_scan']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_call', blocked_functions := [{schema_path:['*'],name:'parquet_scan'}]);
 ----
 ok
 
@@ -158,12 +158,12 @@ SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()');
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['read_parquet']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := [{schema_path:['*'],name:'read_parquet'}]);
 ----
 ok
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := ['by_macro']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT * FROM by_macro()', blocked_functions := [{schema_path:['*'],name:'by_macro'}]);
 ----
 forbidden	function	by_macro
 

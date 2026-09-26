@@ -229,7 +229,7 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT * FROM secret.salaries")
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}, {"schema_path": ["secret"], "table": "*"}],
-                        "blocked_functions": ["md5"]})
+                        "blocked_functions": [{"schema_path":["*"],"name":"md5"}]})
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute("SELECT md5(who) FROM secret.salaries")
     [first, second] = decisions(catalog)
@@ -242,7 +242,7 @@ def test_policy_hash_correlates_decisions_with_the_policy_in_force(catalog, agen
 
 def test_setting_changes_are_recorded(db):
     enable(db)
-    db.execute("SET gatekeeper_policy = {use_default_functions: true, allowed_functions: [], blocked_functions: ['md5'],"
+    db.execute("SET gatekeeper_policy = {use_default_functions: true, allowed_functions: [], blocked_functions: [{catalog:'',schema_path:['*'],name:'md5',type:''}],"
                " allowed_tables: [], blocked_tables: [], restrict_tables: false}")
     db.execute("RESET gatekeeper_policy")
     found = records(db, "event LIKE '%_changed'")

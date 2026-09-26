@@ -15,7 +15,7 @@ SELECT code FROM gatekeeper_validate('DROP TABLE t');
 unsupported
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := ['md5']);
+SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 false
 
@@ -73,7 +73,7 @@ EXECUTE validation;
 true
 
 statement ok
-CALL gatekeeper_configure(blocked_functions := ['md5']);
+CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}]);
 
 query I
 EXECUTE validation;
@@ -87,34 +87,34 @@ statement ok
 CREATE VIEW unnested AS SELECT unnest([1,2]) AS x;
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_sum($1)', blocked_functions := ['sum']);
+SELECT code FROM gatekeeper_validate('SELECT list_sum($1)', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
 binding
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_sum($1::INTEGER[])', blocked_functions := ['sum']);
+SELECT code FROM gatekeeper_validate('SELECT list_sum($1::INTEGER[])', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
 forbidden
 
 # The view's unnest is the view's: a block does not reach into the body. The caller's own unnest, alone or
 # next to the view, is blocked.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM unnested', blocked_functions := ['unnest']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM unnested', blocked_functions := [{schema_path:['*'],name:'unnest'}]);
 ----
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT unnest([3]) FROM unnested', blocked_functions := ['unnest']);
+SELECT code FROM gatekeeper_validate('SELECT unnest([3]) FROM unnested', blocked_functions := [{schema_path:['*'],name:'unnest'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_transform([''a''], lambda x: x COLLATE nocase = ''A'')', blocked_functions := ['lower']);
+SELECT code FROM gatekeeper_validate('SELECT list_transform([''a''], lambda x: x COLLATE nocase = ''A'')', blocked_functions := [{schema_path:['*'],name:'lower'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_sum([1,2])', blocked_functions := ['sum']);
+SELECT code FROM gatekeeper_validate('SELECT list_sum([1,2])', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
 forbidden
 
@@ -124,7 +124,7 @@ SELECT list_contains(list_transform(functions, lambda f: f.name), 'sum') FROM ga
 true
 
 query I
-CALL gatekeeper_configure(blocked_functions := ['md5']);
+CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 true
 

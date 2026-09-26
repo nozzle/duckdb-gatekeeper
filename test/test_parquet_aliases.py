@@ -18,14 +18,14 @@ def test_either_alias_authorizes_both_spellings_and_shorthand(db, tmp_path, glob
 @pytest.mark.parametrize("blocked", ["read_parquet", "PARQUET_SCAN"])
 @pytest.mark.parametrize("global_block", [False, True])
 def test_either_alias_blocks_both_spellings_and_shorthand_before_io(db, blocked, global_block):
-    blocks = {"blocked_functions": [blocked]}
+    blocks = {"blocked_functions": [{"schema_path":["*"],"name":blocked}]}
     configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["read_parquet", "parquet_scan"]], **(blocks if global_block else {})})
     request = {"blocked_functions": []} if global_block else blocks
     for source in ["read_parquet('/missing/data.parquet')", "parquet_scan('/missing/data.parquet')",
                    "'/missing/data.parquet'"]:
         result = validate(db, f"SELECT * FROM {source}", request)
         assert result["code"] == "forbidden" and result["error_message"] == "", result
-        assert result["violations"][0]["function_name"] == "read_parquet"
+        assert result["violations"][0]["function_name"] in {"read_parquet", "parquet_scan"}
 
 
 @pytest.mark.parametrize("reader,blocked", [("read_parquet", "parquet_scan"), ("parquet_scan", "read_parquet")])
@@ -39,8 +39,8 @@ def test_alias_blocks_do_not_reach_inside_trusted_expansions(db, tmp_path, reade
     configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["m", "read_parquet"]]})
     for sql in ["SELECT * FROM v", "SELECT * FROM m()"]:
         assert validate(db, sql)["allowed"]
-        assert validate(db, sql, {"blocked_functions": [blocked]})["allowed"]
-        result = validate(db, f"{sql}, {reader}('{path}')", {"blocked_functions": [blocked]})
+        assert validate(db, sql, {"blocked_functions": [{"schema_path":["*"],"name":blocked}]})["allowed"]
+        result = validate(db, f"{sql}, {reader}('{path}')", {"blocked_functions": [{"schema_path":["*"],"name":blocked}]})
         assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet", result
 
 

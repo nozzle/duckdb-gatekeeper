@@ -8,7 +8,7 @@ import argparse
 import json
 from pathlib import Path
 import re
-from inventory import load
+from inventory import load_default_identities
 from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,7 +163,7 @@ def main():
     if not re.fullmatch(r"[0-9a-f]{7,40}", args.engine_source_id):
         raise SystemExit("Refusing to bake an engine source id that is not a 7-40 hex commit id: "
                          + repr(args.engine_source_id))
-    _, defaults = load()
+    defaults = load_default_identities()
     inventory = {"defaults": defaults}
     build_grammar = grammar(args.duckdb_source)
     args.output.mkdir(parents=True, exist_ok=True)

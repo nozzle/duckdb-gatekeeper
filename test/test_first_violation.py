@@ -27,7 +27,7 @@ def first(result):
 
 def test_text_denials_are_all_reported_and_bind_denials_are_the_first_one(catalog):
     # Both names are denied by the text walk, so both are listed (sorted, as a set is).
-    result = validate(catalog, "SELECT sha256('x'), md5('x')", {"blocked_functions": ["sha256"]})
+    result = validate(catalog, "SELECT sha256('x'), md5('x')", {"blocked_functions": [{"schema_path":["*"],"name":"sha256"}]})
     assert [v["function_name"] for v in result["violations"]] == ["md5", "sha256"]
     # A denial the bind finds stops at the first one.
     catalog.execute("CREATE TABLE secret.other(x INTEGER)")
@@ -43,7 +43,7 @@ def test_table_binding_precedes_resolved_dispatcher_check(catalog, agent, sql):
     # Target checks wait for the real system dispatcher entry; host same-leaf functions are opaque.
     enable(catalog)
     configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
-                        "blocked_functions": ["max"]})
+                        "blocked_functions": [{"schema_path":["*"],"name":"max"}]})
     expected = validate(catalog, sql)
     assert first(expected) == ("table", "object is not allowed", "salaries", "")
     seen = attempt(agent, sql)
@@ -65,14 +65,14 @@ def test_the_ceiling_is_walked_before_the_request_layer(catalog, sql):
     # names first, because the plan is walked once per layer and the ceiling's walk is the first.
     enable(catalog)
     configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
-                        "blocked_functions": ["max"]})
-    expected = validate(catalog, sql, {"blocked_functions": ["min"]})
+                        "blocked_functions": [{"schema_path":["*"],"name":"max"}]})
+    expected = validate(catalog, sql, {"blocked_functions": [{"schema_path":["*"],"name":"min"}]})
     assert first(expected) == ("function", "dispatched aggregate is not allowed", "", "max")
     [record] = decisions(catalog, "mode = 'validate'")
     assert record["violations"] == expected["violations"]
     # Only the request layer's denial remains once the ceiling allows the other name.
     configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}]})
-    assert first(validate(catalog, sql, {"blocked_functions": ["min"]})) == (
+    assert first(validate(catalog, sql, {"blocked_functions": [{"schema_path":["*"],"name":"min"}]})) == (
         "function", "dispatched aggregate is not allowed", "", "min")
 
 

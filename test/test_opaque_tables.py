@@ -168,7 +168,7 @@ def test_dynamic_table_selection_through_a_trusted_macro_is_the_hosts_capability
     assert result["allowed"] and objects(result) == [("main", "secret", "table")], result
     assert validate(chain, "SELECT * FROM query_table('secret')", {"allowed_tables": []})["code"] == "forbidden"
     # Blocking the capability itself is what withdraws it.
-    assert not validate(chain, "SELECT * FROM peek('secret')", {"blocked_functions": ["peek"]})["allowed"]
+    assert not validate(chain, "SELECT * FROM peek('secret')", {"blocked_functions": [{"schema_path":["*"],"name":"peek"}]})["allowed"]
 
 
 def test_scalar_macros_carry_trust_into_what_their_table_functions_bind(chain):
@@ -188,7 +188,7 @@ def test_scalar_macros_carry_trust_into_what_their_table_functions_bind(chain):
     for sql in ["SELECT * FROM query_table('secret')", "SELECT scalar_peek('secret'), (SELECT count(*) FROM query_table('secret'))"]:
         denied = validate(chain, sql, denied_secret)
         assert denied["code"] == "forbidden" and denied["violations"][0]["function_name"] == "query_table", (sql, denied)
-    assert not validate(chain, "SELECT scalar_peek('secret')", {"blocked_functions": ["scalar_peek"]})["allowed"]
+    assert not validate(chain, "SELECT scalar_peek('secret')", {"blocked_functions": [{"schema_path":["*"],"name":"scalar_peek"}]})["allowed"]
 
 
 def test_scalar_macros_over_internal_views_own_their_readers(db):

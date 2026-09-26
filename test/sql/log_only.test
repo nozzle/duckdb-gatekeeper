@@ -17,7 +17,7 @@ statement ok
 INSERT INTO secret VALUES ('hidden');
 
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 'reporting_orders'}], blocked_functions := ['md5']);
+CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 'reporting_orders'}], blocked_functions := [{schema_path:['*'],name:'md5'}]);
 
 statement ok
 CALL enable_logging('Gatekeeper');

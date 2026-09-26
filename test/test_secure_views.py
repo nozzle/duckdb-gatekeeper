@@ -5,7 +5,7 @@ import pytest
 from support.artifact import ENGINE_MAJOR, literal
 from support.audit import decisions, enable
 from support.enforcement import enforce, settle
-from support.typed_helpers import configure, grants, rule, validate
+from support.typed_helpers import configure, function_rules, rule, validate
 
 
 pytestmark = pytest.mark.skipif(ENGINE_MAJOR < 2, reason="Secure views require DuckDB 2.0")
@@ -24,7 +24,7 @@ def secure(db):
                "CREATE SECURE VIEW exposed.nested AS SELECT * FROM exposed.regular; "
                "CREATE SECURE VIEW exposed.generated AS SELECT * FROM range(2)")
     configure(db, {"allowed_tables": [rule(schema_path=["exposed"])],
-                   "blocked_tables": [rule(schema_path=["hidden"])], "blocked_functions": ["md5", "range"]})
+                   "blocked_tables": [rule(schema_path=["hidden"])], "blocked_functions": function_rules("md5", "range")})
     return db
 
 
@@ -48,13 +48,13 @@ def test_hidden_reader_and_caller_function_are_distinguished(secure):
     # The caller function is still caller-attributable when the optimizer can push its predicate below
     # the secure boundary. It must be admitted explicitly, even if the body uses the same function.
     configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])],
-                       "allowed_functions": grants("md5", catalog="system", schema_path=("main",), type="scalar")})
+                       "allowed_functions": function_rules("md5", catalog="system", schema_path=("main",), type="scalar")})
     sql = "SELECT i FROM exposed.direct WHERE md5(s) = digest"
     assert validate(secure, sql)["allowed"]
     with secure.cursor() as agent:
         enforce(agent)
         assert agent.execute(sql).fetchall() == [(1,)]
-        configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])], "blocked_functions": ["md5"]})
+        configure(secure, {"allowed_tables": [rule(schema_path=["exposed"])], "blocked_functions": function_rules("md5")})
         with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied"):
             agent.execute(sql)
 
@@ -70,7 +70,7 @@ def test_caller_objects_is_conservative_not_a_public_diagnostics_projection(secu
     assert denied["objects"] == denied["functions"] == denied["caller_objects"] == []
     assert any(v["table"] == "payload" for v in denied["violations"])
     configure(secure, {"allowed_tables": [rule(schema_path=["exposed"]), rule(schema_path=["hidden"])],
-                       "blocked_functions": ["md5"]})
+                       "blocked_functions": function_rules("md5")})
     result = validate(secure, sql)
     assert result["allowed"], result
     assert identity("hidden", "payload") in result["caller_objects"]
