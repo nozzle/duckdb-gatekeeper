@@ -106,8 +106,15 @@ def test_untyped_parameter_cannot_defer_implementation(db, expression, blocked, 
         configure(db, {"blocked_functions": [{"schema_path":["*"],"name":blocked}]})
         db.execute("SET lock_configuration=true")
     result = validate(db, "SELECT " + expression, {"blocked_functions": [] if global_block else [{"schema_path":["*"],"name":blocked}]})
-    assert result["code"] == "binding", result
-    assert "parameter" in result["error_message"].lower()
+    if blocked in {"sum", "avg"}:
+        # The default macro exposes its fixed target before binding parameters or
+        # entering the aggregate callback, so the explicit block already decides.
+        assert result["code"] == "forbidden", result
+        assert result["violations"][0]["function_name"] == blocked
+        assert result["violations"][0]["message"] == "default macro aggregate is not allowed"
+    else:
+        assert result["code"] == "binding", result
+        assert "parameter" in result["error_message"].lower()
     assert not result["allowed"] and result["objects"] == result["functions"] == []
 
 
