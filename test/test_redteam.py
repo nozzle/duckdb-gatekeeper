@@ -107,14 +107,14 @@ def test_cte_binding_scope(split, sql):
     "sum(x) FILTER (WHERE md5('x')='x')", "lag(x, 1, length(md5('x'))) OVER ()",
 ])
 def test_function_hidden_positions(split, expression):
-    result = validate(split, f"SELECT {expression} FROM allowed.t", {"blocked_functions": ["md5"]})
+    result = validate(split, f"SELECT {expression} FROM allowed.t", {"blocked_functions": [{"schema_path":["*"],"name":"md5"}]})
     assert not result["allowed"], result
     assert result["code"] == "forbidden"
     assert any(v["function_name"]=="md5" for v in result["violations"])
 
 
 @pytest.mark.parametrize("options", [
-    "blocked_functions := ['md5'], BLOCKED_FUNCTIONS := []",
+    "blocked_functions := [{schema_path:['*'],name:'md5'}], BLOCKED_FUNCTIONS := []",
     "allowed_tables := [{schema_path: ['main'], 'table': 't', TABLE: 'other'}]",
 ])
 def test_duplicate_typed_policy_fields(db, options):
@@ -133,7 +133,7 @@ def test_preflight_denies_before_reader_binding(db):
 
 
 def test_request_cannot_opt_out_of_ceiling(split):
-    configure(split,{"blocked_functions":["md5"],"allowed_tables":[{"catalog":"*","schema_path":["allowed"],"table":"*"}]})
+    configure(split,{"blocked_functions":[{"schema_path":["*"],"name":"md5"}],"allowed_tables":[{"catalog":"*","schema_path":["allowed"],"table":"*"}]})
     assert not validate(split, "SELECT md5('x')", {"blocked_functions": []})["allowed"]
     assert not validate(split, "SELECT md5('x')")["allowed"]
     assert not validate(split, "SELECT * FROM secret.t", {"allowed_tables": [{"catalog": "*", "schema_path": ["secret"], "table": "*"}]})["allowed"]
@@ -177,7 +177,7 @@ def test_trusted_implementation_is_not_caller_code(split):
     # directly. The caller's own abs stays blocked, alone or next to the macro, and the macro cannot be used to
     # launder a caller-written argument that is itself blocked.
     configure(split, {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})
-    options = {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}], "blocked_functions": ["abs"]}
+    options = {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}], "blocked_functions": [{"schema_path":["*"],"name":"abs"}]}
     assert validate(split, "SELECT trusted_abs(-1)", {"allowed_functions": [{"schema_path": ["*"], "name": "trusted_abs"}]})["allowed"]
     assert validate(split, "SELECT trusted_abs(-1)", options)["allowed"]
     for sql in ["SELECT abs(-1)", "SELECT trusted_abs(-1), abs(-2)", "SELECT trusted_abs(abs(-1))"]:

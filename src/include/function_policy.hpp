@@ -91,6 +91,20 @@ inline std::string CanonicalFunction(std::string name) {
 	return name;
 }
 
+// Source-defined window spellings: 1.5 WindowExpression::WindowFunctions; 2.0 ranking
+// registration and PEG first/last OVER rewriting. Only system.main window identities use
+// this equivalence, never scalar/macros or first/last aggregates sharing the same leaf.
+inline Names WindowSpellings(const std::string &name) {
+	auto lower = Lower(name);
+	if (lower == "rank_dense" || lower == "dense_rank")
+		return {"dense_rank", "rank_dense"};
+	if (lower == "first" || lower == "first_value")
+		return {"first", "first_value"};
+	if (lower == "last" || lower == "last_value")
+		return {"last", "last_value"};
+	return {lower};
+}
+
 // The never-bind list: functions no policy can admit on any caller-authored route.
 inline bool NeverBind(const std::string &name) {
 	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
@@ -113,16 +127,10 @@ inline bool ControlPlane(const std::string &name) {
 // The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
 // implementations binding derives from it, and the readers its file paths choose. A host view, macro, or
 // attached table is a trusted definition; nothing inside one is subject to blocks.
-inline bool FunctionBlocked(const Policy &policy, const std::string &name) {
-	auto canonical = CanonicalFunction(name);
-	for (const auto &blocked : policy.blocked_functions)
-		if (CanonicalFunction(blocked) == canonical)
-			return true;
-	return false;
-}
+bool FunctionBlocked(const Policy &policy, const Identity &identity);
 
-inline bool FunctionDenied(const Policy &policy, const std::string &name) {
-	return NeverBind(name) || FunctionBlocked(policy, name);
+inline bool FunctionDenied(const Policy &policy, const Identity &identity) {
+	return NeverBind(identity.name) || FunctionBlocked(policy, identity);
 }
 
 // Functions DuckDB binds for a collation (function.cpp: nocase, noaccent, nfc; the ICU extension registers

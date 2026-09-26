@@ -52,7 +52,7 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	auto &name = identity.name;
 	auto canonical = gatekeeper::CanonicalFunction(name);
 	bool implicit = binding.synthesized_functions.count(canonical) || binding.literal_constructors.count(canonical);
-	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, name)) ||
+	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, identity)) ||
 	    (grant && attributable && !gatekeeper::FunctionAllowed(policy, identity)) ||
 	    (!grant && attributable && !gatekeeper::SystemIdentity(identity)) ||
 	    (binding.system_functions.count(canonical) && !gatekeeper::SystemIdentity(identity)) ||
@@ -268,6 +268,16 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
 		result.functions.insert(identity);
 	};
+	auto window_function = [&](const gatekeeper::Identity &identity) {
+		bool callers = attributable(identity.name);
+		// 1.5 intrinsic nodes retain an expression kind, not the written alias. 2.0 can
+		// likewise rewrite first/last or bind an alias to its canonical implementation.
+		// Recover caller attribution only for the source-defined system window capability.
+		if (gatekeeper::SystemIdentity(identity))
+			for (const auto &name : gatekeeper::WindowSpellings(identity.name))
+				callers = callers || attributable(name);
+		function(identity, callers);
+	};
 	vector<LogicalOperator *> operators{&root};
 	vector<Expression *> expressions;
 	while (!operators.empty()) {
@@ -340,7 +350,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				if (!window.WindowFunction())
 					throw BinderException("Unknown window implementation");
 				auto identity = engine::FunctionIdentity(*window.WindowFunction(), "window");
-				function(identity, attributable(identity.name));
+				window_function(identity);
 #else
 				static const std::map<ExpressionType, string> windows = {
 				    {ExpressionType::WINDOW_ROW_NUMBER, "row_number"},
@@ -358,7 +368,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				auto found = windows.find(window.GetExpressionType());
 				if (found == windows.end())
 					throw BinderException("Unsupported bound window implementation");
-				function({"system", {"main"}, found->second, "window"}, attributable(found->second));
+				window_function({"system", {"main"}, found->second, "window"});
 #endif
 			}
 		}

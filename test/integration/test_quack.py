@@ -9,7 +9,7 @@ from support.audit import decisions, enable
 from support.enforcement import DENIED, enforce
 from support.quack import quack_fixture
 from support.quack_capi import CConnection
-from support.typed_helpers import configure, grants, rule, validate
+from support.typed_helpers import configure, function_rules, grants, rule, validate
 
 pytestmark = pytest.mark.skipif(os.getenv("GATEKEEPER_QUACK_TESTS") != "1", reason="opt-in Quack fixture")
 POLICY = {"allowed_tables": [rule("remote", ("main",), "orders"), rule("memory", ("main",), "local_orders")]}
@@ -44,8 +44,12 @@ def test_caller_delegation_never_bind_even_when_granted(remote, function):
     fixed = sql.replace("?", "'SELECT * FROM ticking'")
     policy = {"allowed_tables": [rule()], "allowed_functions": REMOTE_GRANTS}
     configure(db, policy)
-    assert not validate(db, fixed, policy)["allowed"]
-    assert not validate(db, sql, policy)["allowed"]
+    # Never-bind is independent of qualified blocks: even explicit grants and no blocks
+    # cannot admit caller-authored delegation.
+    for query in (fixed, sql):
+        result = validate(db, query, {**policy, "blocked_functions": []})
+        assert not result["allowed"] and result["code"] == "forbidden", result
+    assert remote.requests == [] and remote.executions == []
     with db.cursor() as agent:
         local_binding(agent)
         enforce(agent)
@@ -58,7 +62,14 @@ def test_caller_delegation_never_bind_even_when_granted(remote, function):
 
 def test_attached_scope_validation_enforcement_parameters_and_log_only(remote):
     db = remote.client
-    configure(db, POLICY)
+    blocks = function_rules("md5", catalog="system", schema_path=("main",), type="scalar")
+    local_sql = "SELECT md5('caller') FROM local_orders"
+    assert validate(db, local_sql, {**POLICY, "blocked_functions": function_rules(
+        "md5", catalog="remote", schema_path=("main",), type="scalar")})["allowed"]
+    assert not validate(db, local_sql, {**POLICY, "blocked_functions": blocks})["allowed"]
+    configure(db, {**POLICY, "allowed_functions": blocks, "blocked_functions": blocks})
+    # A request cannot clear the global block, and a matching grant cannot override it.
+    assert not validate(db, local_sql, {**POLICY, "blocked_functions": []})["allowed"]
     result = validate(db, "SELECT sum(amount) FROM remote.main.orders", POLICY)
     assert result["allowed"] == (ENGINE_MAJOR >= 2), result
     assert remote.requests == []
@@ -68,6 +79,10 @@ def test_attached_scope_validation_enforcement_parameters_and_log_only(remote):
     with db.cursor() as agent:
         local_binding(agent)
         enforce(agent)
+        remote.clear()
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(local_sql)
+        assert remote.requests == []
         for sql, args in [("SELECT sum(amount) FROM remote.main.orders", []),
                           ("SELECT amount FROM remote.main.orders WHERE id=?", [2])]:
             remote.clear()
@@ -115,8 +130,9 @@ def test_opaque_trusted_definition_private_bind_refusal_and_deferred_residual(re
 
 def test_local_view_over_base_table_and_identity_collision(remote):
     db = remote.client
-    db.execute("CREATE VIEW trusted AS SELECT * FROM remote.main.orders; CREATE TABLE orders(id INTEGER)")
-    policy = {"allowed_tables": [rule("memory", ("main",), "trusted"), rule("memory", ("main",), "orders")]}
+    db.execute("CREATE VIEW trusted AS SELECT *, md5('host') AS fingerprint FROM remote.main.orders; CREATE TABLE orders(id INTEGER)")
+    policy = {"allowed_tables": [rule("memory", ("main",), "trusted"), rule("memory", ("main",), "orders")],
+              "blocked_functions": function_rules("md5", catalog="system", schema_path=("main",), type="scalar")}
     configure(db, policy)
     assert validate(db, "SELECT * FROM memory.main.orders", policy)["allowed"]
     result = validate(db, "SELECT * FROM trusted", policy)
@@ -126,6 +142,7 @@ def test_local_view_over_base_table_and_identity_collision(remote):
         assert {"catalog": "remote", "schema_path": ["main"], "table": "orders", "type": "table"} in result["objects"]
     assert not validate(db, "SELECT * FROM remote.main.orders", policy)["allowed"]
     assert not validate(db, "SELECT * FROM trusted, remote.main.orders", policy)["allowed"]
+    assert not validate(db, "SELECT md5('caller') FROM trusted", policy)["allowed"]
     assert remote.requests == []
 
 

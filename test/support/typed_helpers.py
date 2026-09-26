@@ -42,3 +42,8 @@ def rule(catalog="*", schema_path=("*",), table="*"):
 def grants(*names, catalog=None, schema_path=("*",), type=None):
     """Explicit structured grants for tests; never converts API inputs implicitly."""
     return [{"catalog": catalog, "schema_path": list(schema_path), "name": name, "type": type} for name in names]
+
+
+def function_rules(*names, catalog="*", schema_path=("*",), type=None):
+    """Explicit qualified allow/block rules; never coerces legacy API inputs."""
+    return grants(*names, catalog=catalog, schema_path=schema_path, type=type)

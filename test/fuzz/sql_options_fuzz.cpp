@@ -554,8 +554,8 @@ static void CheckNativeSettingBypass() {
 		std::abort();
 	if (connection.Query("RESET gatekeeper_policy")->HasError())
 		std::abort();
-	auto canonical =
-	    connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_functions := ['md5'])");
+	auto canonical = connection.Query("SELECT struct_update(current_setting('gatekeeper_policy'), blocked_functions := "
+	                                  "[{catalog:'system',schema_path:['main'],name:'md5',type:'scalar'}])");
 	if (canonical->HasError())
 		std::abort();
 	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
@@ -670,7 +670,7 @@ static std::string StrictCode(Connection &connection, const std::string &sql, co
 	auto options =
 	    std::string(
 	        ", use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'count'}]") +
-	    (blocked ? std::string(", blocked_functions := ['") + blocked + "']" : "");
+	    (blocked ? std::string(", blocked_functions := [{schema_path:['*'],name:'") + blocked + "'}]" : "");
 	auto result = connection.Query("SELECT * FROM gatekeeper_validate($1" + options + ")", Value(sql));
 	if (result->HasError())
 		std::abort();
@@ -784,7 +784,7 @@ static void CheckReplacementCallbacks() {
 		Fail("trusted probe: the admitted caller reader next to the view was refused");
 	if (connection
 	        .Query("CALL gatekeeper_configure(allowed_functions := [{'schema_path':['main'],'name':'range'}], "
-	               "blocked_functions := ['range'])")
+	               "blocked_functions := [{schema_path:['*'],name:'range'}])")
 	        ->HasError())
 		std::abort();
 	if (Code(connection, "SELECT * FROM probe_view") != "ok")
@@ -892,11 +892,17 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	static bool initialized = false;
 	if (!initialized) {
 		CheckForeignAggregateProvenance();
+		auto block = [](const string &name) {
+			return Value::STRUCT({{"catalog", Value("system")},
+			                      {"schema_path", Value::LIST(LogicalType::VARCHAR, {Value("main")})},
+			                      {"name", Value(name)},
+			                      {"type", Value("scalar")}});
+		};
 		for (bool option : {false, true}) {
-			auto type = option ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+			auto type = option ? LogicalType::LIST(block("md5").type()) : LogicalType::VARCHAR;
 			Value null(type);
-			auto value = option ? Value::LIST(LogicalType::VARCHAR, {Value("md5")}) : Value("SELECT 1");
-			auto different = option ? Value::LIST(LogicalType::VARCHAR, {Value("abs")}) : Value("SELECT 2");
+			auto value = option ? Value::LIST(block("md5").type(), {block("md5")}) : Value("SELECT 1");
+			auto different = option ? Value::LIST(block("abs").type(), {block("abs")}) : Value("SELECT 2");
 			if (!GatekeeperBindingsEqualForFuzz(null, null, option) ||
 			    !GatekeeperBindingsEqualForFuzz(value, value, option) ||
 			    GatekeeperBindingsEqualForFuzz(null, value, option) ||
@@ -943,7 +949,9 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		    "{'schema_path':['main'],'name':'list_sum'}, {'schema_path':['main'],'name':'unnest'}, "
 		    "{'schema_path':['main'],'name':'list_value'}, {'schema_path':['main'],'name':'list_transform'}], "
 		    "blocked_functions := " +
-		    (data[1] & 2 ? "['sum','lower','unnest']" : "[]") +
+		    (data[1] & 2
+		         ? "[{schema_path:['*'],name:'sum'},{schema_path:['*'],name:'lower'},{schema_path:['*'],name:'unnest'}]"
+		         : "[]") +
 		    ", allowed_tables := " + (data[1] & 4 ? "[]" : "[{schema_path:['main'], 'table':'*'}]") +
 		    ", blocked_tables := " + (data[1] & 8 ? "[{schema_path:['main'], 'table':'t'}]" : "[]");
 		auto query = "SELECT * FROM gatekeeper_validate($1, " + options + ")";
@@ -979,9 +987,10 @@ static int Fuzz(const uint8_t *data, size_t size) {
 	}
 	if (data[0] % 16 == 14) {
 		// A resolved function denial must also reject its explicit caller spelling.
-		auto first = Run(
-		    connection, "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
-		    text, limit);
+		auto first = Run(connection,
+		                 "SELECT * FROM gatekeeper_validate($1, blocked_functions := "
+		                 "[{schema_path:['*'],name:'json_extract'},{schema_path:['*'],name:'struct_extract'}])",
+		                 text, limit);
 		if (StructValue::GetChildren(first).size() == 9) {
 			for (const auto &violation : ListValue::GetChildren(StructValue::GetChildren(first)[2])) {
 				auto &fields = StructValue::GetChildren(violation);
@@ -996,7 +1005,8 @@ static int Fuzz(const uint8_t *data, size_t size) {
 				}
 				auto explicit_result =
 				    Run(connection,
-					    "SELECT * FROM gatekeeper_validate($1, blocked_functions := ['json_extract','struct_extract'])",
+					    "SELECT * FROM gatekeeper_validate($1, blocked_functions := "
+					    "[{schema_path:['*'],name:'json_extract'},{schema_path:['*'],name:'struct_extract'}])",
 					    Value("SELECT \"" + quoted + "\"(1)"), limit);
 				auto &decision = StructValue::GetChildren(explicit_result);
 				if (decision.size() != 9 || decision[1].GetValue<string>() != "forbidden")

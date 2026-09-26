@@ -6,6 +6,10 @@ Gatekeeper owns its function classifications here:
   generators, scalars), default compute names, and excluded names.
 - `extensions/*.json`: one file for each reviewed core extension, preserving
   `compute` and `elevated` groups, implementation source links, and review notes/pins.
+- `default_identities.json`: explicit default catalog/schema_path/name/type grants,
+  grouped by registration evidence and kind, plus reasoned exclusions. Its schema is
+  `default_identities.schema.json`; [default provenance](../docs/default-provenance.md)
+  records completeness, namespace evidence, intrinsic exceptions and coverage limits.
 - `baselines/duckdb-1.5.5.json`: runtime signatures and loaded-extension versions
   captured from the pinned Python DuckDB runtime. This includes Python-specific
   functions; it does not claim that all extensions were loaded or audited live.
@@ -15,16 +19,21 @@ Gatekeeper allowlist or mandatory inventory audit.
 
 ## Adjusting defaults
 
-All compiled default names grant only `system.main` identities, including reviewed extension
-functions registered there. This is one shared runtime matcher invariant, not a change to the
-historical implementation classifications. Host shadows and `system.pg_catalog` macros require
-explicit grants. Runtime discovery remains a maintenance report and never creates permissions.
-The audit reports `default_namespace` alongside the reviewed-name count; that count is not a
-count of functions currently admitted across all schemas.
+All compiled defaults grant explicit `system.main` identities and concrete kinds, including
+reviewed extension functions registered there. Host shadows and `system.pg_catalog` macros
+require explicit grants. Runtime discovery remains a maintenance report and never creates
+permissions. All 953 historical compute names are accounted for: 913 names contribute 919
+identities; 40 pg_catalog-only names are explicitly excluded without reclassification. The audit
+reports reviewed names, compiled names, compiled identities, exclusions and qualified drift.
+`reporting_discrepancies` records the historical 1.5.5 synthetic window rows labeled
+`aggregate`; executable window intrinsics grant only kind `window`. Snapshot labels remain
+unchanged and aggregate collisions remain ungranted, even when a discrepancy explains the label.
 
 Move exact normalized names between `compute` and `elevated` after source review.
-Only compute names are compiled into defaults. If a core function moves, update
-its descriptive `groups` membership too. `unreviewed` records baseline names without
+Only compute names with explicit registration identities are compiled into defaults. Update
+the identity map in the same change; missing names, conflicting exclusions, duplicate identities,
+unknown kinds, unpinned evidence and non-compute grants fail source-only validation. If a core
+function moves, update its descriptive `groups` membership too. `unreviewed` records baseline names without
 a completed source review; these remain excluded and must not be promoted
 automatically. Unreviewed is not a claim of elevated behavior.
 
@@ -93,7 +102,7 @@ inventory's recorded core source, not the current release build pin.
 
 ## Version update procedure
 
-Function policy matches names. Existing DuckDB implementations are trusted across
+Function policy matches qualified identities and kinds. Existing DuckDB implementations are trusted across
 upgrades; changes behind an existing name are not a backwards-compatibility attack
 model. New names remain excluded until explicitly allowed or classified. Maintaining
 defaults improves convenience and does not gate engine upgrades.
@@ -116,7 +125,12 @@ To investigate coverage on another runtime:
    Additions, removals, changed overload signatures/macro definitions, engine version,
    and loaded-extension versions are reported without failing. `--strict` optionally
    turns drift into an error for baseline investigations. Unknown names remain excluded;
-   they are never added to defaults by enumeration.
+   they are never added to defaults by enumeration. New captures retain catalog, full nested
+   schema paths and kind, including 2.0 windows. Qualified additions/removals/signature changes
+   require two qualified snapshots; the historical unqualified baseline is preserved and reported
+   as such. Default-name registrations at ungranted identities and defaults not observed in a
+   candidate are reported separately. Missing optional extensions and cross-version intrinsic
+   kinds are expected reasons for defaults not being observed, not instructions to remove grants.
 
 3. Review names you choose to add or reclassify, including their overloads. Record why
    non-obvious entries are default or elevated and preserve the reviewed source revision.

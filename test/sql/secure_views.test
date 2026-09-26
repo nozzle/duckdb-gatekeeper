@@ -28,7 +28,7 @@ statement ok
 CREATE SECURE VIEW exposed.generated AS SELECT * FROM range(2);
 
 statement ok
-CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema_path: ['exposed'], 'table': '*'}], blocked_functions := ['md5', 'range']);
+CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema_path: ['exposed'], 'table': '*'}], blocked_functions := [{schema_path: ['*'], name: 'md5'}, {schema_path: ['*'], name: 'range'}]);
 
 query ITIII
 SELECT allowed, caller_objects[1].type, len(caller_objects), len(objects), len(list_filter(functions, lambda f: f.name = 'md5')) > 0 FROM gatekeeper_validate('SELECT * FROM exposed.nested');

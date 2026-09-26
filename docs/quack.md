@@ -35,6 +35,12 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
 * Both Quack SQL functions are on the caller's never-bind list, like `query`/`query_table`.
   Qualified grants cannot override that refusal. Private catalog authorization additionally
   refuses opaque Quack functions and remote views reached through trusted definitions.
+  Never-bind is separate from `blocked_functions`: an empty block list does not admit delegation.
+  Ordinary caller-function blocks use qualified rules, for example
+  `blocked_functions := [{catalog:'system', schema_path:['main'], name:'md5', type:'scalar'}]`.
+  A matching block wins over a grant and cannot be cleared by request options; it does not
+  reach inside a trusted local view. The independent remote-scope refusal still applies to
+  that view's Quack dependencies. See [qualified function rules](qualified-functions.md).
 * **Deferred trusted-body binding is unsupported.** For example, a host view containing
   `quack_query_by_name(...)`, a remote view, or the attachment's `.query()` macro can execute
   remotely when a parameterized statement binds it before Gatekeeper's private check. The final

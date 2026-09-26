@@ -23,7 +23,7 @@ SELECT allowed AND len(functions) = 1 AND functions[1].catalog = 'system' AND fu
 true
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT $x', blocked_functions := ['getvariable']);
+SELECT code FROM gatekeeper_validate('SELECT $x', blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}]);
 ----
 forbidden
 
@@ -36,7 +36,7 @@ SELECT $x;
 42
 
 statement ok host
-CALL gatekeeper_configure(blocked_functions := ['getvariable']);
+CALL gatekeeper_configure(blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}]);
 
 statement error
 SELECT $x;

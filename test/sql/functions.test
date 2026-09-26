@@ -78,12 +78,12 @@ forbidden
 
 # Blocks always win, in either layer, over defaults and explicit allows.
 query T
-SELECT code FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := [{'schema_path':['main'],'name':'md5'}], blocked_functions := ['md5']);
+SELECT code FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := [{'schema_path':['main'],'name':'md5'}], blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 forbidden
 
 statement ok
-CALL gatekeeper_configure(blocked_functions := ['md5']);
+CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'md5'}]);
 
 query TTT
 SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(s) FROM t', allowed_functions := [{'schema_path':['main'],'name':'md5'}], blocked_functions := []);
@@ -144,12 +144,12 @@ SELECT allowed FROM gatekeeper_validate('SELECT h FROM hashed', use_default_func
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT h FROM hashed', blocked_functions := ['md5']);
+SELECT allowed FROM gatekeeper_validate('SELECT h FROM hashed', blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(h) FROM hashed', blocked_functions := ['md5']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT md5(h) FROM hashed', blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 forbidden	function	md5
 
@@ -162,12 +162,12 @@ SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := ['*']);
+SELECT allowed FROM gatekeeper_validate('SELECT doubled(x) FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := [{schema_path:['*'],name:'*'}]);
 ----
 true
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) * 2 FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := ['*']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT doubled(x) * 2 FROM t', use_default_functions := false, allowed_functions := [{'schema_path':['main'],'name':'doubled'}], blocked_functions := [{schema_path:['*'],name:'*'}]);
 ----
 forbidden	function	*
 
@@ -184,7 +184,7 @@ SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting');
 true
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting', blocked_functions := ['current_setting']);
+SELECT allowed FROM gatekeeper_validate('SELECT v FROM inspecting', blocked_functions := [{schema_path:['*'],name:'current_setting'}]);
 ----
 true
 
@@ -225,7 +225,7 @@ statement ok
 CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['main'],name:'ltrim',type:'macro'}]);
 
 query I
-SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t', blocked_functions := ['md5']);
+SELECT allowed FROM gatekeeper_validate('SELECT ltrim(s) FROM t', blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 true
 
@@ -241,22 +241,22 @@ statement ok
 CREATE VIEW unnested AS SELECT unnest([1, 2]) AS u;
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT u FROM unnested', blocked_functions := ['unnest']);
+SELECT code FROM gatekeeper_validate('SELECT u FROM unnested', blocked_functions := [{schema_path:['*'],name:'unnest'}]);
 ----
 ok
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT unnest([3]) FROM unnested', blocked_functions := ['unnest']);
+SELECT code FROM gatekeeper_validate('SELECT unnest([3]) FROM unnested', blocked_functions := [{schema_path:['*'],name:'unnest'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_transform([''a''], lambda v: v COLLATE nocase = ''A'')', blocked_functions := ['lower']);
+SELECT code FROM gatekeeper_validate('SELECT list_transform([''a''], lambda v: v COLLATE nocase = ''A'')', blocked_functions := [{schema_path:['*'],name:'lower'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT list_sum([1, 2])', blocked_functions := ['sum']);
+SELECT code FROM gatekeeper_validate('SELECT list_sum([1, 2])', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
 forbidden
 
@@ -286,7 +286,7 @@ SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_val
 forbidden	function	histogram
 
 query TTT
-SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''su'' || ''m'')', blocked_functions := ['sum']);
+SELECT code, violations[1].rule, violations[1].function_name FROM gatekeeper_validate('SELECT list_aggregate([1, 2], ''su'' || ''m'')', blocked_functions := [{schema_path:['*'],name:'sum'}]);
 ----
 forbidden	bind_time_expression	list_aggregate
 
@@ -316,12 +316,12 @@ RESET gatekeeper_policy;
 
 # Blocks remain leaf-wide: a table function and scalar function sharing a name share a block.
 query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM range(3)', blocked_functions := ['range']);
+SELECT code FROM gatekeeper_validate('SELECT * FROM range(3)', blocked_functions := [{schema_path:['*'],name:'range'}]);
 ----
 forbidden
 
 query T
-SELECT code FROM gatekeeper_validate('SELECT range(3)', blocked_functions := ['range']);
+SELECT code FROM gatekeeper_validate('SELECT range(3)', blocked_functions := [{schema_path:['*'],name:'range'}]);
 ----
 forbidden
 
@@ -348,6 +348,6 @@ SELECT f.catalog, f.schema_path[1], f.name FROM gatekeeper_validate('SELECT md5(
 system	main	md5
 
 query II
-SELECT length(objects), length(functions) FROM gatekeeper_validate('SELECT md5(s) FROM t', blocked_functions := ['md5']);
+SELECT length(objects), length(functions) FROM gatekeeper_validate('SELECT md5(s) FROM t', blocked_functions := [{schema_path:['*'],name:'md5'}]);
 ----
 0	0

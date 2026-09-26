@@ -80,7 +80,7 @@ def test_resolved_identity_preserves_case_qualification_and_shadowing(db):
 @pytest.mark.parametrize("sql, options", [
     ("SELECT * FROM b, missing", {}),
     ("SELECT * FROM b", {"allowed_tables": []}),
-    ("SELECT md5('x') FROM b", {"blocked_functions": ["md5"]}),
+    ("SELECT md5('x') FROM b", {"blocked_functions": [{"schema_path":["*"],"name":"md5"}]}),
     ("SELECT * FROM", {}),
     ("DROP TABLE c", {}),
     (None, {}),

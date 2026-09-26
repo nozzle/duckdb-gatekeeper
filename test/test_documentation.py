@@ -6,7 +6,7 @@ import pytest
 
 import benchmark
 from descriptor import block_scalar
-from inventory import load
+from inventory import load_default_identities
 from support.artifact import EXTENSION, ROOT, by_engine
 from support.headers import control_plane_names, never_bind_names
 from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB
@@ -145,7 +145,7 @@ def test_never_bind_list_in_prose_is_the_header():
 
 def test_default_function_count_in_prose():
     """The default count quoted in the README and descriptor must track the reviewed inventory."""
-    _, defaults = load()
+    defaults = load_default_identities()
     for path in [ROOT / "README.md", ROOT / "community/description.yml"]:
         counts = re.findall(r"\b(\d{3,}) reviewed", path.read_text(encoding="utf-8"))
         assert counts and set(counts) == {str(len(defaults))}, (path, counts, len(defaults))

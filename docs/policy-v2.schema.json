@@ -30,8 +30,9 @@
           "items": {"$ref": "#/$defs/function"}
         },
         "blocked_functions": {
-          "description": "Function leaf names to deny; denies win over allows.",
-          "$ref": "#/$defs/functionNames"
+          "description": "Resolved function blocks using the same namespace and kind matching as grants; denies win over allows. '*' in name is multiplication, not a wildcard.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/function"}
         },
         "allowed_tables": {
           "description": "Allowed table/view identities. An empty array denies all tables/views. Omission leaves configuration unrestricted for non-internal objects, or inherits the global restriction during validation.",
@@ -46,6 +47,7 @@
   },
   "$defs": {
     "function": {
+      "description": "Catalog omitted/null or '*' matches any catalog. Schema path is required and matches at exactly its stated depth; '*' matches one component. Name is exact; optional type restricts the function kind.",
       "type": "object",
       "additionalProperties": false,
       "required": ["schema_path", "name"],
@@ -61,10 +63,6 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^(?:[^\\u0000\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+$"
-    },
-    "functionNames": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/name"}
     },
     "tables": {
       "type": "array",

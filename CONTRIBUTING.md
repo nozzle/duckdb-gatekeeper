@@ -18,7 +18,7 @@ For existing clones run `git submodule update --init --recursive`. The artifact 
 build the CLI.
 
 Generation (`scripts/generate.py`, run at CMake configure time) derives the SQL grammar
-from the DuckDB source actually being compiled and compiles the function name list into
+from the DuckDB source actually being compiled and compiles explicit reviewed function identities into
 the build tree. It needs only the Python standard library. Our submodule and release
 tooling remain pinned for reproducibility, but community builds can use another engine.
 DuckDB's normal extension checks require a matching binary, and Gatekeeper re-checks

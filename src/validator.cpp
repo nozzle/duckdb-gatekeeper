@@ -99,7 +99,7 @@ struct Inventory {
 	Doc inventory{yyjson_read(inventory_json, strlen(inventory_json), 0), yyjson_doc_free};
 	std::unordered_map<std::string, Rule> rules;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::string>> dispatch;
-	Names defaults;
+	std::set<FunctionGrant> defaults;
 	const std::unordered_map<std::string, Names> expression_types = {
 	    {"BETWEEN", {"COMPARE_BETWEEN", "COMPARE_NOT_BETWEEN"}},
 	    {"CASE", {"CASE_EXPR"}},
@@ -144,7 +144,27 @@ struct Inventory {
 			yyjson_obj_foreach(value, j, m, field, type) mapping.emplace(Text(field), Text(type));
 		}
 		auto data = yyjson_doc_get_root(inventory.get());
-		defaults = Strings(yyjson_obj_get(data, "defaults"));
+		auto entries = yyjson_obj_get(data, "defaults");
+		if (!yyjson_is_arr(entries))
+			throw std::runtime_error("invalid embedded default identities");
+		yyjson_arr_foreach(entries, i, n, value) {
+			FunctionGrant identity{Field(value, "catalog"), {}, Field(value, "name"), Field(value, "type")};
+			auto path = yyjson_obj_get(value, "schema_path");
+			if (!yyjson_is_arr(path))
+				throw std::runtime_error("invalid embedded default schema_path");
+			yyjson_arr_foreach(path, j, m, field) {
+				auto part = Text(field);
+				if (part.empty() || part == "*" || part != Lower(part) || part.find('\0') != std::string::npos)
+					throw std::runtime_error("invalid embedded default schema component");
+				identity.schema_path.push_back(part);
+			}
+			if (identity.catalog.empty() || identity.catalog == "*" || identity.schema_path.empty() ||
+			    identity.name.empty() || !SupportedFunctionKind(identity.type) ||
+			    identity.catalog != Lower(identity.catalog) || identity.name != Lower(identity.name) ||
+			    identity.catalog.find('\0') != std::string::npos || identity.name.find('\0') != std::string::npos ||
+			    !defaults.insert(identity).second)
+				throw std::runtime_error("invalid embedded default identity");
+		}
 	}
 };
 
@@ -164,34 +184,96 @@ bool SystemIdentity(const Identity &identity) {
 static bool GrantNameMatches(const FunctionGrant &rule, const std::string &name, bool aliases) {
 	return rule.name == Lower(name) || (aliases && CanonicalFunction(rule.name) == CanonicalFunction(name));
 }
-bool FunctionEligible(const Policy &policy, const std::string &name) {
-	if (FunctionDenied(policy, name))
+static bool ReviewedAliases(const Identity &identity) {
+	return SystemIdentity(identity) &&
+	       ((identity.type == "table" && CanonicalFunction(identity.name) == "read_parquet") ||
+	        (identity.type == "scalar" && (CanonicalFunction(identity.name) == "json_extract" ||
+	                                       CanonicalFunction(identity.name) == "json_extract_string")));
+}
+static bool FunctionMatches(const FunctionGrant &rule, const Identity &identity) {
+	return (rule.type.empty() || rule.type == identity.type) &&
+	       (GrantNameMatches(rule, identity.name, ReviewedAliases(identity)) ||
+	        (SystemIdentity(identity) && identity.type == "window" &&
+	         WindowSpellings(identity.name).count(rule.name))) &&
+	       NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path);
+}
+bool FunctionBlocked(const Policy &policy, const Identity &identity) {
+	for (const auto &rule : policy.blocked_functions)
+		if (FunctionMatches(rule, identity))
+			return true;
+	return false;
+}
+
+// Prove coverage of an eligible namespace pattern, not merely a matching leaf. A scoped block must
+// wait for catalog resolution whenever another admitted identity could survive it. Enumerating kinds
+// permits separate kind-specific blocks to cover an untyped grant without widening eligibility.
+static bool BlockCovers(const FunctionGrant &block, const FunctionGrant &candidate) {
+	if (!block.catalog.empty() && block.catalog != "*" && block.catalog != candidate.catalog)
 		return false;
-	if (policy.defaults && GetInventory().defaults.count(Lower(name)))
+	if (block.schema_path.size() != candidate.schema_path.size())
+		return false;
+	for (size_t i = 0; i < block.schema_path.size(); i++)
+		if (block.schema_path[i] != "*" && block.schema_path[i] != candidate.schema_path[i])
+			return false;
+	if ((block.type.empty() || block.type == candidate.type) && candidate.type == "window" &&
+	    SystemIdentity({candidate.catalog, candidate.schema_path, candidate.name, candidate.type}) &&
+	    WindowSpellings(candidate.name).count(block.name))
 		return true;
+	return (block.type.empty() || block.type == candidate.type) &&
+	       GrantNameMatches(
+	           block, candidate.name,
+	           ReviewedAliases({candidate.catalog, candidate.schema_path, candidate.name, candidate.type}));
+}
+bool FunctionEligible(const Policy &policy, const std::string &name) {
+	if (NeverBind(name))
+		return false;
+	auto survives = [&](const FunctionGrant &rule, bool defaults) {
+		for (const auto &kind : {"scalar", "aggregate", "table", "macro", "table_macro", "window"}) {
+			if (!rule.type.empty() && rule.type != kind)
+				continue;
+			FunctionGrant candidate{rule.catalog, rule.schema_path, Lower(name), kind};
+			if (rule.name != candidate.name) {
+				// Defaults are exact identities. Only explicit rules carry reviewed alias equivalence.
+				bool aliases = (ReviewedAliases({"system", {"main"}, name, kind}) &&
+				                CanonicalFunction(rule.name) == CanonicalFunction(name)) ||
+				               (std::string(kind) == "window" && WindowSpellings(name).count(rule.name));
+				if (defaults || !NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"}) || !aliases)
+					continue;
+				candidate.catalog = "system";
+				candidate.schema_path = {"main"};
+			}
+			bool covered = false;
+			for (const auto &block : policy.blocked_functions)
+				if (BlockCovers(block, candidate)) {
+					covered = true;
+					break;
+				}
+			if (!covered)
+				return true;
+		}
+		return false;
+	};
+	if (policy.defaults)
+		for (const auto &rule : GetInventory().defaults)
+			if (survives(rule, true))
+				return true;
 	for (const auto &rule : policy.allowed_functions)
-		if (GrantNameMatches(rule, name, NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"})))
+		if (survives(rule, false))
 			return true;
 	return false;
 }
 bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	if (identity.name.empty() || identity.catalog.empty() || identity.schema_path.empty() ||
-	    !SupportedFunctionKind(identity.type) || FunctionDenied(policy, identity.name))
+	    !SupportedFunctionKind(identity.type) || FunctionDenied(policy, identity))
 		return false;
 	for (const auto &part : identity.schema_path)
 		if (part.empty())
 			return false;
-	const bool system = SystemIdentity(identity);
-	if (system && policy.defaults && GetInventory().defaults.count(Lower(identity.name)))
+	if (policy.defaults && GetInventory().defaults.count({Lower(identity.catalog), FoldPath(identity.schema_path),
+	                                                      Lower(identity.name), identity.type}))
 		return true;
-	// Reviewed alias grants belong only to their system scalar/table implementations, never host shadows/macros.
-	const bool aliases =
-	    system && ((identity.type == "table" && CanonicalFunction(identity.name) == "read_parquet") ||
-		           (identity.type == "scalar" && (CanonicalFunction(identity.name) == "json_extract" ||
-		                                          CanonicalFunction(identity.name) == "json_extract_string")));
 	for (const auto &rule : policy.allowed_functions)
-		if ((rule.type.empty() || rule.type == identity.type) && GrantNameMatches(rule, identity.name, aliases) &&
-		    NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path))
+		if (FunctionMatches(rule, identity))
 			return true;
 	return false;
 }
