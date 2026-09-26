@@ -28,6 +28,22 @@ static void CheckDefaultOriginAndPreflight(Connection &connection) {
 	}
 	abs.internal = was_internal;
 	Query(connection, "CALL gatekeeper_configure(); BEGIN");
+	auto &expansion = SystemProbeEntry(connection, CatalogType::SCALAR_FUNCTION_ENTRY, "list_aggr");
+	const bool expansion_internal = expansion.internal;
+	expansion.internal = false;
+	Query(connection, "COMMIT");
+	if (!Cell(connection, "SELECT code='forbidden' AND violations[1].function_name='list_aggr' AND "
+	                      "violations[1].function_type='scalar' FROM gatekeeper_validate('SELECT list_sum([1])')")
+	         .GetValue<bool>())
+		std::exit(71);
+	for (const auto &schema : {"main", "*"}) {
+		Query(connection, string("CALL gatekeeper_configure(allowed_functions := [{schema_path:['") + schema +
+		                      "'],name:'list_aggr',type:'scalar'}])");
+		if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT list_sum([1])')").GetValue<bool>())
+			std::exit(72);
+	}
+	expansion.internal = expansion_internal;
+	Query(connection, "CALL gatekeeper_configure(); BEGIN");
 	auto &sum = SystemProbeEntry(connection, CatalogType::AGGREGATE_FUNCTION_ENTRY, "sum")
 	                .Cast<AggregateFunctionCatalogEntry>();
 	Query(connection, "COMMIT");
