@@ -115,8 +115,10 @@ GATEKEEPER_EXTENSION=/absolute/gatekeeper.duckdb_extension \
   --httpfs /absolute/httpfs.duckdb_extension
 ```
 
-Both explicit paths are required for a candidate. Gatekeeper and both extensions must match
-that Python engine. A 1.5.5 Python package cannot test 2.0 binaries. The 1.5 Quack protocol is
+For a custom candidate build, supply both explicit paths as above. For the exact pinned
+candidate, use `--candidate` instead: the runner downloads and verifies its pinned artifacts
+and rejects explicit paths. Gatekeeper and both extensions must match that Python engine.
+A 1.5.5 Python package cannot test 2.0 binaries. The 1.5 Quack protocol is
 version 1, while the 2.0 pin is version 3; build both sides from the same set.
 
 ### Reproducible source pins / candidate co-build
