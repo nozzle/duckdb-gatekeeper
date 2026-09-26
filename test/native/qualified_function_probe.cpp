@@ -5,6 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "probe_database.hpp"
 #include <cstdio>
@@ -14,11 +15,23 @@ using namespace duckdb;
 
 static idx_t binds = 0;
 static idx_t aggregate_binds = 0;
-#if GATEKEEPER_DUCKDB_MAJOR < 2
+static idx_t fraction_calls = 0;
+static void FractionProbe(DataChunk &, ExpressionState &, Vector &result) {
+	++fraction_calls;
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	result.SetValue(0, Value::DOUBLE(0.5));
+}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+static unique_ptr<FunctionData> LoseAggregateStamp(BindAggregateFunctionInput &input) {
+	input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
+	return nullptr;
+}
+#else
 static unique_ptr<FunctionData> LoseAggregateStamp(ClientContext &, AggregateFunction &function,
                                                    vector<unique_ptr<Expression>> &) {
 	function.catalog_name.clear();
 	function.schema_name.clear();
+	function.name = "unrecognized_substitution";
 	return nullptr;
 }
 #endif
@@ -84,6 +97,42 @@ int main() {
 	DuckDB database(nullptr, &config);
 	LoadProbeArtifact(database);
 	Connection connection(database);
+	Query(connection, "BEGIN");
+	CreateScalarFunctionInfo fraction_info(ScalarFunction("fraction_probe", {}, LogicalType::DOUBLE, FractionProbe));
+	Catalog::GetSystemCatalog(*connection.context).CreateFunction(*connection.context, fraction_info);
+	Query(connection, "COMMIT");
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'system',schema_path:['main'],name:'fraction_probe',type:'scalar'}])");
+	for (const auto &expression : {"quantile(x, fraction_probe())", "x.quantile(fraction_probe())"}) {
+		auto result = Cell(connection, string("SELECT code FROM gatekeeper_validate('SELECT ") + expression +
+		                                   " FROM (VALUES (1)) t(x)')");
+		if (result.ToString() != "forbidden" || fraction_calls != 0)
+			return 33;
+	}
+	// A handle prepared before enforcement must re-authorize the implementation, not
+	// just the original catalog name, after a host policy change.
+	for (const auto &item :
+	     vector<pair<string, string>>{{"SELECT min(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_min"},
+	                                  {"SELECT max(x COLLATE nocase) FROM (VALUES ('a')) t(x)", "arg_max"},
+	                                  {"SELECT date_part('epoch', DATE '2020-01-01')", "epoch"},
+	                                  {"SELECT quantile(x, 0.5) FROM (VALUES (1)) t(x)", "quantile_disc"}}) {
+		Query(connection, "CALL gatekeeper_configure()");
+		Connection prepared_agent(database);
+		auto handle = prepared_agent.Prepare(item.first);
+		if (handle->HasError())
+			return 30;
+		Query(prepared_agent, "CALL gatekeeper_enforce()");
+		Query(connection, "CALL gatekeeper_configure(blocked_functions := "
+		                  "[{catalog:'system',schema_path:['main'],name:'" +
+		                      item.second + "'}])");
+		if (!handle->Execute()->HasError())
+			return 31;
+		Query(connection, "SET GLOBAL gatekeeper_log_only=true");
+		if (handle->Execute()->HasError())
+			return 32;
+		Query(connection, "SET GLOBAL gatekeeper_log_only=false");
+	}
+	Query(connection, "CALL gatekeeper_configure()");
 	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
 	// A host alias grant keeps eligibility open: the scoped system block must still win.
 	Query(connection, "CREATE SCHEMA window_host");
@@ -266,6 +315,32 @@ int main() {
 		}
 		Query(connection, string("DROP MACRO main.arg_") + name);
 	}
+	// No foreign bind callback may turn an unrecognized name/namespace into trusted origin.
+	Query(connection, "BEGIN");
+	Query(connection, "CREATE TABLE admitted.unstamped_marker(i INTEGER)");
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto unstamped = *CountFun::GetFunctions().GetFunctionByOffset(0);
+	unstamped.SetName("unstamped_host");
+#else
+	auto unstamped = CountFun::GetFunctions().GetFunctionByOffset(0);
+	unstamped.name = "unstamped_host";
+#endif
+	unstamped.SetBindCallback(LoseAggregateStamp);
+	CreateAggregateFunctionInfo unstamped_info(unstamped);
+	unstamped_info.internal = false;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	unstamped_info.SetQualifiedName(QualifiedName("memory", "admitted", "unstamped_host"));
+#else
+	unstamped_info.catalog = "memory";
+	unstamped_info.schema = "admitted";
+#endif
+	Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, unstamped_info);
+	Query(connection, "COMMIT");
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'}])");
+	denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
+	if (denied.ToString() != "forbidden")
+		return 12;
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 	// A same-name host aggregate observed in this bind must make stamp-loss recovery ambiguous.
 	Query(connection, "BEGIN");
@@ -288,22 +363,6 @@ int main() {
 	                          "'SELECT admitted.mode(x), system.main.mode(x) FROM (VALUES (1)) t(x)')");
 	if (denied.ToString() != "forbidden")
 		return 9;
-	Query(connection, "BEGIN");
-	Query(connection, "CREATE TABLE admitted.unstamped_marker(i INTEGER)");
-	auto unstamped = CountFun::GetFunctions().GetFunctionByOffset(0);
-	unstamped.name = "unstamped_host";
-	unstamped.SetBindCallback(LoseAggregateStamp);
-	CreateAggregateFunctionInfo unstamped_info(unstamped);
-	unstamped_info.internal = false;
-	unstamped_info.catalog = "memory";
-	unstamped_info.schema = "admitted";
-	Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, unstamped_info);
-	Query(connection, "COMMIT");
-	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
-	                  "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'}])");
-	denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
-	if (denied.ToString() != "forbidden")
-		return 12; // An authorized foreign definition does not turn its lost stamp into system provenance.
 #endif
 	return 0;
 }

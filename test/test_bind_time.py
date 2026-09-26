@@ -12,15 +12,27 @@ from support.typed_helpers import configure, validate
     "SELECT COLUMNS(concat('x', '')) FROM t",
     "SELECT COLUMNS(lambda c: len(repeat(c, 200000000))>0) FROM t",
     "PIVOT t ON x IN (1+2) USING sum(x)",
-    "SELECT quantile_cont(x, abs(0.5)) FROM t",
-    "SELECT quantile_cont(x, [0.2, abs(0.8)]) FROM t",
-    "SELECT percentile_cont(abs(0.5)) WITHIN GROUP (ORDER BY x) FROM t",
-    "SELECT quantile_cont(x, abs(0.5)) OVER () FROM t",
     "SELECT unnest([1,2], max_depth:=abs(2))",
     "SELECT * FROM t AT (VERSION => abs(2))",
 ])
 def test_bind_time_computation_rejected_before_binding(db, sql):
     # t deliberately does not exist; preflight must win over the binding error.
+    result = validate(db, sql)
+    assert result["code"] == "forbidden" and result["error_message"] == "", result
+    assert "bind_time_expression" in {v["rule"] for v in result["violations"]}, result
+    assert result["objects"] == result["functions"] == []
+
+
+@pytest.mark.parametrize("expression", [
+    "quantile_cont(x, abs(0.5))", "quantile_cont(x, [0.2, abs(0.8)])",
+    "percentile_cont(abs(0.5)) WITHIN GROUP (ORDER BY x)",
+    "quantile_cont(x, abs(0.5)) OVER ()",
+])
+def test_quantile_contract_follows_catalog_selection(db, expression):
+    sql = f"SELECT {expression} FROM t"
+    # No implementation has been selected when resolving the missing table fails.
+    assert validate(db, sql)["code"] == "binding"
+    db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql)
     assert result["code"] == "forbidden" and result["error_message"] == "", result
     assert "bind_time_expression" in {v["rule"] for v in result["violations"]}, result

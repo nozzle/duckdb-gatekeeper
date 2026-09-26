@@ -278,8 +278,15 @@ bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	return false;
 }
 
+void Provenance::RecordFunction(const Identity &identity, bool caller) {
+	function_entries.insert(identity);
+	for (const auto &name : FunctionImplementations(identity))
+		(caller ? caller_implementations : trusted_implementations)
+		    .insert({identity.catalog, identity.schema_path, name, identity.type});
+}
+
 bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
-	auto canonical = CanonicalFunction(name);
+	auto canonical = Lower(name);
 	return binding.caller_functions.count(canonical) || binding.synthesized_functions.count(canonical) ||
 	       binding.literal_constructors.count(canonical) || caller_expansions.count(canonical) ||
 	       (binding.caller_collates && CollationFunction(canonical));
@@ -290,7 +297,7 @@ bool Provenance::Attributable(const BindingPolicy &binding, const std::string &n
 		return false;
 	// A name the caller can produce, or that the caller's own binders retrieved, is the caller's. A name only a
 	// trusted body introduced is not; when both did, the caller's rules apply query-wide.
-	return CallerCanName(binding, name) || caller_lookups.count(CanonicalFunction(name));
+	return CallerCanName(binding, name) || caller_lookups.count(Lower(name));
 }
 Table ObjectKey(const std::string &catalog, const NamePath &schema_path, const std::string &table) {
 	return {Lower(catalog), FoldPath(schema_path), Lower(table)};
@@ -480,7 +487,7 @@ struct Walker {
 	void Implied(const Names &names) {
 		if (binding)
 			for (const auto &name : names)
-				binding->synthesized_functions.insert(CanonicalFunction(name));
+				binding->synthesized_functions.insert(Lower(name));
 	}
 	// One occurrence of a function name, written or implied by syntax. The position reported for a denied name
 	// is the earliest query_location among all of its occurrences; nodes without one contribute nothing.
@@ -658,11 +665,16 @@ struct Walker {
 			}
 			static const Names quantiles = {"quantile", "quantile_cont", "quantile_disc", "approx_quantile",
 			                                "reservoir_quantile"};
-			if (quantiles.count(name)) {
+			if (binding && quantiles.count(name)) {
 				auto orders = yyjson_obj_get(yyjson_obj_get(value, "order_bys"), "orders");
 				size_t fraction = arguments.size() == 1 && yyjson_arr_size(orders) ? 0 : 1;
+				// A dotted call can prepend a receiver; the lookup callback has no occurrence or
+				// argument mapping. Defer a conservative refusal until a system aggregate is selected.
+				if (WrittenPath(value, true).size() > 1)
+					binding->unsupported_quantiles.insert(name);
 				for (size_t i = fraction; i < arguments.size(); i++)
-					BindTime(arguments[i], "quantile fraction/options", true);
+					if (!BindLiteral(arguments[i], true))
+						binding->unsupported_quantiles.insert(name);
 			}
 			Function(name, value);
 			// Only literal caller-selected aggregate names can be authorized before entering the dispatcher.
@@ -833,7 +845,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 	for (auto &entry : walker.functions) {
 		auto &name = entry.first;
 		if (binding)
-			binding->caller_functions.insert(CanonicalFunction(name));
+			binding->caller_functions.insert(Lower(name));
 		if (!walker.layers.All([&](const Policy &p) { return FunctionEligible(p, name); })) {
 			auto canonical = CanonicalFunction(name);
 			auto message = "function is not allowed: " + canonical;
