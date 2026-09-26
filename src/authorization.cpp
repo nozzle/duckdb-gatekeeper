@@ -101,9 +101,10 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		auto schema = engine::SchemaPath(function.schema);
 		// Reviewed system dependencies are part of the default policy. Turning defaults off requires
 		// explicit qualified grants for the default macro's expansion too, unlike an opaque host body.
+		// A non-internal expansion cannot inherit that default permission either.
 		auto canonical = gatekeeper::Lower(name);
 		bool selected = binding.caller_functions.count(canonical) ||
-		                (!policy.defaults && binding.system_functions.count(canonical));
+		                ((!policy.defaults || !entry.internal) && binding.system_functions.count(canonical));
 		AuthorizeFunction(policy, binding, {catalog, schema, name, kind, entry.internal}, attributable, result,
 		                  selected);
 		bool builtin = catalog == "system" && schema == gatekeeper::NamePath{"main"};
