@@ -22,6 +22,9 @@ resolution; it cannot grant a namespace. Never-bind and control-plane rules keep
 semantics. Blocks use the same namespace, exact-depth path, leaf and optional kind matcher as grants;
 either layer's matching block wins. Reviewed Parquet and JSON aliases apply only to their intended system table/scalar
 identities, never to a host function or macro with an alias-like name.
+Raw host spellings are kept separate for attribution too: a caller's host `read_parquet`
+macro does not attribute a trusted body's system `parquet_scan` reader to the caller, or
+vice versa. Resolved caller use of either system reader still obeys the shared policy.
 Source-defined window alias pairs (`rank_dense`/`dense_rank`, `first`/`first_value`, and
 `last`/`last_value`) share grant/block matching only for `system.main` kind `window`.
 The 1.5 intrinsic expression-kind route preserves caller attribution across those spellings;
@@ -59,13 +62,15 @@ the repository's compatibility workflow also pins 2.0 candidate 6844d1b. Neither
 | Route | 1.5 provenance | 2.0 provenance | Enforcement and absent-provenance behavior |
 | --- | --- | --- | --- |
 | Catalog lookup | Full entry and stamped overloads | Full entry, nested path, QualifiedName | Private lookup callback checks actual identity/kind before function bind or macro expansion. |
-| Bound scalar/aggregate/table | Stamps can be lost by specialization | Qualified implementation plus retained definition | Full identities checked; unknown caller identities refused. Narrow 1.5 recovery below. |
+| Bound scalar/aggregate/table | Stamps can be lost by specialization | Qualified implementations; replacements can still lose provenance | Full identities checked; unknown caller identities refused. Source-backed substitutions and narrow aggregate recovery below. |
+| Binder substitutions | min/max, date_part/datepart, quantile replace implementations | Same source-defined routes | Observed system definitions record possible implementation identities with caller/trusted origin. Surviving caller implementations obey blocks and require grants when defaults are disabled. |
 | Windows | Aggregates stamped; other windows are engine expression kinds | Catalog window entries and BoundWindowFunction | Aggregate identity checked; 1.5 intrinsic windows have explicit system identity; 2.0 actual window identity checked. |
 | Implicit operators/constructors | Often unqualified calls | Still uses search path plus callback | Require system implementation even if host shadow is explicitly granted. Ambiguity can conservatively refuse mixed queries. |
 | Direct builtin helpers / optimizer | System lookups or factory functions, often no callback | More system-qualified builtin helpers, still direct binding | Trusted engine transformations; current authorization is pre-optimizer, not a universal execution/callback interceptor. |
 | Lambda bodies | ListLambdaBindData | Bind data and lambda nodes | Outer catalog identity checked; executable list body traversed explicitly. Nested direct routes retain their limits. |
 | Caller collations | Embedded unstamped ScalarFunction in system.main collation entry | Direct system scalar lookup; nested list_transform | 1.5 records exact embedded scalar names from the caller's system collation entries; absent stamps recover only those capabilities, without competing host scalar evidence. Surviving implementations pass qualified grants/blocks. Host default/type collations remain trusted configuration. |
 | Caller list aggregate dispatch | Direct system lookup; serialization may lose stamps | Direct system lookup and qualified serialization | Only unqualified calls with literal target names: authorize targets after resolving the actual system scalar dispatcher but before its callbacks. Dotted/method and computed-target calls refused; unrelated host same-leaf functions keep their own contracts. |
+| Quantile fractions/options | Catalog callback before aggregate bind | Same | Apply the argument contract only after selecting a caller system aggregate. Dotted calls and nonliteral/nonparameter options refuse; granted host same-leaf functions/macros retain their own contracts. |
 | Fixed list distinct/unique | Factory histogram | Factory histogram | Verified system dispatcher has source-backed histogram dependency, not discovered catalog selection. |
 | Replacement reader | Returned function expression then catalog lookup | Same with qualified names | Leaf screened, actual entry authorized and returned reference pinned before reader bind. Unsupported replacement shapes refused. |
 | Host macros | Full macro entry before expansion | Same, nested schemas | Macro authorized first, then existing body trust; control plane always denied. |
@@ -73,26 +78,50 @@ the repository's compatibility workflow also pins 2.0 candidate 6844d1b. Neither
 
 Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.cpp`,
 `bind_operator_expression.cpp`, `bind_window_expression.cpp`, `collation_binding.cpp`,
-`core_functions/scalar/list/list_aggregates.cpp`, `aggregate/distributive/minmax.cpp`.
+`core_functions/scalar/list/list_aggregates.cpp`, `aggregate/distributive/minmax.cpp`,
+`scalar/date/date_part.cpp`, and `aggregate/holistic/quantile.cpp`.
 
-### 1.5 specialization scope
+### Binder substitutions and specialization
 
-Engine aggregate binders can replace a catalog overload with a factory implementation, losing its
-namespace. Gatekeeper may retain an aggregate definition
-identity only when this same private authorization recorded exactly one matching aggregate entry,
-that entry is system.main, and no competing same-name namespace was observed. This is evidence of
-the admitted definition under the trusted-engine model, not pointer-level proof of every specialized
-callback. Other missing identities refuse; no live relookup, policy-leaf match, or plan-evidence
-same-leaf merge supplies provenance. Mixed same-name definitions conservatively refuse recovery.
+On both supported engines, an observed `system.main` definition records source-backed possible
+implementation identities, preserving whether the definition was caller-attributable or trusted:
+
+| Selected definition | Possible replacement | Kind |
+| --- | --- | --- |
+| `min` / `max` with collation | `arg_min` / `arg_max` | aggregate |
+| `date_part` / `datepart` | `epoch` / `julian` | scalar |
+| `quantile` | `quantile_disc` (scalar-fraction and list-fraction overloads) | aggregate |
+
+These edges come from `BindMinMax`, `DatePartBind`, and the discrete-quantile binders, not
+runtime catalog discovery. They are **not policy aliases**. A surviving caller implementation
+obeys qualified blocks in both layers and needs its own grant in each layer with defaults
+disabled, in addition to the source grant. For example, strict collated `min` needs `min`,
+`arg_min`, and the collation scalar (such as `lower`); strict `date_part('epoch', x)` needs
+`date_part` and `epoch`; strict `quantile(x, 0.5)` needs `quantile` and `quantile_disc`.
+Other caller syntax still needs its own grants, such as `list_value` for a list fraction.
+Substitutions solely inside a trusted view or granted host macro retain that body's trust;
+an identity reached by both caller and trusted routes remains caller-attributable.
+
+Engine aggregate binders can replace a catalog overload with a factory implementation, losing
+its namespace. Gatekeeper recovers an unstamped aggregate only from a matching system
+implementation identity recorded by this same private authorization, including the source-backed
+edges above. Any caller non-system aggregate, or a matching non-system implementation from
+either origin, makes recovery ambiguous and refuses it. This is evidence of the admitted
+definition under the trusted-engine model, not pointer-level proof of every specialized callback.
+No live relookup, policy-leaf match, or plan-evidence same-leaf merge supplies provenance.
+Foreign caller scalar/aggregate callbacks that rename an implementation within their observed
+namespace remain caller code. Missing stamps in a plan with competing foreign caller code
+conservatively fail closed rather than being treated as trusted dependencies.
 
 SELECT-list UNNEST and 1.5 intrinsic windows are source-defined engine operations with explicit
 system identities. Fixed histogram is likewise an intrinsic dependency. These are not claims that
 a catalog lookup selected those implementations. Arbitrary unknown functions never inherit them.
 The 1.5 scalar-subquery planner creates count_star directly. When attributable to a caller's count,
 the same observed-definition rule applies; a helper with no caller origin remains an engine
-dependency and may retain unknown namespace in evidence. There are no callback-pointer fingerprints,
-per-name specialization lists, or stored engine objects. Parser-implied aliases are canonicalized before
-checking system origin. `contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
+dependency and may retain unknown namespace in evidence. There are no callback-pointer fingerprints
+or stored engine objects; the substitution edges above are explicit source-reviewed mappings.
+Alias equivalence requires the reviewed system namespace and kind, never just a raw host leaf.
+`contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
 constructors, are conservatively system-only even when explicitly called: the parsed AST does not
 reliably distinguish their syntactic origin. A host grant cannot redirect these helpers.
 
@@ -106,6 +135,23 @@ registration and implementation code remain host-trusted. Exact entry-name recor
 renamed 2.0 ICU scalars, without assuming a prefix. New names require explicit grants until reviewed
 into defaults. Grant checks still apply after binding,
 so this is not a pre-callback interception guarantee for collation code.
+
+### Quantile argument contracts
+
+`quantile`, `quantile_cont`, `quantile_disc`, `approx_quantile`, and `reservoir_quantile`
+require literal or bindable-parameter fractions/options only when resolution selects a
+caller-attributable `system.main` aggregate. The private catalog callback checks this before
+that aggregate's bind callback. Ordered-set percentile syntax is checked through the quantile
+call the parser produces. A missing input table may fail first with `binding`; the argument
+contract is not a blanket pre-resolution rejection based on a leaf name.
+
+Dotted/method calls are conservatively refused for these system aggregates, even explicit
+qualification such as `system.main.quantile(x, 0.5)`: the lookup hook cannot associate an
+occurrence with its arguments or tell whether a receiver was prepended. Use unqualified
+system calls with literal or bindable-parameter options. The restriction is query-wide by
+written quantile leaf, so ambiguous mixed occurrences can also refuse. Explicitly granted
+host functions/macros named `quantile` (or another listed name) retain their own contracts,
+including computed arguments; they do not inherit the system aggregate restriction.
 
 ### Timing limits and unresolved engine hooks
 
@@ -137,7 +183,8 @@ direct function binding, implementation replacement, nested dispatch, and optimi
 with origin and immutable definition identities. A post-optimizer walk alone is still too late
 for callback side effects. This implementation uses no engine fork or catalog callback mutation.
 Known denied identities produce `forbidden` with identity-bearing function violations; unsupported
-caller bind-time routes are refused before private binding. Engine failures remain `binding`.
+caller bind-time routes are refused by the text check or, for resolution-dependent contracts,
+before the selected function's private bind callback. Engine failures remain `binding`.
 
 ## Validation targets
 

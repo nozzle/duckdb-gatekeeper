@@ -30,9 +30,20 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   within their reviewed system namespace and kind. Scoped blocks wait for actual catalog resolution;
   blocks covering every eligible identity retain early no-bind refusal.
 - Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
-  caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
+  caller implementation identities fail closed. Selected aggregate specializations on both engines may retain
   an unambiguous system definition recorded by the same authorizing bind; see
   [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+- Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
+  `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian`, and `quantile` to
+  `quantile_disc`. Caller implementations obey qualified blocks and require their own grants
+  when defaults are disabled; source grants do not alias those implementation grants. Host
+  alias-like names retain exact spelling and identity for attribution, so a host `read_parquet`
+  macro does not attribute a trusted body's `parquet_scan` reader to the caller, or vice versa.
+- Quantile fraction/options checks now follow resolution of the system aggregate, before its
+  private bind callback. Granted host functions/macros with those names retain their own argument
+  contracts. System quantiles require unqualified calls with literal or bindable-parameter options;
+  dotted/method calls, including explicitly qualified system calls, conservatively refuse because
+  the hook cannot map receivers to arguments. Earlier resolution errors remain `binding`.
 - Disabling defaults requires explicit qualified grants for default-macro expansion functions and
   literal aggregate targets as well as the macro itself. Host macro bodies remain opaque. Implicit
   arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates.

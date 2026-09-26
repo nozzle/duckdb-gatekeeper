@@ -83,6 +83,12 @@ diagnostics are host-facing and retain the engine's messages, which can include 
 path or cast errors. Enforcement engine errors likewise propagate unchanged; this is not a
 diagnostic-redaction boundary.
 
+Grant direct SQL access to `system.main.gatekeeper_validate` (kind `table`) only when the
+caller is entitled to its full host-facing result, including raw diagnostics and trusted
+dependencies. A caller holding that grant can select every result column; asking it to select
+only `allowed` is not a disclosure boundary. Otherwise, keep validation host-mediated and
+return only an approved projection, with generic errors where needed.
+
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
 Empty option lists are accepted regardless of element type, since DuckDB resolves
@@ -671,7 +677,8 @@ list construction and slicing adds `list_value`/`array_slice` to that check.
 Ambiguous indexing, dotted references, arrows and SQL-value names record the possible
 implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
-treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
+treated as functions. `->>` and JSON path aliases share extraction grants/blocks only for
+their reviewed `system.main` scalar identities.
 
 Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
@@ -688,11 +695,15 @@ origin rules. See [qualified function rules](qualified-functions.md) for direct-
 
 The system.main table readers `read_parquet` and `parquet_scan` share grant and block permission
 only in that reviewed namespace and kind. A host function with an alias-like leaf keeps its exact
-identity. This explicit pair is source-reviewed in
+identity and raw spelling for attribution: a caller's host `read_parquet` macro does not
+make a trusted body's system `parquet_scan` reader caller-attributable, or vice versa.
+Actual caller use of the system reader still obeys the shared grant/block rules.
+This explicit pair is source-reviewed in
 `duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
 `ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
-discovery. CSV/JSON reader names are not grouped. Parquet violations use the canonical
-name `read_parquet`; successful dependency lists retain observed function names.
+discovery. CSV/JSON reader names are not grouped. Pre-resolution Parquet refusals use the
+canonical name `read_parquet`; resolved violations and successful dependency lists retain
+the observed identity.
 
 **Trusted definitions are opaque to policy.** A view, scalar macro, or table macro the host
 created (any non-internal catalog entry), and an attached catalog's tables and views with
@@ -775,7 +786,26 @@ retains the trust described above. Types, casts, and host default collations rem
 configuration. Catalog integrity remains a prerequisite; namespace pinning does not make
 untrusted DDL safe. See [qualified grants and feasibility](qualified-functions.md) for the
 exact kind/alias matching contract, migration, intrinsic provenance, and direct-binding limits.
-Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
+
+Source-backed binder substitutions retain the origin of the selected definition on both engines:
+collated `min`/`max` can select `arg_min`/`arg_max`, `date_part`/`datepart` can select
+`epoch`/`julian`, and `quantile` can select `quantile_disc`. Caller substitutions obey qualified
+blocks and, in each layer with defaults disabled, require implementation grants in addition
+to source grants. These are implementation dependencies, not policy aliases; a grant for
+`min` alone does not grant `arg_min`. The same substitutions introduced solely by trusted
+definitions remain those definitions' own. Missing or ambiguous caller implementation
+provenance fails closed; see [binder substitutions](qualified-functions.md#binder-substitutions-and-specialization).
+
+Quantile fraction/options restrictions apply after catalog resolution selects a caller-attributable
+`system.main` aggregate, before its private bind callback. They require literals or bindable
+parameters in an unqualified call. Dotted/method calls, including explicitly qualified system
+quantiles with literal fractions, are conservatively refused because the lookup hook supplies
+no occurrence-to-argument mapping. Granted host functions/macros with quantile-like names retain
+their own contracts. An earlier engine resolution error can therefore return `binding` before
+the quantile check is reached; see [quantile contracts](qualified-functions.md#quantile-argument-contracts).
+
+Caller syntax still has conservative implementation checks: with defaults disabled,
+`SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
 query-wide check too. Single-arrow function-child `x -> ...` remains ambiguous: DuckDB
@@ -891,8 +921,8 @@ as a system dispatcher. Caller use still requires its own qualified grant.
 These implementations obey blocks in both layers and appear in successful function
 evidence. Known identities retain catalog/schema; source-backed intrinsics have explicit system
 identities. Unknown caller implementations refuse rather than satisfying a grant by leaf. Unknown
-trusted-body dependencies can still appear with empty namespace. See the narrowly scoped 1.5
-definition recovery in [qualified-function feasibility](qualified-functions.md). Arbitrary extension
+trusted-body dependencies can still appear with empty namespace. See the narrowly scoped
+definition recovery in [qualified-function feasibility](qualified-functions.md#binder-substitutions-and-specialization). Arbitrary extension
 bind data is not introspected.
 
 ## Remaining boundaries
