@@ -49,7 +49,7 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
                               const gatekeeper::Identity &identity, bool attributable, gatekeeper::Result &result,
                               bool grant = true) {
 	auto &name = identity.name;
-	auto canonical = gatekeeper::CanonicalFunction(name);
+	auto canonical = gatekeeper::Lower(name);
 	bool implicit = binding.synthesized_functions.count(canonical) || binding.literal_constructors.count(canonical);
 	if (gatekeeper::ControlPlane(name) || (attributable && gatekeeper::FunctionDenied(policy, identity)) ||
 	    (grant && attributable && !gatekeeper::FunctionAllowed(policy, identity)) ||
@@ -57,7 +57,7 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	    (binding.system_functions.count(canonical) && !gatekeeper::SystemIdentity(identity)) ||
 	    (implicit && (!gatekeeper::SystemIdentity(identity) || !gatekeeper::FunctionAllowed(policy, identity)))) {
 		result.violations.emplace(gatekeeper::rules::FUNCTION, "resolved function is not allowed: " + canonical,
-		                          identity.catalog, identity.schema_path, "", name);
+		                          identity.catalog, identity.schema_path, "", name, -1, identity.type);
 		throw PermissionException("resolved function is not allowed");
 	}
 }
@@ -71,7 +71,7 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		auto schema = engine::SchemaPath(function.schema);
 		// Reviewed system dependencies are part of the default policy. Turning defaults off requires
 		// explicit qualified grants for the default macro's expansion too, unlike an opaque host body.
-		auto canonical = gatekeeper::CanonicalFunction(name);
+		auto canonical = gatekeeper::Lower(name);
 		bool selected = binding.caller_functions.count(canonical) ||
 		                (!policy.defaults && binding.system_functions.count(canonical));
 		AuthorizeFunction(policy, binding, {catalog, schema, name, kind}, attributable, result, selected);
@@ -81,14 +81,14 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		    (entry.type != CatalogType::TABLE_FUNCTION_ENTRY || !builtin)) {
 			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
 			                          "runtime arguments require a system table-in-out function", catalog, schema, "",
-			                          name);
+			                          name, -1, kind);
 			throw PermissionException("untrusted table-in-out function");
 		}
 		if (binding.literal_constructors.count(gatekeeper::Lower(name)) &&
 		    (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY || !builtin)) {
 			result.violations.emplace(gatekeeper::rules::BIND_TIME_EXPRESSION,
-			                          "literal constructor must resolve to a system builtin", catalog, schema, "",
-			                          name);
+			                          "literal constructor must resolve to a system builtin", catalog, schema, "", name,
+			                          -1, kind);
 			throw PermissionException("untrusted bind-time constructor");
 		}
 		result.functions.insert({catalog, schema, name, kind});
@@ -209,27 +209,31 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	auto attributable = [&](const string &name) {
 		return provenance.Attributable(binding, name) || provenance.collation_functions.count(gatekeeper::Lower(name));
 	};
-	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true) {
-		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::CanonicalFunction(identity.name)) ||
+	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true,
+	                    gatekeeper::Identity definition = {}) {
+		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::Lower(identity.name)) ||
 		                         provenance.caller_expansion_targets.count(gatekeeper::Lower(identity.name))))
 			grant = true;
-#if GATEKEEPER_DUCKDB_MAJOR < 2
 		// Engine aggregate binders can replace a stamped overload with a factory specialization.
 		// Recover only an unambiguous, exact system definition observed by THIS private bind. Never use a
 		// policy leaf match, a runtime catalog lookup, or evidence inserted by this plan walk.
-		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "aggregate") {
+		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "aggregate" &&
+		    (definition.name.empty() || gatekeeper::SystemIdentity(definition))) {
 			const gatekeeper::Identity *definition = nullptr;
 			bool ambiguous = false;
-			for (const auto &entry : provenance.function_entries) {
-				if (gatekeeper::Lower(entry.name) != gatekeeper::Lower(identity.name) || entry.type != identity.type)
-					continue;
-				if (definition || !gatekeeper::SystemIdentity(entry))
-					ambiguous = true;
-				definition = &entry;
-			}
+			for (const auto *entries : {&provenance.caller_implementations, &provenance.trusted_implementations})
+				for (const auto &entry : *entries) {
+					if (gatekeeper::Lower(entry.name) != gatekeeper::Lower(identity.name) ||
+					    entry.type != identity.type)
+						continue;
+					if (!gatekeeper::SystemIdentity(entry))
+						ambiguous = true;
+					definition = &entry;
+				}
 			if (definition && !ambiguous)
 				identity = *definition;
 		}
+#if GATEKEEPER_DUCKDB_MAJOR < 2
 		if (identity.catalog.empty() && identity.schema_path.empty() && identity.type == "scalar" &&
 		    provenance.collation_functions.count(gatekeeper::Lower(identity.name))) {
 			bool competing = false;
@@ -241,6 +245,23 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				identity = {"system", {"main"}, identity.name, "scalar"};
 		}
 #endif
+		// Resolved origin wins over a raw caller leaf: a host read_parquet macro is not
+		// the system reader a trusted body wrote as parquet_scan (and vice versa).
+		if (provenance.trusted_implementations.count(identity) && !binding.synthesized_functions.count(identity.name) &&
+		    !binding.literal_constructors.count(identity.name) && !provenance.collation_functions.count(identity.name))
+			callers = false;
+		callers = callers || provenance.caller_implementations.count(identity);
+		// A caller definition stays caller code even if its callback replaces the leaf,
+		// namespace, or entire implementation. A trusted implementation identity cannot
+		// launder a replacement selected by a caller definition. Uncatalogued engine helpers
+		// (including casts) have no observed caller definition and gain no such attribution.
+		if (provenance.caller_implementations.count(definition)) {
+			callers = true;
+			if (!gatekeeper::SystemIdentity(definition) || !provenance.caller_implementations.count(identity))
+				grant = true;
+		}
+		if (callers && !policy.defaults && provenance.caller_implementations.count(identity))
+			grant = true;
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
 		result.functions.insert(identity);
 	};
@@ -285,9 +306,10 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 			auto &implementation = engine::Function(bound);
 			auto &name = engine::FunctionName(implementation);
 			function(engine::FunctionIdentity(implementation, "scalar"), attributable(name),
-			         binding.caller_functions.count(gatekeeper::CanonicalFunction(name)) ||
+			         binding.caller_functions.count(gatekeeper::Lower(name)) ||
 			             provenance.collation_functions.count(gatekeeper::Lower(name)) ||
-			             (binding.caller_collates && gatekeeper::CollationFunction(name)));
+			             (binding.caller_collates && gatekeeper::CollationFunction(name)),
+			         engine::DefinitionIdentity(implementation, "scalar"));
 			auto lambda = dynamic_cast<ListLambdaBindData *>(engine::BindInfo(bound).get());
 			// The system list-lambda builtins always carry ListLambdaBindData, and the lambda body it holds is
 			// executable code that blocks must reach. A distributed loadable performs this cast across the
@@ -314,13 +336,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &name = engine::FunctionName(child.Cast<BoundAggregateExpression>());
 			auto identity = engine::AggregateIdentity(child.Cast<BoundAggregateExpression>());
-			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::CanonicalFunction(name)));
+			function(identity, attributable(name), binding.caller_functions.count(gatekeeper::Lower(name)),
+			         engine::AggregateDefinition(child.Cast<BoundAggregateExpression>()));
 		}
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = child.Cast<BoundWindowExpression>();
 			if (auto aggregate = engine::WindowAggregate(window)) {
 				auto &name = engine::FunctionName(*aggregate);
-				function(engine::FunctionIdentity(*aggregate, "aggregate"), attributable(name));
+				function(engine::FunctionIdentity(*aggregate, "aggregate"), attributable(name), true,
+				         engine::DefinitionIdentity(*aggregate, "aggregate"));
 			} else {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 				if (!window.WindowFunction())

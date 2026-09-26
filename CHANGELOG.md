@@ -13,6 +13,20 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
   its conservative query-wide attribution can include hidden dependencies whose names match
   caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
+
+- Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
+  including cross-namespace replacements, without attributing ordinary casts to unrelated
+  caller functions. Refuse caller non-system callbacks whose expression origin cannot be
+  retained (native bind/extended-bind callbacks on 1.5; expression-replacement callbacks on both engines).
+  Lambda-type callbacks alone remain permitted.
+
+- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR`, also
+  observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
+  Known denied functions retain their complete catalog/schema/name/kind identity even when
+  the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
+  denials are distinguishable. Unresolved kinds and nonfunction violations use `''`.
+  Update consumers that pin the violation STRUCT schema to accept the new field.
+
 - Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
   intrinsic expression kind. Scoped system window blocks cannot be bypassed by a same-leaf
   host macro grant; window alias equivalence is restricted to `system.main` kind `window`.
@@ -28,15 +42,28 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   within their reviewed system namespace and kind. Scoped blocks wait for actual catalog resolution;
   blocks covering every eligible identity retain early no-bind refusal.
 - Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
-  caller implementation identities fail closed. Selected 1.5 aggregate specializations may retain
+  caller implementation identities fail closed. Selected aggregate specializations on both engines may retain
   an unambiguous system definition recorded by the same authorizing bind; see
   [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+- Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
+  `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian` on 1.5 or every constant
+  unary date part on 2.0, and `quantile` to
+  `quantile_disc`. Caller implementations obey qualified blocks and require their own grants
+  when defaults are disabled; source grants do not alias those implementation grants. Host
+  alias-like names retain exact spelling and identity for attribution, so a host `read_parquet`
+  macro does not attribute a trusted body's `parquet_scan` reader to the caller, or vice versa.
+- Quantile fraction/options checks now follow resolution of the system aggregate, before its
+  private bind callback. Granted host functions/macros with those names retain their own argument
+  contracts. System quantiles, including windows, require unqualified positional calls with literal
+  or bindable-parameter options; named and dotted/method calls conservatively refuse because
+  the hook cannot map receivers or reordered arguments. Earlier resolution errors remain `binding`.
 - Disabling defaults requires explicit qualified grants for default-macro expansion functions and
   literal aggregate targets as well as the macro itself. Host macro bodies remain opaque. Implicit
-  arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates.
+  arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates;
+  1.5 host aggregates with bind callbacks are separately refused for missing retained provenance.
 - Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
   `system.main` aggregate after resolving the system scalar dispatcher, before its bind callbacks.
-  Computed/parameterized targets and dotted/method dispatcher calls are refused; unrelated host
+  Computed/parameterized targets and named/dotted/method dispatcher calls are refused; unrelated host
   functions/macros with dispatcher-like names retain their own argument contracts. IN-list,
   SIMILAR TO and canonicalized JSON arrow helpers cannot select explicitly granted host shadows.
   Caller `COLLATE` on 1.5 uses exact system collation entries to identify its unstamped scalar

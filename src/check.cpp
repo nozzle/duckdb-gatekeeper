@@ -2,7 +2,9 @@
 #include "audit.hpp"
 #include "authorization.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -481,11 +483,11 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 			layers = {&scope->bind.layers.ceiling, &scope->bind.layers.policy};
 		else
 			layers = {enforced.get()};
-		auto canonical = gatekeeper::CanonicalFunction(resolution.name);
+		auto canonical = gatekeeper::Lower(resolution.name);
 		for (const auto *layer : layers) {
 			if (caller_written && !gatekeeper::FunctionEligible(*layer, resolution.name)) {
-				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + canonical,
-				         canonical))
+				auto display = gatekeeper::CanonicalFunction(resolution.name);
+				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + display, display))
 					return std::move(resolution.ref);
 			}
 		}
@@ -508,6 +510,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		}
 		if (scope) {
 			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
+			for (const auto &identity : reader_result.functions)
+				scope->bind.provenance.RecordFunction(identity, caller_written, GATEKEEPER_DUCKDB_MAJOR);
 			if (caller_written)
 				scope->bind.provenance.replacement_functions.insert(canonical);
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
@@ -591,7 +595,7 @@ static void CheckAggregateDependency(ClientContext &context, const string &name,
 	    engine::SchemaPath(standard.schema) != gatekeeper::NamePath{"main"}) {
 		result.violations.emplace(gatekeeper::rules::FUNCTION, "implicit aggregate must resolve to system.main",
 		                          engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema), "",
-		                          dependency);
+		                          dependency, -1, FunctionKind(target.type) ? FunctionKind(target.type) : "");
 		throw PermissionException("untrusted implicit aggregate");
 	}
 }
@@ -631,7 +635,7 @@ struct LookupCallback {
 				armed = true;
 			return;
 		}
-		auto canonical = gatekeeper::CanonicalFunction(engine::EntryName(entry));
+		auto canonical = gatekeeper::Lower(engine::EntryName(entry));
 		// A name a host scalar-macro body introduced is the body's, unless the caller can produce it too, in its
 		// text or through a default macro its text expands to: then it is the caller's, query-wide, since both
 		// bind in the same binder.
@@ -646,6 +650,45 @@ struct LookupCallback {
 		} else
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		auto &function_entry = entry.Cast<StandardEntry>();
+		gatekeeper::Identity source{engine::CatalogName(function_entry.schema.catalog),
+		                            engine::SchemaPath(function_entry.schema), canonical, FunctionKind(entry.type)};
+		// 1.5 has no retained definition after native bind callbacks replace descriptors.
+		// Refuse this untrackable caller route before callbacks, rather than inferring
+		// origin from arbitrary output leaves or all functions in a namespace.
+		// Expression-replacement callbacks can replace the entire node on either engine,
+		// dropping even 2.0's retained descriptor; they need the same conservative refusal.
+		bool mutable_implementation = false;
+		if (attributable && !gatekeeper::SystemIdentity(source)) {
+			if (entry.type == CatalogType::SCALAR_FUNCTION_ENTRY)
+				for (const auto &item : entry.Cast<ScalarFunctionCatalogEntry>().functions.functions) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+					mutable_implementation |= item->HasBindExpressionCallback();
+#else
+					mutable_implementation |=
+					    item.HasBindCallback() || item.HasBindExtendedCallback() || item.HasBindExpressionCallback();
+#endif
+				}
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+			if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY)
+				for (const auto &overload : entry.Cast<AggregateFunctionCatalogEntry>().functions.functions)
+					mutable_implementation |= overload.HasBindCallback();
+#endif
+		}
+		if (mutable_implementation) {
+			s.result.violations.emplace(gatekeeper::rules::UNSUPPORTED_STRUCTURE,
+			                            "native function callback cannot retain definition provenance", source.catalog,
+			                            source.schema_path, "", source.name, -1, source.type);
+			throw PermissionException("untrackable native function bind callback");
+		}
+		if (attributable && source.type == "aggregate" && gatekeeper::SystemIdentity(source) &&
+		    s.binding.unsupported_quantiles.count(canonical)) {
+			s.result.violations.emplace(
+			    gatekeeper::rules::BIND_TIME_EXPRESSION,
+			    "quantile fraction/options require literals or bindable parameters in an unqualified positional call",
+			    source.catalog, source.schema_path, "", source.name, -1, source.type);
+			throw PermissionException("unsupported quantile arguments");
+		}
+		s.provenance.RecordFunction(source, attributable, GATEKEEPER_DUCKDB_MAJOR);
 		if (attributable && entry.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
 		    gatekeeper::DispatchingAggregators().count(canonical) && s.binding.caller_dispatchers.count(canonical) &&
 		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
@@ -653,8 +696,8 @@ struct LookupCallback {
 			if (s.binding.unsupported_dispatchers.count(canonical)) {
 				s.result.violations.emplace(
 				    gatekeeper::rules::BIND_TIME_EXPRESSION,
-				    "aggregate dispatch requires an unqualified call and literal aggregate name", "system",
-				    gatekeeper::NamePath{"main"}, "", canonical);
+				    "aggregate dispatch requires an unqualified positional call and literal aggregate name", "system",
+				    gatekeeper::NamePath{"main"}, "", canonical, -1, "scalar");
 				throw PermissionException("unsupported aggregate dispatch");
 			}
 			auto targets = s.binding.dispatcher_targets_by_name.find(canonical);
@@ -665,7 +708,8 @@ struct LookupCallback {
 				if (!s.layers.All(
 				        [&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
 					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
-					                            identity.catalog, identity.schema_path, "", identity.name);
+					                            identity.catalog, identity.schema_path, "", identity.name, -1,
+					                            identity.type);
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
 				CheckAggregateDependency(s.context, name, s.result);
@@ -673,13 +717,10 @@ struct LookupCallback {
 				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
 				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
 					throw BinderException("List aggregate target is not an aggregate");
-				s.provenance.function_entries.insert(identity);
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 			s.provenance.authorized_dispatchers.insert(canonical);
 		}
-		s.provenance.function_entries.insert({engine::CatalogName(function_entry.schema.catalog),
-		                                      engine::SchemaPath(function_entry.schema), engine::EntryName(entry),
-		                                      FunctionKind(entry.type)});
 		if (attributable)
 			s.provenance.caller_lookups.insert(canonical);
 		// Collated min/max directly resolve these dependencies through the search path on both engines.
@@ -714,7 +755,8 @@ struct LookupCallback {
 					    return p.defaults || gatekeeper::FunctionAllowed(p, selected);
 				    })) {
 					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "default macro aggregate is not allowed",
-					                            selected.catalog, selected.schema_path, "", selected.name);
+					                            selected.catalog, selected.schema_path, "", selected.name, -1,
+					                            selected.type);
 					throw PermissionException("default macro aggregate is not allowed");
 				}
 				s.provenance.caller_expansion_targets.insert(name);
@@ -727,7 +769,7 @@ struct LookupCallback {
 				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
 				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
 				                              FunctionKind(target.type)};
-				s.provenance.function_entries.insert(identity);
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 		}
 	}
@@ -747,7 +789,7 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 			continue;
 		auto deny = [&](const string &message) {
 			result.violations.emplace(gatekeeper::rules::FUNCTION, message, "system", gatekeeper::NamePath{"main"}, "",
-			                          "getvariable", parameter.second);
+			                          "getvariable", parameter.second, "scalar");
 			throw PermissionException("named parameter fallback is not allowed");
 		};
 		// This is a fixed engine capability, not an unqualified function lookup that a host macro can shadow.

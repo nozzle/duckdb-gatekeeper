@@ -1,0 +1,55 @@
+# name: test/sql/function_substitutions.test
+# description: Source-backed substitutions retain caller origin and scoped blocks
+# group: [gatekeeper]
+
+require gatekeeper
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT min(x COLLATE nocase) FROM (VALUES (''a'')) t(x)', blocked_functions := [{catalog:'system',schema_path:['main'],name:'arg_min',type:'aggregate'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT max(x COLLATE nocase) FROM (VALUES (''a'')) t(x)', blocked_functions := [{catalog:'system',schema_path:['main'],name:'arg_max',type:'aggregate'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01'')', blocked_functions := [{catalog:'system',schema_path:['main'],name:'epoch',type:'scalar'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT quantile(x, 0.5) FROM (VALUES (1)) t(x)', blocked_functions := [{catalog:'system',schema_path:['main'],name:'quantile_disc',type:'aggregate'}]);
+----
+forbidden
+
+statement ok
+CREATE MACRO wrapper() AS (SELECT quantile(x, 0.5) FROM (VALUES (1)) t(x));
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'wrapper',type:'macro'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT wrapper()', blocked_functions := [{catalog:'system',schema_path:['main'],name:'quantile_disc',type:'aggregate'}]);
+----
+ok
+
+statement ok
+CREATE SCHEMA host;
+
+statement ok
+CREATE MACRO host.quantile(x, q) AS x + q;
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['host'],name:'quantile',type:'macro'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT host.quantile(x, x + 1) FROM (VALUES (1)) t(x)');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT x.quantile(0.25 + 0.25) FROM (VALUES (1)) t(x)');
+----
+forbidden

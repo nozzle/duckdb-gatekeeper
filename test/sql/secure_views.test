@@ -126,3 +126,39 @@ statement error agent
 SELECT * FROM exposed.direct;
 ----
 <REGEX>:.*
+
+# A substitution inside a secure view is trusted; the same caller-written substitution
+# stays caller-owned and retains its implementation kind in validation and audit denials.
+statement ok
+SET gatekeeper_log_only = false;
+
+statement ok
+CREATE SECURE VIEW exposed.substituted AS SELECT date_part('epoch', DATE '2020-01-01') AS x;
+
+statement ok
+CALL gatekeeper_configure(blocked_functions := [{catalog: 'system', schema_path: ['main'], name: 'epoch', type: 'scalar'}]);
+
+query IT
+SELECT allowed, caller_objects[1].type FROM gatekeeper_validate('SELECT * FROM exposed.substituted');
+----
+true	view
+
+query I agent
+SELECT x FROM exposed.substituted;
+----
+1577836800
+
+query TTTTIII
+SELECT code, violations[1].catalog, violations[1].function_name, violations[1].function_type, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted');
+----
+forbidden	system	epoch	scalar	0	0	0
+
+statement error agent
+SELECT date_part('epoch', DATE '2020-01-01'), x FROM exposed.substituted;
+----
+resolved function is not allowed: epoch
+
+query TTT
+SELECT code, violations[1].function_name, violations[1].function_type FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND statement = 'SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted;';
+----
+forbidden	epoch	scalar

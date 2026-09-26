@@ -121,6 +121,23 @@ inline gatekeeper::Identity AggregateIdentity(const BoundAggregateExpression &ex
 #endif
 }
 
+// 2.0 retains the definition through descriptor mutation. Compare qualified identities,
+// never callback/overload addresses across the host and loadable engine copies.
+template <class FUNCTION> inline gatekeeper::Identity DefinitionIdentity(const FUNCTION &function, const string &kind) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	return function.GetDefinition() ? FunctionIdentity(*function.GetDefinition(), kind) : gatekeeper::Identity{};
+#else
+	return {};
+#endif
+}
+inline gatekeeper::Identity AggregateDefinition(const BoundAggregateExpression &expression) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	return DefinitionIdentity(expression.Function(), "aggregate");
+#else
+	return {};
+#endif
+}
+
 // Parsed expressions.
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 inline const string &FunctionName(const FunctionExpression &expression) {

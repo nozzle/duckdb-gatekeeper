@@ -60,6 +60,32 @@ bind the submitted SQL again; preparing a call does not cache an authorization d
 Validation also rejects non-null placeholder plans with unresolved parameter types;
 otherwise execution could rebind to an implementation the validator never authorized.
 
+Native scalar/aggregate substitutions use retained definition provenance on DuckDB 2.0:
+the original definition's qualified identity determines caller origin even if its bind
+callback changes the surviving implementation's name or namespace. That implementation
+must satisfy caller policy too. Identity comparisons do not rely on callback pointers
+across the host/loadable engine boundary. Engine-generated casts do not inherit origin
+from unrelated caller functions, and exact trusted-body-only identities remain trusted.
+
+DuckDB 1.5 does not retain the original definition after a native bind callback replaces
+its descriptor. Gatekeeper therefore refuses caller-attributable non-system scalar entries
+with bind, extended-bind, or expression-bind callbacks, and non-system
+aggregate entries with bind callbacks, before invoking them. The check covers every
+overload because the catalog hook precedes overload selection. On both engines, caller
+non-system scalar expression-bind callbacks are refused because they can replace the
+entire expression and discard descriptor provenance. These refusals report `forbidden`
+with the `unsupported_structure` rule; explicit grants cannot supply missing provenance.
+Ordinary native functions without these
+callbacks and callbacks reached only inside trusted definitions remain usable.
+Lambda-type callbacks alone are not refused: they return a `LogicalType` and do not
+receive a mutable function descriptor. Executable lambda bodies have separate traversal checks.
+
+This is a surviving-plan authorization boundary, not a sandbox for native extension code:
+native code and the engine are trusted to preserve their provenance metadata. It does not
+undo effects of a callback that runs before the plan check, and malicious native code can
+forge metadata or execute outside a returned expression. The existing native-prepare and
+other early bind-time timing limits still apply.
+
 On DuckDB 2.0, caller-written `$name` references with a same-named session variable require the
 fixed `system.main.getvariable` capability before validation binds anything. Both policy layers
 must allow it; blocks win. Successful validation includes `{catalog: 'system', schema_path: ['main'],
@@ -82,6 +108,12 @@ Capability evidence contains only the fixed identity, never variable values. Raw
 diagnostics are host-facing and retain the engine's messages, which can include values in regex,
 path or cast errors. Enforcement engine errors likewise propagate unchanged; this is not a
 diagnostic-redaction boundary.
+
+Grant direct SQL access to `system.main.gatekeeper_validate` (kind `table`) only when the
+caller is entitled to its full host-facing result, including raw diagnostics and trusted
+dependencies. A caller holding that grant can select every result column; asking it to select
+only `allowed` is not a disclosure boundary. Otherwise, keep validation host-mediated and
+return only an approved projection, with generic errors where needed.
 
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
@@ -620,7 +652,11 @@ gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured en
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
 `code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
-the enforcement parity corpus. The rest of the record is:
+the enforcement parity corpus. In particular, each violation includes `function_type VARCHAR`
+alongside its catalog, schema path, and function name: a known denied function retains its kind
+even though `functions` is empty on failure. An unresolved kind or nonfunction violation uses
+`''`, not a guessed kind. This applies equally to `validate`, `enforce`, and `log_only` records
+returned by `duckdb_logs_parsed('Gatekeeper')`. The rest of the record is:
 
 | column | meaning |
 | --- | --- |
@@ -702,7 +738,8 @@ list construction and slicing adds `list_value`/`array_slice` to that check.
 Ambiguous indexing, dotted references, arrows and SQL-value names record the possible
 implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
-treated as functions. `->>` and JSON path aliases share canonical extraction blocks.
+treated as functions. `->>` and JSON path aliases share extraction grants/blocks only for
+their reviewed `system.main` scalar identities.
 
 Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
@@ -719,11 +756,15 @@ origin rules. See [qualified function rules](qualified-functions.md) for direct-
 
 The system.main table readers `read_parquet` and `parquet_scan` share grant and block permission
 only in that reviewed namespace and kind. A host function with an alias-like leaf keeps its exact
-identity. This explicit pair is source-reviewed in
+identity and raw spelling for attribution: a caller's host `read_parquet` macro does not
+make a trusted body's system `parquet_scan` reader caller-attributable, or vice versa.
+Actual caller use of the system reader still obeys the shared grant/block rules.
+This explicit pair is source-reviewed in
 `duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
 `ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
-discovery. CSV/JSON reader names are not grouped. Parquet violations use the canonical
-name `read_parquet`; successful dependency lists retain observed function names.
+discovery. CSV/JSON reader names are not grouped. Pre-resolution Parquet refusals use the
+canonical name `read_parquet`; resolved violations and successful dependency lists retain
+the observed identity.
 
 **Trusted definitions are opaque to policy.** A view, scalar macro, or table macro the host
 created (any non-internal catalog entry), and an attached catalog's tables and views with
@@ -806,7 +847,30 @@ retains the trust described above. Types, casts, and host default collations rem
 configuration. Catalog integrity remains a prerequisite; namespace pinning does not make
 untrusted DDL safe. See [qualified grants and feasibility](qualified-functions.md) for the
 exact kind/alias matching contract, migration, intrinsic provenance, and direct-binding limits.
-Concretely, with defaults disabled, `SELECT * FROM v_st` may pass but
+
+Source-backed binder substitutions retain the origin of the selected definition on both engines:
+collated `min`/`max` can select `arg_min`/`arg_max`, `date_part`/`datepart` can select
+`epoch`/`julian` on 1.5 or any constant unary date part on 2.0 (including `year`, `dayofweek`,
+and `microsecond`), and `quantile` can select `quantile_disc`. Caller substitutions obey qualified
+blocks and, in each layer with defaults disabled, require implementation grants in addition
+to source grants. These are implementation dependencies, not policy aliases; a grant for
+`min` alone does not grant `arg_min`. The same substitutions introduced solely by trusted
+definitions remain those definitions' own. Missing or ambiguous caller implementation
+provenance fails closed; see [binder substitutions](qualified-functions.md#binder-substitutions-and-specialization).
+
+Quantile fraction/options restrictions apply after catalog resolution selects a caller-attributable
+`system.main` aggregate, before its private bind callback. They require literals or bindable
+parameters in an unqualified positional call. Named-argument and dotted/method calls, including explicitly qualified system
+quantiles with literal fractions, are conservatively refused because the lookup hook supplies
+no occurrence-to-argument mapping and named arguments can be reordered by the selected signature.
+This applies to window aggregates too. Granted host functions/macros with quantile-like names retain
+their own argument contracts, subject to the native callback provenance restrictions above.
+List aggregate dispatchers similarly refuse named mappings after system resolution.
+An earlier engine resolution error can therefore return `binding` before
+the quantile check is reached; see [quantile contracts](qualified-functions.md#quantile-argument-contracts).
+
+Caller syntax still has conservative implementation checks: with defaults disabled,
+`SELECT * FROM v_st` may pass but
 `SELECT t.x FROM t, v_st` may fail because the view uses `struct_extract`. Whole-row
 `SELECT t FROM t` needs `struct_pack`; single-part references therefore enable its
 query-wide check too. Single-arrow function-child `x -> ...` remains ambiguous: DuckDB
@@ -922,8 +986,8 @@ as a system dispatcher. Caller use still requires its own qualified grant.
 These implementations obey blocks in both layers and appear in successful function
 evidence. Known identities retain catalog/schema; source-backed intrinsics have explicit system
 identities. Unknown caller implementations refuse rather than satisfying a grant by leaf. Unknown
-trusted-body dependencies can still appear with empty namespace. See the narrowly scoped 1.5
-definition recovery in [qualified-function feasibility](qualified-functions.md). Arbitrary extension
+trusted-body dependencies can still appear with empty namespace. See the narrowly scoped
+definition recovery in [qualified-function feasibility](qualified-functions.md#binder-substitutions-and-specialization). Arbitrary extension
 bind data is not introspected.
 
 ## Remaining boundaries

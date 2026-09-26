@@ -5,6 +5,7 @@ from pathlib import Path
 
 from inventory import ROOT, load, check_sources, load_default_identities, load_default_mapping, identity_key
 from versions import BASELINE_FILENAME
+from inventory_capture import snapshot, reconstruct_collection, union_snapshot, digest, require
 
 
 def schema_paths(db):
@@ -91,6 +92,7 @@ def capture(extension_paths=()):
 
 
 def compare(baseline, candidate):
+    baseline, candidate = snapshot(baseline), snapshot(candidate)
     def grouped(snapshot):
         result = {}
         for entry in snapshot["functions"]:
@@ -161,7 +163,7 @@ def reporting_discrepancies(snapshot, mapping):
     """
     result = []
     for group in mapping["reporting_discrepancies"]:
-        if snapshot["duckdb_version"] != group["duckdb_version"]:
+        if snapshot.get("duckdb_version", snapshot.get("engine", {}).get("library_version")) != group["duckdb_version"]:
             continue
         observed = {row["name"].lower() for row in snapshot["functions"]
                     if row.get("kind") == group["reported_type"]
@@ -175,10 +177,100 @@ def reporting_discrepancies(snapshot, mapping):
     return result
 
 
+def identity_coverage(candidate, defaults, entries, mapping):
+    """Exact sets, not inferred permissions. Missing source-backed kinds remain visible."""
+    observed = qualified_identities(candidate)
+    grants = {identity_key(row) for row in defaults}
+    names = {row[2] for row in grants}
+    return {"observed_default_identities": identities_json(grants & observed),
+            "defaults_not_observed": identities_json(grants - observed),
+            "default_names_at_ungranted_identities": identities_json({k for k in observed - grants if k[2] in names}),
+            **coverage(candidate, entries), "reporting_discrepancies": reporting_discrepancies(candidate, mapping)}
+
+
+def collection_report(path, root=ROOT):
+    """Recompute policy coverage from verified stages and the current source-backed map."""
+    base, outcomes = reconstruct_collection(path)
+    entries, _ = load(root)
+    defaults, mapping = load_default_identities(root), load_default_mapping(root)
+    per_extension = {}
+    snapshots = [base]
+    for name, outcome in outcomes.items():
+        metadata, stages = outcome["metadata"], outcome["snapshots"]
+        item = {"status": metadata["status"], "load_names": metadata["load_names"],
+                "stage_hashes": [stage["functions_sha256"] for stage in metadata.get("stages", [])]}
+        per_extension[name] = item
+        if metadata["status"] != "ok":
+            continue
+        before, target = stages[-2:]
+        snapshots.append(target)
+        source_names = set(entries.get(name, {}).get("compute", []))
+        source_defaults = [row for row in defaults if row["name"] in source_names]
+        observed_before = qualified_identities(before)
+        target_delta = qualified_drift(before, target, defaults)
+        source_coverage = identity_coverage(target, source_defaults, entries, mapping)
+        item.update({"dependencies_loaded": metadata["dependencies_loaded"],
+                     "final_signature_count": len(target["functions"]),
+                     "target_identities": {key: target_delta[key] for key in ("added", "removed", "changed")},
+                     "source_default_identities_present_before_target": identities_json(
+                         {identity_key(row) for row in source_defaults} & observed_before),
+                     "source_default_coverage": {key: source_coverage[key] for key in (
+                         "observed_default_identities", "defaults_not_observed", "default_names_at_ungranted_identities")},
+                     "target_default_names_at_ungranted_identities": [row for row in target_delta["added"]
+                         if row in target_delta["default_names_at_ungranted_identities"]],
+                     "unclassified_target_added_names": sorted({row["name"] for row in target_delta["added"]}
+                         & set(coverage(target, entries)["unclassified_runtime_names"]))})
+    union = union_snapshot(snapshots)
+    return {"report_schema": "gatekeeper-qualified-collection-audit-v1",
+            "scope": "Union of base and successful independent final setups; not a combined live catalog.",
+            "engine": base["engine"], "base_sha256": digest(json.loads(
+                ((Path(path).parent if Path(path).name == "collection.json" else Path(path)) / "base.json").read_text())),
+            "policy_sha256": digest({"entries": entries, "mapping": mapping}),
+            "compiled_defaults": len(defaults), "union_signatures": len(union["functions"]),
+            "union_qualified_identities": len(qualified_identities(union)),
+            **identity_coverage(union, defaults, entries, mapping), "per_extension": per_extension}
+
+
+def verify_collection_report(path, root=ROOT, report_path=None):
+    """Check every field of the reproducible report, including equal-count substitutions."""
+    path = Path(path)
+    if path.name == "collection.json":
+        path = path.parent
+    expected = collection_report(path, root)
+    actual = json.loads(Path(report_path or path / "qualified-report.json").read_text())
+    require(actual == expected, "Qualified collection report differs from reconstructed captures/current policy")
+    return expected
+
+
+def verify_historical_report(path, report):
+    """Recheck aggregate claims in the two committed historical report formats.
+
+    Exploratory origin annotations and historical name comparisons remain evidence;
+    the qualified report is the reproducible replacement for per-stage policy checks.
+    """
+    old = json.loads((Path(path) / "report.json").read_text())
+    if "qualified_source_mapping" in old:
+        for field in ("defaults_not_observed", "default_names_at_ungranted_identities"):
+            require(old["qualified_source_mapping"][field] == report[field], f"Historical report {field} mismatch")
+        require(old["reporting_discrepancies"] == report["reporting_discrepancies"], "Historical reporting discrepancy mismatch")
+        require(old["unclassified_added_names"] == report["unclassified_runtime_names"], "Historical unclassified names mismatch")
+    else:
+        for field in ("compiled_defaults", "union_signatures", "union_qualified_identities", "defaults_not_observed",
+                      "default_names_at_ungranted_identities", "unclassified_runtime_names"):
+            require(old[field] == report[field], f"Historical report {field} mismatch")
+        require(old["observed_default_identities"] == len(report["observed_default_identities"]),
+                "Historical observed default count mismatch")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--capture", type=Path, help="write a candidate snapshot, without approving it")
-    parser.add_argument("--candidate", type=Path, help="compare a previously captured snapshot")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--candidate", type=Path, help="compare a full historical or collector base snapshot")
+    inputs.add_argument("--collection", type=Path, help="audit a staged collection directory offline")
+    parser.add_argument("--extension", help="with --collection, compare one successful reconstructed target")
+    parser.add_argument("--verify-report", type=Path, help="with --collection, verify the complete qualified report")
+    parser.add_argument("--write-report", type=Path, help="with --collection, write the reproducible qualified report")
     parser.add_argument("--baseline", type=Path, default=ROOT / "inventories/baselines" / BASELINE_FILENAME)
     parser.add_argument("--load-extension", type=Path, action="append", default=[], help="local extension file to LOAD during capture, signed or not (repeatable)")
     parser.add_argument("--check-sources", action="store_true",
@@ -187,17 +279,41 @@ def main():
                         help="historical DuckDB checkout for --check-sources (default: local submodule)")
     parser.add_argument("--strict", action="store_true", help="fail on runtime drift (default: report only)")
     args = parser.parse_args()
+    if (args.extension or args.verify_report or args.write_report) and not args.collection:
+        parser.error("--extension/--verify-report/--write-report require --collection")
+    if args.collection and (args.capture or args.load_extension):
+        parser.error("--collection is offline and cannot be combined with capture/loading")
+    if args.extension and (args.verify_report or args.write_report):
+        parser.error("report verification/writing applies to the whole collection")
     entries, names = load()
     defaults = load_default_identities()
     mapping = load_default_mapping()
-    candidate = json.loads(args.candidate.read_text()) if args.candidate else capture(args.load_extension)
+    if args.check_sources:
+        check_sources(entries, duckdb_source=args.source_checkout)
+    if args.collection:
+        if not args.extension:
+            report = (verify_collection_report(args.collection, report_path=args.verify_report)
+                      if args.verify_report else collection_report(args.collection))
+            if args.write_report:
+                args.write_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            else:
+                print(json.dumps(report, indent=2, sort_keys=True))
+            if args.strict and (report["defaults_not_observed"] or report["unclassified_runtime_names"]
+                               or report["default_names_at_ungranted_identities"]
+                               or any(item["status"] != "ok" for item in report["per_extension"].values())):
+                raise SystemExit("Runtime collection has coverage drift or incomplete outcomes")
+            return
+        _, outcomes = reconstruct_collection(args.collection)
+        if args.extension not in outcomes or outcomes[args.extension]["metadata"]["status"] != "ok":
+            parser.error("Requested extension has no successful target snapshot")
+        candidate = outcomes[args.extension]["snapshots"][-1]
+    else:
+        candidate = snapshot(json.loads(args.candidate.read_text())) if args.candidate else capture(args.load_extension)
     if args.capture:
         args.capture.parent.mkdir(parents=True, exist_ok=True)
         args.capture.write_text(json.dumps(candidate, indent=2) + "\n")
         print(f"Candidate snapshot written to {args.capture}; review before accepting as baseline")
         return
-    if args.check_sources:
-        check_sources(entries, duckdb_source=args.source_checkout)
     baseline = json.loads(args.baseline.read_text())
     delta = compare(baseline, candidate)
     qualified = qualified_drift(baseline, candidate, defaults)
