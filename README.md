@@ -247,7 +247,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -257,6 +257,15 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 
 Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 `replacement_scan`, `bind_time_expression`, `statement`, `limit`, `unsupported_structure`.
+
+For a known function identity, `catalog`, `schema_path`, `function_name`, and `function_type`
+identify the denied capability, using the same kinds as `functions[].type`. For example,
+`system.main.range` can be `scalar` or `table`; its name alone does not distinguish them.
+`function_type = ''` when the kind is unresolved or the violation is not about a function.
+Pre-resolution refusals do not infer a kind from the written call's syntax. Denied identities
+remain in `violations` even though the `functions` evidence list is empty on failure.
+The same shape is returned in `duckdb_logs_parsed('Gatekeeper')` for validation, enforced,
+and log-only decisions.
 
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
@@ -292,13 +301,17 @@ FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := [])
 
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
-       violations[1].message AS message, violations[1].function_name AS function_name
+       violations[1].message AS message, violations[1].function_name AS function_name,
+       violations[1].function_type AS function_type
 FROM gatekeeper_validate('SELECT md5(''x''), current_setting(''threads'')');
 ```
 
-| allowed | code | rule | message | function_name |
-| --- | --- | --- | --- | --- |
-| false | forbidden | function | function is not allowed: current_setting | current_setting |
+| allowed | code | rule | message | function_name | function_type |
+| --- | --- | --- | --- | --- | --- |
+| false | forbidden | function | function is not allowed: current_setting | current_setting | '' |
+
+This call is refused before resolution because no function identity with that name is eligible;
+its kind is therefore empty.
 
 **Engine error:** the code identifies the phase and `violations` is empty. This
 example displays the first line of DuckDB's error message, omitting suggestions:

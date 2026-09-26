@@ -8,6 +8,13 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR`, also
+  observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
+  Known denied functions retain their complete catalog/schema/name/kind identity even when
+  the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
+  denials are distinguishable. Unresolved kinds and nonfunction violations use `''`.
+  Update consumers that pin the violation STRUCT schema to accept the new field.
+
 - Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
   intrinsic expression kind. Scoped system window blocks cannot be bypassed by a same-leaf
   host macro grant; window alias equivalence is restricted to `system.main` kind `window`.

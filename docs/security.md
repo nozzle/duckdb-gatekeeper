@@ -585,7 +585,11 @@ gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured en
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
 `code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
-the enforcement parity corpus. The rest of the record is:
+the enforcement parity corpus. In particular, each violation includes `function_type VARCHAR`
+alongside its catalog, schema path, and function name: a known denied function retains its kind
+even though `functions` is empty on failure. An unresolved kind or nonfunction violation uses
+`''`, not a guessed kind. This applies equally to `validate`, `enforce`, and `log_only` records
+returned by `duckdb_logs_parsed('Gatekeeper')`. The rest of the record is:
 
 | column | meaning |
 | --- | --- |

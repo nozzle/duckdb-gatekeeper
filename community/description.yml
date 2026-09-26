@@ -134,7 +134,7 @@ docs:
     |--------|------|---------|
     | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
     | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden` and `unsupported`. |
+    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden` and `unsupported`. |
     | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) for engine errors. |
     | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
     | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -145,6 +145,11 @@ docs:
     Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
     `replacement_scan`, `bind_time_expression`, `statement`, `limit`,
     `unsupported_structure`. Branch on `code` and `violations[].rule`, not on message text.
+
+    Known denied functions retain their catalog, schema path, name, and `function_type`, even
+    though `functions` is empty on failure. `function_type` uses the same kinds as `functions[].type`;
+    it is `''` for unresolved kinds and nonfunction violations. Audit decisions returned by
+    `duckdb_logs_parsed('Gatekeeper')` carry the same violation shape.
 
     ### Global policy
 
