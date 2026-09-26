@@ -27,7 +27,8 @@ def test_committed_reports_are_recomputed_and_historical_hashes_still_match(coll
     path, _, _, report = collection
     assert verify_collection_report(path) == report
     verify_historical_report(path, report)
-    subprocess.run([sys.executable, "-S", str(path / "reconstruct.py")], check=True, capture_output=True, text=True)
+    result = subprocess.run([sys.executable, "-S", str(path / "reconstruct.py")], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_base_and_extension_cli_use_offline_supported_adapters(collection):
