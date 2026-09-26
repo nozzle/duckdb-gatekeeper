@@ -134,6 +134,47 @@ def test_secure_boundary_does_not_hide_gatekeeper_control_plane(secure):
             agent.execute(sql)
 
 
+@pytest.mark.parametrize("expression,target,kind,value", [
+    ("min(x COLLATE nocase)", "arg_min", "aggregate", "'a'"),
+    ("date_part('epoch', x)", "epoch", "scalar", "DATE '2020-01-01'"),
+    ("quantile(x, 0.5)", "quantile_disc", "aggregate", "1"),
+])
+@pytest.mark.parametrize("log_only", [False, True])
+def test_secure_view_substitution_origin_and_violation_audit(db, expression, target, kind, value, log_only):
+    body = f"SELECT {expression} AS y FROM (VALUES ({value})) t(x)"
+    db.execute(f"CREATE SECURE VIEW wrapped AS {body}")
+    implementation = {"catalog": "system", "schema_path": ["main"], "name": target, "type": kind}
+    configure(db, {"blocked_functions": [implementation]})
+    trusted = validate(db, "SELECT * FROM wrapped")
+    assert trusted["allowed"], trusted
+    assert implementation in trusted["functions"]
+    assert trusted["caller_objects"] == [identity("main", "wrapped", "view")]
+    # The same substitution in the caller stays caller-owned even when its implementation
+    # also occurs beneath a secure boundary in the same statement.
+    sql = f"SELECT ({body}), y FROM wrapped"
+    denied = validate(db, sql)
+    assert denied["code"] == "forbidden", denied
+    assert denied["objects"] == denied["functions"] == denied["caller_objects"] == []
+    assert any(v["function_name"] == target and v["function_type"] == kind
+               and v["catalog"] == "system" and v["schema_path"] == ["main"]
+               for v in denied["violations"]), denied
+    enable(db, "debug")
+    db.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute("SELECT * FROM wrapped").fetchall()
+        if log_only:
+            assert agent.execute(sql).fetchall()
+        else:
+            with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied"):
+                agent.execute(sql)
+        settle(agent)
+    mode = "log_only" if log_only else "enforce"
+    [record] = decisions(db, f"mode = '{mode}' AND statement = {literal(sql)}")
+    for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
+        assert record[column] == denied[column], (column, record, denied)
+
+
 @pytest.mark.parametrize("log_only", [False, True])
 def test_missing_dependency_diagnostics_remain_host_only(secure, log_only):
     secure.execute("DROP TABLE hidden.payload")

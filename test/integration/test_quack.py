@@ -113,7 +113,12 @@ def test_opaque_trusted_definition_private_bind_refusal_and_deferred_residual(re
     policy = {"allowed_tables": [rule()], "allowed_functions": REMOTE_GRANTS}
     configure(db, policy)
     remote.clear()
-    assert not validate(db, "SELECT * FROM trusted", policy)["allowed"]
+    result = validate(db, "SELECT * FROM trusted", policy)
+    assert not result["allowed"]
+    if "quack_query_by_name" in body:
+        violation, = result["violations"]
+        assert (violation["catalog"], violation["schema_path"], violation["function_name"],
+                violation["function_type"]) == ("system", ["main"], "quack_query_by_name", "table")
     assert remote.requests == [] and remote.executions == []
     with db.cursor() as agent:
         local_binding(agent)

@@ -134,7 +134,7 @@ docs:
     |--------|------|---------|
     | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
     | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position`. Nonempty only for `forbidden` and `unsupported`. |
+    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden` and `unsupported`. |
     | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) for engine errors. |
     | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
     | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -145,6 +145,11 @@ docs:
     Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
     `replacement_scan`, `bind_time_expression`, `statement`, `limit`,
     `unsupported_structure`. Branch on `code` and `violations[].rule`, not on message text.
+
+    Known denied functions retain their catalog, schema path, name, and `function_type`, even
+    though `functions` is empty on failure. `function_type` uses the same kinds as `functions[].type`;
+    it is `''` for unresolved kinds and nonfunction violations. Audit decisions returned by
+    `duckdb_logs_parsed('Gatekeeper')` carry the same violation shape.
 
     ### Global policy
 
@@ -191,7 +196,9 @@ docs:
 
     To have DuckDB refuse denied statements automatically, finish trusted setup first:
     load extensions, attach catalogs, configure policy and host restrictions, enable logging,
-    and lock configuration. Then, outside a transaction, run this on each untrusted connection:
+    and lock configuration. Then, outside a transaction, run this on each LOCAL connection
+    before handing out SQL access. On DuckDB 2.0, use a fresh local connection or `DISCONNECT`
+    during trusted setup, before submitting activation, and keep the connection LOCAL:
 
     ```sql
     CALL gatekeeper_enforce();
@@ -200,6 +207,8 @@ docs:
     - Denials raise a `Permission Error`; enforcement is permanent for that connection.
     - Parameters and relation queries are covered; prepared executions use the current policy.
     - The result includes host-setting `warnings`. Keep a separate host connection for administration.
+    - An already-connected DuckDB 2.0 session can dispatch SQL before the local enforcement hook,
+      including the activation call. A successful remote result does not establish local enforcement.
 
     See the [enforcement guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/security.md#enforced-connections)
     for setup and execution-boundary details, including parser-time side effects.
@@ -216,10 +225,13 @@ docs:
 
     - **Denials and policy changes:** recorded at `INFO`.
     - **Allowed decisions:** also recorded with `SET logging_level = 'debug'`.
-    - **Trial rollout:** `SET gatekeeper_log_only = true` records decisions without refusing
-      anything. Set it back to `false` to restore enforcement.
+    - **Trial rollout:** `SET gatekeeper_log_only = true` records policy denials without refusing
+      them. Set it back to `false` to restore policy refusals.
+    - **Routing exception:** DuckDB 2.0 `CONNECT`/`DISCONNECT` remain refused before binding,
+      with audit `mode = 'enforce'`, so the rollout preserves LOCAL routing.
 
-    Log-only mode protects nothing while enabled. Before locking configuration, plan how
+    Apart from those routing controls, log-only provides no policy protection, including for
+    Gatekeeper's settings. Before locking configuration, plan how
     the host will turn it off. See the [audit log](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/security.md#audit-log)
     and [log-only guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/security.md#log-only-mode).
 

@@ -3,31 +3,17 @@ import collections
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT.parents[2] / "scripts"))
+from audit_inventory import verify_collection_report, verify_historical_report
+from inventory_capture import apply_delta, digest
 
 
 def read(name):
     return json.loads((ROOT / name).read_text())
-
-
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def apply_delta(before, delta):
-    """Multiset subtraction preserves overload multiplicity; restore capture ordering."""
-    rows = collections.Counter(json.dumps(row, sort_keys=True) for row in before)
-    removed = delta["removed"] + [row for group in delta["changed"] for row in group["before"]]
-    added = delta["added"] + [row for group in delta["changed"] for row in group["after"]]
-    for row in removed:
-        key = json.dumps(row, sort_keys=True)
-        if rows[key] <= 0:
-            raise ValueError("delta removes a missing signature")
-        rows[key] -= 1
-    rows.update(json.dumps(row, sort_keys=True) for row in added)
-    return [json.loads(key) for key in sorted(rows) for _ in range(rows[key])]
 
 
 def functions_for(ref, base):
@@ -45,6 +31,8 @@ def functions_for(ref, base):
 
 
 def verify():
+    report = verify_collection_report(ROOT)
+    verify_historical_report(ROOT, report)
     base, lock, summary = read("base.json"), read("lock.json"), read("summary.json")
     original, collection = read("original-evidence.json"), read("collection.json")
     assert digest(base) == lock["base_sha256"] == summary["base_sha256"]

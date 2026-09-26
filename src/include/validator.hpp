@@ -87,15 +87,17 @@ struct Violation {
 	NamePath schema_path;
 	std::string table, function_name;
 	int64_t position = -1;
+	std::string function_type;
 	Violation(std::string rule, std::string message, std::string catalog = {}, NamePath schema_path = {},
-	          std::string table = {}, std::string function_name = {}, int64_t position = -1)
+	          std::string table = {}, std::string function_name = {}, int64_t position = -1,
+	          std::string function_type = {})
 	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)),
 	      schema_path(std::move(schema_path)), table(std::move(table)), function_name(std::move(function_name)),
-	      position(position) {}
+	      position(position), function_type(std::move(function_type)) {}
 	bool operator<(const Violation &other) const {
-		return std::tie(rule, message, catalog, schema_path, table, function_name, position) <
+		return std::tie(rule, message, catalog, schema_path, table, function_name, position, function_type) <
 		       std::tie(other.rule, other.message, other.catalog, other.schema_path, other.table, other.function_name,
-		                other.position);
+		                other.position, other.function_type);
 	}
 };
 struct Identity {
@@ -152,7 +154,9 @@ struct BindingPolicy {
 	Names dispatcher_targets;
 	std::map<std::string, Names> dispatcher_targets_by_name;
 	Names unsupported_dispatchers;
-	// Every function name the caller wrote, canonical: the names the text check decided, kept for the bind and
+	// Builtin argument contracts are enforced only after resolving the system implementation.
+	Names unsupported_quantiles;
+	// Every function name the caller wrote, case-folded but never alias-canonicalized: kept for the bind and
 	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
 	Names caller_functions;
 	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
@@ -183,17 +187,21 @@ struct Provenance {
 	Names collation_functions;
 	// Exact entries observed by the authorizing binder, never populated from plan leaf names.
 	std::set<Identity> function_entries;
+	// Source-reviewed implementation edges from exact entries observed by this bind. Preserve origin
+	// separately: a trusted body's substitution is not a caller capability just because its leaf changed.
+	std::set<Identity> caller_implementations, trusted_implementations;
+	void RecordFunction(const Identity &identity, bool caller, int engine_major);
 	Names replacement_functions;
 	Names authorized_dispatchers;
-	// Canonical function names the caller's binders retrieved from the catalog.
+	// Case-folded raw function names the caller's binders retrieved from the catalog.
 	Names caller_lookups;
-	// Canonical function names the default macros the caller's text expands to introduce (list_count names
+	// Case-folded raw function names the default macros the caller's text expands to introduce (list_count names
 	// list_aggr without the caller writing it). With the text's own names, these are the names the caller can
 	// produce; a trusted scalar-macro body sharing one of them does not make it the body's.
 	Names caller_expansions;
 	// Literal aggregate targets introduced by caller-attributable default macros.
 	Names caller_expansion_targets;
-	// Canonical function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
+	// Case-folded raw function names host scalar-macro bodies introduce. Such a body binds in the caller's own binder,
 	// so its names are recognized by name; a name the caller can also produce is checked as the caller's,
 	// query-wide.
 	Names trusted_names;

@@ -105,6 +105,58 @@ inline Names WindowSpellings(const std::string &name) {
 	return {lower};
 }
 
+bool SystemIdentity(const Identity &identity);
+
+// Equivalence applies to a reviewed system identity and kind, never to raw caller/host names.
+inline Names FunctionSpellings(const Identity &identity) {
+	auto name = Lower(identity.name);
+	if (SystemIdentity(identity)) {
+		if (identity.type == "window")
+			return WindowSpellings(name);
+		if (identity.type == "table" && CanonicalFunction(name) == "read_parquet")
+			return {"read_parquet", "parquet_scan"};
+		if (identity.type == "scalar" && CanonicalFunction(name) == "json_extract")
+			return {"json_extract", "json_extract_path", "->"};
+		if (identity.type == "scalar" && CanonicalFunction(name) == "json_extract_string")
+			return {"json_extract_string", "json_extract_path_text", "->>"};
+	}
+	return {name};
+}
+
+// Implementation substitutions, not policy aliases. These edges require an observed system entry.
+// minmax.cpp BindMinMax, date_part.cpp DatePartBind, quantile.cpp DiscreteQuantile{List,}Function::Bind
+// on both supported engines. No catalog discovery or arbitrary same-leaf host inference.
+inline Names FunctionImplementations(const Identity &source, int engine_major) {
+	auto names = FunctionSpellings(source);
+	if (!SystemIdentity(source))
+		return names;
+	if (source.type == "aggregate") {
+		if (source.name == "min")
+			names.insert("arg_min");
+		if (source.name == "max")
+			names.insert("arg_max");
+		if (source.name == "quantile")
+			names.insert("quantile_disc");
+	}
+	if (source.type == "scalar" && (source.name == "date_part" || source.name == "datepart")) {
+		names.insert("epoch");
+		names.insert("julian");
+		// 2.0 DatePartBind replaces every constant part. DatePartUnaryFunctionName
+		// maps DOW/DOY and the plural micro/milliseconds to their registration names;
+		// all remaining valid DatePartSpecifier values use the lowercase enum name.
+		// 1.5 DatePartBind replaces only EPOCH and JULIAN_DAY.
+		if (engine_major >= 2) {
+			static const Names unary = {"year",          "month",          "day",         "decade", "century",
+			                            "millennium",    "microsecond",    "millisecond", "second", "minute",
+			                            "hour",          "dayofweek",      "isodow",      "week",   "isoyear",
+			                            "quarter",       "dayofyear",      "yearweek",    "era",    "timezone",
+			                            "timezone_hour", "timezone_minute"};
+			names.insert(unary.begin(), unary.end());
+		}
+	}
+	return names;
+}
+
 // The never-bind list: functions no policy can admit on any caller-authored route.
 inline bool NeverBind(const std::string &name) {
 	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
