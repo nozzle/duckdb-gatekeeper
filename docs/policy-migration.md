@@ -2,7 +2,12 @@
 
 Legacy shapes are rejected, never converted implicitly. Update both allow and block
 rules in typed `gatekeeper_validate` / `gatekeeper_configure` calls and JSON policies
-(`"version": 2`):
+(`"version": 2`).
+
+0.3.0 shipped JSON v1. Set `version` to `2` and, if `$schema` is present, use
+`https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v2.schema.json`.
+Typed and JSON legacy-rule diagnostics identify the affected option, its replacement rule
+shape, and the requirement for a nonempty list of schema components. They do not convert rules.
 
 | Old entry | Replacement |
 | --- | --- |
@@ -22,6 +27,20 @@ required and literal: `"*"` names multiplication, not a wildcard. Schema-wide
 function grants are unsupported. See [qualified functions](qualified-functions.md)
 for matching and authorization semantics and the [JSON schema](policy-v2.schema.json)
 for supported kinds.
+
+Configurable grants and blocks match exact catalog-entry names, without alias canonicalization.
+Cover each intended Parquet reader (`read_parquet`, `parquet_scan`), JSON extraction entry
+(`json_extract`, `json_extract_path`, `->`, `json_extract_string`, `json_extract_path_text`, `->>`),
+and window entry (`rank_dense`, `dense_rank`, `first`, `first_value`, `last`, `last_value`)
+explicitly. Parquet file shorthand selects `parquet_scan`. Source-defined parser/binder rewriting
+determines the parsed operation or selected entry; it does not make policy names interchangeable.
+
+Internal table/view grants require exact schema components and an exact table name; internal
+function grants require exact schema components and the always-required exact function name.
+Catalog may still be omitted, NULL, or `*`. Block namespace wildcards still match internal entries.
+The actual entry's `internal` flag controls this restriction, not the `system` catalog name;
+non-internal entries can use schema-pattern grants. Unknown bound-function internal origin cannot
+use a schema-wildcard grant. Reviewed defaults already name exact identities.
 
 An empty typed legacy function list (`[]::VARCHAR[]`) or a typed struct list with a
 `schema` field still requires migration. Use `[]` or an empty list with the v2

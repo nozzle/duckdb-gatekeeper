@@ -117,17 +117,18 @@ return only an approved projection, with generic errors where needed.
 
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
-Empty option lists are accepted regardless of element type, since DuckDB resolves
-untyped `[]` to `INTEGER[]` before table binding. All-NULL lists also pass the element-type
-check regardless of declared type (`[NULL]` and `[NULL]::DOUBLE[]` both return `invalid_input`
-at execution). Lists with non-NULL members require the documented element types.
-Nested identity fields are preserved
-and checked, including the field names of typed empty STRUCT lists.
+Untyped empty option lists (`[]`) are accepted despite DuckDB resolving them to `INTEGER[]`.
+Empty or all-NULL lists otherwise bypass the element-type check, except legacy function
+`VARCHAR[]`, which is rejected even when empty. `[NULL]` and `[NULL]::DOUBLE[]` return
+`invalid_input` at execution. Lists with non-NULL members require the documented element types.
+Nested identity fields are preserved and checked, including the field names of typed empty
+STRUCT lists. Legacy function strings and the old `schema` field receive consistent guidance
+to the v2 rule shape; follow the [policy v2 migration guide](policy-migration.md).
 
 ### Table ACL matching
 
 Tables and views are unrestricted until a layer configures `allowed_tables`; only internal
-objects (`duckdb_*`, `information_schema.*`) need an explicit rule from the start. Set
+objects (those with `CatalogEntry::internal = true`) need an explicit rule from the start. Set
 `allowed_tables` in the global policy during trusted setup when tenants must not see every
 table; `[]` denies all tables and views. The rules, which the README's
 [table ACL](../README.md#table-acl) section illustrates:
@@ -157,9 +158,10 @@ table; `[]` denies all tables and views. The rules, which the README's
   allowlist. A matching block in either layer always wins for what the caller names; it does
   not reach the tables and views a trusted view or macro reads. Block the view or macro to
   withdraw it.
-- Internal objects the caller names need an allow rule with exact schema and table names in
-  each layer; schema/table wildcards never grant them, though the catalog may be `*` or
-  omitted. Block wildcards do match them, even when an exact allow rule exists. Metadata
+- Internal objects the caller names need an allow rule with every schema component and the
+  table name exact in each layer; schema/table wildcards never grant them, though the catalog
+  may be `*`, NULL, or omitted. The actual entry's `internal` flag controls this, not its
+  catalog or a name prefix. Block wildcards do match them, even when an exact allow rule exists. Metadata
   *readers* stay on the [never-bind list](#never-bind-functions) for the caller's own text
   regardless, so an exact rule for a caller-named metadata view is necessary and not
   sufficient; a host view or macro over an internal view is the host's decision to expose
@@ -220,6 +222,10 @@ declared objects. A successful decision already establishes the allowed-input su
 the equality comparison additionally detects unused declarations. Select named columns:
 `caller_objects` is appended to the result and also included in audit decisions, so positional
 `SELECT *` consumers must accept a ninth column. Existing refusal ordering is unchanged.
+
+`functions` remains combined host-facing evidence, including caller-attributable functions
+and trusted dependencies. A public `caller_functions` evidence field is explicitly deferred
+and is not implemented. `caller_objects` is the existing conservative catalog-table/view subset.
 
 **Evidence contract:**
 
@@ -715,15 +721,16 @@ list construction and slicing adds `list_value`/`array_slice` to that check.
 Ambiguous indexing, dotted references, arrows and SQL-value names record the possible
 implementations; the catalog callback checks the implementation DuckDB actually
 selects. `t.column` and a real column named `current_schema` are not automatically
-treated as functions. `->>` and JSON path aliases share extraction grants/blocks only for
-their reviewed `system.main` scalar identities.
+treated as functions. Parser/binder rewriting may select an extraction helper for JSON syntax;
+the selected entry has its own exact grant/block identity.
 
 Function allowlisting cannot be disabled. Each policy layer admits its explicit qualified
 `allowed_functions` plus the reviewed defaults when `use_default_functions` is true;
 explicit blocks and the never-bind list take precedence for what the caller writes.
 `blocked_functions` has the same STRUCT/object shape as grants: optional catalog, required
-exact-depth `schema_path`, exact `name`, and optional `type`. Namespace wildcards are explicit;
-the leaf `*` is multiplication. Defaults carry exact catalog/schema/name/kind identities from
+exact-depth `schema_path`, required exact `name`, and optional `type`. Namespace wildcards are explicit;
+the leaf `*` is multiplication, not all functions. Omitting the name cannot grant a schema;
+schema-wide function permission is unsupported. Defaults carry exact catalog/schema/name/kind identities from
 the reviewed inventory, so another kind in the same namespace cannot borrow a default.
 Pre-resolution refusal requires that blocks cover every eligible identity for the leaf; a scoped
 block leaving another eligible identity waits for the actual catalog entry, before its bind callback.
@@ -731,17 +738,29 @@ Unknown attributable provenance fails closed; absence of a matching block is nev
 Never-bind and control-plane restrictions remain separate pre-resolution checks with their existing
 origin rules. See [qualified function rules](qualified-functions.md) for direct-binding and preparation limits.
 
-The system.main table readers `read_parquet` and `parquet_scan` share grant and block permission
-only in that reviewed namespace and kind. A host function with an alias-like leaf keeps its exact
-identity and raw spelling for attribution: a caller's host `read_parquet` macro does not
-make a trusted body's system `parquet_scan` reader caller-attributable, or vice versa.
-Actual caller use of the system reader still obeys the shared grant/block rules.
-This explicit pair is source-reviewed in
-`duckdb/extension/parquet/parquet_extension.cpp` (`LoadInternal` registers the same
-`ParquetScanFunction::GetFunctionSet()` under both names). There is no dynamic alias
-discovery. CSV/JSON reader names are not grouped. Pre-resolution Parquet refusals use the
-canonical name `read_parquet`; resolved violations and successful dependency lists retain
-the observed identity.
+Explicit grants for internal functions require every schema component to be exact. Catalog
+may be omitted, NULL, or `*`; kind remains optional and name is always exact. Block rules keep
+their namespace wildcards. This uses the actual `CatalogEntry::internal` flag, not an assumption
+that every `system.main` entry is internal: non-internal extension entries can use schema-pattern
+grants. Bound descriptors recover the flag only from exact observed-entry provenance or reviewed
+source-defined intrinsics/substitutions. Unknown internal origin cannot use schema-wildcard grants.
+Reviewed defaults already carry exact identities; the flag is not added to public evidence.
+
+Configurable grants and blocks match **exact catalog-entry names without alias canonicalization**.
+This includes Parquet (`read_parquet` / `parquet_scan`), JSON extraction (`json_extract` /
+`json_extract_path` / `->`, and `json_extract_string` / `json_extract_path_text` / `->>`), and
+window names (`rank_dense` / `dense_rank`, `first` / `first_value`, `last` / `last_value`).
+Cover each intended entry explicitly. Parquet file shorthand selects `parquet_scan`; granting
+`read_parquet` alone does not authorize that replacement reader. Pre-resolution refusals preserve
+the screened spelling; resolved violations and successful dependency lists retain observed identities.
+A caller's host `read_parquet` macro likewise does not make a trusted body's system `parquet_scan`
+reader caller-attributable, or vice versa.
+
+Source-defined parser/binder rewriting is an attribution mechanism, not general semantic equivalence
+or a configurable policy alias. Authorization follows parsed operations and selected entries.
+DuckDB 1.5 intrinsic windows lack catalog selection, so Gatekeeper preserves the parsed spelling
+for the intrinsic operation rather than requiring an invented canonical entry. See
+[qualified function rules](qualified-functions.md) for the engine-specific details.
 
 **Trusted definitions are opaque to policy.** A view, scalar macro, or table macro the host
 created (any non-internal catalog entry), and an attached catalog's tables and views with
@@ -823,7 +842,8 @@ shadowing a default needs an explicit qualified grant; once authorized, a host m
 retains the trust described above. Types, casts, and host default collations remain trusted
 configuration. Catalog integrity remains a prerequisite; namespace pinning does not make
 untrusted DDL safe. See [qualified grants and feasibility](qualified-functions.md) for the
-exact kind/alias matching contract, migration, intrinsic provenance, and direct-binding limits.
+exact name/kind matching contract, intrinsic provenance, and direct-binding limits, and the
+[policy v2 migration guide](policy-migration.md) for input changes.
 
 Source-backed binder substitutions retain the origin of the selected definition on both engines:
 collated `min`/`max` can select `arg_min`/`arg_max`, `date_part`/`datepart` can select

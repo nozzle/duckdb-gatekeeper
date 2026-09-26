@@ -121,12 +121,29 @@ docs:
     | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. Nonempty path, outermost first; `'*'` matches one component at exactly that depth, never recursively. Omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
     | `use_default_functions` | BOOLEAN | `true` | `true`: 919 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
-    | `allowed_functions` | STRUCT[] | `[]` | Resolved `{catalog?, schema_path, name, type?}` grants. Exact leaf; defaults cover reviewed system.main identities. |
+    | `allowed_functions` | STRUCT[] | `[]` | Resolved `{catalog?, schema_path, name, type?}` grants. Required exact leaf; `'*'` means multiplication, not all functions. Defaults cover reviewed system.main identities. |
     | `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 
-    Only a whole-component `'*'` is a wildcard: `sales_*`, `?`, and `%` are literal names.
+    Only a whole-component `'*'` is a wildcard in catalog/schema components and table names:
+    `sales_*`, `?`, and `%` are literal names. Function names cannot be omitted or wildcarded;
+    schema-wide function permission is unsupported.
     Wildcards also match objects created or attached later, so prefer explicit catalog
     names when that scope is not intended.
+
+    Configurable function grants and blocks match exact catalog-entry names, without alias
+    canonicalization, including Parquet readers, JSON extraction aliases, and window aliases.
+    Cover each intended entry explicitly: `read_parquet` and `parquet_scan` have separate
+    permissions, and Parquet file shorthand selects `parquet_scan`. Source-defined parser/binder
+    rewriting determines the operation or entry checked, not general semantic equivalence.
+
+    Internal table/view and function grants require exact schema components; tables/views also
+    require an exact table name. Catalog may be omitted, NULL, or `*`; block namespace wildcards
+    still match internal entries. The actual entry's `internal` flag controls this, not the
+    `system` catalog name. Non-internal entries can use schema patterns; unknown bound-function
+    internal origin cannot use schema-wildcard grants. Reviewed defaults already name exact identities.
+
+    Follow the [policy v2 migration guide](https://github.com/nozzle/duckdb-gatekeeper/blob/main/docs/policy-migration.md)
+    for legacy function strings, old `schema` fields, typed empty lists, and canonical settings.
 
     ### Result columns
 
@@ -157,6 +174,10 @@ docs:
     Consumers pinning the violation STRUCT must include both trailing VARCHAR kind fields.
     Audit decisions returned by
     `duckdb_logs_parsed('Gatekeeper')` carry the same violation shape.
+
+    `functions` remains combined host-facing evidence of caller-attributable functions and trusted
+    dependencies. A public `caller_functions` evidence field is explicitly deferred and is not
+    implemented. `caller_objects` is the existing conservative catalog-table/view subset of `objects`.
 
     ### Global policy
 
