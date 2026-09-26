@@ -203,7 +203,7 @@ docs:
     checks still apply: Gatekeeper's control plane remains refused on every route, and
     private catalog authorization refuses unsupported Quack dependencies even inside trusted
     bodies. Deferred binding can execute remotely before that refusal; see the
-    [Quack support matrix](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/quack.md).
+    [Quack support matrix](https://github.com/nozzle/duckdb-gatekeeper/blob/main/docs/quack.md).
 
     - Allowing a view admits its underlying tables. Block the view itself to withdraw it.
     - A caller's separate reference to an underlying table or function is still checked.

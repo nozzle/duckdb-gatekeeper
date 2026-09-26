@@ -115,9 +115,12 @@ Build Gatekeeper normally, then:
 The runner downloads **hash-verified** Quack and httpfs 1.5.5 core artifacts into ignored
 `build/quack-artifacts`. Supported download platforms are Linux AMD64/ARM64 and macOS ARM64.
 It uses separate in-memory client/server databases and a loopback listener, a random token,
-bounded readiness polling, explicit LOAD paths, no autoinstall/autoload, and finally cleanup.
+explicit LOAD paths, no autoinstall/autoload, and finally cleanup. Readiness requires a successful
+synchronous server bind, then a Quack query reading a per-fixture random marker stored only on that server.
 No Docker or extra Python dependencies are required. The release pin reserves then releases
-a candidate port before binding; a race fails setup rather than connecting to a foreign server.
+a candidate port before binding; bind failures retry up to five candidates and then fail setup,
+without probing or attaching to the competing listener. The candidate pin binds port `0` directly
+and returns the OS-allocated endpoint. Arbitrary HTTP responses are never accepted as readiness.
 
 Server-side `Quack` logs prove whether a PREPARE request arrived. A sequence-backed remote
 view proves execution independently of transactional rollback. Setup/metadata requests are

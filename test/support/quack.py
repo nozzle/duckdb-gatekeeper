@@ -6,9 +6,10 @@ Gatekeeper, Quack and httpfs build. No INSTALL/autoload or persistent credential
 from contextlib import contextmanager
 import os
 import socket
-import time
-import urllib.request
+from urllib.parse import urlsplit
 import uuid
+
+import duckdb
 
 from support.artifact import connect, ENGINE_MAJOR, literal
 
@@ -16,6 +17,44 @@ from support.artifact import connect, ENGINE_MAJOR, literal
 def load_quack(db):
     for name in ("httpfs", "quack"):
         db.execute("LOAD " + literal(os.environ["GATEKEEPER_" + name.upper() + "_EXTENSION"]))
+
+
+def candidate_port():
+    # Only the release pin needs this handoff; a competing bind is handled by start_listener.
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        return reservation.getsockname()[1]
+
+
+def start_listener(server, token):
+    # Both pinned HttpQuackServer constructors bind synchronously and throw IOException on failure.
+    # No network probe or ATTACH may run unless this call has completed successfully. In particular,
+    # never interpret an HTTP 200 at a failed candidate port as evidence that our server started.
+    for attempt in range(5):
+        port = 0 if ENGINE_MAJOR >= 2 else candidate_port()
+        requested = f"quack:127.0.0.1:{port}"
+        try:
+            rows = server.execute(f"CALL quack_serve({literal(requested)}, token={literal(token)})").fetchall()
+        except duckdb.IOException as error:
+            if ENGINE_MAJOR >= 2 or "Failed to bind DuckDB Quack RPC server" not in str(error):
+                raise
+            if attempt == 4:
+                raise
+            continue
+        # The candidate returns its actual OS-allocated endpoint for port 0. Fail closed if a custom
+        # artifact changes the startup contract; closing the owning database cleans up on this path.
+        if len(rows) != 1 or len(rows[0]) != 3:
+            raise RuntimeError("Unexpected quack_serve result")
+        uri, url, returned_token = rows[0]
+        endpoint = urlsplit(url)
+        actual_port = endpoint.port
+        if (endpoint.scheme != "http" or endpoint.hostname != "127.0.0.1"
+                or not actual_port or (port and actual_port != port)
+                or url != f"http://127.0.0.1:{actual_port}"
+                or uri not in (f"quack:127.0.0.1:{actual_port}", f"quack://127.0.0.1:{actual_port}")
+                or returned_token != token):
+            raise RuntimeError("Unexpected quack_serve endpoint or token")
+        return uri
 
 
 class QuackFixture:
@@ -62,29 +101,19 @@ def quack_fixture():
         server.execute("CREATE TABLE orders(id INTEGER, amount INTEGER); INSERT INTO orders VALUES (1,20),(2,30)")
         server.execute("CREATE TABLE secret(value INTEGER); INSERT INTO secret VALUES (999)")
         server.execute("CREATE VIEW ticking AS SELECT nextval('fixture_ticks') AS id FROM orders")
+        # Store the marker only on the owning server; the remote query must read it, not echo it.
+        marker = uuid.uuid4().hex
+        server.execute("CREATE TABLE fixture_identity AS SELECT " + literal(marker) + " AS marker")
         client.execute("CREATE TABLE local_orders(id INTEGER, amount INTEGER); INSERT INTO local_orders VALUES (3,40)")
         token = uuid.uuid4().hex
-        # The release pin has no ephemeral-port support. Reserve a candidate, close, then let bind fail
-        # loudly on a collision rather than accidentally contacting an unrelated listener.
-        with socket.socket() as reservation:
-            reservation.bind(("127.0.0.1", 0))
-            port = reservation.getsockname()[1]
-        uri = f"quack:127.0.0.1:{port}"
-        server.execute(f"CALL quack_serve({literal(uri)}, token={literal(token)})").fetchall()
+        uri = start_listener(server, token)
         try:
-            for attempt in range(50):
-                try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
-                        if response.status == 200:
-                            break
-                except OSError:
-                    time.sleep(.02)
-            else:
-                raise RuntimeError("Quack listener did not become ready")
             fixture = QuackFixture(server, client, uri, token)
             fixture.attach(client)
             if ENGINE_MAJOR >= 2:
                 client.execute("SET disabled_optimizers='remote_pushdown'")
+            if client.execute("SELECT marker FROM remote.main.fixture_identity").fetchall() != [(marker,)]:
+                raise RuntimeError("Quack fixture server identity mismatch")
             fixture.clear()
             yield fixture
         finally:

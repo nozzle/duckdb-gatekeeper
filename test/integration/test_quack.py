@@ -1,9 +1,12 @@
 """Real transport, supported local binding, and demonstrated unsupported remote bind routes."""
 import os
+import socket
+from unittest.mock import Mock
 
 import duckdb
 import pytest
 
+from support import quack
 from support.artifact import ENGINE_MAJOR, EXTENSION, connect, literal
 from support.audit import decisions, enable
 from support.enforcement import DENIED, enforce
@@ -25,6 +28,21 @@ def remote():
 def local_binding(db):
     if ENGINE_MAJOR >= 2:
         db.execute("SET disabled_optimizers='remote_pushdown'")
+
+
+def test_real_bind_collision_never_attaches(monkeypatch):
+    # Exercise both pinned constructors on an occupied fixed port, including the release handoff path.
+    with socket.socket() as competitor:
+        competitor.bind(("127.0.0.1", 0))
+        competitor.listen()
+        monkeypatch.setattr(quack, "ENGINE_MAJOR", 1)
+        monkeypatch.setattr(quack, "candidate_port", lambda: competitor.getsockname()[1])
+        attach = Mock(side_effect=AssertionError("ATTACH after failed bind"))
+        monkeypatch.setattr(quack.QuackFixture, "attach", attach)
+        with pytest.raises(duckdb.IOException, match="Failed to bind DuckDB Quack RPC server"):
+            with quack_fixture():
+                pytest.fail("fixture yielded after failed bind")
+        attach.assert_not_called()
 
 
 def object_denial(result, name, kind):
