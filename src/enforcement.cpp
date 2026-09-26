@@ -198,8 +198,22 @@ struct EnforcementState : ClientContextState {
 		}
 		admitted = true;
 		unit = std::move(text.units[0]);
+		if (!CheckParameters(context))
+			return;
 		if (unit.statement->named_param_map.empty())
 			Authorize(context, nullptr);
+	}
+	bool CheckParameters(ClientContext &context) {
+		try {
+			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
+			// Require fallback permission before the engine binds; with permission either input source is safe.
+			CheckParameterFallbacks(context, Snapshot(), unit.binding, nullptr, false, result);
+		} catch (const PermissionException &) {
+			MarkDenied(result);
+			Record(context, Boundary::BINDING, &policy, &context.GetCurrentQuery());
+			return false;
+		}
+		return true;
 	}
 	void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) override {
 		if (in_statement && log_only && !decided && error && error->HasError()) {

@@ -9,8 +9,10 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -614,10 +616,41 @@ struct LookupCallback {
 	}
 };
 
+void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &layers,
+                             const gatekeeper::BindingPolicy &binding,
+                             optional_ptr<const engine::ParameterMap> supplied, bool provenance_known,
+                             gatekeeper::Result &result) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	auto &variables = ClientConfig::GetConfig(context).user_variables;
+	for (const auto &parameter : binding.caller_parameters) {
+		auto name = engine::ToName(parameter.first);
+		if (provenance_known && supplied && supplied->count(name))
+			continue; // Explicit NULL is an input too.
+		if (!PreparedStatement::AllowsUserVariableFallback(name) || !variables.count(name))
+			continue;
+		auto deny = [&](const string &message) {
+			result.violations.emplace(gatekeeper::rules::FUNCTION, message, "system", gatekeeper::NamePath{"main"}, "",
+			                          "getvariable", parameter.second);
+			throw PermissionException("named parameter fallback is not allowed");
+		};
+		// This is a fixed engine capability, not an unqualified function lookup that a host macro can shadow.
+		// Without supplied-input provenance, either source may supply the value. Requiring permission for the
+		// fallback authorizes both possibilities; evidence conservatively includes the capability even when the
+		// caller supplied an explicit value. DuckDB still chooses the value and preserves explicit precedence.
+		layers.Each([&](const gatekeeper::Policy &policy) {
+			if (!gatekeeper::FunctionAllowed(policy, "getvariable"))
+				deny("session-variable fallback requires system.main.getvariable permission");
+		});
+		result.functions.insert({"system", {"main"}, "getvariable", "scalar"});
+	}
+#endif
+}
+
 // Binds statement, the unit's own or a copy of it, against the unit's text record; fills the unit's provenance.
 static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers &layers, SQLStatement &statement,
                                TextCheck::Unit &unit, optional_ptr<const engine::ParameterMap> parameters,
                                gatekeeper::Result &result) {
+	CheckParameterFallbacks(context, layers, unit.binding, parameters, true, result);
 	engine::ParameterMap parameter_data;
 	if (parameters)
 		parameter_data = *parameters;

@@ -154,8 +154,18 @@ The suite has two layers with different reach:
   already-connected/native-state limitations on 2.0 (local trusted-control-plane cases on both).
   They link against the engine with Gatekeeper built in, under
   `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
-  each candidate engine. Their expectations hold on both engines; add one here when a guarantee
-  is made to a client API rather than to SQL text.
+  each candidate engine. The parameter-fallback leg on 2.0 also retains handles across session-variable
+  changes and counts table-function binds to prove collision refusals precede bind-time work (see
+  [the fallback decision](docs/parameter-fallback.md)). Add a probe here when a guarantee is made to a
+  client API rather than to SQL text.
+
+Native probes also accept `GATEKEEPER_EXTENSION=/absolute/path/to/gatekeeper.duckdb_extension`.
+In this mode they disable automatic linked-extension loading, load core functions, and explicitly
+load the named artifact; they refuse to proceed if Gatekeeper was already loaded. This permits
+linking a probe against an existing matching engine library while testing a newly built loadable,
+without silently exercising the engine library's older linked Gatekeeper. Without the environment
+variable, the normal CI probes still test the statically linked extension. Both probes share this
+setup in `test/native/probe_database.hpp`.
 
 ### Running the suite on DuckDB 2.0
 

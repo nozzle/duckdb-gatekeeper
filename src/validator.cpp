@@ -408,6 +408,13 @@ struct Walker {
 		violations.emplace(rule, message, "", NamePath{}, Field(node, "table_name"), function, Position(node));
 	}
 	void References(Json *value, const std::string &kind, const std::string &edge) {
+		if (kind == "ParameterExpression" && binding) {
+			auto name = Lower(Field(value, "identifier"));
+			auto position = Position(value);
+			auto inserted = binding->caller_parameters.emplace(name, position);
+			if (!inserted.second && position >= 0 && (inserted.first->second < 0 || position < inserted.first->second))
+				inserted.first->second = position;
+		}
 		// Every table name the caller wrote, whatever it turns out to be: a CTE, a catalog object, or a path a
 		// replacement scan turns into a reader. Only the last matters to the replacement callback, which learns
 		// which names are which and treats the rest as trusted. The same names, as written components, are what

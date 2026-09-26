@@ -1,0 +1,28 @@
+# name: test/sql/named_parameters.test
+# description: Missing inputs must bind completely; positional parameters never use session variables
+# group: [gatekeeper]
+
+require gatekeeper
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $missing');
+----
+binding
+
+statement ok
+SET VARIABLE "1" = 77;
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT $1');
+----
+binding
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT $missing::INTEGER');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM range($missing)');
+----
+binding
