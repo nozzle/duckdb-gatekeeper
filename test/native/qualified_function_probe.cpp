@@ -16,6 +16,7 @@ using namespace duckdb;
 static idx_t binds = 0;
 static idx_t aggregate_binds = 0;
 static idx_t fraction_calls = 0;
+static bool keep_stamp = false;
 static void FractionProbe(DataChunk &, ExpressionState &, Vector &result) {
 	++fraction_calls;
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -23,14 +24,35 @@ static void FractionProbe(DataChunk &, ExpressionState &, Vector &result) {
 }
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 static unique_ptr<FunctionData> LoseAggregateStamp(BindAggregateFunctionInput &input) {
-	input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
+	if (keep_stamp)
+		input.GetBoundFunction().SetName("unrecognized_substitution");
+	else
+		input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
+	return nullptr;
+}
+static unique_ptr<FunctionData> LoseScalarStamp(BindScalarFunctionInput &input) {
+	if (keep_stamp)
+		input.GetBoundFunction().SetName("unrecognized_substitution");
+	else
+		input.GetBoundFunction().SetQualifiedName(QualifiedName("unrecognized_substitution"));
 	return nullptr;
 }
 #else
 static unique_ptr<FunctionData> LoseAggregateStamp(ClientContext &, AggregateFunction &function,
                                                    vector<unique_ptr<Expression>> &) {
-	function.catalog_name.clear();
-	function.schema_name.clear();
+	if (!keep_stamp) {
+		function.catalog_name.clear();
+		function.schema_name.clear();
+	}
+	function.name = "unrecognized_substitution";
+	return nullptr;
+}
+static unique_ptr<FunctionData> LoseScalarStamp(ClientContext &, ScalarFunction &function,
+                                                vector<unique_ptr<Expression>> &) {
+	if (!keep_stamp) {
+		function.catalog_name.clear();
+		function.schema_name.clear();
+	}
 	function.name = "unrecognized_substitution";
 	return nullptr;
 }
@@ -91,6 +113,74 @@ static void Register(Connection &connection, const string &schema) {
 	Query(connection, "COMMIT");
 }
 
+// Two distinct stamped native entries in one namespace: only the caller's entry
+// is policy-controlled; the other's exact trusted provenance must beat fallback.
+static void CheckNativeOrigins(Connection &connection) {
+	Query(connection, "CREATE SCHEMA origins; BEGIN; CREATE TABLE origins.marker(i INTEGER)");
+	for (const auto &name : {"scalar_f", "scalar_g", "scalar_rename"}) {
+		ScalarFunction function(name, {}, LogicalType::DOUBLE, FractionProbe);
+		if (string(name) == "scalar_rename")
+			function.SetBindCallback(LoseScalarStamp);
+		CreateScalarFunctionInfo info(function);
+		info.internal = false;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		info.SetQualifiedName(QualifiedName("memory", "origins", name));
+#else
+		info.catalog = "memory";
+		info.schema = "origins";
+#endif
+		Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, info);
+	}
+	for (const auto &name : {"aggregate_f", "aggregate_g"}) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		auto function = *CountFun::GetFunctions().GetFunctionByOffset(0);
+		function.SetName(name);
+#else
+		auto function = CountFun::GetFunctions().GetFunctionByOffset(0);
+		function.name = name;
+#endif
+		CreateAggregateFunctionInfo info(function);
+		info.internal = false;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		info.SetQualifiedName(QualifiedName("memory", "origins", name));
+#else
+		info.catalog = "memory";
+		info.schema = "origins";
+#endif
+		Catalog::GetCatalog(*connection.context, "memory").CreateFunction(*connection.context, info);
+	}
+	Query(connection, "COMMIT");
+	for (const auto &kind : {"scalar", "aggregate"}) {
+		auto args = string(kind) == "scalar" ? "" : "1";
+		auto f = string("origins.") + kind + "_f(" + args + ")";
+		auto g = string("origins.") + kind + "_g(" + args + ")";
+		Query(connection, "CREATE OR REPLACE MACRO origins.wrapper() AS " + g);
+		Query(connection,
+		      "CALL gatekeeper_configure(allowed_functions := "
+		      "[{catalog:'memory',schema_path:['origins'],name:'" +
+		          string(kind) + "_f',type:'" + kind +
+		          "'},"
+		          "{catalog:'memory',schema_path:['origins'],name:'wrapper',type:'macro'}], blocked_functions := "
+		          "[{catalog:'memory',schema_path:['origins'],name:'" +
+		          kind + "_g',type:'" + kind + "'}])");
+		for (const auto &sql : {"SELECT " + f + ", origins.wrapper()", "SELECT origins.wrapper(), " + f})
+			if (!Cell(connection, "SELECT allowed FROM gatekeeper_validate('" + sql + "')").GetValue<bool>())
+				std::exit(36);
+		if (Cell(connection, "SELECT allowed FROM gatekeeper_validate('SELECT " + g + "')").GetValue<bool>())
+			std::exit(37);
+	}
+	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
+	                  "[{catalog:'memory',schema_path:['origins'],name:'scalar_rename',type:'scalar'}])");
+	for (bool preserve : {false, true}) {
+		keep_stamp = preserve;
+		if (Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT origins.scalar_rename()')").ToString() !=
+		    "forbidden")
+			std::exit(38);
+	}
+	keep_stamp = false;
+	Query(connection, "CALL gatekeeper_configure()");
+}
+
 int main() {
 	DBConfig config;
 	ConfigureProbeArtifact(config);
@@ -109,6 +199,27 @@ int main() {
 		if (result.ToString() != "forbidden" || fraction_calls != 0)
 			return 33;
 	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	// Signature-based argument reordering must not move a computed fraction out of
+	// the literal contract. Refuse named mappings before any child callback runs.
+	for (const auto &name : {"quantile", "quantile_disc", "quantile_cont", "approx_quantile", "reservoir_quantile"})
+		for (const auto &args : {"quantile:=fraction_probe(), x:=1", "x:=1, quantile:=fraction_probe()",
+		                         "quantile:=0.5, x:=fraction_probe()"})
+			for (const auto &window : {"", " OVER ()"}) {
+				auto sql = string("SELECT ") + name + "(" + args + ")" + window;
+				auto result = Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')");
+				if (result.ToString() != "forbidden" || fraction_calls != 0)
+					return 34;
+			}
+	for (const auto &name : {"list_aggregate", "list_aggr", "array_aggregate", "array_aggr", "aggregate"})
+		for (const auto &args : {"name:=CAST(fraction_probe() AS VARCHAR), list:=[1]",
+		                         "list:=[1], name:=CAST(fraction_probe() AS VARCHAR)"}) {
+			auto sql = string("SELECT ") + name + "(" + args + ")";
+			auto result = Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')");
+			if (result.ToString() != "forbidden" || fraction_calls != 0)
+				return 35;
+		}
+#endif
 	// A handle prepared before enforcement must re-authorize the implementation, not
 	// just the original catalog name, after a host policy change.
 	for (const auto &item :
@@ -133,6 +244,7 @@ int main() {
 		Query(connection, "SET GLOBAL gatekeeper_log_only=false");
 	}
 	Query(connection, "CALL gatekeeper_configure()");
+	CheckNativeOrigins(connection);
 	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
 	// A host alias grant keeps eligibility open: the scoped system block must still win.
 	Query(connection, "CREATE SCHEMA window_host");
@@ -270,6 +382,14 @@ int main() {
 	                          "'SELECT l.list_aggregate(''dispatch_counter'', ''sum'') FROM (VALUES ([1])) t(l)')");
 	if (denied.ToString() != "forbidden" || aggregate_binds != 0)
 		return 6;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	for (const auto &args : {"name:=''dispatch_counter'', list:=[1]", "list:=[1], name:=''dispatch_counter''"}) {
+		denied =
+		    Cell(connection, string("SELECT code FROM gatekeeper_validate('SELECT list_aggregate(") + args + ")')");
+		if (denied.ToString() != "forbidden" || aggregate_binds != 0)
+			return 39;
+	}
+#endif
 	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
 	                  "[{catalog:'system',schema_path:['main'],name:'list_aggregate'},"
 	                  "{catalog:'system',schema_path:['main'],name:'dispatch_counter',type:'aggregate'}])");
@@ -338,9 +458,13 @@ int main() {
 	Query(connection, "COMMIT");
 	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
 	                  "[{catalog:'memory',schema_path:['admitted'],name:'unstamped_host',type:'aggregate'}])");
-	denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
-	if (denied.ToString() != "forbidden")
-		return 12;
+	for (bool preserve : {false, true}) {
+		keep_stamp = preserve;
+		denied = Cell(connection, "SELECT code FROM gatekeeper_validate('SELECT admitted.unstamped_host(1)')");
+		if (denied.ToString() != "forbidden")
+			return 12;
+	}
+	keep_stamp = false;
 #if GATEKEEPER_DUCKDB_MAJOR < 2
 	// A same-name host aggregate observed in this bind must make stamp-loss recovery ambiguous.
 	Query(connection, "BEGIN");

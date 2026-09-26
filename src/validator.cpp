@@ -278,9 +278,9 @@ bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	return false;
 }
 
-void Provenance::RecordFunction(const Identity &identity, bool caller) {
+void Provenance::RecordFunction(const Identity &identity, bool caller, int engine_major) {
 	function_entries.insert(identity);
-	for (const auto &name : FunctionImplementations(identity))
+	for (const auto &name : FunctionImplementations(identity, engine_major))
 		(caller ? caller_implementations : trusted_implementations)
 		    .insert({identity.catalog, identity.schema_path, name, identity.type});
 }
@@ -393,6 +393,22 @@ struct Walker {
 		yyjson_arr_foreach(yyjson_obj_get(call, "arguments"), i, n, item)
 		    arguments.push_back(yyjson_obj_get(item, "expression"));
 		return arguments;
+	}
+	// Positional contracts must never index the serialized order of named arguments:
+	// 2.0 reorders FunctionArgument by the selected signature before entering callbacks.
+	// 1.5 represents := with a child alias. Preserve this distinction even when all
+	// argument values can otherwise be walked uniformly.
+	static bool HasNamedArguments(Json *call) {
+		size_t i, n;
+		Json *item;
+		yyjson_arr_foreach(yyjson_obj_get(call, "arguments"), i, n, item) if (!Field(item, "name").empty()) return true;
+		yyjson_arr_foreach(yyjson_obj_get(call, "children"), i, n, item) if (!Field(item, "alias").empty()) return true;
+		return false;
+	}
+	static std::string ArgumentName(Json *call, size_t index) {
+		if (auto arguments = yyjson_obj_get(call, "arguments"))
+			return Field(yyjson_arr_get(arguments, index), "name");
+		return Field(yyjson_arr_get(yyjson_obj_get(call, "children"), index), "alias");
 	}
 	// The value of a table-function argument. `name = value` reaches the binder as a comparison on a single-part
 	// column reference, which it unwraps as a named parameter on both engines (bind_table_function.cpp); the
@@ -660,8 +676,9 @@ struct Walker {
 				}
 			}
 			if (name == "unnest") {
-				for (size_t i = 1; i < arguments.size(); i++)
-					BindTime(arguments[i], "UNNEST option");
+				for (size_t i = 0; i < arguments.size(); i++)
+					if (i > 0 || !ArgumentName(value, i).empty())
+						BindTime(arguments[i], "UNNEST option");
 			}
 			static const Names quantiles = {"quantile", "quantile_cont", "quantile_disc", "approx_quantile",
 			                                "reservoir_quantile"};
@@ -670,7 +687,7 @@ struct Walker {
 				size_t fraction = arguments.size() == 1 && yyjson_arr_size(orders) ? 0 : 1;
 				// A dotted call can prepend a receiver; the lookup callback has no occurrence or
 				// argument mapping. Defer a conservative refusal until a system aggregate is selected.
-				if (WrittenPath(value, true).size() > 1)
+				if (WrittenPath(value, true).size() > 1 || HasNamedArguments(value))
 					binding->unsupported_quantiles.insert(name);
 				for (size_t i = fraction; i < arguments.size(); i++)
 					if (!BindLiteral(arguments[i], true))
@@ -691,7 +708,8 @@ struct Walker {
 				// A dotted spelling may be rewritten to a method call with a prepended receiver. Our catalog
 				// callback cannot identify that occurrence, so refuse it if it resolves to a system dispatcher.
 				// Merely sharing a dispatcher leaf does not impose its argument contract on a host macro/UDF.
-				if (WrittenPath(value, true).size() > 1 || Field(target, "class") != "CONSTANT" || !yyjson_is_str(text))
+				if (WrittenPath(value, true).size() > 1 || HasNamedArguments(value) ||
+				    Field(target, "class") != "CONSTANT" || !yyjson_is_str(text))
 					binding->unsupported_dispatchers.insert(name);
 				else {
 					binding->dispatcher_targets.insert(Lower(Text(text)));

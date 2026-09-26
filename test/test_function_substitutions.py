@@ -3,6 +3,7 @@ import pytest
 
 from support.enforcement import DENIED, enforce
 from support.audit import enable, decisions
+from support.artifact import ENGINE_MAJOR
 from support.typed_helpers import configure, validate
 
 
@@ -95,3 +96,75 @@ def test_host_alias_does_not_attribute_trusted_reader(db, tmp_path, caller, body
     for sql in (f"SELECT {caller}(), wrapper()", f"SELECT wrapper(), {caller}()"):
         result = validate(db, sql)
         assert result["allowed"], result
+
+
+# All valid DatePartSpecifier members, including DatePartUnaryFunctionName's
+# exceptional spellings. The 1.5 binder only substitutes epoch and julian.
+DATE_PARTS = [
+    ("year", "year"), ("month", "month"), ("day", "day"), ("decade", "decade"),
+    ("century", "century"), ("millennium", "millennium"),
+    ("microseconds", "microsecond"), ("milliseconds", "millisecond"),
+    ("second", "second"), ("minute", "minute"), ("hour", "hour"),
+    ("dow", "dayofweek"), ("isodow", "isodow"), ("week", "week"),
+    ("isoyear", "isoyear"), ("quarter", "quarter"), ("doy", "dayofyear"),
+    ("yearweek", "yearweek"), ("era", "era"), ("timezone", "timezone"),
+    ("timezone_hour", "timezone_hour"), ("timezone_minute", "timezone_minute"),
+    ("epoch", "epoch"), ("julian", "julian"),
+]
+
+
+@pytest.mark.parametrize("part,target", DATE_PARTS)
+@pytest.mark.parametrize("source", ["date_part", "datepart"])
+def test_every_date_part_substitution(db, part, target, source):
+    sql = f"SELECT {source}('{part}', TIMESTAMP '2020-06-15 12:34:56.123456')"
+    db.execute(f"CREATE MACRO wrapper() AS ({sql})")
+    db.execute(f"CREATE VIEW wrapped AS {sql}")
+    grants = [identity("wrapper", "macro", "memory")]
+    configure(db, {"allowed_functions": grants})
+    substituted = ENGINE_MAJOR >= 2 or part in ("epoch", "julian")
+    block = {"blocked_functions": [identity(target, "scalar")]}
+    result = validate(db, sql, block)
+    assert result["allowed"] == (not substituted), result
+    if substituted:
+        assert any(v["function_name"] == target for v in result["violations"]), result
+    for trusted in ("SELECT wrapper()", "SELECT * FROM wrapped"):
+        assert validate(db, trusted, block)["allowed"], (trusted, validate(db, trusted, block))
+    configure(db, {"allowed_functions": grants, **block})
+    with db.cursor() as agent:
+        enforce(agent)
+        if substituted:
+            with pytest.raises(Exception, match=DENIED):
+                agent.execute(sql)
+        else:
+            agent.execute(sql).fetchall()
+        agent.execute("SELECT wrapper()").fetchall()
+    strict = {"use_default_functions": False, "allowed_functions": [identity(source, "scalar")]}
+    configure(db, strict)
+    result = validate(db, sql)
+    assert result["allowed"] == (not substituted), result
+    strict["allowed_functions"].append(identity(target, "scalar"))
+    configure(db, strict)
+    result = validate(db, sql)
+    assert result["allowed"], result
+    if substituted:
+        assert identity(target, "scalar") in result["functions"], result
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="named builtin signature reordering is a 2.0 API")
+@pytest.mark.parametrize("name", ["quantile", "quantile_disc", "quantile_cont", "approx_quantile", "reservoir_quantile"])
+@pytest.mark.parametrize("window", ["", " OVER ()"])
+def test_named_quantile_mappings_are_conservatively_refused(db, name, window):
+    sql = f"SELECT {name}(quantile := 0.5, x := 1){window}"
+    result = validate(db, sql)
+    assert result["code"] == "forbidden", result
+    assert any(v["rule"] == "bind_time_expression" for v in result["violations"]), result
+
+
+@pytest.mark.parametrize("name", ["quantile", "quantile_disc", "quantile_cont", "approx_quantile", "reservoir_quantile",
+                                  "list_aggregate", "list_aggr", "array_aggregate", "array_aggr", "aggregate"])
+def test_named_contract_does_not_restrict_host_macros(db, name):
+    db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{name}(x, q) AS x + q")
+    configure(db, {"allowed_functions": [identity(name, "macro", "memory", "host")]})
+    sql = f"SELECT host.{name}(q := x + 1, x := x) FROM (VALUES (1)) t(x)"
+    result = validate(db, sql)
+    assert result["allowed"], result

@@ -190,7 +190,7 @@ struct Provenance {
 	// Source-reviewed implementation edges from exact entries observed by this bind. Preserve origin
 	// separately: a trusted body's substitution is not a caller capability just because its leaf changed.
 	std::set<Identity> caller_implementations, trusted_implementations;
-	void RecordFunction(const Identity &identity, bool caller);
+	void RecordFunction(const Identity &identity, bool caller, int engine_major);
 	Names replacement_functions;
 	Names authorized_dispatchers;
 	// Case-folded raw function names the caller's binders retrieved from the catalog.

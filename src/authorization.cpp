@@ -263,10 +263,12 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		callers = callers || provenance.caller_implementations.count(identity);
 		// Foreign executable callbacks may replace their function descriptor. A changed
 		// leaf within an observed caller namespace is still caller code, not a trusted macro.
+		// This fallback applies only without exact trusted evidence; sharing a namespace
+		// with a caller function does not change a trusted definition's recorded origin.
 		for (const auto &entry : provenance.caller_implementations)
-			if (!gatekeeper::SystemIdentity(entry) && (entry.type == "scalar" || entry.type == "aggregate") &&
-			    entry.type == identity.type && entry.catalog == identity.catalog &&
-			    entry.schema_path == identity.schema_path)
+			if (!provenance.trusted_implementations.count(identity) && !gatekeeper::SystemIdentity(entry) &&
+			    (entry.type == "scalar" || entry.type == "aggregate") && entry.type == identity.type &&
+			    entry.catalog == identity.catalog && entry.schema_path == identity.schema_path)
 				callers = true;
 		if (callers && !policy.defaults && provenance.caller_implementations.count(identity))
 			grant = true;

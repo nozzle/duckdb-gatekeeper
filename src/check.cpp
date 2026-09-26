@@ -504,7 +504,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		if (scope) {
 			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
 			for (const auto &identity : reader_result.functions)
-				scope->bind.provenance.RecordFunction(identity, caller_written);
+				scope->bind.provenance.RecordFunction(identity, caller_written, GATEKEEPER_DUCKDB_MAJOR);
 			if (caller_written)
 				scope->bind.provenance.replacement_functions.insert(canonical);
 			scope->authorized.insert(gatekeeper::Lower(input.table_name));
@@ -648,11 +648,11 @@ struct LookupCallback {
 		    s.binding.unsupported_quantiles.count(canonical)) {
 			s.result.violations.emplace(
 			    gatekeeper::rules::BIND_TIME_EXPRESSION,
-			    "quantile fraction/options require literals or bindable parameters in an unqualified call",
+			    "quantile fraction/options require literals or bindable parameters in an unqualified positional call",
 			    source.catalog, source.schema_path, "", source.name, -1, source.type);
 			throw PermissionException("unsupported quantile arguments");
 		}
-		s.provenance.RecordFunction(source, attributable);
+		s.provenance.RecordFunction(source, attributable, GATEKEEPER_DUCKDB_MAJOR);
 		if (attributable && entry.type == CatalogType::SCALAR_FUNCTION_ENTRY &&
 		    gatekeeper::DispatchingAggregators().count(canonical) && s.binding.caller_dispatchers.count(canonical) &&
 		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
@@ -660,7 +660,7 @@ struct LookupCallback {
 			if (s.binding.unsupported_dispatchers.count(canonical)) {
 				s.result.violations.emplace(
 				    gatekeeper::rules::BIND_TIME_EXPRESSION,
-				    "aggregate dispatch requires an unqualified call and literal aggregate name", "system",
+				    "aggregate dispatch requires an unqualified positional call and literal aggregate name", "system",
 				    gatekeeper::NamePath{"main"}, "", canonical, -1, "scalar");
 				throw PermissionException("unsupported aggregate dispatch");
 			}
@@ -681,7 +681,7 @@ struct LookupCallback {
 				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
 				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
 					throw BinderException("List aggregate target is not an aggregate");
-				s.provenance.RecordFunction(identity, true);
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 			s.provenance.authorized_dispatchers.insert(canonical);
 		}
@@ -733,7 +733,7 @@ struct LookupCallback {
 				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
 				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
 				                              FunctionKind(target.type)};
-				s.provenance.RecordFunction(identity, true);
+				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 		}
 	}
