@@ -447,14 +447,24 @@ caller-written `list_sum`, `list_aggr` behind it. These implementations are incl
 successful function dependency lists, as are the ones trusted definitions introduce.
 When the caller writes a name-selected dispatcher (`list_aggregate`, `list_aggr`,
 `aggregate`, `array_aggregate`, `array_aggr`), the aggregate it names is caller-chosen
-text and must also be allowed in both layers, not merely unblocked.
+text and must also be allowed in both layers, not merely unblocked. System dispatchers require
+unqualified positional calls with literal targets; named and dotted/method calls refuse after resolution.
 
 Source-backed binder substitutions retain their origin: collated `min`/`max` can bind
-`arg_min`/`arg_max`, `date_part`/`datepart` can bind `epoch`/`julian`, and `quantile` can bind
+`arg_min`/`arg_max`, `date_part`/`datepart` can bind `epoch`/`julian` on 1.5 or any constant
+unary date part on 2.0 (such as `year`), and `quantile` can bind
 `quantile_disc`. Caller-selected implementations obey blocks and, with defaults disabled,
 need their own qualified grants as well as the source function's. These substitutions are
 not grant aliases. See [qualified-function feasibility](docs/qualified-functions.md#binder-substitutions-and-specialization)
 for provenance and timing limits.
+
+Native scalar/aggregate replacements on 2.0 retain caller origin through the original
+definition's qualified identity, even across namespace changes. On 1.5, caller non-system
+scalar bind/extended-bind callbacks and aggregate bind callbacks are conservatively refused
+before invocation because that provenance is unavailable. Scalar expression-replacement
+callbacks are refused on caller non-system routes on both engines. These restrictions cover
+every overload; a lambda-type callback alone is not refused. Ordinary native functions,
+casts, and callbacks used only inside trusted definitions remain usable.
 
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
@@ -831,10 +841,11 @@ execute. A failure at any step raises; nothing executes.
   leaves a same-leaf scalar alone; omitting `type` covers both within the namespace pattern.
   To deny default row generators, block their qualified table identities or set
   `use_default_functions := false` and grant only the capabilities needed.
-- System quantile aggregates require an unqualified call with literal or bindable-parameter
-  fractions/options. Dotted calls, including explicitly qualified system calls, are
-  conservatively refused after resolution because the hook cannot map a possible receiver
-  to arguments. Explicitly granted host functions/macros named `quantile` keep their own
+- System quantile aggregates (including windows) require an unqualified positional call with
+  literal or bindable-parameter fractions/options. Named and dotted calls, including explicitly
+  qualified system calls, are conservatively refused after resolution because the hook cannot
+  map receivers or signature-reordered arguments to an occurrence. Explicitly granted host
+  functions/macros named `quantile` keep their own
   argument contracts; see [quantile contracts](docs/qualified-functions.md#quantile-argument-contracts).
 
 ## Python

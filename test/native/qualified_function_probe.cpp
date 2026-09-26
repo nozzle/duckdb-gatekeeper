@@ -20,6 +20,9 @@ static idx_t fraction_calls = 0;
 static bool keep_stamp = false;
 static bool change_namespace = false;
 static idx_t replacement_binds = 0;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+static LogicalType LambdaType(ClientContext &, const vector<LogicalType> &, idx_t) { return LogicalType::DOUBLE; }
+#endif
 static unique_ptr<Expression> ReplaceExpression(FunctionBindExpressionInput &) {
 	++replacement_binds;
 	return make_uniq<BoundConstantExpression>(Value::DOUBLE(0.5));
@@ -157,12 +160,18 @@ static void Register(Connection &connection, const string &schema) {
 // is policy-controlled; the other's exact trusted provenance must beat fallback.
 static void CheckNativeOrigins(Connection &connection, DuckDB &database) {
 	Query(connection, "CREATE SCHEMA origins; BEGIN; CREATE TABLE origins.marker(i INTEGER)");
-	for (const auto &name : {"scalar_f", "scalar_g", "scalar_rename", "expression_replace"}) {
+	for (const auto &name : {"scalar_f", "scalar_g", "scalar_rename", "expression_replace", "lambda_type_only"}) {
 		ScalarFunction function(name, {}, LogicalType::DOUBLE, FractionProbe);
 		if (string(name) == "scalar_rename")
 			function.SetBindCallback(LoseScalarStamp);
 		if (string(name) == "expression_replace")
 			function.SetBindExpressionCallback(ReplaceExpression);
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+		// The narrowed pre-invocation restriction is specific to 1.5. On 2.0 a
+		// lambda-marked descriptor additionally requires executable lambda bind data.
+		if (string(name) == "lambda_type_only")
+			function.SetBindLambdaCallback(LambdaType);
+#endif
 		CreateScalarFunctionInfo info(function);
 		info.internal = false;
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
@@ -261,9 +270,11 @@ static void CheckNativeOrigins(Connection &connection, DuckDB &database) {
 	change_namespace = false;
 	Query(connection, "CALL gatekeeper_configure(allowed_functions := "
 	                  "[{catalog:'memory',schema_path:['origins'],name:'scalar_f',type:'scalar'},"
+	                  "{catalog:'memory',schema_path:['origins'],name:'lambda_type_only',type:'scalar'},"
 	                  "{catalog:'memory',schema_path:['origins'],name:'aggregate_f',type:'aggregate'}])");
 	for (const auto &sql :
-	     {"SELECT CAST(origins.scalar_f() AS VARCHAR)", "SELECT origins.scalar_f() + 1::DECIMAL(10,2)",
+	     {"SELECT origins.lambda_type_only()", "SELECT CAST(origins.lambda_type_only() AS VARCHAR)",
+	      "SELECT CAST(origins.scalar_f() AS VARCHAR)", "SELECT origins.scalar_f() + 1::DECIMAL(10,2)",
 	      "SELECT CAST(origins.aggregate_f(1) AS VARCHAR)"})
 		if (!Cell(connection, string("SELECT allowed FROM gatekeeper_validate('") + sql + "')").GetValue<bool>())
 			std::exit(41);

@@ -69,7 +69,7 @@ from unrelated caller functions, and exact trusted-body-only identities remain t
 
 DuckDB 1.5 does not retain the original definition after a native bind callback replaces
 its descriptor. Gatekeeper therefore refuses caller-attributable non-system scalar entries
-with bind, extended-bind, lambda-bind, or expression-bind callbacks, and non-system
+with bind, extended-bind, or expression-bind callbacks, and non-system
 aggregate entries with bind callbacks, before invoking them. The check covers every
 overload because the catalog hook precedes overload selection. On both engines, caller
 non-system scalar expression-bind callbacks are refused because they can replace the
@@ -77,6 +77,8 @@ entire expression and discard descriptor provenance. These refusals report `forb
 with the `unsupported_structure` rule; explicit grants cannot supply missing provenance.
 Ordinary native functions without these
 callbacks and callbacks reached only inside trusted definitions remain usable.
+Lambda-type callbacks alone are not refused: they return a `LogicalType` and do not
+receive a mutable function descriptor. Executable lambda bodies have separate traversal checks.
 
 This is a surviving-plan authorization boundary, not a sandbox for native extension code:
 native code and the engine are trusted to preserve their provenance metadata. It does not
@@ -813,7 +815,8 @@ exact kind/alias matching contract, migration, intrinsic provenance, and direct-
 
 Source-backed binder substitutions retain the origin of the selected definition on both engines:
 collated `min`/`max` can select `arg_min`/`arg_max`, `date_part`/`datepart` can select
-`epoch`/`julian`, and `quantile` can select `quantile_disc`. Caller substitutions obey qualified
+`epoch`/`julian` on 1.5 or any constant unary date part on 2.0 (including `year`, `dayofweek`,
+and `microsecond`), and `quantile` can select `quantile_disc`. Caller substitutions obey qualified
 blocks and, in each layer with defaults disabled, require implementation grants in addition
 to source grants. These are implementation dependencies, not policy aliases; a grant for
 `min` alone does not grant `arg_min`. The same substitutions introduced solely by trusted
@@ -822,10 +825,13 @@ provenance fails closed; see [binder substitutions](qualified-functions.md#binde
 
 Quantile fraction/options restrictions apply after catalog resolution selects a caller-attributable
 `system.main` aggregate, before its private bind callback. They require literals or bindable
-parameters in an unqualified call. Dotted/method calls, including explicitly qualified system
+parameters in an unqualified positional call. Named-argument and dotted/method calls, including explicitly qualified system
 quantiles with literal fractions, are conservatively refused because the lookup hook supplies
-no occurrence-to-argument mapping. Granted host functions/macros with quantile-like names retain
-their own contracts. An earlier engine resolution error can therefore return `binding` before
+no occurrence-to-argument mapping and named arguments can be reordered by the selected signature.
+This applies to window aggregates too. Granted host functions/macros with quantile-like names retain
+their own argument contracts, subject to the native callback provenance restrictions above.
+List aggregate dispatchers similarly refuse named mappings after system resolution.
+An earlier engine resolution error can therefore return `binding` before
 the quantile check is reached; see [quantile contracts](qualified-functions.md#quantile-argument-contracts).
 
 Caller syntax still has conservative implementation checks: with defaults disabled,

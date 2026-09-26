@@ -658,8 +658,8 @@ struct LookupCallback {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 					mutable_implementation |= item->HasBindExpressionCallback();
 #else
-					mutable_implementation |= item.HasBindCallback() || item.HasBindExtendedCallback() ||
-					                          item.HasBindExpressionCallback() || item.HasBindLambdaCallback();
+					mutable_implementation |=
+					    item.HasBindCallback() || item.HasBindExtendedCallback() || item.HasBindExpressionCallback();
 #endif
 				}
 #if GATEKEEPER_DUCKDB_MAJOR < 2
