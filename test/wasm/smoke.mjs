@@ -100,7 +100,8 @@ try {
       d = await decision('SELECT list_sum([1,2])', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
       check('list aggregate implementation blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum($1)', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
-      check('deferred aggregate binding rejected', !d.allowed && d.code === 'binding' && d.functions.length === 0);
+      check('default aggregate blocked before parameter binding', !d.allowed && d.code === 'forbidden' &&
+        d.violations.some(v => v.function_name === 'sum' && v.function_type === 'aggregate') && d.functions.length === 0);
       d = await decision('SELECT list_sum($1::INTEGER[])', ", blocked_functions := [{schema_path:['*'],name:'sum'}]");
       check('typed aggregate parameter still blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])');
