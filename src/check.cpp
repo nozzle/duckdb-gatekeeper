@@ -40,6 +40,7 @@
 #include "function_policy.hpp"
 #include "json_serializer.hpp"
 #include "policy_setting.hpp"
+#include "remote_scope.hpp"
 
 namespace duckdb {
 using namespace duckdb_yyjson;
@@ -311,6 +312,8 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 		if (op->type == LogicalOperatorType::LOGICAL_GET && origin != PlanOrigin::PRESCREEN) {
 			auto &get = op->Cast<LogicalGet>();
 			auto table = get.GetTable();
+			if (OpaqueQuackFunction(engine::FunctionName(get.function)) && !table)
+				deny("Quack scan lacks a checked table identity");
 			if (table) {
 				auto catalog = engine::CatalogName(table->schema.catalog), name = engine::EntryName(*table);
 				auto schema = engine::SchemaPath(table->schema);
@@ -966,6 +969,8 @@ static bool SubstitutePivotEnums(ClientContext &context, QueryNode &node, const 
 
 void Authorize(ClientContext &context, const gatekeeper::Layers &layers, TextCheck::Unit &unit,
                optional_ptr<const engine::ParameterMap> parameters, gatekeeper::Result &result) {
+	if (!CheckRemoteScope(context, result))
+		throw PermissionException("unsupported remote authorization scope");
 	if (unit.pivot_enums.empty()) {
 		if (unit.statement->type == StatementType::SELECT_STATEMENT)
 			return AuthorizeStatement(context, layers, *unit.statement, unit, parameters, result);

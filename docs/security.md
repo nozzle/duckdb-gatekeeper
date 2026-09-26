@@ -1,5 +1,10 @@
 # Security model
 
+For Quack, see the [remote authorization support matrix](quack.md): evidence is host-only checked
+local binding scope, caller-written delegation is never-bind, and server-created connections are
+not automatically enforced. Opaque trusted definitions are unsupported: deferred binding can
+execute remotely before a later refusal. The matrix also identifies the native 1.5 preparation limit.
+
 Gatekeeper decides whether one SQL statement conforms to the selected syntax, caller-function
 and resolved-deny/object policies on the build engine's parser and binder. It offers that decision two ways:
 `gatekeeper_validate` returns it to the host before the host executes, and an
@@ -468,6 +473,12 @@ under residuals.
   statement (for example when that view is blocked by table policy). Object identity is a
   bind-time property, so this cannot move earlier. `enable_external_access=false` and
   `allowed_directories` are the controls; `CALL gatekeeper_enforce()` warns when they are loose.
+- **Opaque Quack bodies and deferred binding.** Private catalog authorization refuses
+  unsupported remote scope even through trusted definitions. A parameterized statement can
+  nevertheless bind a remote view or a trusted body containing Quack SQL delegation before
+  that private check and execute remotely. Native DuckDB 1.5 preparation of constant remote
+  SQL can also transmit before any text hook. A later refusal does not undo that execution;
+  these routes are unsupported. See the [Quack support matrix](quack.md).
 - **`Prepare()` binds before it is decided.** DuckDB 1.5 binds a prepared statement before
   any extension hook runs; 2.0 runs the prepare as a statement whose text is checked first, but
   a statement the text admits is still bound before its pre-screen. Agent-written readers are
@@ -766,8 +777,8 @@ discovery. CSV/JSON reader names are not grouped. Pre-resolution Parquet refusal
 canonical name `read_parquet`; resolved violations and successful dependency lists retain
 the observed identity.
 
-**Trusted definitions are opaque to policy.** A view, scalar macro, or table macro the host
-created (any non-internal catalog entry), and an attached catalog's tables and views with
+**Trusted definitions are opaque to table and function policy.** A view, scalar macro, or
+table macro the host created (any non-internal catalog entry), and an attached catalog's tables and views with
 the scans the catalog uses for them, are trusted definitions. What their bodies introduce is
 theirs, not the caller's: an explicit `read_parquet(...)`, a file path (`FROM 'x.parquet'`),
 `md5`, `list_sum` and the `sum` it dispatches, the `lower` behind a `COLLATE nocase`,
@@ -775,12 +786,20 @@ theirs, not the caller's: an explicit `read_parquet(...)`, a file path (`FROM 'x
 included. None of it is subject to the function allowlist, to `blocked_functions`, to the
 never-bind list, to `allowed_tables`, to `blocked_tables`, or to the internal-object rule; a
 host view over `duckdb_settings()` is the host's decision to expose settings, and a host view
-over `secret.t` is the host's decision to expose those rows. The one exception is
-Gatekeeper's own control plane (`gatekeeper_configure`, `gatekeeper_enforce`,
+over `secret.t` is the host's decision to expose those rows. This exemption does not bypass
+independent control-plane or supported-execution-scope checks. Gatekeeper's own control plane
+(`gatekeeper_configure`, `gatekeeper_enforce`,
 `enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`,
-`ControlPlaneFunctions()` in `src/include/function_policy.hpp`), refused on every route: a
+`ControlPlaneFunctions()` in `src/include/function_policy.hpp`) is refused on every route: a
 definition over one of these would let a `SELECT` rewrite the policy or erase its own record,
-which no definition legitimately intends. Policy governs what is attributable to the caller.
+which no definition legitimately intends. Private catalog authorization also refuses opaque
+Quack SQL functions and remote views even when a trusted body reaches them; on DuckDB 1.5,
+all attached Quack objects are refused. These are unsupported-scope refusals, not ordinary
+function or table blocks reaching inside a trusted definition. Deferred trusted-body binding
+can execute remotely before the private check, so a later denial is not proof of zero remote
+I/O. See the [Quack support matrix](quack.md) for supported base-table reads and preparation limits.
+
+Table and function policy govern what is attributable to the caller.
 For objects: the view or table the caller names, checked by resolved identity, and every
 object the caller's own binders retrieve or the caller's text names, wherever that name
 binds. For functions: the names in the caller's text, the names the caller's own binders
@@ -884,7 +903,7 @@ The explicit list in `src/include/function_policy.hpp` contains:
 
 ```
 checkpoint currval force_checkpoint nextval gatekeeper_configure gatekeeper_enforce
-query query_table json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
+query query_table quack_query quack_query_by_name json_execute_serialized_sql json_serialize_plan read_duckdb seq_scan which_secret
 enable_logging disable_logging truncate_duckdb_logs write_log
 pragma_collations pragma_database_size pragma_metadata_info pragma_show
 pragma_storage_info pragma_table_info pragma_table_sample
@@ -899,9 +918,13 @@ duckdb_temporary_files duckdb_types duckdb_variables duckdb_views
 
 It governs what the caller's text reaches, directly or through the implementations
 binding derives from it; a host view or macro that uses one of these is a trusted
-definition and is admitted when the view is. The control-plane subset (`gatekeeper_configure`,
+definition, exempt from the caller never-bind rule. Independent control-plane and
+supported-execution-scope checks still apply. The control-plane subset (`gatekeeper_configure`,
 `gatekeeper_enforce`, `enable_logging`, `disable_logging`, `truncate_duckdb_logs`,
-`write_log`) is refused on every route.
+`write_log`) is refused on every route. Private catalog authorization also refuses
+`quack_query`, `quack_query_by_name`, and unsupported Quack objects reached through trusted
+bodies. Deferred binding can execute remotely before that check; see the
+[remote support matrix and residuals](quack.md).
 
 Source review at the pinned revision: `src/function/table/query_function.cpp`
 reparses dynamic SQL/names; `read_duckdb.cpp` attaches hidden databases;
@@ -994,9 +1017,11 @@ bind data is not introspected.
 
 - Validation always binds on the calling connection and authorizes the retrieved table
   and view identities attributable to the caller; what a trusted view or macro reads is
-  recorded, not authorized, so a host definition is the host's decision to expose what it
-  reads. No public syntax-only mode exists. Function matching uses qualified identity, not a
-  proof of a macro/UDF's implementation; catalog integrity is assumed.
+  recorded, not checked against table allow/block rules, so a host definition is the host's
+  decision to expose what it reads within the supported execution scope. Independent
+  control-plane and [Quack scope checks](quack.md) still apply. No public syntax-only mode
+  exists. Function matching uses qualified identity, not a proof of a macro/UDF's implementation;
+  catalog integrity is assumed.
 - Trusted catalog code and attached tables may invoke elevated readers internally.
   Backing-file reads for an authorized logical table are allowed. Binder callbacks
   identify tables without depending on a particular scan operator. Local Iceberg

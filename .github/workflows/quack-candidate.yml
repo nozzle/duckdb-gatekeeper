@@ -1,0 +1,46 @@
+name: Quack candidate integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quack-candidate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  quack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GATEKEEPER_EXTENSION: ${{ github.workspace }}/build/quack-candidate/extension/gatekeeper/gatekeeper.duckdb_extension
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          python-version: '3.13'
+          ccache-key: quack-d4e72566-ubuntu
+      - name: Install the hash-pinned candidate Python engine
+        run: >-
+          python -m pip install --no-deps --force-reinstall
+          'https://files.pythonhosted.org/packages/14/8d/b3e4aabfbbd908c0a418a6526bef8543e649ac011683c61f61284b8c6eb4/duckdb-2.0.0.dev2609221243-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl#sha256=11494d0e867e92845872b8d628bbd486a9808798f0be4a66aaf462c56361333d'
+      - name: Check out the matching engine without moving existing pins
+        run: |
+          mkdir -p build/quack-source
+          git -C build/quack-source init
+          git -C build/quack-source remote add origin https://github.com/duckdb/duckdb.git
+          git -C build/quack-source fetch --depth=1 origin d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143
+          git -C build/quack-source checkout --detach FETCH_HEAD
+      - name: Build Gatekeeper for that engine
+        run: |
+          cmake -G Ninja -S build/quack-source -B build/quack-candidate \
+            -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v2.0.0-alpha42986 \
+            -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" \
+            -DDUCKDB_EXTENSION_CONFIGS="$PWD/extension_config.cmake" \
+            -DBUILD_SHELL=OFF -DBUILD_UNITTESTS=OFF
+          cmake --build build/quack-candidate --target gatekeeper_loadable_extension --parallel 4
+      - name: Real matched protocol-3 client/server suite (no skips)
+        # Downloads exact hash-pinned fa3f82c53c Quack and 0507d4ae49 httpfs artifacts.
+        # --candidate verifies Python's PRAGMA version and makes any pytest skip fail the job.
+        run: python scripts/test_quack.py --candidate

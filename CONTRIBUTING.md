@@ -283,6 +283,15 @@ catalog and scan function.
 .venv/bin/python scripts/test_lakehouses.py
 ```
 
+### Quack integration
+
+Run `.venv/bin/python scripts/test_quack.py`
+for the disposable loopback client/server fixture.
+It downloads checksum-pinned 1.5.5 Quack/httpfs artifacts; candidate engines require explicit
+matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
+source pins, server-session limits, and the distinction between observed release behavior and
+candidate coverage. The opt-in tests live in `test/integration/test_quack.py`.
+
 ### Fuzzing
 
 Coverage-guided libFuzzer targets, built in Docker with Clang:

@@ -8,6 +8,13 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Caller-written Quack SQL delegation is never-bind; private authorization refuses opaque
+  trusted-view expansions. Deferred trusted-body binding and native 1.5 constant preparation
+  can execute remotely before refusal and remain unsupported. The 1.5 attached-object path is refused because it loses
+  server schema qualification; 2.0 local-binding reads require remote SQL pushdown disabled and
+  table provenance. Evidence remains local binding scope, not complete remote lineage. See
+  [Quack support](docs/quack.md), including server-connection and CONNECT restrictions.
+
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
   preserving the engine's optimization boundary and transitive host evidence. Validation results
   and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
