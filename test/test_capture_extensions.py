@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -10,6 +11,9 @@ from types import SimpleNamespace
 import pytest
 
 import capture_extensions as capture
+
+
+requires_posix = pytest.mark.skipif(os.name != "posix", reason="collector process isolation requires POSIX")
 
 
 def signature(name="f", catalog="system", schema_path=None, kind="scalar", returns="INTEGER"):
@@ -98,6 +102,7 @@ def test_parent_import_requires_no_duckdb():
     subprocess.run([sys.executable, "-S", "-c", code], cwd=capture.ROOT, check=True)
 
 
+@requires_posix
 def test_process_isolation_removes_tokens_and_user_paths(tmp_path, monkeypatch):
     fake = tmp_path / "fake.py"
     fake.write_text("import json, os, pathlib, sys\n"
@@ -118,6 +123,7 @@ def test_process_isolation_removes_tokens_and_user_paths(tmp_path, monkeypatch):
     assert "motherduck_token" not in first["env"]
 
 
+@requires_posix
 @pytest.mark.parametrize("body,status", [("import time; time.sleep(30)", "timeout"),
                                         ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", "crash"),
                                         ("raise RuntimeError('/private/token=secret')", "failed")])
@@ -160,6 +166,19 @@ def test_collection_requires_opt_in(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
+def test_collection_rejects_non_posix_before_launch_or_output(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(capture, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(capture, "run_child", lambda *args: pytest.fail("unsupported collector launched a worker"))
+    output = tmp_path / "out"
+    with pytest.raises(SystemExit) as error:
+        capture.main(["collect", "--allow-install", "--python", sys.executable,
+                      "--output", str(output), "--discover"])
+    assert error.value.code == 2
+    assert "requires POSIX" in capsys.readouterr().err
+    assert not output.exists()
+
+
+@requires_posix
 def test_builtin_discovery_and_locked_replay(tmp_path):
     discovery, verified = tmp_path / "discovery", tmp_path / "verified"
     common = ["worker", "--allow-install", "--python", sys.executable, "--extension", "json"]
@@ -196,6 +215,9 @@ def test_child_never_loads_motherduck_or_mismatched_installed_binary(tmp_path, m
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CAPTURE_EXTENSIONS_CHILD", "1")
+    # This test mocks native execution; do not change the test runner's core limit
+    # or require the POSIX-only resource module on Windows.
+    monkeypatch.setitem(sys.modules, "resource", SimpleNamespace(RLIMIT_CORE=0, setrlimit=lambda *args: None))
     commands = []
     engine = {"library_version": "fixture"}
     artifact = {"name": extension, "version": "fixture", "sha256": "0" * 64}
@@ -238,6 +260,8 @@ def test_child_never_loads_motherduck_or_mismatched_installed_binary(tmp_path, m
 
 
 def test_matrix_continues_after_failure_and_retains_partial_lock(tmp_path, monkeypatch):
+    # Exercise orchestration on every platform without launching a POSIX worker.
+    monkeypatch.setattr(capture, "os", SimpleNamespace(name="posix"))
     base = {"engine": {"library_version": "fixture"}, "functions": []}
     monkeypatch.setattr(capture, "run_child", lambda *args: {"status": "ok", "base": base})
     calls = []
@@ -256,6 +280,7 @@ def test_matrix_continues_after_failure_and_retains_partial_lock(tmp_path, monke
     assert set(json.loads((output / "lock.json").read_text())["extensions"]) == {"httpfs", "json"}
 
 
+@requires_posix
 def test_isolated_child_imports_never_write_bytecode_outside_home(tmp_path, monkeypatch):
     repo = tmp_path / "fixture-repository"
     repo.mkdir()
@@ -274,6 +299,7 @@ def test_isolated_child_imports_never_write_bytecode_outside_home(tmp_path, monk
     assert not list(repo.rglob("*.pyc"))
 
 
+@requires_posix
 def test_explicit_preloads_replay_in_order_with_distinct_stages(tmp_path):
     discovery, replay = tmp_path / "discovery", tmp_path / "replay"
     common = ["worker", "--allow-install", "--python", sys.executable, "--extension", "json"]
