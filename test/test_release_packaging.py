@@ -20,7 +20,8 @@ CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 # heading and Unreleased is left empty. Between releases the checkout is not in that state, so a test that
 # packages a tag starts from it; the version's own section must already exist, which is the coupled edit
 # docs/releasing.md asks for and these tests refuse to do without.
-RELEASED = (("CHANGELOG.md", release.changelog_sections(CHANGELOG).get("Unreleased", ""), ""),)
+PINNED_LINKS = (("community/description.yml", "/blob/main/", f"/blob/{TAG}/"),)
+RELEASED = (("CHANGELOG.md", release.changelog_sections(CHANGELOG).get("Unreleased", ""), ""),) + PINNED_LINKS
 
 
 def checkout(tmp_path, monkeypatch, edits=()):
@@ -30,11 +31,6 @@ def checkout(tmp_path, monkeypatch, edits=()):
         target = root / source
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / source, target)
-        if source == "community/description.yml":
-            # Development-only documentation links use main until the release exists.
-            # This fixture models the release descriptor, whose links are all pinned.
-            text = target.read_text()
-            target.write_text(text.replace("/blob/main/", f"/blob/{TAG}/"))
         for filename, old, new in edits:
             if filename == source:
                 text = target.read_text()
@@ -168,6 +164,18 @@ def test_descriptor_without_ref_next_is_built_for_the_stable_engine_only(tmp_pat
     assert release.release_version(TAG) == EXTENSION_VERSION
 
 
+@pytest.mark.parametrize("tag", [TAG, ""])
+@pytest.mark.parametrize("ref", ["main", "v0.0.9", "feature"])
+def test_development_documentation_links_are_only_allowed_without_a_tag(tmp_path, monkeypatch, tag, ref):
+    checkout(tmp_path, monkeypatch, RELEASED + (
+        ("community/description.yml", f"blob/{TAG}/README.md", f"blob/{ref}/README.md"),))
+    if not tag and ref == "main":
+        assert release.release_version(tag) == EXTENSION_VERSION
+    else:
+        with pytest.raises(ValueError, match="every blob/ link must name"):
+            release.release_version(tag)
+
+
 @pytest.mark.parametrize("tag,edits,message", [
     # A tag ships with its notes written: the version's section with content...
     (TAG, RELEASED + (("CHANGELOG.md", f"## {EXTENSION_VERSION} ", "## 0.0.9 "),),
@@ -184,6 +192,7 @@ def test_descriptor_without_ref_next_is_built_for_the_stable_engine_only(tmp_pat
      "more than one section for"),
 ])
 def test_changelog_gate(tmp_path, monkeypatch, tag, edits, message):
-    checkout(tmp_path, monkeypatch, edits)
+    # These cases isolate changelog errors from the separate release-link gate.
+    checkout(tmp_path, monkeypatch, edits if PINNED_LINKS[0] in edits else PINNED_LINKS + edits)
     with pytest.raises(ValueError, match=message):
         release.release_version(tag)
