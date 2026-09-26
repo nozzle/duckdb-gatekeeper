@@ -62,7 +62,7 @@ forbidden
 statement error
 CALL gatekeeper_configure(blocked_functions := ['range']);
 ----
-requires STRUCT
+legacy rule shape is unsupported
 
 statement ok
 CALL gatekeeper_configure();
