@@ -176,9 +176,9 @@ def main(argv):
         path = str(Path(directory) / "data.parquet").replace("'", "''")
         db.execute(f"COPY (SELECT 1 AS x) TO '{path}'")
         result = validate(db, f"SELECT * FROM '{path}'")
-        expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "read_parquet",
+        expect(result["code"] == "forbidden" and result["violations"][0]["function_name"] == "parquet_scan",
                f"replacement scan admitted without a reader grant: {result}")
-        db.execute("CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'read_parquet'}])")
+        db.execute("CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'parquet_scan'}])")
         result = validate(db, f"SELECT * FROM '{path}'")
         expect(result["allowed"] and result["objects"][0]["type"] == "replacement",
                f"granted replacement scan not recorded: {result}")
