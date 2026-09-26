@@ -342,6 +342,15 @@ their underlying tables, whether or not policy was applied to those (see
 [Table ACL](#table-acl)); CTE names do not. They help detect search-path surprises but do
 not prove definitions are unchanged between validation and execution.
 
+Validation results and audit diagnostics are **privileged host information**, including
+`objects`, `functions`, `caller_objects`, violations, and engine errors. On DuckDB 2.0,
+secure views use the same table rules and `type = 'view'` identity as ordinary views;
+their transitive dependencies remain in host evidence. `caller_objects` is conservative
+query-wide attribution: a caller-written name can match a dependency inside a trusted
+body, so this list is neither exact lexical dependencies nor universally safe to expose
+to untrusted callers. Applications may expose a minimal decision or a separately reviewed
+projection. See [secure views and host-only evidence](docs/security.md#secure-views-and-host-only-evidence).
+
 ## Table ACL
 
 > [!IMPORTANT]

@@ -239,6 +239,40 @@ the equality comparison additionally detects unused declarations. Select named c
   resolved. A successful empty list means no caller-attributable catalog objects were retrieved.
   No diagnostic collection mode or continued binding after denial is introduced.
 
+### Secure views and host-only evidence
+
+On DuckDB 2.0, a host-created `CREATE SECURE VIEW` is authorized by the existing
+`catalog`/`schema_path`/`table` rules and reported as `type = 'view'`. Its body binds in
+the same trusted child scope as an ordinary host view, including nested regular/secure
+views and hidden readers. A caller's separate reference to an object or function still
+receives caller policy; query-wide name collisions have the conservative behavior above.
+
+Gatekeeper admits `LogicalSecureView` as a read-only wrapper and traverses its child for
+authorization, transitive binding evidence, and private-bind/executed-plan scan accounting.
+It does not remove or rewrite the wrapper. Both checks run before optimization: caller
+predicates are checked while still caller-attributable, even when DuckDB later pushes them
+beneath the boundary. DuckDB retains control of its predicate, plan-display, and statistics
+barriers; admitting a secure view does not disable them.
+
+**Validation results and audit diagnostics are privileged host information.** This includes
+`objects`, `functions`, `caller_objects`, violation messages, and engine errors. Secure views
+do not redact these lists: host evidence retains transitive dependencies under the same
+binding-evidence limits as ordinary views. There is no new identity kind, redaction field,
+or claim of completeness after redaction.
+
+`caller_objects` is not a confidentiality-safe public projection or an exact lexical
+dependency list. It can include a hidden object retrieved inside a trusted body when a
+caller-written name also matches it, even if that name resolves to a CTE in the caller's
+scope. A refusal can also name that hidden object in `violations`. The tested 2.0 engine
+does not sanitize missing-dependency binding errors inside secure views: dropping a backing
+table can reveal its name in the engine error. Gatekeeper preserves the engine diagnostic,
+including in log-only mode; failed decisions retain the usual empty evidence lists.
+
+Applications may deliberately expose a minimal decision or a separately reviewed projection
+and should mediate execution errors as well as validation output if names must stay hidden.
+A confidentiality-safe public diagnostics interface is a separate design, not a guarantee
+of `SECURE VIEW` support or of `caller_objects`.
+
 ## Enforced connections
 
 ### Threat model
@@ -511,7 +545,8 @@ under residuals.
 - **Errors are informative.** Engine errors keep DuckDB's wording, which can name objects and
   paths the policy denies (`Did you mean "secret"?`). Gatekeeper's own denials name the rule
   and the denied function or object, and the [audit record](#audit-log) holds the caller's
-  text. Treat all of them as sensitive when relaying to untrusted callers or storing the log.
+  text. These are privileged host diagnostics, including errors inside secure-view bodies;
+  see [host-only evidence](#secure-views-and-host-only-evidence) before relaying any projection.
   One engine error reads differently on an enforced connection: the engine binds a copy of the
   statement when a connection state can request a rebind, as Gatekeeper's does, and DuckDB's
   `PivotRef::Copy` drops the query location, so a binder error raised at a `PIVOT` (a value
@@ -1140,6 +1175,9 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   have the same array type on 1.5, whose schemas have one component.
   The tested 2.0 snapshot does not allow nested schemas in `USE`/`search_path`; qualify nested
   names explicitly. Text-level refusals have no resolved catalog/schema identity (`''`/`[]`).
+- 2.0 secure views are admitted with ordinary view identity and trusted attribution while
+  preserving DuckDB's optimization boundary. Their transitive evidence and diagnostics remain
+  [host-only](#secure-views-and-host-only-evidence).
 - 2.0's default transaction-invalidation policy aborts an open transaction on any error,
   including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
   connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`

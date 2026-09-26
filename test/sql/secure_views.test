@@ -1,0 +1,164 @@
+# name: test/sql/secure_views.test
+# description: Secure boundaries preserve trusted evidence, caller policy and executed scan accounting
+# group: [gatekeeper]
+
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
+
+require gatekeeper
+
+statement ok
+CREATE SCHEMA hidden;
+
+statement ok
+CREATE SCHEMA exposed;
+
+statement ok
+CREATE TABLE hidden.payload AS SELECT * FROM (VALUES (1, '12'), (2, 'secret')) t(i, s);
+
+statement ok
+CREATE SECURE VIEW exposed.direct AS SELECT i, s, md5(s) AS digest FROM hidden.payload WHERE i = 1;
+
+statement ok
+CREATE VIEW exposed.regular AS SELECT * FROM exposed.direct;
+
+statement ok
+CREATE SECURE VIEW exposed.nested AS SELECT * FROM exposed.regular;
+
+statement ok
+CREATE SECURE VIEW exposed.generated AS SELECT * FROM range(2);
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{catalog: 'memory', schema_path: ['exposed'], 'table': '*'}], blocked_functions := [{schema_path: ['*'], name: 'md5'}, {schema_path: ['*'], name: 'range'}]);
+
+query ITIII
+SELECT allowed, caller_objects[1].type, len(caller_objects), len(objects), len(list_filter(functions, lambda f: f.name = 'md5')) > 0 FROM gatekeeper_validate('SELECT * FROM exposed.nested');
+----
+true	view	1	4	true
+
+query I
+SELECT allowed FROM gatekeeper_validate('SELECT * FROM exposed.generated');
+----
+true
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct', blocked_tables := [{schema_path: ['exposed'], 'table': 'direct'}]);
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct, hidden.payload');
+----
+forbidden
+
+# A CTE name that matches a hidden dependency still attributes it query-wide.
+query T
+SELECT code FROM gatekeeper_validate('WITH payload AS (SELECT 1) SELECT * FROM exposed.direct, payload');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct WHERE md5(s) = digest');
+----
+forbidden
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+statement ok
+SET logging_level = 'debug';
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+# Both private and executed plans traverse every occurrence underneath the wrappers.
+query II agent
+SELECT a.i, b.i FROM exposed.nested a, exposed.direct b WHERE a.i = b.i;
+----
+1	1
+
+query II agent
+SELECT * FROM exposed.generated a, exposed.generated b ORDER BY a.range, b.range;
+----
+0	0
+0	1
+1	0
+1	1
+
+# The engine must keep the throwing predicate away from the excluded 'secret' row.
+query I agent
+SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = 12;
+----
+1
+
+query II
+SELECT len(objects), len(caller_objects) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND statement = 'SELECT i FROM exposed.direct WHERE CAST(s AS INTEGER) = 12;';
+----
+2	1
+
+statement error agent
+SELECT i FROM exposed.direct WHERE md5(s) = digest;
+----
+function is not allowed: md5
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I agent
+SELECT i FROM exposed.direct WHERE md5(s) = digest;
+----
+1
+
+query IT
+SELECT allowed, code FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only';
+----
+false	forbidden
+
+statement ok
+DROP TABLE hidden.payload;
+
+# Binding failures retain empty evidence; do not require the engine to disclose hidden names.
+query TIII
+SELECT code, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
+----
+binding	0	0	0
+
+statement error agent
+SELECT * FROM exposed.direct;
+----
+<REGEX>:.*
+
+# A substitution inside a secure view is trusted; the same caller-written substitution
+# stays caller-owned and retains its implementation kind in validation and audit denials.
+statement ok
+SET gatekeeper_log_only = false;
+
+statement ok
+CREATE SECURE VIEW exposed.substituted AS SELECT date_part('epoch', DATE '2020-01-01') AS x;
+
+statement ok
+CALL gatekeeper_configure(blocked_functions := [{catalog: 'system', schema_path: ['main'], name: 'epoch', type: 'scalar'}]);
+
+query IT
+SELECT allowed, caller_objects[1].type FROM gatekeeper_validate('SELECT * FROM exposed.substituted');
+----
+true	view
+
+query I agent
+SELECT x FROM exposed.substituted;
+----
+1577836800
+
+query TTTTIII
+SELECT code, violations[1].catalog, violations[1].function_name, violations[1].function_type, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted');
+----
+forbidden	system	epoch	scalar	0	0	0
+
+statement error agent
+SELECT date_part('epoch', DATE '2020-01-01'), x FROM exposed.substituted;
+----
+resolved function is not allowed: epoch
+
+query TTT
+SELECT code, violations[1].function_name, violations[1].function_type FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND statement = 'SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted;';
+----
+forbidden	epoch	scalar

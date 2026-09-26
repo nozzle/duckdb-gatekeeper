@@ -205,9 +205,11 @@ checklist.
 `test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
 create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises
 the explicit path API on every engine; `test_schema_paths.py` adds deeper 2.0 coverage.
-`test/sql/connect.test` uses `GATEKEEPER_TEST_ENGINE_MAJOR=2` for CONNECT syntax; both
-compatibility matrix jobs set the engine-major marker for engine-specific SQL tests. The native
-remote-catalog probe additionally verifies callback ordering with an actual routing target.
+`test/sql/secure_views.test`, `connect.test`, and `parameter_fallback.test` require
+`GATEKEEPER_TEST_ENGINE_MAJOR=2`; both compatibility matrix jobs set the engine-major marker
+for engine-specific SQL tests. `test_secure_views.py` covers host evidence, engine diagnostics
+and predicate barriers, and the native prepared-handle probe includes secure views on 2.0.
+The native remote-catalog probe additionally verifies callback ordering with an actual routing target.
 
 The two layers overlap on purpose and the overlap is not a cleanup target: a behavior that
 appears in both is checked on the static build on every platform *and* on the loadable
