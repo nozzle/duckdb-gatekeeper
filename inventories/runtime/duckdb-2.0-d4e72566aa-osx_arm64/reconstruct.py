@@ -3,36 +3,24 @@ import collections
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT.parents[2] / "scripts"))
+from audit_inventory import verify_collection_report, verify_historical_report
+from inventory_capture import apply_delta, digest
 
 
 def read(name):
     return json.loads((ROOT / name).read_text())
 
 
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def apply_delta(before, delta):
-    """Preserve duplicate overload rows and restore capture_functions ordering."""
-    rows = collections.Counter(json.dumps(row, sort_keys=True) for row in before)
-    removed = delta["removed"] + [row for group in delta["changed"] for row in group["before"]]
-    added = delta["added"] + [row for group in delta["changed"] for row in group["after"]]
-    for row in removed:
-        key = json.dumps(row, sort_keys=True)
-        if rows[key] <= 0:
-            raise ValueError("delta removes a missing signature")
-        rows[key] -= 1
-    rows.update(json.dumps(row, sort_keys=True) for row in added)
-    return [json.loads(key) for key in sorted(rows) for _ in range(rows[key])]
-
-
 def verify():
+    qualified_report = verify_collection_report(ROOT)
+    verify_historical_report(ROOT, qualified_report)
     base, lock, summary = read("base.json"), read("lock.json"), read("summary.json")
-    collection, report = read("collection.json"), read("report.json")
+    collection = read("collection.json")
     discovery = read("evidence/discovery.json")
     assert base["engine"] == lock["engine"] == collection["engine"]
     engine = base["engine"]
@@ -101,13 +89,8 @@ def verify():
         union |= collections.Counter(json.dumps(row, sort_keys=True) for row in rows)
     identities = {(r["catalog"].lower(), tuple(p.lower() for p in r["schema_path"]), r["name"].lower(), r["kind"])
                   for r in (json.loads(key) for key in union)}
-    assert len(identities) == report["union_qualified_identities"] == 1438
-    assert sum(union.values()) == report["union_signatures"] == 3667
-    assert report["observed_default_identities"] == 913
-    assert report["compiled_defaults"] == 919
-    assert len(report["defaults_not_observed"]) == 6
-    assert len(report["unclassified_runtime_names"]) == 248
-    assert report["default_names_at_ungranted_identities"] == []
+    assert len(identities) == qualified_report["union_qualified_identities"]
+    assert sum(union.values()) == qualified_report["union_signatures"]
     repo = ROOT.parents[2]
     for relative, expected in collection["historical_inputs_sha256"].items():
         assert hashlib.sha256((repo / relative).read_bytes()).hexdigest() == expected

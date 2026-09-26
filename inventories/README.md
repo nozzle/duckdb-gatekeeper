@@ -281,6 +281,66 @@ the core catalog for every extension. Historical baselines and review provenance
 separate; collection never creates grants or reclassifies functions. The existing
 `audit_inventory.py` interface retains its no-automatic-install behavior.
 
+### Offline collection audit and reconstruction
+
+Committed collections are audited without importing DuckDB, installing extensions or
+replaying native code. The supported inputs are:
+
+```sh
+# A full collector base is also a supported --candidate snapshot.
+python -S scripts/audit_inventory.py --candidate inventories/runtime/duckdb-1.5.5-osx_arm64/base.json
+# Aggregate qualified coverage from the base and successful independent final setups.
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64
+# One full reconstructed final target, compared with --baseline (historical by default).
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64 --extension excel
+# Recompute and check every field, not just report counts.
+python -S scripts/audit_inventory.py --collection inventories/runtime/duckdb-1.5.5-osx_arm64 \
+  --verify-report inventories/runtime/duckdb-1.5.5-osx_arm64/qualified-report.json
+```
+
+`--collection` accepts a directory or its `collection.json` path. An extension delta
+is **not** a full `--candidate`: use `--collection DIR --extension NAME`. Failed or
+skipped targets produce no final snapshot and are rejected by `--extension`.
+`--strict` makes collection coverage drift/incomplete outcomes fail; ordinary audits
+report them without treating optional-extension absence as a compatibility failure.
+
+`scripts/inventory_capture.py` provides `snapshot(value)` (legacy and collector full
+snapshot adapter), `apply_delta(rows, delta)` (multiset reconstruction), and
+`reconstruct_collection(path)` returning an adapted base and outcomes with original
+metadata and full stage snapshots. The adapter reads `engine.library_version` and
+normalizes loaded-extension name/version pairs for comparison. It preserves function
+rows and never invents qualifications for historical snapshots. Reconstruction verifies
+the base hash, engine/protocol, artifact metadata against the lock, ordered load plan,
+every recorded stage function hash, successful stage-list hashes, final delta/count,
+and loaded/dependency observations. This is offline consistency checking of committed
+evidence; it does not rehash unavailable binaries or attest who collected them.
+
+`audit_inventory.collection_report(path, root=ROOT)` recomputes exact observed-default,
+missing-default, ungranted-identity and unclassified-name sets from those snapshots and
+the current inventories. Per-extension reports compare the stage immediately before
+the target with its final stage, retain source-default identities already observed
+before the target, and cross-check concrete kinds for that extension's compute names.
+Dependency attribution remains an observation, not proof of function ownership.
+
+Both collections have a reproducible `qualified-report.json` using
+`gatekeeper-qualified-collection-audit-v1`. Regenerate intentionally with
+`--collection DIR --write-report DIR/qualified-report.json`; `--verify-report` compares
+the entire parsed report, including policy hash and all sets. These reports contain
+identities and stage references, not duplicate full function snapshots. Historical
+`report.json` files retain exploratory origins/comparisons as evidence; their aggregate
+missing/ungranted/unclassified claims are also checked by each collection's
+`reconstruct.py`. Current per-stage policy verification uses the qualified report,
+not the historical report's exploratory per-extension fields or hard-coded counts.
+Historical baselines, locks and raw labels remain unchanged.
+
+`test/test_collection_audit.py` is included by the existing standard `pytest test`
+CI invocation. It consumes both committed collections, checks optional-extension
+source-map kinds and exact version-specific missing identities, and rejects report,
+source-map, stage and hash mutations (including equal-count Excel scalar/table swaps).
+Source-dependent tooling tests accept `GATEKEEPER_ENGINE_SOURCE` for build grammar and
+`GATEKEEPER_REVIEW_SOURCE` for historical provenance; both default to local `duckdb/`.
+The collection tests themselves need neither checkout nor extension artifact.
+
 ## Repinning the engine
 
 Our submodule and release toolchain pins make local/CI artifacts reproducible. They do

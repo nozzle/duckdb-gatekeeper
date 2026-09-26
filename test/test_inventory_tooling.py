@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -10,8 +11,13 @@ import pytest
 from generate import grammar, header
 from inventory import check_sources, load
 import schema_check
-from support.artifact import ROOT
+from support.artifact import ROOT, ENGINE_SOURCE
 from support.toolchain import compile_cpp, git, repository
+
+
+# Worktrees can share external sources without creating a duckdb symlink. Historical
+# provenance needs the reviewed release even when the grammar test uses a newer engine.
+REVIEW_SOURCE = Path(os.getenv("GATEKEEPER_REVIEW_SOURCE", str(ROOT / "duckdb")))
 
 
 @pytest.mark.parametrize("key,value", [
@@ -57,7 +63,7 @@ def test_generation_chunks_roundtrip_and_compile(tmp_path):
 def test_generation_uses_build_source_without_git_or_matching_review(tmp_path):
     source = tmp_path / "engine"
     relative = "src/include/duckdb/storage/serialization"
-    shutil.copytree(ROOT / "duckdb" / relative, source / relative)
+    shutil.copytree(ENGINE_SOURCE / relative, source / relative)
     path = source / relative / "parsed_expression.json"
     data = json.loads(path.read_text())
     expression = next(entry for entry in data if entry["class"] == "ConstantExpression")
@@ -67,7 +73,7 @@ def test_generation_uses_build_source_without_git_or_matching_review(tmp_path):
     subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"),
                     "--duckdb-source", str(source), "--output", str(output)], check=True)
     assert "candidate_field" in (output / "grammar.hpp").read_text()
-    assert "candidate_field" not in grammar()["rules"]["ConstantExpression"]["fields"]
+    assert "candidate_field" not in grammar(ENGINE_SOURCE)["rules"]["ConstantExpression"]["fields"]
     expression["members"][-1]["type"] = "UnsupportedCandidateType"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="Unreviewed field type"):
@@ -85,17 +91,17 @@ def test_review_version_is_historical_provenance(tmp_path):
 
 def test_reviewed_sources_match_engine_descriptors():
     entries, _ = load()
-    check_sources(entries)
+    check_sources(entries, duckdb_source=REVIEW_SOURCE)
     entries["spatial"]["source"] = entries["spatial"]["source"].replace("/tree/", "/tree/0")
     with pytest.raises(ValueError, match="Reviewed source.*spatial"):
-        check_sources(entries)
+        check_sources(entries, duckdb_source=REVIEW_SOURCE)
 
 
 def test_source_check_rejects_conditional_pins(tmp_path):
     entries, _ = load()
     descriptor = tmp_path / "duckdb/.github/config/extensions/spatial.cmake"
     descriptor.parent.mkdir(parents=True)
-    descriptor.write_text((ROOT / "duckdb/.github/config/extensions/spatial.cmake").read_text() +
+    descriptor.write_text((REVIEW_SOURCE / ".github/config/extensions/spatial.cmake").read_text() +
                           "\nif(WIN32)\n GIT_TAG " + "0" * 40 + "\nendif()\n")
     with pytest.raises(ValueError, match="Ambiguous platform-conditional.*spatial"):
         check_sources({"spatial": entries["spatial"]}, tmp_path)
@@ -118,10 +124,10 @@ def test_audit_comparison_checks_reviewed_sources(monkeypatch, tmp_path):
 def test_source_check_accepts_explicit_historical_checkout(monkeypatch, tmp_path):
     entries, _ = load()
     # An external review checkout works even if the caller has no duckdb submodule.
-    check_sources(entries, tmp_path, duckdb_source=ROOT / "duckdb")
+    check_sources(entries, tmp_path, duckdb_source=REVIEW_SOURCE)
     monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "0" * 40)
     with pytest.raises(ValueError, match="historical review checkout"):
-        check_sources(entries)
+        check_sources(entries, duckdb_source=REVIEW_SOURCE)
 
 
 def test_source_check_explains_missing_checkout(tmp_path):
@@ -145,12 +151,14 @@ def test_binary_only_review_cannot_grant_defaults(tmp_path):
 def test_generation_bakes_build_engine_identity(tmp_path):
     output = tmp_path / "generated"
     subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                    "--duckdb-source", str(ENGINE_SOURCE),
                     "--engine-version-label", "v1.5.6-dev150", "--engine-source-id", "a3cd0deed1"], check=True)
     text = (output / "version.hpp").read_text()
     assert re.search(r'BUILD_ENGINE_STAMP\[\d+\] = "GATEKEEPER_BUILD_ENGINE v1.5.6-dev150 a3cd0deed1"', text)
     for flag, value in [("--engine-version-label", "v0.0.1; system(\"x\")"), ("--engine-source-id", "not-hex"),
                         ("--engine-source-id", "a"), ("--engine-source-id", "")]:
         result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(output),
+                                 "--duckdb-source", str(ENGINE_SOURCE),
                                  flag, value], capture_output=True, text=True)
         assert result.returncode != 0 and "Refusing to bake" in result.stderr
 
@@ -162,8 +170,8 @@ def test_engine_selection_defaults(tmp_path):
     parser = argparse.ArgumentParser()
     add_engine_arguments(parser)
     # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
-    assert checkout_revision(ROOT / "duckdb") == SUPPORTED_DUCKDB_REVISION
-    assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
+    assert checkout_revision(REVIEW_SOURCE) == SUPPORTED_DUCKDB_REVISION
+    assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(REVIEW_SOURCE)])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
     assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
     # Other checkouts use their own Git metadata unless told otherwise. The cache entry is always
     # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.
@@ -267,7 +275,8 @@ def test_inventory_uses_supplied_schema(tmp_path):
 
 def test_generation_needs_only_the_standard_library(tmp_path):
     # Distribution images build with a standard-library-only interpreter (-S drops site packages).
-    result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(tmp_path)],
+    result = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/generate.py"), "--output", str(tmp_path),
+                             "--duckdb-source", str(ENGINE_SOURCE)],
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "inventory.hpp").exists() and (tmp_path / "grammar.hpp").exists()
