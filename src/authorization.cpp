@@ -56,8 +56,11 @@ static void AuthorizeFunction(const gatekeeper::Policy &policy, const gatekeeper
 	    (!grant && attributable && !gatekeeper::SystemIdentity(identity)) ||
 	    (binding.system_functions.count(canonical) && !gatekeeper::SystemIdentity(identity)) ||
 	    (implicit && (!gatekeeper::SystemIdentity(identity) || !gatekeeper::FunctionAllowed(policy, identity)))) {
-		result.violations.emplace(gatekeeper::rules::FUNCTION, "resolved function is not allowed: " + canonical,
-		                          identity.catalog, identity.schema_path, "", name, -1, identity.type);
+		auto message = "resolved function is not allowed: " + canonical;
+		if (!identity.internal.has_value())
+			message += "; internal origin is unknown, so schema-wildcard grants cannot authorize it";
+		result.violations.emplace(gatekeeper::rules::FUNCTION, message, identity.catalog, identity.schema_path, "",
+		                          name, -1, identity.type);
 		throw PermissionException("resolved function is not allowed");
 	}
 }
@@ -74,7 +77,8 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 		auto canonical = gatekeeper::Lower(name);
 		bool selected = binding.caller_functions.count(canonical) ||
 		                (!policy.defaults && binding.system_functions.count(canonical));
-		AuthorizeFunction(policy, binding, {catalog, schema, name, kind}, attributable, result, selected);
+		AuthorizeFunction(policy, binding, {catalog, schema, name, kind, entry.internal}, attributable, result,
+		                  selected);
 		bool builtin = catalog == "system" && schema == gatekeeper::NamePath{"main"};
 		if ((entry.type == CatalogType::TABLE_FUNCTION_ENTRY || entry.type == CatalogType::TABLE_MACRO_ENTRY) &&
 		    binding.runtime_table_functions.count(gatekeeper::Lower(name)) &&
@@ -91,7 +95,7 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 			                          -1, kind);
 			throw PermissionException("untrusted bind-time constructor");
 		}
-		result.functions.insert({catalog, schema, name, kind});
+		result.functions.insert({catalog, schema, name, kind, entry.internal});
 		return;
 	}
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
@@ -99,16 +103,20 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 	auto &object = entry.Cast<StandardEntry>();
 	auto catalog = engine::CatalogName(object.schema.catalog);
 	auto schema = engine::SchemaPath(object.schema);
+	const string object_type = entry.type == CatalogType::TABLE_ENTRY ? "table" : "view";
 	// Table policy, the internal-object rule included, holds for objects attributable to the caller. An object
 	// a trusted definition's body retrieved is that definition's own: recorded as evidence, outside policy.
 	if (attributable && !gatekeeper::TableAllowed(policy, catalog, schema, name, entry.internal)) {
 		if (gatekeeper::TableBlocked(policy, catalog, schema, name))
-			result.violations.emplace(gatekeeper::rules::TABLE, "object is blocked", catalog, schema, name);
+			result.violations.emplace(gatekeeper::rules::TABLE, "object is blocked", catalog, schema, name, "", -1, "",
+			                          object_type);
 		else if (entry.internal)
 			result.violations.emplace(gatekeeper::rules::INTERNAL_OBJECT,
-			                          "internal object requires exact schema/table permission", catalog, schema, name);
+			                          "internal object requires exact schema/table permission", catalog, schema, name,
+			                          "", -1, "", object_type);
 		else
-			result.violations.emplace(gatekeeper::rules::TABLE, "object is not allowed", catalog, schema, name);
+			result.violations.emplace(gatekeeper::rules::TABLE, "object is not allowed", catalog, schema, name, "", -1,
+			                          "", object_type);
 	}
 	if (!result.violations.empty())
 		throw PermissionException("resolved object is not allowed");
@@ -143,7 +151,9 @@ static gatekeeper::Identity ListAggregateImplementation(const BoundFunctionExpre
 	auto null_input = !children.empty() && engine::ReturnType(*children[0]).id() == LogicalTypeId::SQLNULL;
 	// These builtins use the fixed histogram implementation and have no serialization callbacks.
 	if (fixed.count(name))
-		return null_input ? gatekeeper::Identity{} : gatekeeper::Identity{"system", {"main"}, "histogram", "aggregate"};
+		// list_aggregates.cpp constructs HistogramFun directly; no catalog lookup is selected.
+		return null_input ? gatekeeper::Identity{}
+		                  : gatekeeper::Identity{"system", {"main"}, "histogram", "aggregate", true};
 	if (!bind_info) {
 		// A NULL-list input carries no executable aggregate: DuckDB 1.5 binds it with a VariableReturnBindData
 		// whose serialization holds no bind data (handled below), 2.0 with no bind data at all. Any other
@@ -211,6 +221,20 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	};
 	auto function = [&](gatekeeper::Identity identity, bool callers, bool grant = true,
 	                    gatekeeper::Identity definition = {}) {
+		// A bound descriptor (including a retained 2.0 definition) carries a qualified name,
+		// not CatalogEntry::internal. Restore that fact only from an exact observed entry
+		// or reviewed implementation edge. Unknown substitutions stay unknown, even when
+		// their source definition was non-internal; a schema pattern must not authorize them.
+		const bool intrinsic_origin = identity.internal.has_value();
+		for (const auto *entries :
+		     {&provenance.trusted_implementations, &provenance.caller_implementations, &provenance.function_entries}) {
+			auto found = entries->find(identity);
+			if (!intrinsic_origin && found != entries->end())
+				identity.internal = found->internal;
+			auto source = entries->find(definition);
+			if (source != entries->end())
+				definition.internal = source->internal;
+		}
 		if (!policy.defaults && (provenance.caller_expansions.count(gatekeeper::Lower(identity.name)) ||
 		                         provenance.caller_expansion_targets.count(gatekeeper::Lower(identity.name))))
 			grant = true;
@@ -267,12 +291,15 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	};
 	auto window_function = [&](const gatekeeper::Identity &identity) {
 		bool callers = attributable(identity.name);
-		// 1.5 intrinsic nodes retain an expression kind, not the written alias. 2.0 can
-		// likewise rewrite first/last or bind an alias to its canonical implementation.
-		// Recover caller attribution only for the source-defined system window capability.
-		if (gatekeeper::SystemIdentity(identity))
-			for (const auto &name : gatekeeper::WindowSpellings(identity.name))
-				callers = callers || attributable(name);
+		// 1.5's WindowFunctions maps parsed spellings to an intrinsic node, without
+		// selecting a canonical catalog entry. Authorize the actual parsed spelling(s),
+		// not an invented second capability. 2.0's catalog windows take the normal path.
+		auto written = binding.intrinsic_windows.find(identity.name);
+		if (gatekeeper::SystemIdentity(identity) && written != binding.intrinsic_windows.end()) {
+			for (const auto &name : written->second)
+				function({identity.catalog, identity.schema_path, name, "window", true}, true);
+			return;
+		}
 		function(identity, callers);
 	};
 	vector<LogicalOperator *> operators{&root};
@@ -300,7 +327,8 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		expressions.pop_back();
 		ExpressionIterator::EnumerateChildren(child, [&](Expression &nested) { expressions.push_back(&nested); });
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_UNNEST)
-			function({"system", {"main"}, "unnest", "scalar"}, attributable("unnest"));
+			// BindUnnestExpression constructs this node intrinsically, without catalog selection.
+			function({"system", {"main"}, "unnest", "scalar", true}, attributable("unnest"));
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &bound = child.Cast<BoundFunctionExpression>();
 			auto &implementation = engine::Function(bound);
@@ -368,7 +396,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 				auto found = windows.find(window.GetExpressionType());
 				if (found == windows.end())
 					throw BinderException("Unsupported bound window implementation");
-				window_function({"system", {"main"}, found->second, "window"});
+				window_function({"system", {"main"}, found->second, "window", true});
 #endif
 			}
 		}

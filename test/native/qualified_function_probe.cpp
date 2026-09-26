@@ -281,6 +281,8 @@ static void CheckNativeOrigins(Connection &connection, DuckDB &database) {
 	Query(connection, "CALL gatekeeper_configure()");
 }
 
+#include "internal_function_cases.hpp"
+
 int main() {
 	DBConfig config;
 	ConfigureProbeArtifact(config);
@@ -354,9 +356,10 @@ int main() {
 	}
 	Query(connection, "CALL gatekeeper_configure()");
 	CheckNativeOrigins(connection, database);
+	CheckInternalFunctions(connection, database);
 	replacement_binds = 0;
-	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
-	// A host alias grant keeps eligibility open: the scoped system block must still win.
+	// Alias policy is exact. A host same-leaf grant cannot hide a block on the
+	// actual parsed spelling. 2.0 first/last OVER is parser syntax for *_value.
 	Query(connection, "CREATE SCHEMA window_host");
 	for (const auto &alias : {"rank_dense", "first", "last"}) {
 		auto canonical = string(alias) == "rank_dense" ? "dense_rank" : string(alias) + "_value";
@@ -372,8 +375,19 @@ int main() {
 			Query(window_agent, string("SELECT window_host.") + alias + "()");
 			for (const auto &name : {string(alias), string(canonical)}) {
 				auto sql = "SELECT " + name + "(" + args + ") OVER ()";
-				if (Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() != "forbidden" ||
-				    !window_agent.Query(sql)->HasError())
+				auto parsed = name;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+				if (name == "first" || name == "last")
+					parsed += "_value";
+#endif
+				// 1.5 first/last also probes the aggregate entry before the intrinsic.
+				bool denied = blocked == parsed;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+				denied = denied || name == "first" || name == "last";
+#endif
+				if ((Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() ==
+				     "forbidden") != denied ||
+				    window_agent.Query(sql)->HasError() != denied)
 					return 29;
 			}
 		}

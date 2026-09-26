@@ -3,6 +3,7 @@
 #include "yyjson.hpp"
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <tuple>
@@ -88,22 +89,28 @@ struct Violation {
 	std::string table, function_name;
 	int64_t position = -1;
 	std::string function_type;
+	std::string object_type;
 	Violation(std::string rule, std::string message, std::string catalog = {}, NamePath schema_path = {},
 	          std::string table = {}, std::string function_name = {}, int64_t position = -1,
-	          std::string function_type = {})
+	          std::string function_type = {}, std::string object_type = {})
 	    : rule(std::move(rule)), message(std::move(message)), catalog(std::move(catalog)),
 	      schema_path(std::move(schema_path)), table(std::move(table)), function_name(std::move(function_name)),
-	      position(position), function_type(std::move(function_type)) {}
+	      position(position), function_type(std::move(function_type)), object_type(std::move(object_type)) {}
 	bool operator<(const Violation &other) const {
-		return std::tie(rule, message, catalog, schema_path, table, function_name, position, function_type) <
-		       std::tie(other.rule, other.message, other.catalog, other.schema_path, other.table, other.function_name,
-		                other.position, other.function_type);
+		return std::tie(rule, message, catalog, schema_path, table, function_name, position, function_type,
+		                object_type) < std::tie(other.rule, other.message, other.catalog, other.schema_path,
+		                                        other.table, other.function_name, other.position, other.function_type,
+		                                        other.object_type);
 	}
 };
 struct Identity {
 	std::string catalog;
 	NamePath schema_path;
 	std::string name, type;
+	// CatalogEntry::internal, or a documented engine intrinsic. Qualified descriptor names alone
+	// do not establish this flag. Unknown origin cannot use schema-wildcard grants.
+	// Origin is evidence about an identity, not part of its catalog key or public result shape.
+	std::optional<bool> internal;
 	bool operator<(const Identity &other) const {
 		return std::tie(catalog, schema_path, name, type) <
 		       std::tie(other.catalog, other.schema_path, other.name, other.type);
@@ -159,6 +166,9 @@ struct BindingPolicy {
 	// Every function name the caller wrote, case-folded but never alias-canonicalized: kept for the bind and
 	// execution boundaries to tell the caller's functions from those a trusted definition introduces.
 	Names caller_functions;
+	// 1.5 intrinsic windows have no catalog selection and retain only an expression kind in
+	// the plan. Keep their parsed spellings separately, not as configurable policy aliases.
+	std::map<std::string, Names> intrinsic_windows;
 	// The caller wrote COLLATE: the collation's function (lower, strip_accents, ...) is the caller's choice,
 	// though it never appears in the text.
 	bool caller_collates = false;

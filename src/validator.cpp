@@ -181,21 +181,11 @@ bool SystemIdentity(const Identity &identity) {
 	return !identity.name.empty() && Lower(identity.catalog) == "system" &&
 	       FoldPath(identity.schema_path) == NamePath{"main"};
 }
-static bool GrantNameMatches(const FunctionGrant &rule, const std::string &name, bool aliases) {
-	return rule.name == Lower(name) || (aliases && CanonicalFunction(rule.name) == CanonicalFunction(name));
-}
-static bool ReviewedAliases(const Identity &identity) {
-	return SystemIdentity(identity) &&
-	       ((identity.type == "table" && CanonicalFunction(identity.name) == "read_parquet") ||
-	        (identity.type == "scalar" && (CanonicalFunction(identity.name) == "json_extract" ||
-	                                       CanonicalFunction(identity.name) == "json_extract_string")));
-}
-static bool FunctionMatches(const FunctionGrant &rule, const Identity &identity) {
-	return (rule.type.empty() || rule.type == identity.type) &&
-	       (GrantNameMatches(rule, identity.name, ReviewedAliases(identity)) ||
-	        (SystemIdentity(identity) && identity.type == "window" &&
-	         WindowSpellings(identity.name).count(rule.name))) &&
-	       NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path);
+static bool FunctionMatches(const FunctionGrant &rule, const Identity &identity, bool exact_schema = false) {
+	if (exact_schema && std::find(rule.schema_path.begin(), rule.schema_path.end(), "*") != rule.schema_path.end())
+		return false;
+	return (rule.type.empty() || rule.type == identity.type) && rule.name == Lower(identity.name) &&
+	       NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path, exact_schema);
 }
 bool FunctionBlocked(const Policy &policy, const Identity &identity) {
 	for (const auto &rule : policy.blocked_functions)
@@ -215,33 +205,18 @@ static bool BlockCovers(const FunctionGrant &block, const FunctionGrant &candida
 	for (size_t i = 0; i < block.schema_path.size(); i++)
 		if (block.schema_path[i] != "*" && block.schema_path[i] != candidate.schema_path[i])
 			return false;
-	if ((block.type.empty() || block.type == candidate.type) && candidate.type == "window" &&
-	    SystemIdentity({candidate.catalog, candidate.schema_path, candidate.name, candidate.type}) &&
-	    WindowSpellings(candidate.name).count(block.name))
-		return true;
-	return (block.type.empty() || block.type == candidate.type) &&
-	       GrantNameMatches(
-	           block, candidate.name,
-	           ReviewedAliases({candidate.catalog, candidate.schema_path, candidate.name, candidate.type}));
+	return (block.type.empty() || block.type == candidate.type) && block.name == candidate.name;
 }
 bool FunctionEligible(const Policy &policy, const std::string &name) {
 	if (NeverBind(name))
 		return false;
-	auto survives = [&](const FunctionGrant &rule, bool defaults) {
+	auto survives = [&](const FunctionGrant &rule) {
+		if (rule.name != Lower(name))
+			return false;
 		for (const auto &kind : {"scalar", "aggregate", "table", "macro", "table_macro", "window"}) {
 			if (!rule.type.empty() && rule.type != kind)
 				continue;
 			FunctionGrant candidate{rule.catalog, rule.schema_path, Lower(name), kind};
-			if (rule.name != candidate.name) {
-				// Defaults are exact identities. Only explicit rules carry reviewed alias equivalence.
-				bool aliases = (ReviewedAliases({"system", {"main"}, name, kind}) &&
-				                CanonicalFunction(rule.name) == CanonicalFunction(name)) ||
-				               (std::string(kind) == "window" && WindowSpellings(name).count(rule.name));
-				if (defaults || !NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"}) || !aliases)
-					continue;
-				candidate.catalog = "system";
-				candidate.schema_path = {"main"};
-			}
 			bool covered = false;
 			for (const auto &block : policy.blocked_functions)
 				if (BlockCovers(block, candidate)) {
@@ -255,10 +230,10 @@ bool FunctionEligible(const Policy &policy, const std::string &name) {
 	};
 	if (policy.defaults)
 		for (const auto &rule : GetInventory().defaults)
-			if (survives(rule, true))
+			if (survives(rule))
 				return true;
 	for (const auto &rule : policy.allowed_functions)
-		if (survives(rule, false))
+		if (survives(rule))
 			return true;
 	return false;
 }
@@ -273,7 +248,7 @@ bool FunctionAllowed(const Policy &policy, const Identity &identity) {
 	                                                      Lower(identity.name), identity.type}))
 		return true;
 	for (const auto &rule : policy.allowed_functions)
-		if (FunctionMatches(rule, identity))
+		if (FunctionMatches(rule, identity, identity.internal.value_or(true)))
 			return true;
 	return false;
 }
@@ -282,7 +257,7 @@ void Provenance::RecordFunction(const Identity &identity, bool caller, int engin
 	function_entries.insert(identity);
 	for (const auto &name : FunctionImplementations(identity, engine_major))
 		(caller ? caller_implementations : trusted_implementations)
-		    .insert({identity.catalog, identity.schema_path, name, identity.type});
+		    .insert({identity.catalog, identity.schema_path, name, identity.type, identity.internal});
 }
 
 bool Provenance::CallerCanName(const BindingPolicy &binding, const std::string &name) const {
@@ -653,6 +628,11 @@ struct Walker {
 		}
 		if (kind == "FunctionExpression" || kind == "WindowExpression") {
 			auto name = Lower(Field(value, "function_name"));
+			// 1.5 serializes intrinsic windows with a non-aggregate expression type;
+			// 2.0 windows use catalog resolution instead. No policy equivalence is implied.
+			if (binding && kind == "WindowExpression" && !yyjson_obj_get(value, "qualified_name") &&
+			    Field(value, "type") != "WINDOW_AGGREGATE")
+				binding->intrinsic_windows[WindowImplementationName(name)].insert(name);
 			auto arguments = Arguments(value);
 			if (yyjson_is_true(yyjson_obj_get(value, "is_operator")))
 				Implied({name});
@@ -865,7 +845,7 @@ Result Validate(Json *root, const Policy &policy, BindingPolicy *binding, const 
 		if (binding)
 			binding->caller_functions.insert(Lower(name));
 		if (!walker.layers.All([&](const Policy &p) { return FunctionEligible(p, name); })) {
-			auto canonical = CanonicalFunction(name);
+			auto canonical = Lower(name);
 			auto message = "function is not allowed: " + canonical;
 			if (entry.second > 1)
 				message += " (" + std::to_string(entry.second) + " occurrences)";

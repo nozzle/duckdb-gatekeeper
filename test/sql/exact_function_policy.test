@@ -1,0 +1,194 @@
+# name: test/sql/exact_function_policy.test
+# description: Exact catalog entry names and internal schema grants, separate from syntax rewrites.
+# group: [gatekeeper]
+
+require gatekeeper
+require json
+require parquet
+
+# JSON aliases are distinct catalog entries, including the ->> operator entry.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'json_extract_path',type:'scalar'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT json_extract_path(''{}'', ''x'')');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT json_extract(''{}'', ''x'')');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'json_extract',type:'scalar'}], blocked_functions := [{schema_path:['*'],name:'json_extract_path'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT json_extract(''{}'', ''x'')');
+----
+ok
+
+# -> is syntax lowered by BindOperatorExpression to json_extract, not a selected
+# catalog entry named ->. It requires json_extract alone. ->> is different.
+query T
+SELECT code FROM gatekeeper_validate('SELECT (JSON ''{}'' -> ''x'')');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT JSON ''{}'' ->> ''x''');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'->>',type:'scalar'}], blocked_functions := [{schema_path:['main'],name:'json_extract_string'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT JSON ''{}'' ->> ''x''');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT json_extract_string(''{}'', ''x'')');
+----
+forbidden
+
+# A denied reader spelling stops before a missing file can bind. Granting the
+# other spelling does not rescue it. Blocks likewise do not cross entry names.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'parquet_scan',type:'table'}], blocked_functions := [{schema_path:['main'],name:'read_parquet'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM read_parquet(''exact_policy_missing.parquet'')');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM parquet_scan(''exact_policy_missing.parquet'')');
+----
+binding
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'read_parquet',type:'table'}], blocked_functions := [{schema_path:['main'],name:'parquet_scan'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM parquet_scan(''exact_policy_missing.parquet'')');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT * FROM read_parquet(''exact_policy_missing.parquet'')');
+----
+binding
+
+# rank_dense retains its spelling on both engines. On 1.5 the spelling is kept
+# alongside the intrinsic expression kind; there is no second dense_rank lookup.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'rank_dense',type:'window'}], blocked_functions := [{schema_path:['main'],name:'dense_rank',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT rank_dense() OVER ()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT dense_rank() OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'dense_rank',type:'window'}], blocked_functions := [{schema_path:['main'],name:'rank_dense',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT dense_rank() OVER ()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT rank_dense() OVER ()');
+----
+forbidden
+
+# Internal catalog entries require all schema components exact, including when
+# selected implicitly. Catalog wildcard/omission remains allowed.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'*',schema_path:['*'],name:'abs'}, {schema_path:['*'],name:'list_value'}, {schema_path:['*'],name:'row_number'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT abs(1)');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT [1]');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT row_number() OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'*',schema_path:['main'],name:'abs'}, {schema_path:['main'],name:'list_value'}, {schema_path:['main'],name:'row_number'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT abs(1), [1], row_number() OVER ()');
+----
+ok
+
+# A request's exact grant cannot expand a wildcard-only ceiling for an internal.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['*'],name:'abs'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT abs(1)', allowed_functions := [{schema_path:['main'],name:'abs'}]);
+----
+forbidden
+
+# Defaults remain exact identities; a wildcard block still overrides one.
+statement ok
+CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'abs'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT abs(1)');
+----
+forbidden
+
+# Binder substitutions retain their actual internal origin. The written entry
+# is authorized separately from the epoch implementation DatePartBind selects.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'date_part'}, {schema_path:['*'],name:'epoch'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01'')');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'date_part'}, {schema_path:['main'],name:'epoch'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01'')');
+----
+ok
+
+# Literal dispatcher targets are resolved to actual entries before checking grants.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'list_aggregate'}, {schema_path:['main'],name:'list_value'}, {schema_path:['*'],name:'sum'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT list_aggregate([1], ''sum'')');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'list_aggregate'}, {schema_path:['main'],name:'list_value'}, {schema_path:['main'],name:'sum'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT list_aggregate([1], ''sum'')');
+----
+ok
+
+statement ok
+CALL gatekeeper_configure();
