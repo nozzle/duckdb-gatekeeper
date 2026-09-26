@@ -1,0 +1,36 @@
+{
+  "inventory": "motherduck",
+  "extension": "motherduck",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/motherduck.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/motherduck.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "other_platform_probes": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/linux_amd64/motherduck.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:35.627290+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/linux_amd64/motherduck.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:35.939036+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    }
+  ]
+}

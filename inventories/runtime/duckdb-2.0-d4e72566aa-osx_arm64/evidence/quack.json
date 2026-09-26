@@ -1,0 +1,59 @@
+{
+  "inventory": "quack",
+  "extension": "quack",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/quack.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/quack.duckdb_extension.gz",
+      "compressed_sha256": "f6a675a4a129d16d3ba1f34961c785bca7bb0f9c00fccd06b6fb29b837a0bfc1",
+      "decompressed_sha256": "0e73d74a2a878d3801fc331422653b3bd0232188fa2ae938a8b87065d3a756a8",
+      "compressed_bytes": 11385671,
+      "decompressed_bytes": 38946478,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "fa3f82c53c",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/quack.cmake",
+    "descriptor_sha256": "355c621161d9a0160d8ac87fc20526ed9854b7acddaf7baf158505a862960cd7",
+    "descriptor_text": "duckdb_extension_load(quack\n    LOAD_TESTS\n    GIT_URL https://github.com/duckdb/duckdb-quack\n    GIT_TAG fa3f82c53cf587838d55efbd24f31b0c055684a9\n    SUBMODULES extension-ci-tools\n    APPLY_PATCHES\n)\n",
+    "repository": "https://github.com/duckdb/duckdb-quack",
+    "revision": "fa3f82c53cf587838d55efbd24f31b0c055684a9",
+    "source_url": "https://github.com/duckdb/duckdb-quack/tree/fa3f82c53cf587838d55efbd24f31b0c055684a9",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/quack/0001-table-catalog-entry-columns.patch",
+        "sha256": "a2914b2ae897b83817200a99c60471eeb85144ba54130aa88a9859b0c55c7d7b"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/quack/0002-binder-include.patch",
+        "sha256": "ec2a02e4e7f8b81cb5561a768aac3a19cb9050ee02f36b13f755fbe020ab1d57"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/quack/0002-literal-constant-expression.patch",
+        "sha256": "d75d56b09136b6d307490dcead98d095139a160b464824d33a349ed8601649e9"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/quack/0002-single-query-result-type.patch",
+        "sha256": "7e9ab050bd32c6db98e2c92ce8cbd3d0e18b7ce351ed69b6825f5ea3d62b9aca"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/quack/0003-nested-schema-four-part-name.patch",
+        "sha256": "4c48899fc2313206502ee0693959ea3aaede7ebda49e8fa46e61788945193328"
+      }
+    ]
+  }
+}

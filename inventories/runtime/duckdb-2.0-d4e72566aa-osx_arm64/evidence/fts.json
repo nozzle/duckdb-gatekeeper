@@ -1,0 +1,47 @@
+{
+  "inventory": "fts",
+  "extension": "fts",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/fts.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/fts.duckdb_extension.gz",
+      "compressed_sha256": "403f4096ff5a26d16c80fa2875ab04dd3db56ce7ce0d16979891c4e27c7fb844",
+      "decompressed_sha256": "a21477cd22c7030f4c64f318afba15fd6eb98943c9c29e8764c8843b92d66953",
+      "compressed_bytes": 3571352,
+      "decompressed_bytes": 12754350,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "2266e67d01",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/fts.cmake",
+    "descriptor_sha256": "8a559bc0a644a21458e7c7b0bb0d5614f351df35e5b77a77cf600b9336288196",
+    "descriptor_text": "duckdb_extension_load(fts\n        LOAD_TESTS\n        DONT_LINK\n        GIT_URL https://github.com/duckdb/duckdb-fts\n        GIT_TAG 2266e67d01c737cb65114e77c7c672e58869a635\n        TEST_DIR test/sql\n        APPLY_PATCHES\n)\n",
+    "repository": "https://github.com/duckdb/duckdb-fts",
+    "revision": "2266e67d01c737cb65114e77c7c672e58869a635",
+    "source_url": "https://github.com/duckdb/duckdb-fts/tree/2266e67d01c737cb65114e77c7c672e58869a635",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/fts/0001-get-default-schema-optional.patch",
+        "sha256": "549679069162c2fc8a42611bca7d109af0d2227943a36d9ea22907bf36ac8e2b"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/fts/0002-fts-indexing-includes.patch",
+        "sha256": "e9d111030fa1acdb4f511ed5e97e2ec294eef16484a2a2e9e118e694b1440fd7"
+      }
+    ]
+  }
+}

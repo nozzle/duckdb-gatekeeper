@@ -1,0 +1,714 @@
+{
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
+  "extensions": {
+    "autocomplete": {
+      "artifacts": [
+        {
+          "bytes": 11746918,
+          "download_sha256": "b2fa78ebc50534cf1bd9c6ab598f25f03aef6afbd749b182bcbb3669ecbbc18e",
+          "name": "autocomplete",
+          "repository": "core",
+          "sha256": "5f796d26edbe414342c6a269bdf95b26cfd961a11e178079f327317b4226a51e",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/autocomplete.duckdb_extension.gz",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "install_names": [
+        "autocomplete"
+      ],
+      "load_names": [
+        "autocomplete"
+      ],
+      "repository": "core",
+      "resolved_name": "autocomplete",
+      "stages_sha256": "490561f9a40d174d4b927a3fa558f1eeb19fd20a4dc2ba8f61528e79a5e29019",
+      "status": "ok"
+    },
+    "avro": {
+      "artifacts": [
+        {
+          "bytes": 20442958,
+          "download_sha256": "d40bd9f818a4f82b359d56b1651a7fcd2f2c287ab5f2c8885e39b8a710c5a227",
+          "name": "avro",
+          "repository": "core",
+          "sha256": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+          "version": "36a4d8ac56"
+        }
+      ],
+      "install_names": [
+        "avro"
+      ],
+      "load_names": [
+        "avro"
+      ],
+      "repository": "core",
+      "resolved_name": "avro",
+      "stages_sha256": "2068b9b91fbe8f3e85aa908d012348715664f10f98599d007510003007abac3b",
+      "status": "ok"
+    },
+    "aws": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        },
+        {
+          "bytes": 49232110,
+          "download_sha256": "2d182fc0de34aa96d208eb92c753d8faf4f9b4ae39086982819864a6c4ebdba3",
+          "name": "aws",
+          "repository": "core",
+          "sha256": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+          "version": "0a30cdb5ab"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "aws"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws"
+      ],
+      "repository": "core",
+      "resolved_name": "aws",
+      "stages_sha256": "4d0e4ced60a336f18d4ff0575a947e42a2adca52fc00186ea7a732fc802d0322",
+      "status": "ok"
+    },
+    "azure": {
+      "artifacts": [
+        {
+          "bytes": 19326990,
+          "download_sha256": "c2bb162763395ad85b9ceb789685702385dbf6f24ce895db10a19bedeb739b8d",
+          "name": "azure",
+          "repository": "core",
+          "sha256": "82530cd63e2c50d351d41b58c7fe808d0041fcf02cc7b27126746ceb1485216c",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/azure.duckdb_extension.gz",
+          "version": "8a5df75eaa"
+        }
+      ],
+      "install_names": [
+        "azure"
+      ],
+      "load_names": [
+        "azure"
+      ],
+      "repository": "core",
+      "resolved_name": "azure",
+      "stages_sha256": "0b9b9311cf6aa3257b2d222398538d6f2b8c15800d2f7e689fad9028ea31f606",
+      "status": "ok"
+    },
+    "delta": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        },
+        {
+          "bytes": 77730414,
+          "download_sha256": "c9b66825a4640d254556f9384da2e233ee829333e7d26de41905afe001ee5b0d",
+          "name": "delta",
+          "repository": "core",
+          "sha256": "94e82e37ecbc70da17f20733d041692996dc579aecaf0eae42a23d0d09170fec",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/delta.duckdb_extension.gz",
+          "version": "d1b2ffd7de"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "delta"
+      ],
+      "load_names": [
+        "httpfs",
+        "delta"
+      ],
+      "repository": "core",
+      "resolved_name": "delta",
+      "stages_sha256": "14c8f17d94eb7fc878e6285bf06e0af94fb93dd4265a305e74a5c66058240449",
+      "status": "ok"
+    },
+    "ducklake": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        },
+        {
+          "bytes": 40488718,
+          "download_sha256": "d59a6c4109cc80e3d93159151bc461f1344c342bd1c03a3d4c01bb6066629947",
+          "name": "ducklake",
+          "repository": "core",
+          "sha256": "344d30fe9879fa28af5678bad54da6eb19f0c6110945871e88506efd65e6bc2f",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/ducklake.duckdb_extension.gz",
+          "version": "e8924cfc9c"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "ducklake"
+      ],
+      "load_names": [
+        "httpfs",
+        "ducklake"
+      ],
+      "repository": "core",
+      "resolved_name": "ducklake",
+      "stages_sha256": "1cb4a7895cdb4570fe9fb80b9ccedb3d14373a1f918169ed7c9cc1fd3349e94c",
+      "status": "ok"
+    },
+    "encodings": {
+      "artifacts": [
+        {
+          "bytes": 123751614,
+          "download_sha256": "c62d6158e61b5e078f3655178c5a19615042836370146d8633e6bed75c57e909",
+          "name": "encodings",
+          "repository": "core",
+          "sha256": "7977e5c3c49ef5361ceb0626591644c7240bbf94b1046ec29b301cfe516ae1aa",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/encodings.duckdb_extension.gz",
+          "version": "f3e4d03ecf"
+        }
+      ],
+      "install_names": [
+        "encodings"
+      ],
+      "load_names": [
+        "encodings"
+      ],
+      "repository": "core",
+      "resolved_name": "encodings",
+      "stages_sha256": "2eb9c0750a1575ef23de8e944ad9af249fca2081f727b3a08c834ae54afb0ec5",
+      "status": "ok"
+    },
+    "excel": {
+      "artifacts": [
+        {
+          "bytes": 12129822,
+          "download_sha256": "61853eebd8836ef4f06656709f5b822b83be8a10c06ac6e1a156ccbe13ffc321",
+          "name": "excel",
+          "repository": "core",
+          "sha256": "4817fc3e4e96c870d2d093f21832cf90a0dfc7bf34e588e6ddc1c1907e5a8d3f",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/excel.duckdb_extension.gz",
+          "version": "9421a2d75b"
+        }
+      ],
+      "install_names": [
+        "excel"
+      ],
+      "load_names": [
+        "excel"
+      ],
+      "repository": "core",
+      "resolved_name": "excel",
+      "stages_sha256": "07167cfb88ca536684ab6352e54a06c7c60faa33b1045f4064957f8f59a8bfd1",
+      "status": "ok"
+    },
+    "fts": {
+      "artifacts": [
+        {
+          "bytes": 12754350,
+          "download_sha256": "403f4096ff5a26d16c80fa2875ab04dd3db56ce7ce0d16979891c4e27c7fb844",
+          "name": "fts",
+          "repository": "core",
+          "sha256": "a21477cd22c7030f4c64f318afba15fd6eb98943c9c29e8764c8843b92d66953",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/fts.duckdb_extension.gz",
+          "version": "2266e67d01"
+        }
+      ],
+      "install_names": [
+        "fts"
+      ],
+      "load_names": [
+        "fts"
+      ],
+      "repository": "core",
+      "resolved_name": "fts",
+      "stages_sha256": "c7734455520989a23431bb0cb0050ac671ae60ec5bde248e59fc7b2bf7337390",
+      "status": "ok"
+    },
+    "httpfs": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        }
+      ],
+      "install_names": [
+        "httpfs"
+      ],
+      "load_names": [
+        "httpfs"
+      ],
+      "repository": "core",
+      "resolved_name": "httpfs",
+      "stages_sha256": "c1a309f60116e56aa12c3f5ba67e71fdcfeec1fdf7f47516a0c7079d7296b3ba",
+      "status": "ok"
+    },
+    "iceberg": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        },
+        {
+          "bytes": 49232110,
+          "download_sha256": "2d182fc0de34aa96d208eb92c753d8faf4f9b4ae39086982819864a6c4ebdba3",
+          "name": "aws",
+          "repository": "core",
+          "sha256": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+          "version": "0a30cdb5ab"
+        },
+        {
+          "bytes": 20442958,
+          "download_sha256": "d40bd9f818a4f82b359d56b1651a7fcd2f2c287ab5f2c8885e39b8a710c5a227",
+          "name": "avro",
+          "repository": "core",
+          "sha256": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+          "version": "36a4d8ac56"
+        },
+        {
+          "bytes": 48331534,
+          "download_sha256": "0f82ef95556b2cfef254bc9ae5ba24203ac04c48c0751c6e4fa6eb19cdd9e431",
+          "name": "iceberg",
+          "repository": "core",
+          "sha256": "3d657a11cb6ed93e2ce133a9f3a1e6c40933a6a305fc23e31caa40dd5d58a135",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension.gz",
+          "version": "61c948fb29"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "aws",
+        "avro",
+        "iceberg"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws",
+        "avro",
+        "iceberg"
+      ],
+      "repository": "core",
+      "resolved_name": "iceberg",
+      "stages_sha256": "7f8d0cfa434244ecccb76772a1bce7f71b6a053139f4708d1d35476b463610f4",
+      "status": "ok"
+    },
+    "icu": {
+      "artifacts": [],
+      "install_names": [
+        "icu"
+      ],
+      "load_names": [
+        "icu"
+      ],
+      "repository": "core",
+      "resolved_name": "icu",
+      "stages_sha256": "be70303e9a4fc54881462fae86d926af51291b6f52db84aef1edbbeb8ee87662",
+      "status": "ok"
+    },
+    "inet": {
+      "artifacts": [
+        {
+          "bytes": 12250238,
+          "download_sha256": "123b2adf4d8d5f9106b4f5cb074205e2c6f83c9f93e275568c1573ff496a1784",
+          "name": "inet",
+          "repository": "core",
+          "sha256": "21331ef3e4c8ee7eb432f980c093c482dcb1ab7cb5138d49311873511b93ea8e",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/inet.duckdb_extension.gz",
+          "version": "fe7f60bb60"
+        }
+      ],
+      "install_names": [
+        "inet"
+      ],
+      "load_names": [
+        "inet"
+      ],
+      "repository": "core",
+      "resolved_name": "inet",
+      "stages_sha256": "46104595146d27e647b261069acf3145687b463e1496a8b03ac1fac144756e6c",
+      "status": "ok"
+    },
+    "json": {
+      "artifacts": [],
+      "install_names": [
+        "json"
+      ],
+      "load_names": [
+        "json"
+      ],
+      "repository": "core",
+      "resolved_name": "json",
+      "stages_sha256": "ea8b81085ac7bc1ed29bb0b7d930c78a1b880c259dcda9f547aadb8833195cda",
+      "status": "ok"
+    },
+    "lance": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "lance"
+      ],
+      "load_names": [
+        "httpfs",
+        "lance"
+      ],
+      "repository": "core",
+      "resolved_name": "lance",
+      "stages_sha256": null,
+      "status": "unavailable"
+    },
+    "motherduck": {
+      "artifacts": [],
+      "install_names": [
+        "motherduck"
+      ],
+      "load_names": [
+        "motherduck"
+      ],
+      "repository": "core",
+      "resolved_name": "motherduck",
+      "stages_sha256": null,
+      "status": "unavailable"
+    },
+    "mysql": {
+      "artifacts": [
+        {
+          "bytes": 43470598,
+          "download_sha256": "d8488511585daf4c6d2ea4b430128291c567e1af33987465fd16f6d48fb309f8",
+          "name": "mysql_scanner",
+          "repository": "core",
+          "sha256": "8a404c80eae753b6a7b4d27702966600f75bf44532750a211facb6c05c2fbe8d",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/mysql_scanner.duckdb_extension.gz",
+          "version": "c40fd3d3e1"
+        }
+      ],
+      "install_names": [
+        "mysql_scanner"
+      ],
+      "load_names": [
+        "mysql_scanner"
+      ],
+      "repository": "core",
+      "resolved_name": "mysql_scanner",
+      "stages_sha256": "a1eb1b10e46fff4413df2cb1d8b30a77147b76d3f94905d2ccbc2ecbce687790",
+      "status": "ok"
+    },
+    "odbc": {
+      "artifacts": [
+        {
+          "bytes": 522190,
+          "download_sha256": "86b17a5ccaec25683b3b752f8efdb431857ee39273689e40923a31ff8a0c16bf",
+          "name": "odbc_scanner",
+          "repository": "core",
+          "sha256": "27c33ad5d3b300d0b9e5b7accdf7f92c2fb254a1ee69488a3e3537b57721aa1c",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/odbc_scanner.duckdb_extension.gz",
+          "version": "274a330734"
+        }
+      ],
+      "install_names": [
+        "odbc_scanner"
+      ],
+      "load_names": [
+        "odbc_scanner"
+      ],
+      "repository": "core",
+      "resolved_name": "odbc_scanner",
+      "stages_sha256": "f1b93da4e4f0da817ad5b8dc01a65a1300c28586f186e6463f1d07c9dade2fb0",
+      "status": "ok"
+    },
+    "parquet": {
+      "artifacts": [],
+      "install_names": [
+        "parquet"
+      ],
+      "load_names": [
+        "parquet"
+      ],
+      "repository": "core",
+      "resolved_name": "parquet",
+      "stages_sha256": "32d5aa0921207ef0a63e7e366cc4c4f92eba4adb6a57f6a67b81e50d1cfd7cf0",
+      "status": "ok"
+    },
+    "postgres": {
+      "artifacts": [
+        {
+          "bytes": 43672022,
+          "download_sha256": "d9415c538b7a5ba4a60f869e87e11bd0c12681a47e3f3f7e9412d3088f4b4ea1",
+          "name": "postgres_scanner",
+          "repository": "core",
+          "sha256": "9e05dfefc8cf39c4f9bf6aeed25f4f83dfff5d1d8428e0e29862ed457f4215db",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/postgres_scanner.duckdb_extension.gz",
+          "version": "bc6aab54de"
+        }
+      ],
+      "install_names": [
+        "postgres_scanner"
+      ],
+      "load_names": [
+        "postgres_scanner"
+      ],
+      "repository": "core",
+      "resolved_name": "postgres_scanner",
+      "stages_sha256": "e02af656b6340698983b3b4edf837f0e75cb87cbaadcffe00c565873b94b3dd2",
+      "status": "ok"
+    },
+    "quack": {
+      "artifacts": [
+        {
+          "bytes": 38946478,
+          "download_sha256": "f6a675a4a129d16d3ba1f34961c785bca7bb0f9c00fccd06b6fb29b837a0bfc1",
+          "name": "quack",
+          "repository": "core",
+          "sha256": "0e73d74a2a878d3801fc331422653b3bd0232188fa2ae938a8b87065d3a756a8",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/quack.duckdb_extension.gz",
+          "version": "fa3f82c53c"
+        }
+      ],
+      "install_names": [
+        "quack"
+      ],
+      "load_names": [
+        "quack"
+      ],
+      "repository": "core",
+      "resolved_name": "quack",
+      "stages_sha256": "d7273ac769e3d07ffba216689015ebc3bea1d8e5f36ca3afccae367b14148971",
+      "status": "ok"
+    },
+    "spatial": {
+      "artifacts": [
+        {
+          "bytes": 72430542,
+          "download_sha256": "53e0ac37a22b9201b74fa51e767d4c9bbef5301b24204f04dc829b9abc4e4f9f",
+          "name": "spatial",
+          "repository": "core",
+          "sha256": "fa05cf9af56e4852e8a1ac53f572090a9cf042051ae3f7e8bce2aa6e2a69b5ff",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/spatial.duckdb_extension.gz",
+          "version": "686950e980"
+        }
+      ],
+      "install_names": [
+        "spatial"
+      ],
+      "load_names": [
+        "spatial"
+      ],
+      "repository": "core",
+      "resolved_name": "spatial",
+      "stages_sha256": "aaea8c89726c0dd6e32819062ac32be1082e8fd339af4d8e35f6a8db0f3b988e",
+      "status": "ok"
+    },
+    "sqlite": {
+      "artifacts": [
+        {
+          "bytes": 39726022,
+          "download_sha256": "8527957f5f9ba2692ac086efc1efe61d07a13578f851b65784ff6780e2be2f1d",
+          "name": "sqlite_scanner",
+          "repository": "core",
+          "sha256": "bbfc1744fe7913920736fa758ff4eee220edebd793d6dc9aa946469abde8a6bb",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+          "version": "982cb44841"
+        }
+      ],
+      "install_names": [
+        "sqlite_scanner"
+      ],
+      "load_names": [
+        "sqlite_scanner"
+      ],
+      "repository": "core",
+      "resolved_name": "sqlite_scanner",
+      "stages_sha256": "8bb61f5d4ad139b2bd52dc50a4d5089aeccbdea8682d4da7eb184203d907886a",
+      "status": "ok"
+    },
+    "tpcds": {
+      "artifacts": [
+        {
+          "bytes": 23246686,
+          "download_sha256": "070cdb63207da24366ed1b51e8b1fd820289a4f18723f8a1b2a27a51d380112a",
+          "name": "tpcds",
+          "repository": "core",
+          "sha256": "1c9058182fe61ddc3b3e943c5fad5a8e52caa488b1348dab629d74b7a4a79642",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpcds.duckdb_extension.gz",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "install_names": [
+        "tpcds"
+      ],
+      "load_names": [
+        "tpcds"
+      ],
+      "repository": "core",
+      "resolved_name": "tpcds",
+      "stages_sha256": "c597cdf9f8e4825ba35487497a6b95d7c3ae67e1f1e1e167469f879ee139ccb3",
+      "status": "ok"
+    },
+    "tpch": {
+      "artifacts": [
+        {
+          "bytes": 22084574,
+          "download_sha256": "be043f8499f75d04cfb7826bbbf195645524ee342d6785d536c8116a0b7f9cf4",
+          "name": "tpch",
+          "repository": "core",
+          "sha256": "50734d1a7331785f477a7be18a7b55152ba8edb3c5f212bb3c4cb0628c723ca4",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpch.duckdb_extension.gz",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "install_names": [
+        "tpch"
+      ],
+      "load_names": [
+        "tpch"
+      ],
+      "repository": "core",
+      "resolved_name": "tpch",
+      "stages_sha256": "795e082ee6c89d63a8d14da3ccfa0ab24b99d719db8e2579d739d180b111d8f7",
+      "status": "ok"
+    },
+    "ui": {
+      "artifacts": [],
+      "install_names": [
+        "ui"
+      ],
+      "load_names": [
+        "ui"
+      ],
+      "repository": "core",
+      "resolved_name": "ui",
+      "stages_sha256": null,
+      "status": "unavailable"
+    },
+    "unity_catalog": {
+      "artifacts": [
+        {
+          "bytes": 19246078,
+          "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+          "name": "httpfs",
+          "repository": "core",
+          "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+          "version": "0507d4ae49"
+        },
+        {
+          "bytes": 49232110,
+          "download_sha256": "2d182fc0de34aa96d208eb92c753d8faf4f9b4ae39086982819864a6c4ebdba3",
+          "name": "aws",
+          "repository": "core",
+          "sha256": "6fe8bad87e1e9f339c2bce538f4a34fc06806618acadeb138db286d0750b8226",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/aws.duckdb_extension.gz",
+          "version": "0a30cdb5ab"
+        },
+        {
+          "bytes": 38197494,
+          "download_sha256": "8458fdc97754872d5a3a5242335a1a9d547b3cd4b2e60715a2f224eb09c96bcf",
+          "name": "unity_catalog",
+          "repository": "core",
+          "sha256": "5a9c489dcd225e8a53cf428ae6c2093d9daa0379170c10b664398bad2f8c11b5",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/unity_catalog.duckdb_extension.gz",
+          "version": "5be31beb33"
+        }
+      ],
+      "install_names": [
+        "httpfs",
+        "aws",
+        "unity_catalog"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws",
+        "unity_catalog"
+      ],
+      "repository": "core",
+      "resolved_name": "unity_catalog",
+      "stages_sha256": "f2da5b29c1aa8d290129ae38c40028146c5a4aea2c6a614e5ef12bc16d16ae4d",
+      "status": "ok"
+    },
+    "vortex": {
+      "artifacts": [],
+      "install_names": [
+        "vortex"
+      ],
+      "load_names": [
+        "vortex"
+      ],
+      "repository": "core",
+      "resolved_name": "vortex",
+      "stages_sha256": null,
+      "status": "unavailable"
+    },
+    "vss": {
+      "artifacts": [
+        {
+          "bytes": 38319870,
+          "download_sha256": "c1b8e5e26467c5caa5551f91ae94d01e26093dcfc9f2d4927e83849f025569c6",
+          "name": "vss",
+          "repository": "core",
+          "sha256": "f53897a186e63e06c6d66780ff77c0f6b1a47ea4f6f57803369cb5f68f233c95",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/vss.duckdb_extension.gz",
+          "version": "9eba8b3dc4"
+        }
+      ],
+      "install_names": [
+        "vss"
+      ],
+      "load_names": [
+        "vss"
+      ],
+      "repository": "core",
+      "resolved_name": "vss",
+      "stages_sha256": "df80b31fefa4c5279993a4c2b6dc0a41892eca9f1312df92196c0bb7bfd144a8",
+      "status": "ok"
+    }
+  },
+  "schema_version": 2
+}

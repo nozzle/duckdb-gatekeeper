@@ -97,8 +97,31 @@ explanation. The historical snapshot is never rewritten to make the kinds match.
 
 Autocomplete, Delta, DuckLake, Excel, FTS, Iceberg, INET, PostgreSQL, Quack, Spatial,
 TPC-DS and TPC-H have registration-source evidence even though absent from that
-snapshot. Their identities are retained, with that limitation recorded in each evidence
-group. Extensions with no compute names contribute no defaults; binary-only MotherDuck
+historical snapshot. The evidence groups retain that original coverage limitation;
+new qualified observations are checked in separately under `inventories/runtime/`:
+
+- [DuckDB 1.5.5, macOS ARM64](../inventories/runtime/duckdb-1.5.5-osx_arm64/README.md):
+  locked replay succeeded for 28 of 29 extension setups, including the extensions above.
+  MotherDuck was installed but deliberately not loaded. The independent captures observe
+  903 of 919 default identities. The 16 unobserved identities are the 13 window intrinsics
+  reported as aggregates, the two 2.0-only rounding scalars, and scalar `unnest` (a binder
+  intrinsic). No target-added default-name identity falls outside the grants; the aggregate
+  report still flags the 13 synthetic window labels. `vortex_version` is the only added
+  name absent from the historical classifications.
+- [DuckDB 2.0 candidate, macOS ARM64](../inventories/runtime/duckdb-2.0-d4e72566aa-osx_arm64/README.md):
+  locked replay succeeded for 25 of 29 setups at `d4e72566aa`; Lance, MotherDuck, UI and
+  Vortex artifacts were unavailable at the recorded coordinates. The independent captures
+  observe 913 of 919 default identities, with no default names at ungranted identities.
+  The six unobserved defaults are two ICU locale scalars, the two historical rounding
+  macros, Spatial's `st_snap`, and scalar `unnest`; the candidate report links their
+  source reconciliation. Its 248 unclassified runtime names grant no permissions.
+
+These collections preserve shared qualified bases, per-extension dependency/target deltas,
+artifact locks and stage hashes. Their aggregate reports are unions of independent setups,
+not a single combined live catalog or proof of individual function ownership. They are
+runtime observations, **not accepted extension baselines**, replacements for the historical
+baseline, or new implementation reviews. Source-backed grants and classifications remain
+unchanged. Extensions with no compute names contribute no defaults; binary-only MotherDuck
 continues to contribute none. No source-limited name was silently dropped.
 
 New captures retain catalog, kind and full schema paths. On engines exposing nested

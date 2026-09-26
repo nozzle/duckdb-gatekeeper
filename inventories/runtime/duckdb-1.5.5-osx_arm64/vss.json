@@ -1,0 +1,304 @@
+{
+  "active_extension": "vss",
+  "artifacts": [
+    {
+      "bytes": 25562974,
+      "download_sha256": "74ddab07d8db831dfb97f2cbe9b30d8699da2baa6254fa8f19c2f2ec0964665b",
+      "name": "vss",
+      "repository": "core",
+      "sha256": "0d2643871203c4aa07649f5aa4ed8fc7fe8f2b3a6761bc9c6f1160e97cbe7685",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vss.duckdb_extension.gz",
+      "version": "b833341"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2907,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "hnsw_index_scan",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "pragma_hnsw_index_info",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT score, left_tbl, right_tbl FROM (SELECT * FROM query_table(CAST(left_table AS VARCHAR))) AS left_tbl , (SELECT struct_pack(UNPACK(COLUMNS(main.list_apply(main.list_filter(main.list_apply(matches.*, (lambda x: main.struct_pack(\"filter\" := (x != 'score'), result := x))), (lambda elem: main.struct_extract(elem, 'filter'))), (lambda elem: main.struct_extract(elem, 'result')))))) AS right_tbl, matches.score AS score FROM (SELECT unnest(CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (min_by(tbl, tbl.score, k)) ELSE max_by(tbl, tbl.score, k) END, max_depth := 2) AS result FROM (SELECT *, CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (array_distance(left_col, right_col)) WHEN (((metric = 'cosine') OR (metric = 'cos'))) THEN (array_cosine_similarity(left_col, right_col)) WHEN ((metric = 'ip')) THEN (array_inner_product(left_col, right_col)) ELSE \"error\"('Unknown metric') END AS score FROM query_table(CAST(right_table AS VARCHAR))) AS tbl) AS matches)",
+        "name": "vss_join",
+        "parameters": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table_macro",
+        "macro": "SELECT right_tbl AS matches FROM (SELECT CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (min_by(main.struct_pack(score := score, \"row\" := t), score, k)) ELSE max_by(main.struct_pack(score := score, \"row\" := t), score, k) END AS right_tbl FROM (SELECT CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (array_distance(left_col, right_col)) WHEN (((metric = 'cosine') OR (metric = 'cos'))) THEN (array_cosine_similarity(left_col, right_col)) WHEN ((metric = 'ip')) THEN (array_inner_product(left_col, right_col)) ELSE \"error\"('Unknown metric') END AS score, tbl AS t FROM (SELECT * FROM query_table(CAST(right_table AS VARCHAR))) AS tbl))",
+        "name": "vss_match",
+        "parameters": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "vss"
+  ],
+  "inventory": "vss",
+  "load_names": [
+    "vss"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "vss",
+      "version": "b833341"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "vss",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "hnsw_index_scan",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "pragma_hnsw_index_info",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT score, left_tbl, right_tbl FROM (SELECT * FROM query_table(CAST(left_table AS VARCHAR))) AS left_tbl , (SELECT struct_pack(UNPACK(COLUMNS(main.list_apply(main.list_filter(main.list_apply(matches.*, (lambda x: main.struct_pack(\"filter\" := (x != 'score'), result := x))), (lambda elem: main.struct_extract(elem, 'filter'))), (lambda elem: main.struct_extract(elem, 'result')))))) AS right_tbl, matches.score AS score FROM (SELECT unnest(CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (min_by(tbl, tbl.score, k)) ELSE max_by(tbl, tbl.score, k) END, max_depth := 2) AS result FROM (SELECT *, CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (array_distance(left_col, right_col)) WHEN (((metric = 'cosine') OR (metric = 'cos'))) THEN (array_cosine_similarity(left_col, right_col)) WHEN ((metric = 'ip')) THEN (array_inner_product(left_col, right_col)) ELSE \"error\"('Unknown metric') END AS score FROM query_table(CAST(right_table AS VARCHAR))) AS tbl) AS matches)",
+            "name": "vss_join",
+            "parameters": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table_macro",
+            "macro": "SELECT right_tbl AS matches FROM (SELECT CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (min_by(main.struct_pack(score := score, \"row\" := t), score, k)) ELSE max_by(main.struct_pack(score := score, \"row\" := t), score, k) END AS right_tbl FROM (SELECT CASE  WHEN (((metric = 'l2sq') OR (metric = 'l2'))) THEN (array_distance(left_col, right_col)) WHEN (((metric = 'cosine') OR (metric = 'cos'))) THEN (array_cosine_similarity(left_col, right_col)) WHEN ((metric = 'ip')) THEN (array_inner_product(left_col, right_col)) ELSE \"error\"('Unknown metric') END AS score, tbl AS t FROM (SELECT * FROM query_table(CAST(right_table AS VARCHAR))) AS tbl))",
+            "name": "vss_match",
+            "parameters": [
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "4953d979e84b50a4f7387e621ae04214a065e35b278454efd396a2f8161fa389",
+      "load_name": "vss",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "vss",
+          "version": "b833341"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "f25e6760a740eb94c1145795e362127a785219e6c0ee520bc0db73f18b004f2c",
+  "status": "ok"
+}

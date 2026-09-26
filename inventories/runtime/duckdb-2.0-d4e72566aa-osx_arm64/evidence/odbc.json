@@ -1,0 +1,43 @@
+{
+  "inventory": "odbc",
+  "extension": "odbc_scanner",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/odbc_scanner.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/odbc_scanner.duckdb_extension.gz",
+      "compressed_sha256": "86b17a5ccaec25683b3b752f8efdb431857ee39273689e40923a31ff8a0c16bf",
+      "decompressed_sha256": "27c33ad5d3b300d0b9e5b7accdf7f92c2fb254a1ee69488a3e3537b57721aa1c",
+      "compressed_bytes": 179749,
+      "decompressed_bytes": 522190,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v1.2.0",
+        "extension_version": "274a330734",
+        "abi": "C_STRUCT",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/odbc_scanner.cmake",
+    "descriptor_sha256": "55a163c587db8e4581a1803fcee3de54de57b72ed55905818533277d2e80bb9c",
+    "descriptor_text": "if (NOT MINGW AND NOT ${WASM_ENABLED})\n    duckdb_extension_load(odbc_scanner\n            DONT_LINK\n            GIT_URL https://github.com/duckdb/odbc-scanner\n            GIT_TAG 274a3307341dcafd62471c09b45c5d858d6c95cc\n            APPLY_PATCHES\n            )\nendif()\n",
+    "repository": "https://github.com/duckdb/odbc-scanner",
+    "revision": "274a3307341dcafd62471c09b45c5d858d6c95cc",
+    "source_url": "https://github.com/duckdb/odbc-scanner/tree/274a3307341dcafd62471c09b45c5d858d6c95cc",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/odbc_scanner/0001-move-strip-flag-to-linker.patch",
+        "sha256": "c32252a248cbe2a4118728f41b2328026037f6a1aca22f2c438f8139c52cafc1"
+      }
+    ]
+  }
+}

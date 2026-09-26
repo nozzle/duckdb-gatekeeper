@@ -1,0 +1,50 @@
+{
+  "inventory": "vortex",
+  "extension": "vortex",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/vortex.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/vortex.duckdb_extension.gz",
+      "result": "http_error",
+      "http_status": 404,
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "other_platform_probes": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/linux_amd64/vortex.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:36.867293+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "url": "https://extensions.duckdb.org/d4e72566aa/linux_amd64/vortex.duckdb_extension.gz",
+      "method": "GET",
+      "retrieved_at": "2026-09-26T05:06:37.149317+00:00",
+      "http_status": 404,
+      "result": "http_error",
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/vortex.cmake",
+    "descriptor_sha256": "852a77854c2e0803d9f363a7464342feaffc43a6d7d8d8dc3e272dd3243629bf",
+    "descriptor_text": "# FIXME: disabled for now while CopyFunction undergoes heavy changes\nif (NOT DEFINED VORTEX_ENABLED)\n    set(VORTEX_ENABLED OFF)\nendif()\nif (VORTEX_ENABLED AND NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})\n    duckdb_extension_load(vortex\n            GIT_URL https://github.com/vortex-data/duckdb-vortex\n            GIT_TAG 2aaba5f07f489f6fa73e74d457faf324cb84dcf5\n            SUBMODULES vortex\n            APPLY_PATCHES\n            LOAD_TESTS\n            DONT_LINK\n    )\nendif()\n",
+    "repository": "https://github.com/vortex-data/duckdb-vortex",
+    "revision": "2aaba5f07f489f6fa73e74d457faf324cb84dcf5",
+    "source_url": "https://github.com/vortex-data/duckdb-vortex/tree/2aaba5f07f489f6fa73e74d457faf324cb84dcf5",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/vortex/pass-variable-through-cmake-not-make.patch",
+        "sha256": "29d6ac8e7d1a30e343611a806b2c2a697a84826efc9927038c27186ac17307a8"
+      }
+    ]
+  }
+}
