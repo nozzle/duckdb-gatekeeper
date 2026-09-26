@@ -1,0 +1,43 @@
+{
+  "inventory": "encodings",
+  "extension": "encodings",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/encodings.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/encodings.duckdb_extension.gz",
+      "compressed_sha256": "c62d6158e61b5e078f3655178c5a19615042836370146d8633e6bed75c57e909",
+      "decompressed_sha256": "7977e5c3c49ef5361ceb0626591644c7240bbf94b1046ec29b301cfe516ae1aa",
+      "compressed_bytes": 19623334,
+      "decompressed_bytes": 123751614,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "f3e4d03ecf",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/encodings.cmake",
+    "descriptor_sha256": "9d5f317f9f3ab4ff374860a53cdec3b209fc14f503ebc2285ba4e490c65697dd",
+    "descriptor_text": "if (NOT MINGW AND NOT ${WASM_ENABLED} AND ${BUILD_COMPLETE_EXTENSION_SET})\nduckdb_extension_load(encodings\n        LOAD_TESTS\n        DONT_LINK\n        GIT_URL https://github.com/duckdb/duckdb-encodings\n        GIT_TAG f3e4d03ecf18406ef86fe5833a7ad55d8f93520f\n        TEST_DIR test/sql\n        APPLY_PATCHES\n)\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-encodings",
+    "revision": "f3e4d03ecf18406ef86fe5833a7ad55d8f93520f",
+    "source_url": "https://github.com/duckdb/duckdb-encodings/tree/f3e4d03ecf18406ef86fe5833a7ad55d8f93520f",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/encodings/decode_straddle_test.patch",
+        "sha256": "44148c1451e3c07d60e9bd622a7e85aed4a612bab44f0db73c40843359db94ad"
+      }
+    ]
+  }
+}

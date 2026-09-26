@@ -1,0 +1,43 @@
+{
+  "inventory": "azure",
+  "extension": "azure",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/azure.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/azure.duckdb_extension.gz",
+      "compressed_sha256": "c2bb162763395ad85b9ceb789685702385dbf6f24ce895db10a19bedeb739b8d",
+      "decompressed_sha256": "82530cd63e2c50d351d41b58c7fe808d0041fcf02cc7b27126746ceb1485216c",
+      "compressed_bytes": 6754316,
+      "decompressed_bytes": 19326990,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "8a5df75eaa",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/azure.cmake",
+    "descriptor_sha256": "4b3f767cb10bdf3dd42726ad1c6f3a0ab09ea7556348517472493b7c2ba3051e",
+    "descriptor_text": "if (NOT MINGW AND NOT ${WASM_ENABLED})\n  duckdb_extension_load(azure\n        LOAD_TESTS\n        GIT_URL https://github.com/duckdb/duckdb-azure\n        GIT_TAG 8a5df75eaaaa9a75e6bb4596f374eb44ec35032d\n        APPLY_PATCHES\n  )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-azure",
+    "revision": "8a5df75eaaaa9a75e6bb4596f374eb44ec35032d",
+    "source_url": "https://github.com/duckdb/duckdb-azure/tree/8a5df75eaaaa9a75e6bb4596f374eb44ec35032d",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/azure/0001-fix-azure-storage-cstdint.patch",
+        "sha256": "4da6237da2f043e0dff9e5b0f8b697fe57a54b2d3c34ddc53ff2a06b5b2c4f6c"
+      }
+    ]
+  }
+}

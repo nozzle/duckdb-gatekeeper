@@ -1,0 +1,550 @@
+{
+  "active_extension": "postgres_scanner",
+  "artifacts": [
+    {
+      "bytes": 43672022,
+      "download_sha256": "d9415c538b7a5ba4a60f869e87e11bd0c12681a47e3f3f7e9412d3088f4b4ea1",
+      "name": "postgres_scanner",
+      "repository": "core",
+      "sha256": "9e05dfefc8cf39c4f9bf6aeed25f4f83dfff5d1d8428e0e29862ed457f4215db",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/postgres_scanner.duckdb_extension.gz",
+      "version": "bc6aab54de"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
+  "function_count": 3217,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "pg_clear_cache",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_attach",
+        "named_parameters": {
+          "filter_pushdown": "BOOLEAN",
+          "overwrite": "BOOLEAN",
+          "sink_schema": "VARCHAR",
+          "source_schema": "VARCHAR",
+          "suffix": "VARCHAR"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_configure_pool",
+        "named_parameters": {
+          "acquire_mode": "VARCHAR",
+          "catalog_name": "VARCHAR",
+          "enable_reaper_thread": "BOOLEAN",
+          "enable_thread_local_cache": "BOOLEAN",
+          "health_check_query": "VARCHAR",
+          "idle_timeout_millis": "UBIGINT",
+          "max_connections": "UBIGINT",
+          "max_lifetime_millis": "UBIGINT",
+          "wait_timeout_millis": "UBIGINT"
+        },
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_execute",
+        "named_parameters": {
+          "params": "ANY",
+          "prepare": "BOOLEAN",
+          "use_transaction": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "postgres_hstore_get",
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "postgres_hstore_to_json",
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": "JSON",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_query",
+        "named_parameters": {
+          "params": "ANY",
+          "prepare": "BOOLEAN",
+          "suppress_dml_output": "BOOLEAN",
+          "use_transaction": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_scan",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "postgres_scan_pushdown",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_postgres_binary",
+        "named_parameters": {
+          "buffer_size": "UBIGINT",
+          "columns": "ANY"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "install_names": [
+    "postgres_scanner"
+  ],
+  "inventory": "postgres",
+  "load_names": [
+    "postgres_scanner"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "postgres_scanner",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "bc6aab54de"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "postgres_scanner",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "pg_clear_cache",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_attach",
+            "named_parameters": {
+              "filter_pushdown": "BOOLEAN",
+              "overwrite": "BOOLEAN",
+              "sink_schema": "VARCHAR",
+              "source_schema": "VARCHAR",
+              "suffix": "VARCHAR"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_configure_pool",
+            "named_parameters": {
+              "acquire_mode": "VARCHAR",
+              "catalog_name": "VARCHAR",
+              "enable_reaper_thread": "BOOLEAN",
+              "enable_thread_local_cache": "BOOLEAN",
+              "health_check_query": "VARCHAR",
+              "idle_timeout_millis": "UBIGINT",
+              "max_connections": "UBIGINT",
+              "max_lifetime_millis": "UBIGINT",
+              "wait_timeout_millis": "UBIGINT"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_execute",
+            "named_parameters": {
+              "params": "ANY",
+              "prepare": "BOOLEAN",
+              "use_transaction": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "postgres_hstore_get",
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "postgres_hstore_to_json",
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": "JSON",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_query",
+            "named_parameters": {
+              "params": "ANY",
+              "prepare": "BOOLEAN",
+              "suppress_dml_output": "BOOLEAN",
+              "use_transaction": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_scan",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "postgres_scan_pushdown",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_postgres_binary",
+            "named_parameters": {
+              "buffer_size": "UBIGINT",
+              "columns": "ANY"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "8c259c7401c690714c8a2e6b3f5cacd1e258f0a7febd4547b567c73cfc0d84dd",
+      "load_name": "postgres_scanner",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "postgres_scanner",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "bc6aab54de"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "e02af656b6340698983b3b4edf837f0e75cb87cbaadcffe00c565873b94b3dd2",
+  "status": "ok"
+}

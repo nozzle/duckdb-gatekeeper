@@ -1,0 +1,33 @@
+{
+  "inventory": "icu",
+  "extension": "icu",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/icu.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/icu.duckdb_extension.gz",
+      "compressed_sha256": "ff007cd5a713bf8fd90991995bb8c67c53669a73f090882f582f477661635cec",
+      "decompressed_sha256": "d8590a1266c25cd67e00666f2d43c36f9ba76c0fb8b3a8a72a2127548a2755ad",
+      "compressed_bytes": 4106311,
+      "decompressed_bytes": 13349646,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/icu",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

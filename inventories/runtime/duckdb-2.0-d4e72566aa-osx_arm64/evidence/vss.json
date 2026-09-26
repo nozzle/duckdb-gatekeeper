@@ -1,0 +1,43 @@
+{
+  "inventory": "vss",
+  "extension": "vss",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/vss.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/vss.duckdb_extension.gz",
+      "compressed_sha256": "c1b8e5e26467c5caa5551f91ae94d01e26093dcfc9f2d4927e83849f025569c6",
+      "decompressed_sha256": "f53897a186e63e06c6d66780ff77c0f6b1a47ea4f6f57803369cb5f68f233c95",
+      "compressed_bytes": 11204496,
+      "decompressed_bytes": 38319870,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "9eba8b3dc4",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/vss.cmake",
+    "descriptor_sha256": "073cc7fb68496f2347c27d62e4fef01e87a8e81f57a1e4deb36f72f86236d88d",
+    "descriptor_text": "duckdb_extension_load(vss\n        LOAD_TESTS\n        DONT_LINK\n        GIT_URL https://github.com/duckdb/duckdb-vss\n        GIT_TAG 9eba8b3dc41e819eafb693102b4fb4a2845934c1\n        TEST_DIR test/sql\n        APPLY_PATCHES\n    )\n",
+    "repository": "https://github.com/duckdb/duckdb-vss",
+    "revision": "9eba8b3dc41e819eafb693102b4fb4a2845934c1",
+    "source_url": "https://github.com/duckdb/duckdb-vss/tree/9eba8b3dc41e819eafb693102b4fb4a2845934c1",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/vss/0002-add-index-api.patch",
+        "sha256": "32f57639550e68f86f7b72ade9f481db46f72037c0f7fd20f4bdebfd00acc021"
+      }
+    ]
+  }
+}
