@@ -4,6 +4,31 @@
 
 require gatekeeper
 
+# A host same-leaf grant keeps eligibility open; intrinsic window alias attribution survives binding.
+statement ok
+CREATE SCHEMA window_host; CREATE MACRO window_host.rank_dense() AS 7;
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{catalog:'memory',schema_path:['window_host'],name:'rank_dense',type:'macro'}], blocked_functions := [{catalog:'system',schema_path:['main'],name:'rank_dense'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT window_host.rank_dense()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT rank_dense() OVER ()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT dense_rank() OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure();
+
 # Scoped blocks use the resolved namespace and kind, not the shared leaf.
 statement ok
 CREATE SCHEMA block_a; CREATE SCHEMA block_b; CREATE MACRO block_a.f(x) AS x; CREATE MACRO block_b.f(x) AS x;

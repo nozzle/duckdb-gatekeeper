@@ -8,6 +8,10 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
+  intrinsic expression kind. Scoped system window blocks cannot be bypassed by a same-leaf
+  host macro grant; window alias equivalence is restricted to `system.main` kind `window`.
+
 - **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
   String rules are rejected with migration guidance. Catalog/schema wildcards follow table rules;

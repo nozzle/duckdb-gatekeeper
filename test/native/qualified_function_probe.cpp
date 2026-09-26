@@ -84,6 +84,30 @@ int main() {
 	DuckDB database(nullptr, &config);
 	LoadProbeArtifact(database);
 	Connection connection(database);
+	// Intrinsic windows on 1.5 lose their written alias in the bound expression kind.
+	// A host alias grant keeps eligibility open: the scoped system block must still win.
+	Query(connection, "CREATE SCHEMA window_host");
+	for (const auto &alias : {"rank_dense", "first", "last"}) {
+		auto canonical = string(alias) == "rank_dense" ? "dense_rank" : string(alias) + "_value";
+		auto args = string(alias) == "rank_dense" ? "" : "1";
+		Query(connection, string("CREATE MACRO window_host.") + alias + "() AS 7");
+		for (const auto &blocked : {string(alias), string(canonical)}) {
+			Query(connection,
+			      string("CALL gatekeeper_configure(allowed_functions := ") +
+			          "[{catalog:'memory',schema_path:['window_host'],name:'" + alias + "',type:'macro'}], " +
+			          "blocked_functions := [{catalog:'system',schema_path:['main'],name:'" + blocked + "'}])");
+			Connection window_agent(database);
+			Query(window_agent, "CALL gatekeeper_enforce()");
+			Query(window_agent, string("SELECT window_host.") + alias + "()");
+			for (const auto &name : {string(alias), string(canonical)}) {
+				auto sql = "SELECT " + name + "(" + args + ") OVER ()";
+				if (Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() != "forbidden" ||
+				    !window_agent.Query(sql)->HasError())
+					return 29;
+			}
+		}
+	}
+	Query(connection, "CALL gatekeeper_configure()");
 	Query(connection, "CREATE SCHEMA admitted; CREATE SCHEMA denied");
 	Register(connection, "admitted");
 	Register(connection, "denied");

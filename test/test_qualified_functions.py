@@ -68,6 +68,49 @@ def test_unknown_kind_and_missing_namespace(db):
             configure(db, {"allowed_functions": [entry]})
 
 
+@pytest.mark.parametrize("alias,canonical,args", [
+    ("rank_dense", "dense_rank", ""), ("first", "first_value", "1"), ("last", "last_value", "1"),
+])
+@pytest.mark.parametrize("block_alias", [False, True])
+@pytest.mark.parametrize("kind", [None, "window"])
+def test_deferred_window_alias_blocks(db, alias, canonical, args, block_alias, kind):
+    db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{alias}() AS 7")
+    host = grants(alias, catalog="memory", schema_path=("host",), type="macro")
+    blocked = grants(alias if block_alias else canonical, catalog="system", schema_path=("main",), type=kind)
+    configure(db, {"allowed_functions": host, "blocked_functions": blocked})
+    assert validate(db, f"SELECT host.{alias}()")["allowed"]
+    for spelling in (alias, canonical):
+        sql = f"SELECT {spelling}({args}) OVER ()"
+        assert validate(db, sql)["code"] == "forbidden"
+        assert validate(db, sql, {"blocked_functions": []})["code"] == "forbidden"
+        with db.cursor() as agent:
+            enforce(agent)
+            assert agent.execute(f"SELECT host.{alias}()").fetchone() == (7,)
+            with pytest.raises(duckdb.PermissionException):
+                agent.execute(sql)
+
+
+@pytest.mark.parametrize("alias,canonical,args", [
+    ("rank_dense", "dense_rank", ""), ("first", "first_value", "1"), ("last", "last_value", "1"),
+])
+def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args):
+    # 1.5 also looks up first/last's real aggregate entry while binding the intrinsic
+    # alias; grant that separate dependency explicitly rather than inventing a default.
+    dependencies = grants(alias, catalog="system", schema_path=("main",), type="aggregate") if alias in {"first", "last"} else []
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants(alias, catalog="system", schema_path=("main",), type="window") + dependencies})
+    for spelling in (alias, canonical):
+        assert validate(db, f"SELECT {spelling}({args}) OVER ()")["allowed"]
+    db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{alias}() AS 1; CREATE MACRO host.{canonical}() AS 2")
+    configure(db, {"allowed_functions": grants(alias, catalog="memory", schema_path=("host",), type="macro"),
+                   "blocked_functions": grants(canonical, catalog="memory", schema_path=("host",))})
+    assert validate(db, f"SELECT host.{alias}()")["allowed"]
+    assert validate(db, f"SELECT host.{canonical}()")["code"] == "forbidden"
+    if alias in {"first", "last"}:
+        configure(db, {"blocked_functions": grants(canonical, catalog="system", schema_path=("main",), type="window")})
+        assert validate(db, f"SELECT {alias}(x) FROM (VALUES (1)) t(x)")["allowed"]
+
+
 @pytest.mark.parametrize("global_block", [False, True])
 def test_scoped_blocks_resolve_namespace_and_layers(db, global_block):
     db.execute("CREATE SCHEMA a; CREATE SCHEMA b; CREATE MACRO a.f(x) AS x; CREATE MACRO b.f(x) AS x")

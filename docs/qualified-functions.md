@@ -22,6 +22,11 @@ resolution; it cannot grant a namespace. Never-bind and control-plane rules keep
 semantics. Blocks use the same namespace, exact-depth path, leaf and optional kind matcher as grants;
 either layer's matching block wins. Reviewed Parquet and JSON aliases apply only to their intended system table/scalar
 identities, never to a host function or macro with an alias-like name.
+Source-defined window alias pairs (`rank_dense`/`dense_rank`, `first`/`first_value`, and
+`last`/`last_value`) share grant/block matching only for `system.main` kind `window`.
+The 1.5 intrinsic expression-kind route preserves caller attribution across those spellings;
+host macros and real first/last aggregates do not inherit window alias equivalence. With defaults
+disabled, 1.5 first/last OVER calls also need explicit grants for the aggregate entries the binder retrieves.
 
 Defaults are explicit `{catalog, schema_path, name, type}` identities, including reviewed extension functions.
 Every default has an exact kind; a host native table function registered in `system.main` under a

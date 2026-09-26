@@ -89,6 +89,20 @@ inline std::string CanonicalFunction(std::string name) {
 	return name;
 }
 
+// Source-defined window spellings: 1.5 WindowExpression::WindowFunctions; 2.0 ranking
+// registration and PEG first/last OVER rewriting. Only system.main window identities use
+// this equivalence, never scalar/macros or first/last aggregates sharing the same leaf.
+inline Names WindowSpellings(const std::string &name) {
+	auto lower = Lower(name);
+	if (lower == "rank_dense" || lower == "dense_rank")
+		return {"dense_rank", "rank_dense"};
+	if (lower == "first" || lower == "first_value")
+		return {"first", "first_value"};
+	if (lower == "last" || lower == "last_value")
+		return {"last", "last_value"};
+	return {lower};
+}
+
 // The never-bind list: functions no policy can admit on any caller-authored route.
 inline bool NeverBind(const std::string &name) {
 	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));

@@ -120,7 +120,7 @@ docs:
     |--------|------|---------|-------|
     | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. Nonempty path, outermost first; `'*'` matches one component at exactly that depth, never recursively. Omitted or NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
     | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
-    | `use_default_functions` | BOOLEAN | `true` | `true`: 932 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+    | `use_default_functions` | BOOLEAN | `true` | `true`: 919 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
     | `allowed_functions` | STRUCT[] | `[]` | Resolved `{catalog?, schema_path, name, type?}` grants. Exact leaf; defaults cover reviewed system.main identities. |
     | `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 

@@ -192,7 +192,9 @@ static bool ReviewedAliases(const Identity &identity) {
 }
 static bool FunctionMatches(const FunctionGrant &rule, const Identity &identity) {
 	return (rule.type.empty() || rule.type == identity.type) &&
-	       GrantNameMatches(rule, identity.name, ReviewedAliases(identity)) &&
+	       (GrantNameMatches(rule, identity.name, ReviewedAliases(identity)) ||
+	        (SystemIdentity(identity) && identity.type == "window" &&
+	         WindowSpellings(identity.name).count(rule.name))) &&
 	       NamespaceMatches(rule.catalog, rule.schema_path, identity.catalog, identity.schema_path);
 }
 bool FunctionBlocked(const Policy &policy, const Identity &identity) {
@@ -213,6 +215,10 @@ static bool BlockCovers(const FunctionGrant &block, const FunctionGrant &candida
 	for (size_t i = 0; i < block.schema_path.size(); i++)
 		if (block.schema_path[i] != "*" && block.schema_path[i] != candidate.schema_path[i])
 			return false;
+	if ((block.type.empty() || block.type == candidate.type) && candidate.type == "window" &&
+	    SystemIdentity({candidate.catalog, candidate.schema_path, candidate.name, candidate.type}) &&
+	    WindowSpellings(candidate.name).count(block.name))
+		return true;
 	return (block.type.empty() || block.type == candidate.type) &&
 	       GrantNameMatches(
 	           block, candidate.name,
@@ -228,9 +234,10 @@ bool FunctionEligible(const Policy &policy, const std::string &name) {
 			FunctionGrant candidate{rule.catalog, rule.schema_path, Lower(name), kind};
 			if (rule.name != candidate.name) {
 				// Defaults are exact identities. Only explicit rules carry reviewed alias equivalence.
-				if (defaults || !NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"}) ||
-				    !ReviewedAliases({"system", {"main"}, name, kind}) ||
-				    CanonicalFunction(rule.name) != CanonicalFunction(name))
+				bool aliases = (ReviewedAliases({"system", {"main"}, name, kind}) &&
+				                CanonicalFunction(rule.name) == CanonicalFunction(name)) ||
+				               (std::string(kind) == "window" && WindowSpellings(name).count(rule.name));
+				if (defaults || !NamespaceMatches(rule.catalog, rule.schema_path, "system", {"main"}) || !aliases)
 					continue;
 				candidate.catalog = "system";
 				candidate.schema_path = {"main"};
