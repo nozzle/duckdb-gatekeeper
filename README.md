@@ -248,7 +248,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | --- | --- | --- |
 | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
 | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
+| `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type`, `object_type` (other fields VARCHAR, in this order). Nonempty only for `forbidden`/`unsupported`. Replacement-scan denials put the full written path in `table`, with `catalog = ''` and `schema_path = []`. |
 | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) when available. Empty for `ok`/`forbidden`/`unsupported`. |
 | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
 | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -265,8 +265,18 @@ identify the denied capability, using the same kinds as `functions[].type`. For 
 `function_type = ''` when the kind is unresolved or the violation is not about a function.
 Pre-resolution refusals do not infer a kind from the written call's syntax. Denied identities
 remain in `violations` even though the `functions` evidence list is empty on failure.
+
+For a resolved catalog object, `catalog`, `schema_path`, `table`, and `object_type`
+identify the denied table or view. `object_type` is `table` or `view` for allowlist misses,
+explicit blocks, and internal-object denials; `rule = 'table'` alone does not distinguish
+a table from a view. `object_type = ''` for unresolved objects and function-only or other
+nonobject violations, including replacement-reader denials whose `table` holds a written
+path. No kind is guessed from SQL syntax. The `objects`, `functions`, and `caller_objects`
+evidence lists remain empty on every failure.
+
 The same shape is returned in `duckdb_logs_parsed('Gatekeeper')` for validation, enforced,
-and log-only decisions.
+and log-only decisions. Consumers that pin the violation STRUCT schema must include both
+trailing fields, `function_type VARCHAR` and `object_type VARCHAR`.
 
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
@@ -290,13 +300,14 @@ error text. Project the first violation's fields to display them as columns:
 ```sql
 SELECT allowed, code, violations[1].rule AS rule,
        violations[1].message AS message, violations[1].catalog AS catalog,
-       violations[1].schema_path AS schema_path, violations[1]."table" AS "table"
+       violations[1].schema_path AS schema_path, violations[1]."table" AS "table",
+       violations[1].object_type AS object_type
 FROM gatekeeper_validate('SELECT * FROM reporting.orders', allowed_tables := []);
 ```
 
-| allowed | code | rule | message | catalog | schema_path | table |
-| --- | --- | --- | --- | --- | --- | --- |
-| false | forbidden | table | object is not allowed | memory | [reporting] | orders |
+| allowed | code | rule | message | catalog | schema_path | table | object_type |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| false | forbidden | table | object is not allowed | memory | [reporting] | orders | table |
 
 **Function denied:** `md5` is a default, but `current_setting` (configuration inspection) is not.
 

@@ -25,7 +25,9 @@ def test_record_shape(db):
     validation_type = db.execute("SELECT violations FROM gatekeeper_validate('SELECT 1') LIMIT 0").description[0][1]
     audit_type = db.execute("SELECT violations FROM duckdb_logs_parsed('Gatekeeper') LIMIT 0").description[0][1]
     assert validation_type == audit_type
-    assert "function_type VARCHAR" in str(audit_type)
+    assert audit_type == duckdb.sqltype(
+        'STRUCT(rule VARCHAR, message VARCHAR, catalog VARCHAR, schema_path VARCHAR[], '
+        '"table" VARCHAR, function_name VARCHAR, position BIGINT, function_type VARCHAR, object_type VARCHAR)[]')
     # Registration is what makes enable_logging('Gatekeeper') accept the name; an unknown type is refused.
     with pytest.raises(duckdb.InvalidInputException, match="Unknown log type"):
         db.execute("CALL enable_logging('Gatekeeper_missing')")

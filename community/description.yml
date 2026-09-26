@@ -134,7 +134,7 @@ docs:
     |--------|------|---------|
     | `allowed` | BOOLEAN | True exactly when `code = 'ok'`. |
     | `code` | VARCHAR | `ok`, `forbidden`, `unsupported`, `parser`, `binding`, `invalid_input`. |
-    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type` (other fields VARCHAR). Nonempty only for `forbidden` and `unsupported`. |
+    | `violations` | STRUCT[] | `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`, `position BIGINT`, `function_type`, `object_type` (other fields VARCHAR, in this order). Nonempty only for `forbidden` and `unsupported`. |
     | `error_type` | VARCHAR | DuckDB exception category (`parser`, `Catalog`, `Binder`, ...) for engine errors. |
     | `error_message` | VARCHAR | The engine's message; empty for policy denials. |
     | `position` | BIGINT | Zero-based parser byte offset, or NULL. |
@@ -148,7 +148,14 @@ docs:
 
     Known denied functions retain their catalog, schema path, name, and `function_type`, even
     though `functions` is empty on failure. `function_type` uses the same kinds as `functions[].type`;
-    it is `''` for unresolved kinds and nonfunction violations. Audit decisions returned by
+    it is `''` for unresolved kinds and nonfunction violations. Resolved catalog-object denials
+    retain `object_type = 'table'` or `'view'` for allowlist misses, explicit blocks, and
+    internal-object refusals; the `table` rule alone does not distinguish tables from views.
+    `object_type` is `''` for unresolved objects and function-only or other nonobject violations,
+    including replacement-reader refusals whose `table` contains a written path. All three
+    evidence lists (`objects`, `functions`, `caller_objects`) remain empty on failure.
+    Consumers pinning the violation STRUCT must include both trailing VARCHAR kind fields.
+    Audit decisions returned by
     `duckdb_logs_parsed('Gatekeeper')` carry the same violation shape.
 
     ### Global policy

@@ -14,12 +14,16 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   retained (native bind/extended-bind callbacks on 1.5; expression-replacement callbacks on both engines).
   Lambda-type callbacks alone remain permitted.
 
-- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR`, also
+- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR` followed
+  by `object_type VARCHAR`, also
   observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
   Known denied functions retain their complete catalog/schema/name/kind identity even when
   the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
-  denials are distinguishable. Unresolved kinds and nonfunction violations use `''`.
-  Update consumers that pin the violation STRUCT schema to accept the new field.
+  denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
+  `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
+  Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
+  The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
+  Update consumers that pin the violation STRUCT schema to include both trailing fields.
 
 - Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
   intrinsic expression kind. Scoped system window blocks cannot be bypassed by a same-leaf

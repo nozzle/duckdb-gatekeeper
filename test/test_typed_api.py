@@ -16,10 +16,11 @@ def test_named_prepared_options_and_result_columns(db):
     assert rows[0][0] is False and rows[0][1] == "forbidden"
     assert rows[0][2][0]["function_name"] == "md5"
     assert list(rows[0][2][0]) == [
-        "rule", "message", "catalog", "schema_path", "table", "function_name", "position", "function_type"
+        "rule", "message", "catalog", "schema_path", "table", "function_name", "position", "function_type", "object_type"
     ]
     # This wildcard block refuses before catalog resolution, so its kind is unknown.
     assert rows[0][2][0]["function_type"] == ""
+    assert rows[0][2][0]["object_type"] == ""
 
 
 def test_table_projection_filter_and_join(db):
@@ -125,6 +126,7 @@ def test_structured_object_and_limit_diagnostics(db):
     assert (violation["catalog"],violation["schema_path"],violation["table"])==("memory",["secret"],"t")
     assert violation["function_name"]==""
     assert violation["function_type"]==""
+    assert violation["object_type"]=="table"
     result=validate(db,"SELECT 1;SELECT 2")
     assert result["code"]=="forbidden" and result["violations"][0]["rule"]=="limit"
     result=validate(db,"SELECT md5('x')",{"blocked_functions":function_rules("md5")})
