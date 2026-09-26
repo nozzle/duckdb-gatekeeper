@@ -92,8 +92,9 @@ def verify():
     assert len(identities) == qualified_report["union_qualified_identities"]
     assert sum(union.values()) == qualified_report["union_signatures"]
     repo = ROOT.parents[2]
+    from audit_inventory import verify_historical_input
     for relative, expected in collection["historical_inputs_sha256"].items():
-        assert hashlib.sha256((repo / relative).read_bytes()).hexdigest() == expected
+        verify_historical_input(repo, relative, expected)
     for path in ROOT.rglob("*"):
         if path.is_file() and path.suffix in {".md", ".json"}:
             assert not any(value in path.read_text() for value in ["/Users/", "/private/var/", "/var/folders/"])

@@ -78,9 +78,10 @@ def verify():
         assert hashlib.sha256(encoded).hexdigest() == expected
     assert len(original["original_full_snapshots"]) == 37
     repo = ROOT.parents[2]
+    from audit_inventory import verify_historical_input
     for relative, key in [("inventories/baselines/duckdb-1.5.5.json", "baseline_sha256"),
                           ("inventories/default_identities.json", "default_mapping_sha256")]:
-        assert hashlib.sha256((repo / relative).read_bytes()).hexdigest() == collection[key]
+        verify_historical_input(repo, relative, collection[key])
     for path in ROOT.glob("*.json"):
         text = path.read_text()
         assert not any(value in text for value in ["/Users/", "/private/var/", "/var/folders/"])

@@ -42,6 +42,33 @@ const std::vector<std::string> &OptionNames() {
 	return names;
 }
 
+static bool FunctionOption(const std::string &name) {
+	return name == "allowed_functions" || name == "blocked_functions";
+}
+
+static std::string MigrationError(const std::string &name) {
+	return name + ": legacy rule shape is unsupported; migrate to policy v2 " +
+	       (FunctionOption(name) ? "{catalog?, schema_path, name, type?}" : "{catalog?, schema_path, table}") +
+	       " rules; schema_path is a nonempty list of schema components";
+}
+
+// Inspect declared fields too: an empty typed list still carries a rule shape.
+static void CheckRuleFields(const std::string &name, const std::vector<std::string> &keys) {
+	const bool functions = FunctionOption(name);
+	const std::string rule = functions ? "function" : "table";
+	const std::string leaf = functions ? "name" : "table";
+	for (const auto &key : keys)
+		if (key == "schema")
+			throw std::invalid_argument(MigrationError(name));
+	Names fields;
+	for (const auto &key : keys)
+		if (!fields.insert(key).second ||
+		    (key != "catalog" && key != "schema_path" && key != leaf && !(functions && key == "type")))
+			throw std::invalid_argument(name + ": unknown " + rule + " rule field: " + key);
+	if (!fields.count("schema_path") || !fields.count(leaf))
+		throw std::invalid_argument(name + ": " + rule + " rules require schema_path and " + leaf);
+}
+
 void CheckOptionShape(const std::string &name, const Value &value) {
 	auto element = FindOption(name).element;
 	if (value.IsNull())
@@ -51,11 +78,11 @@ void CheckOptionShape(const std::string &name, const Value &value) {
 			throw std::invalid_argument(name + " requires BOOLEAN");
 		return;
 	}
-	auto message = name + (element == LogicalTypeId::VARCHAR ? " requires VARCHAR[]" : " requires STRUCT[]");
-	if (name == "allowed_functions" || name == "blocked_functions")
-		message += "; migrate to policy v2 {catalog?, schema_path, name, type?} rules";
+	auto message = name + " requires STRUCT[]";
 	if (value.type().id() != LogicalTypeId::LIST)
 		throw std::invalid_argument(message);
+	if (FunctionOption(name) && duckdb::ListType::GetChildType(value.type()).id() == LogicalTypeId::VARCHAR)
+		throw std::invalid_argument(MigrationError(name));
 	// Empty and all-NULL lists have no value that can violate the element shape. DuckDB
 	// gives untyped [] and [NULL] INTEGER[]; semantic decoding still rejects NULL members.
 	if (duckdb::ListType::GetChildType(value.type()).id() != element)
@@ -126,7 +153,7 @@ static std::vector<std::pair<std::string, Json *>> JsonObject(Json *object, cons
 
 static Value JsonOption(const std::string &name, Json *value) {
 	auto element = FindOption(name).element;
-	const bool functions = name == "allowed_functions" || name == "blocked_functions";
+	const bool functions = FunctionOption(name);
 	const std::string leaf = functions ? "name" : "table";
 	if (yyjson_is_null(value))
 		return Value(); // Let the shared decoder report NULL options.
@@ -158,17 +185,20 @@ static Value JsonOption(const std::string &name, Json *value) {
 			entries.emplace_back(JsonString(entry, path));
 		else {
 			if (functions && yyjson_is_str(entry))
-				throw std::invalid_argument(path + ": migrate " + name + " to policy v2 qualified objects");
+				throw std::invalid_argument(MigrationError(name));
+			auto object = JsonObject(entry, path);
+			std::vector<std::string> keys;
+			for (const auto &field : object)
+				keys.push_back(field.first);
+			CheckRuleFields(name, keys);
 			duckdb::vector<Value> fields(functions ? 4 : 3, Value(LogicalType::VARCHAR));
 			fields[1] = Value(LogicalType::LIST(LogicalType::VARCHAR));
-			bool schema = false, table = false;
-			for (const auto &field : JsonObject(entry, path)) {
+			for (const auto &field : object) {
 				size_t index;
 				if (field.first == "catalog")
 					index = 0;
 				else if (field.first == "schema_path") {
 					index = 1;
-					schema = true;
 					if (!yyjson_is_arr(field.second))
 						throw std::invalid_argument("schema_path requires JSON array");
 					NamePath parts;
@@ -180,17 +210,12 @@ static Value JsonOption(const std::string &name, Json *value) {
 					continue;
 				} else if (field.first == leaf) {
 					index = 2;
-					table = true;
-				} else if (functions && field.first == "type") {
+				} else {
 					index = 3;
-				} else
-					throw std::invalid_argument(std::string("unknown ") + (functions ? "function" : "table") +
-					                            " field: " + field.first);
+				}
 				if (!yyjson_is_null(field.second))
 					fields[index] = Value(JsonString(field.second, path + "." + field.first));
 			}
-			if (!schema || !table)
-				throw std::invalid_argument("identity entries require schema_path and " + leaf);
 			entries.push_back(Value::STRUCT(type, fields));
 		}
 	}
@@ -256,19 +281,16 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 			auto &function_rules =
 			    kind == OptionKind::ALLOWED_FUNCTIONS ? policy.allowed_functions : policy.blocked_functions;
 			std::string leaf = functions ? "name" : "table";
+			const std::string rule = functions ? "function" : "table";
 			if (value.type().id() != LogicalTypeId::LIST)
 				throw std::invalid_argument(name + " requires a list of structs");
 			const auto &entry_type = duckdb::ListType::GetChildType(value.type());
 			if (entry_type.id() == LogicalTypeId::STRUCT) {
-				Names fields;
+				std::vector<std::string> keys;
 				for (const auto &field : duckdb::StructType::GetChildTypes(entry_type)) {
-					auto &key = duckdb::engine::Str(field.first);
-					if (!fields.insert(key).second ||
-					    (key != "catalog" && key != "schema_path" && key != leaf && !(functions && key == "type")))
-						throw std::invalid_argument("unknown " + leaf + " field: " + key);
+					keys.push_back(duckdb::engine::Str(field.first));
 				}
-				if (!fields.count("schema_path") || !fields.count(leaf))
-					throw std::invalid_argument(leaf + " entries require schema_path and " + leaf);
+				CheckRuleFields(name, keys);
 			}
 			if (kind == OptionKind::ALLOWED_TABLES)
 				policy.tables = true;
@@ -279,17 +301,13 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 				identities.clear();
 			for (const auto &entry : duckdb::ListValue::GetChildren(value)) {
 				if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT)
-					throw std::invalid_argument("expected " + leaf + " struct");
+					throw std::invalid_argument("expected " + rule + " rule struct");
 				auto &types = duckdb::StructType::GetChildTypes(entry.type());
 				auto &values = duckdb::StructValue::GetChildren(entry);
-				Names fields;
 				Table table;
 				std::string function_type;
 				for (size_t i = 0; i < types.size(); i++) {
 					auto &key = duckdb::engine::Str(types[i].first);
-					if (!fields.insert(key).second ||
-					    (key != "catalog" && key != "schema_path" && key != leaf && !(functions && key == "type")))
-						throw std::invalid_argument("unknown " + leaf + " field: " + key);
 					if (key == "schema_path") {
 						table.schema_path = SchemaPath(values[i]);
 						continue;
@@ -297,10 +315,10 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 					if (values[i].IsNull() && (key == "catalog" || (functions && key == "type")))
 						continue;
 					if (values[i].IsNull() || values[i].type().id() != LogicalTypeId::VARCHAR)
-						throw std::invalid_argument("expected " + leaf + " identifier string");
+						throw std::invalid_argument("expected " + rule + " identifier string");
 					auto text = values[i].GetValue<std::string>();
 					if (text.empty() || text.find('\0') != std::string::npos)
-						throw std::invalid_argument(leaf + " identifiers must be nonempty and NUL-free");
+						throw std::invalid_argument(rule + " identifiers must be nonempty and NUL-free");
 					text = Lower(text);
 					if (key == "catalog")
 						table.catalog = text;
@@ -312,8 +330,6 @@ void ApplyOptions(Policy &policy, const std::vector<std::pair<std::string, Value
 						function_type = text;
 					}
 				}
-				if (!fields.count("schema_path") || !fields.count(leaf))
-					throw std::invalid_argument(leaf + " entries require schema_path and " + leaf);
 				if (functions)
 					function_rules.insert({table.catalog, table.schema_path, table.table, function_type});
 				else

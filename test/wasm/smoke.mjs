@@ -127,7 +127,7 @@ try {
       try {
         check('policy shared across connections', !(await second.query("SELECT * FROM gatekeeper_validate('SELECT md5(''x'')')")).toArray()[0].allowed);
       } finally {await second.close();}
-      check('malformed configuration rejected', await rejects("CALL gatekeeper_configure(allowed_tables := [{catlog:'x', schema_path:['main'], 'table':'t'}])", 'unknown table field'));
+      check('malformed configuration rejected', await rejects("CALL gatekeeper_configure(allowed_tables := [{catlog:'x', schema_path:['main'], 'table':'t'}])", 'unknown table rule field'));
       check('invalid replacement atomic', !(await decision("SELECT md5('x')")).allowed);
       await con.query('RESET gatekeeper_policy');
       check('RESET restores defaults', (await decision("SELECT md5('x')")).allowed);

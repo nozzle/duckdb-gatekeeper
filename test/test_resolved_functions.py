@@ -13,7 +13,7 @@ def expressions(db):
 
 
 @pytest.mark.parametrize("sql,name", [
-    ("SELECT j->'a' FROM t", "json_extract"), ("SELECT j->>'a' FROM t", "json_extract_string"),
+    ("SELECT j->'a' FROM t", "json_extract"), ("SELECT j->>'a' FROM t", "->>"),
     ("SELECT st.a FROM t", "struct_extract"), ("SELECT arr[1] FROM t", "array_extract"),
     ("SELECT m['a'] FROM t", "map_extract_value"), ("SELECT v['a'] FROM t", "variant_extract"),
     ("SELECT arr[1:2] FROM t", "array_slice"), ("SELECT [1,2]", "list_value"),
@@ -32,9 +32,9 @@ def test_synthesized_functions_obey_blocks_and_allowlist(expressions, sql, name)
 def test_resolution_does_not_confuse_columns_with_functions(expressions):
     options = {"use_default_functions": False, "blocked_functions": [{"schema_path":["*"],"name":n} for n in ["struct_extract", "current_schema"]]}
     assert validate(expressions, "SELECT t.x, current_schema FROM t", options)["allowed"]
-    assert validate(expressions, "SELECT arr[1] FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "array_extract"}],
+    assert validate(expressions, "SELECT arr[1] FROM t", {"allowed_functions": [{"schema_path": ["main"], "name": "array_extract"}],
                                                         "use_default_functions": False})["allowed"]
-    assert validate(expressions, "SELECT st.a FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "struct_extract"}],
+    assert validate(expressions, "SELECT st.a FROM t", {"allowed_functions": [{"schema_path": ["main"], "name": "struct_extract"}],
                                                       "use_default_functions": False})["allowed"]
 
 
@@ -45,8 +45,8 @@ def test_variant_indexing_resolves_to_variant_extract(expressions):
     for options in [{"blocked_functions": [{"schema_path":["*"],"name":"variant_extract"}]}, {"use_default_functions": False}]:
         result = validate(expressions, "SELECT v['a'] FROM t", options)
         assert result["code"] == "forbidden" and result["violations"][0]["function_name"] == "variant_extract", result
-    configure(expressions, {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "variant_extract"}]})
-    assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": [{"schema_path": ["*"], "name": "variant_extract"}]})["allowed"]
+    configure(expressions, {"use_default_functions": False, "allowed_functions": [{"schema_path": ["main"], "name": "variant_extract"}]})
+    assert validate(expressions, "SELECT v['a'] FROM t", {"allowed_functions": [{"schema_path": ["main"], "name": "variant_extract"}]})["allowed"]
     configure(expressions)
 
 
@@ -196,8 +196,8 @@ def test_default_non_compute_value_functions_require_opt_in(db):
                       ("current_setting('threads')", "current_setting"), ("getvariable('x')", "getvariable")]:
         result = validate(db, "SELECT " + sql)
         assert result["code"] == "forbidden", (name, result)
-        configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": name}]})
-        assert validate(db, "SELECT " + sql, {"allowed_functions": [{"schema_path": ["*"], "name": name}]})["allowed"]
+        configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": name}]})
+        assert validate(db, "SELECT " + sql, {"allowed_functions": [{"schema_path": ["main"], "name": name}]})["allowed"]
         configure(db)
 
 
@@ -213,7 +213,7 @@ def test_host_can_disable_type_autoload(db):
 def test_whole_row_reference_requires_struct_pack(expressions):
     assert not validate(expressions, "SELECT t FROM t", {"use_default_functions": False})["allowed"]
     assert validate(expressions, "SELECT t FROM t", {
-        "use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "struct_pack"}]})["allowed"]
+        "use_default_functions": False, "allowed_functions": [{"schema_path": ["main"], "name": "struct_pack"}]})["allowed"]
 
 
 def test_function_child_arrow_can_still_be_json(expressions):
@@ -222,12 +222,12 @@ def test_function_child_arrow_can_still_be_json(expressions):
     assert result["code"] == "forbidden"
     assert any(v["function_name"] == "json_extract" for v in result["violations"])
     assert validate(expressions, "SELECT j->>'a' FROM t", {
-        "use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "json_extract_string"}]})["allowed"]
+        "use_default_functions": False, "allowed_functions": [{"schema_path": ["main"], "name": "->>"}]})["allowed"]
 
 
 def test_single_arrow_lambda_overlap_and_keyword_workaround(expressions):
     expressions.execute("SET lambda_syntax='ENABLE_SINGLE_ARROW'; CREATE VIEW v_json AS SELECT json_extract(j, 'a') z FROM t")
-    options = {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["list_transform", "+"]]}
+    options = {"use_default_functions": False, "allowed_functions": [{"schema_path": ["main"], "name": n} for n in ["list_transform", "+"]]}
     sql = "SELECT list_transform(arr, x -> x + 1), z FROM t, v_json"
     assert not validate(expressions, sql, options)["allowed"]
     assert validate(expressions, sql.replace("x ->", "lambda x:"), options)["allowed"]

@@ -97,6 +97,8 @@ template <class FUNCTION> inline bool SystemBuiltin(const FUNCTION &function) {
 inline const LogicalType &ReturnType(const Expression &expression) { return expression.return_type; }
 #endif
 
+// Descriptor qualification is not CatalogEntry::internal. Leave origin unknown here;
+// authorization restores it from the private bind's exact catalog-entry provenance.
 template <class FUNCTION> inline gatekeeper::Identity FunctionIdentity(const FUNCTION &function, const string &kind) {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	auto qualified = function.GetQualifiedName();

@@ -91,11 +91,11 @@ FROM gatekeeper_validate('SELECT unnest([1, 2])', blocked_functions := [{schema_
 -- Replacement scans are decided in Gatekeeper's callback before the host's reader binds.
 COPY (SELECT 1 AS x) TO 'gatekeeper_smoke.parquet';
 
-SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'read_parquet', false)
+SELECT CASE WHEN NOT coalesce(code = 'forbidden' AND violations[1].function_name = 'parquet_scan', false)
             THEN error('replacement scan admitted without a reader grant: ' || code) END
 FROM gatekeeper_validate('SELECT * FROM ''gatekeeper_smoke.parquet''');
 
-CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'read_parquet'}]);
+CALL gatekeeper_configure(allowed_functions := [{'catalog':'system','schema_path':['main'],'name':'parquet_scan'}]);
 
 SELECT CASE WHEN NOT coalesce(allowed AND objects[1].type = 'replacement', false)
             THEN error('granted replacement scan not recorded: ' || code) END

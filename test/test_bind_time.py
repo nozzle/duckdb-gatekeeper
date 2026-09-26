@@ -84,8 +84,8 @@ def test_parameter_does_not_override_function_policy(db):
     result = validate(db, "SELECT * FROM read_csv(?)")
     assert result["code"] == "forbidden"
     assert any(v["function_name"] == "read_csv" for v in result["violations"])
-    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
-    result = validate(db, "SELECT * FROM read_csv(?)", {"allowed_functions": [{"schema_path": ["*"], "name": "read_csv"}]})
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "read_csv"}]})
+    result = validate(db, "SELECT * FROM read_csv(?)", {"allowed_functions": [{"schema_path": ["main"], "name": "read_csv"}]})
     assert result["code"] == "binding"
 
 

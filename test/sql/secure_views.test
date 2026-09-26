@@ -40,15 +40,15 @@ SELECT allowed FROM gatekeeper_validate('SELECT * FROM exposed.generated');
 ----
 true
 
-query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct', blocked_tables := [{schema_path: ['exposed'], 'table': 'direct'}]);
+query TTTTTIIII
+SELECT code, violations[1].catalog, violations[1].schema_path[1], violations[1]."table", violations[1].object_type, violations[1].function_type = '', len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct', blocked_tables := [{schema_path: ['exposed'], 'table': 'direct'}]);
 ----
-forbidden
+forbidden	memory	exposed	direct	view	true	0	0	0
 
-query T
-SELECT code FROM gatekeeper_validate('SELECT * FROM exposed.direct, hidden.payload');
+query TTT
+SELECT code, violations[1]."table", violations[1].object_type FROM gatekeeper_validate('SELECT * FROM exposed.direct, hidden.payload');
 ----
-forbidden
+forbidden	payload	table
 
 # A CTE name that matches a hidden dependency still attributes it query-wide.
 query T
@@ -117,10 +117,10 @@ statement ok
 DROP TABLE hidden.payload;
 
 # Binding failures retain empty evidence; do not require the engine to disclose hidden names.
-query TIII
-SELECT code, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
+query TIIII
+SELECT code, len(violations), len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT * FROM exposed.direct');
 ----
-binding	0	0	0
+binding	0	0	0	0
 
 statement error agent
 SELECT * FROM exposed.direct;
@@ -148,10 +148,10 @@ SELECT x FROM exposed.substituted;
 ----
 1577836800
 
-query TTTTIII
-SELECT code, violations[1].catalog, violations[1].function_name, violations[1].function_type, len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted');
+query TTTTIIII
+SELECT code, violations[1].catalog, violations[1].function_name, violations[1].function_type, violations[1].object_type = '', len(objects), len(functions), len(caller_objects) FROM gatekeeper_validate('SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted');
 ----
-forbidden	system	epoch	scalar	0	0	0
+forbidden	system	epoch	scalar	true	0	0	0
 
 statement error agent
 SELECT date_part('epoch', DATE '2020-01-01'), x FROM exposed.substituted;
@@ -162,3 +162,26 @@ query TTT
 SELECT code, violations[1].function_name, violations[1].function_type FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND statement = 'SELECT date_part(''epoch'', DATE ''2020-01-01''), x FROM exposed.substituted;';
 ----
 forbidden	epoch	scalar
+
+# Secure-view ACL denials report the resolved view kind through both enforcement modes.
+statement ok
+CALL gatekeeper_configure(blocked_tables := [{schema_path: ['exposed'], 'table': 'substituted'}]);
+
+statement error agent
+SELECT * FROM exposed.substituted;
+----
+object is blocked
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I agent
+SELECT * FROM exposed.substituted;
+----
+1577836800
+
+query TTTTIIII rowsort
+SELECT mode, violations[1].catalog, violations[1]."table", violations[1].object_type, violations[1].function_type = '', len(objects), len(functions), len(caller_objects) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode IN ('enforce', 'log_only') AND statement = 'SELECT * FROM exposed.substituted;';
+----
+enforce	memory	substituted	view	true	0	0	0
+log_only	memory	substituted	view	true	0	0	0

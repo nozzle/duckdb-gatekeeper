@@ -25,7 +25,9 @@ def test_record_shape(db):
     validation_type = db.execute("SELECT violations FROM gatekeeper_validate('SELECT 1') LIMIT 0").description[0][1]
     audit_type = db.execute("SELECT violations FROM duckdb_logs_parsed('Gatekeeper') LIMIT 0").description[0][1]
     assert validation_type == audit_type
-    assert "function_type VARCHAR" in str(audit_type)
+    assert audit_type == duckdb.sqltype(
+        'STRUCT(rule VARCHAR, message VARCHAR, catalog VARCHAR, schema_path VARCHAR[], '
+        '"table" VARCHAR, function_name VARCHAR, position BIGINT, function_type VARCHAR, object_type VARCHAR)[]')
     # Registration is what makes enable_logging('Gatekeeper') accept the name; an unknown type is refused.
     with pytest.raises(duckdb.InvalidInputException, match="Unknown log type"):
         db.execute("CALL enable_logging('Gatekeeper_missing')")
@@ -211,7 +213,7 @@ def test_replacement_scan_outside_the_private_bind_is_recorded_with_the_text(cat
         agent.execute("SELECT * FROM '/nonexistent/gatekeeper.parquet' WHERE x = ?", [1])
     [record] = decisions(catalog)
     assert record["boundary"] == "replacement_scan" and record["code"] == "forbidden"
-    assert record["violations"][0]["rule"] == "function" and record["violations"][0]["function_name"] == "read_parquet"
+    assert record["violations"][0]["rule"] == "function" and record["violations"][0]["function_name"] == "parquet_scan"
     assert record["statement"] == "SELECT * FROM '/nonexistent/gatekeeper.parquet' WHERE x = ?"
 
 
@@ -367,7 +369,7 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
     path = tmp_path / "flip.parquet"
     catalog.execute("COPY (SELECT range AS x FROM range(3)) TO ? (FORMAT parquet)", [str(path)])
     tables = [{"schema_path": ["reporting"], "table": "*"}]
-    reader_allowed = {"allowed_tables": tables, "allowed_functions": [{"schema_path": ["*"], "name": "read_parquet"}]}
+    reader_allowed = {"allowed_tables": tables, "allowed_functions": [{"schema_path": ["main"], "name": "parquet_scan"}]}
     reader_denied = {"allowed_tables": tables}
     enable(catalog, "debug")
     configure(catalog, reader_denied)  # both policies are installed after logging is on, so both hashes are recorded
@@ -403,7 +405,7 @@ def test_replacement_gate_uses_the_statement_snapshot_under_policy_flips(catalog
         for future in futures:
             future.result()
     assert errors == []
-    hashes = {r["policy_hash"]: "read_parquet" in r["new_value"] for r in records(catalog, "event = 'policy_changed'")}
+    hashes = {r["policy_hash"]: "parquet_scan" in r["new_value"] for r in records(catalog, "event = 'policy_changed'")}
     assert set(hashes.values()) == {True, False}
     found = [r for r in decisions(catalog, "mode = 'enforce'") if r["statement"] == statement]
     assert any(r["allowed"] for r in found) and any(not r["allowed"] for r in found), len(found)

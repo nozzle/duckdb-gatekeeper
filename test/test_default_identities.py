@@ -20,7 +20,7 @@ def test_default_mapping_accounts_for_every_historical_name():
     excluded = {name for group in mapping["exclusions"] for name in group["names"]}
     granted = {identity["name"] for identity in identities}
     assert len(names) == 953
-    assert len(identities) == 919 and len(granted) == 913 and len(excluded) == 40
+    assert len(identities) == 921 and len(granted) == 913 and len(excluded) == 40
     assert granted | excluded == set(names) and not granted & excluded
     assert identities == sorted(identities, key=identity_key)
     assert all(row["catalog"] == "system" and row["schema_path"] == ["main"] for row in identities)
@@ -29,6 +29,7 @@ def test_default_mapping_accounts_for_every_historical_name():
     assert kinds("sum") == {"aggregate"}
     assert kinds("abs") == {"scalar"}
     assert kinds("row_number") == {"window"}
+    assert kinds("first") == kinds("last") == {"aggregate", "window"}
     assert kinds("unnest") == {"scalar", "table"}
     assert kinds("range") == {"scalar", "table"}
     assert kinds("parse_delta_filter_logline") == {"macro"}
@@ -45,6 +46,11 @@ def test_identity_kinds_cross_check_historical_snapshot_without_promoting_it():
     for identity in load_default_identities():
         name, kind = identity["name"], identity["type"]
         if kind == "window":
+            if name in {"first", "last"}:
+                assert historical[name] == {"aggregate"}
+                assert any(group["evidence"] == "window-spellings-1.5" and name in group["names"]
+                           for group in load_default_mapping()["grants"])
+                continue  # Source-defined spelling, not a synthetic reporting row.
             discrepancy = next(group for group in load_default_mapping()["reporting_discrepancies"]
                                if name in group["names"])
             assert discrepancy["reported_type"] in historical[name]

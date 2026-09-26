@@ -1,8 +1,16 @@
 {
   "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
-  "compiled_defaults": 919,
+  "compiled_defaults": 921,
   "default_names_at_ungranted_identities": [],
   "defaults_not_observed": [
+    {
+      "catalog": "system",
+      "name": "first",
+      "schema_path": [
+        "main"
+      ],
+      "type": "window"
+    },
     {
       "catalog": "system",
       "name": "icu_collate_yue",
@@ -18,6 +26,14 @@
         "main"
       ],
       "type": "scalar"
+    },
+    {
+      "catalog": "system",
+      "name": "last",
+      "schema_path": [
+        "main"
+      ],
+      "type": "window"
     },
     {
       "catalog": "system",
@@ -15701,7 +15717,7 @@
       "unclassified_target_added_names": []
     }
   },
-  "policy_sha256": "4201f98638c3819814a0e0d316f1a1487f4eba44c57ddb8c1477b13d67e7d874",
+  "policy_sha256": "7d46832151844d5d5151293d0f09fba1d7b55c6245dd1a5579bacbed5442741d",
   "report_schema": "gatekeeper-qualified-collection-audit-v1",
   "reporting_discrepancies": [],
   "scope": "Union of base and successful independent final setups; not a combined live catalog.",

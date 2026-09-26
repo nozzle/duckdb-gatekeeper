@@ -11,8 +11,10 @@ CALL gatekeeper_configure(allowed_functions := [
 
 Required `schema_path` is nonempty and matches exact depth. Omitted/null catalog matches any
 known catalog. Catalog and schema components support whole-component `*`, not recursive
-wildcards. The leaf `name` is always exact: `*` means multiplication. All identifiers use ASCII
-case folding, and dots inside a component remain literal. `type` may be omitted/null or one of
+wildcards. The leaf `name` is required and always exact: `*` means multiplication, not all
+functions. Omitting `name` cannot grant a whole schema; schema-wide function permission is
+unsupported. All identifiers use ASCII case folding, and dots inside a component remain literal.
+`type` may be omitted/null or one of
 `scalar`, `aggregate`, `table`, `macro`, `table_macro`, `window` (ASCII case-insensitive).
 Omission covers all supported kinds at that identity; all overloads share a grant. Windowed
 aggregates have kind `aggregate`; standalone window functions have kind `window`.
@@ -20,16 +22,41 @@ aggregates have kind `aggregate`; standalone window functions have kind `window`
 Both layers must authorize the resolved identity. Eligibility of a written leaf merely allows
 resolution; it cannot grant a namespace. Never-bind and control-plane rules keep their origin
 semantics. Blocks use the same namespace, exact-depth path, leaf and optional kind matcher as grants;
-either layer's matching block wins. Reviewed Parquet and JSON aliases apply only to their intended system table/scalar
-identities, never to a host function or macro with an alias-like name.
-Raw host spellings are kept separate for attribution too: a caller's host `read_parquet`
-macro does not attribute a trusted body's system `parquet_scan` reader to the caller, or
-vice versa. Resolved caller use of either system reader still obeys the shared policy.
-Source-defined window alias pairs (`rank_dense`/`dense_rank`, `first`/`first_value`, and
-`last`/`last_value`) share grant/block matching only for `system.main` kind `window`.
-The 1.5 intrinsic expression-kind route preserves caller attribution across those spellings;
-host macros and real first/last aggregates do not inherit window alias equivalence. With defaults
-disabled, 1.5 first/last OVER calls also need explicit grants for the aggregate entries the binder retrieves.
+either layer's matching block wins. **Configurable grants and blocks match exact catalog-entry
+names, without alias canonicalization**, including all three formerly grouped families:
+
+- Parquet table readers: `read_parquet` and `parquet_scan` are separate entries.
+- JSON scalars: `json_extract`, `json_extract_path`, and `->` are separate entries, as are
+  `json_extract_string`, `json_extract_path_text`, and `->>`.
+- Windows: `rank_dense`/`dense_rank`, `first`/`first_value`, and `last`/`last_value` do not
+  share configurable permissions.
+
+Grant or block each entry the policy intends to cover. A shared implementation or equivalent
+SQL result does not make two names interchangeable in policy. Host spellings also remain exact
+for attribution: a caller's host `read_parquet` macro does not attribute a trusted body's
+system `parquet_scan` reader to the caller, or vice versa.
+
+Parser/binder rewriting is separate from policy matching. DuckDB may rewrite syntax before
+Gatekeeper sees it; authorization follows the parsed operation and actual entries selected.
+On 1.5, intrinsic windows retain an expression kind rather than a catalog selection, so
+Gatekeeper preserves the parsed spelling for that operation instead of inventing a second
+canonical permission. With defaults disabled, first/last OVER calls also need grants for any
+aggregate entries the binder retrieves. Source-defined implementation substitutions below
+preserve attribution, not general semantic equivalence.
+
+### Internal-entry grants
+
+An explicit grant for a caller-attributable internal function requires every `schema_path`
+component to be exact; no schema component may be `*`. The function name is always exact.
+Catalog may still be omitted, NULL, or `*`, and kind remains optional. Reviewed defaults
+already name exact identities. Tables/views follow the same exact-schema rule and additionally
+require an exact table name. Block rules retain their namespace wildcards for internal entries.
+
+The actual `CatalogEntry::internal` flag controls this restriction, not a `system` catalog
+name or a naming prefix. Non-internal entries can use schema-pattern grants, including
+non-internal extension entries in `system.main`. For bound functions, the flag is recovered
+from exact observed-entry provenance or a reviewed source-defined intrinsic/substitution;
+unknown internal origin cannot use a schema-wildcard grant. This flag is not a public evidence field.
 
 Defaults are explicit `{catalog, schema_path, name, type}` identities, including reviewed extension functions.
 Every default has an exact kind; a host native table function registered in `system.main` under a
@@ -42,17 +69,15 @@ sharing their names remains conservatively caller-attributed.
 
 ## Migration
 
-0.3.0 shipped JSON v1. Migrate once to v2, changing table schema fields and both function rule lists.
-Replace `"allowed_functions":["abs"]` with
-`"allowed_functions":[{"catalog":"system","schema_path":["main"],"name":"abs"}]`.
-Replace `"blocked_functions":["md5"]` with
-`"blocked_functions":[{"catalog":"system","schema_path":["main"],"name":"md5","type":"scalar"}]`.
-To deliberately cover all catalogs and all one-component schemas, use `catalog:"*", schema_path:["*"]`;
-that rule does not cover deeper schema paths. There is no string-rule compatibility or mixed-list format.
-Empty lists still work. Canonical
-settings have all four fields and are NULL-free: empty catalog/type mean unrestricted catalog/kind.
-Read-modify-write the canonical setting rather than constructing a partial STRUCT that DuckDB
-could cast lossily. JSON schema and typed decoding enforce the same shape.
+0.3.0 shipped JSON v1. Follow the [policy v2 migration guide](policy-migration.md) for table
+schema fields, both function rule lists, typed empty lists, and canonical settings.
+
+## Public evidence
+
+`functions` remains combined host-facing binding evidence, including caller-attributable
+functions and trusted dependencies. A public `caller_functions` evidence field is explicitly
+deferred and is not implemented. `caller_objects` is the existing conservative catalog-table/view
+subset of `objects`; see [declared input validation](security.md#declared-input-validation).
 
 ## Feasibility matrix
 
@@ -84,8 +109,8 @@ Relevant engine sites: `catalog_entry_retriever.cpp`, `bind_function_expression.
 
 ### Binder substitutions and specialization
 
-On both supported engines, an observed `system.main` definition records source-backed possible
-implementation identities, preserving whether the definition was caller-attributable or trusted:
+On both supported engines, an observed internal `system.main` definition records source-backed
+possible implementation identities, preserving whether the definition was caller-attributable or trusted:
 
 | Selected definition | Possible replacement | Kind |
 | --- | --- | --- |
@@ -139,7 +164,7 @@ The 1.5 scalar-subquery planner creates count_star directly. When attributable t
 the same observed-definition rule applies; a helper with no caller origin remains an engine
 dependency and may retain unknown namespace in evidence. There are no callback-pointer fingerprints
 or stored engine objects; the substitution edges above are explicit source-reviewed mappings.
-Alias equivalence requires the reviewed system namespace and kind, never just a raw host leaf.
+These source-defined attribution rules do not canonicalize configurable grants or blocks.
 `contains` (IN-list) and `regexp_full_match` (SIMILAR TO), like literal
 constructors, are conservatively system-only even when explicitly called: the parsed AST does not
 reliably distinguish their syntactic origin. A host grant cannot redirect these helpers.

@@ -79,56 +79,25 @@ inline const Names &ListLambdaFunctions() {
 	return names;
 }
 
-inline std::string CanonicalFunction(std::string name) {
+// 1.5 WindowExpression::WindowFunctions maps syntax directly to an expression kind;
+// it does not select a second catalog entry. Used only to recover parsed provenance.
+inline std::string WindowImplementationName(std::string name) {
 	name = Lower(std::move(name));
-	// Explicit aliases reviewed in DuckDB's Parquet registration; no runtime discovery.
-	if (name == "parquet_scan")
-		return "read_parquet";
-	if (name == "->>" || name == "json_extract_path_text")
-		return "json_extract_string";
-	if (name == "->" || name == "json_extract_path")
-		return "json_extract";
+	if (name == "rank_dense")
+		return "dense_rank";
+	if (name == "first" || name == "last")
+		return name + "_value";
 	return name;
 }
 
-// Source-defined window spellings: 1.5 WindowExpression::WindowFunctions; 2.0 ranking
-// registration and PEG first/last OVER rewriting. Only system.main window identities use
-// this equivalence, never scalar/macros or first/last aggregates sharing the same leaf.
-inline Names WindowSpellings(const std::string &name) {
-	auto lower = Lower(name);
-	if (lower == "rank_dense" || lower == "dense_rank")
-		return {"dense_rank", "rank_dense"};
-	if (lower == "first" || lower == "first_value")
-		return {"first", "first_value"};
-	if (lower == "last" || lower == "last_value")
-		return {"last", "last_value"};
-	return {lower};
-}
-
 bool SystemIdentity(const Identity &identity);
-
-// Equivalence applies to a reviewed system identity and kind, never to raw caller/host names.
-inline Names FunctionSpellings(const Identity &identity) {
-	auto name = Lower(identity.name);
-	if (SystemIdentity(identity)) {
-		if (identity.type == "window")
-			return WindowSpellings(name);
-		if (identity.type == "table" && CanonicalFunction(name) == "read_parquet")
-			return {"read_parquet", "parquet_scan"};
-		if (identity.type == "scalar" && CanonicalFunction(name) == "json_extract")
-			return {"json_extract", "json_extract_path", "->"};
-		if (identity.type == "scalar" && CanonicalFunction(name) == "json_extract_string")
-			return {"json_extract_string", "json_extract_path_text", "->>"};
-	}
-	return {name};
-}
 
 // Implementation substitutions, not policy aliases. These edges require an observed system entry.
 // minmax.cpp BindMinMax, date_part.cpp DatePartBind, quantile.cpp DiscreteQuantile{List,}Function::Bind
 // on both supported engines. No catalog discovery or arbitrary same-leaf host inference.
 inline Names FunctionImplementations(const Identity &source, int engine_major) {
-	auto names = FunctionSpellings(source);
-	if (!SystemIdentity(source))
+	Names names{Lower(source.name)};
+	if (!SystemIdentity(source) || source.internal != true)
 		return names;
 	if (source.type == "aggregate") {
 		if (source.name == "min")
@@ -158,9 +127,7 @@ inline Names FunctionImplementations(const Identity &source, int engine_major) {
 }
 
 // The never-bind list: functions no policy can admit on any caller-authored route.
-inline bool NeverBind(const std::string &name) {
-	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
-}
+inline bool NeverBind(const std::string &name) { return NeverBindFunctions().count(Lower(name)); }
 
 // Gatekeeper's own control plane: the policy and the lifecycle of the log that records its decisions. These
 // are refused on every route, trusted definitions included. A host view or macro that exposed one would let
@@ -172,9 +139,7 @@ inline const Names &ControlPlaneFunctions() {
 	return names;
 }
 
-inline bool ControlPlane(const std::string &name) {
-	return ControlPlaneFunctions().count(Lower(name)) || ControlPlaneFunctions().count(CanonicalFunction(name));
-}
+inline bool ControlPlane(const std::string &name) { return ControlPlaneFunctions().count(Lower(name)); }
 
 // The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
 // implementations binding derives from it, and the readers its file paths choose. A host view, macro, or

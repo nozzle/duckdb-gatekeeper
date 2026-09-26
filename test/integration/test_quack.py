@@ -27,6 +27,15 @@ def local_binding(db):
         db.execute("SET disabled_optimizers='remote_pushdown'")
 
 
+def object_denial(result, name, kind):
+    assert not result["allowed"] and result["code"] == "forbidden", result
+    violation, = result["violations"]
+    assert (violation["catalog"], violation["schema_path"], violation["table"],
+            violation["object_type"]) == ("remote", ["main"], name, kind)
+    assert violation["function_name"] == violation["function_type"] == ""
+    assert result["objects"] == result["functions"] == result["caller_objects"] == []
+
+
 def test_real_transport_and_binding_executes_opaque_queries(remote):
     assert remote.client.execute("SELECT sum(amount) FROM remote.main.orders").fetchone() == (50,)
     assert remote.requests
@@ -75,6 +84,8 @@ def test_attached_scope_validation_enforcement_parameters_and_log_only(remote):
     assert remote.requests == []
     if result["allowed"]:
         assert result["caller_objects"] == [{"catalog": "remote", "schema_path": ["main"], "table": "orders", "type": "table"}]
+    else:
+        object_denial(result, "orders", "table")
     enable(db, "debug")
     with db.cursor() as agent:
         local_binding(agent)
@@ -93,6 +104,7 @@ def test_attached_scope_validation_enforcement_parameters_and_log_only(remote):
                 with pytest.raises(duckdb.PermissionException, match=DENIED):
                     agent.execute(sql, args)
                 assert remote.requests == []
+                object_denial(decisions(db, "mode='enforce'")[-1], "orders", "table")
         for sql in ["SELECT * FROM remote.main.secret", "INSERT INTO remote.main.orders VALUES (3,40)"]:
             remote.clear()
             with pytest.raises(duckdb.PermissionException, match=DENIED):
@@ -102,6 +114,7 @@ def test_attached_scope_validation_enforcement_parameters_and_log_only(remote):
         assert agent.execute("SELECT * FROM remote.main.secret").fetchone() == (999,)
         found = decisions(db, "mode='log_only'")
         assert len(found) == 1 and not found[0]["allowed"]
+        object_denial(found[0], "secret", "table")
 
 
 @pytest.mark.parametrize("body", ["SELECT * FROM remote.main.ticking",
@@ -112,6 +125,7 @@ def test_opaque_trusted_definition_private_bind_refusal_and_deferred_residual(re
     db.execute("CREATE VIEW trusted AS " + body)
     policy = {"allowed_tables": [rule()], "allowed_functions": REMOTE_GRANTS}
     configure(db, policy)
+    enable(db, "debug")
     remote.clear()
     result = validate(db, "SELECT * FROM trusted", policy)
     assert not result["allowed"]
@@ -119,6 +133,10 @@ def test_opaque_trusted_definition_private_bind_refusal_and_deferred_residual(re
         violation, = result["violations"]
         assert (violation["catalog"], violation["schema_path"], violation["function_name"],
                 violation["function_type"]) == ("system", ["main"], "quack_query_by_name", "table")
+        assert violation["table"] == violation["object_type"] == ""
+    elif "remote.main.ticking" in body:
+        object_denial(result, "ticking", "view")
+    assert decisions(db, "mode='validate'")[-1]["violations"] == result["violations"]
     assert remote.requests == [] and remote.executions == []
     with db.cursor() as agent:
         local_binding(agent)
@@ -126,6 +144,10 @@ def test_opaque_trusted_definition_private_bind_refusal_and_deferred_residual(re
         with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied|unsupported remote authorization scope"):
             agent.execute("SELECT * FROM trusted")
         assert remote.requests == [] and remote.executions == []
+        # The attachment's query macro can raise directly during engine binding, before
+        # an enforcement decision is emitted. Resolved object/function routes retain kinds.
+        if "remote.query(" not in body:
+            assert decisions(db, "mode='enforce'")[-1]["violations"] == result["violations"]
         # Unsupported: parameters defer private authorization until after the engine's bind.
         # A denial is NOT proof of zero I/O. The trusted body already executed on the server.
         with pytest.raises(duckdb.PermissionException, match="Gatekeeper denied|unsupported remote authorization scope"):
@@ -174,7 +196,27 @@ def test_server_sessions_require_independent_installation(remote):
 
 
 @pytest.mark.parametrize("parameterized", [False, True])
-def test_held_prepared_base_table_reauthorized(remote, parameterized):
+def test_held_prepared_base_table_reauthorized(remote, parameterized, tmp_path):
+    # Alias permission is exact even for a handle prepared while that entry was granted.
+    # Use the same C API/engine as the transport probe, with a fresh local connection.
+    path = tmp_path / "held.parquet"
+    remote.client.execute(f"COPY (SELECT 1 AS id) TO {literal(path)} (FORMAT PARQUET)")
+    aliases = CConnection()
+    try:
+        aliases.query("LOAD " + literal(EXTENSION))
+        aliases.query("CALL gatekeeper_configure(allowed_functions := "
+                      "[{catalog:'system',schema_path:['main'],name:'read_parquet',type:'table'}])")
+        sql = f"SELECT * FROM read_parquet({literal(path)})" + (" WHERE id=?" if parameterized else "")
+        with aliases.prepare(sql) as (handle, error):
+            assert error is None
+            assert aliases.execute(handle, 1 if parameterized else None) is None
+            aliases.query("CALL gatekeeper_configure(allowed_functions := "
+                          "[{catalog:'system',schema_path:['main'],name:'parquet_scan',type:'table'}])")
+            aliases.query("CALL gatekeeper_enforce()")
+            assert "Gatekeeper denied" in aliases.execute(handle, 1 if parameterized else None)
+            aliases.query(f"SELECT * FROM parquet_scan({literal(path)})")
+    finally:
+        aliases.close()
     db = CConnection()
     try:
         db.query("LOAD " + literal(EXTENSION))

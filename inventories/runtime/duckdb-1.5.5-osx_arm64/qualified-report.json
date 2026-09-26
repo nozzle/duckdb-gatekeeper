@@ -1,6 +1,6 @@
 {
   "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
-  "compiled_defaults": 919,
+  "compiled_defaults": 921,
   "default_names_at_ungranted_identities": [
     {
       "catalog": "system",
@@ -134,6 +134,14 @@
     },
     {
       "catalog": "system",
+      "name": "first",
+      "schema_path": [
+        "main"
+      ],
+      "type": "window"
+    },
+    {
+      "catalog": "system",
       "name": "first_value",
       "schema_path": [
         "main"
@@ -143,6 +151,14 @@
     {
       "catalog": "system",
       "name": "lag",
+      "schema_path": [
+        "main"
+      ],
+      "type": "window"
+    },
+    {
+      "catalog": "system",
+      "name": "last",
       "schema_path": [
         "main"
       ],
@@ -15831,7 +15847,7 @@
       "unclassified_target_added_names": []
     }
   },
-  "policy_sha256": "4201f98638c3819814a0e0d316f1a1487f4eba44c57ddb8c1477b13d67e7d874",
+  "policy_sha256": "7d46832151844d5d5151293d0f09fba1d7b55c6245dd1a5579bacbed5442741d",
   "report_schema": "gatekeeper-qualified-collection-audit-v1",
   "reporting_discrepancies": [
     {

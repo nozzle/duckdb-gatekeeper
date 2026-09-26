@@ -249,7 +249,7 @@ def test_policy_changes_apply_to_the_next_statement(catalog, agent):
 
 def test_validate_is_available_when_allowed(catalog, agent):
     configure(catalog, {"allowed_tables": [{"schema_path": ["reporting"], "table": "*"}],
-                        "allowed_functions": [{"schema_path": ["*"], "name": "gatekeeper_validate"}]})
+                        "allowed_functions": [{"schema_path": ["main"], "name": "gatekeeper_validate"}]})
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM secret.salaries')").fetchall()
     assert rows == [(False, "forbidden")]
     rows = agent.execute("SELECT allowed, code FROM gatekeeper_validate('SELECT count(*) FROM reporting.orders')").fetchall()

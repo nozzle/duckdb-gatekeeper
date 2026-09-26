@@ -319,7 +319,8 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 				auto schema = engine::SchemaPath(table->schema);
 				account(provenance.validated_scans, remaining, gatekeeper::ObjectKey(catalog, schema, name),
 				        {gatekeeper::rules::STATEMENT,
-				         "plan scans an object more often than the validated statement did", catalog, schema, name});
+				         "plan scans an object more often than the validated statement did", catalog, schema, name, "",
+				         -1, "", "table"});
 				AuthorizeObject(layers, unit.binding, *table, result,
 				                provenance.ObjectAttributable(unit.binding, catalog, schema, name));
 			} else {
@@ -489,7 +490,7 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		auto canonical = gatekeeper::Lower(resolution.name);
 		for (const auto *layer : layers) {
 			if (caller_written && !gatekeeper::FunctionEligible(*layer, resolution.name)) {
-				auto display = gatekeeper::CanonicalFunction(resolution.name);
+				auto display = gatekeeper::Lower(resolution.name);
 				if (deny(gatekeeper::rules::FUNCTION, "replacement scan function is not allowed: " + display, display))
 					return std::move(resolution.ref);
 			}
@@ -587,7 +588,8 @@ static void MacroBodyNames(ScalarMacroCatalogEntry &macro, gatekeeper::Names &na
 // attributed to nothing, with one exception: Gatekeeper's control plane is refused on every route. A scalar
 // macro body binds in the caller's own binder, so its names and table references are learned from its
 // definition instead, and an object the caller's text names is the caller's wherever it binds.
-static void CheckAggregateDependency(ClientContext &context, const string &name, gatekeeper::Result &result) {
+static void CheckAggregateDependency(ClientContext &context, const string &name, gatekeeper::Result &result,
+                                     gatekeeper::Provenance &provenance) {
 	if (name != "min" && name != "max")
 		return;
 	auto dependency = name == "min" ? "arg_min" : "arg_max";
@@ -601,6 +603,11 @@ static void CheckAggregateDependency(ClientContext &context, const string &name,
 		                          dependency, -1, FunctionKind(target.type) ? FunctionKind(target.type) : "");
 		throw PermissionException("untrusted implicit aggregate");
 	}
+	// This preflight proves the dependency's actual flag, not that the binder used it.
+	// Attribution comes from min/max's reviewed implementation edge if it appears in the plan.
+	provenance.function_entries.insert(
+	    gatekeeper::FunctionKey({engine::CatalogName(standard.schema.catalog), engine::SchemaPath(standard.schema),
+		                         engine::EntryName(target), "aggregate", target.internal}));
 }
 
 struct LookupCallback {
@@ -654,7 +661,8 @@ struct LookupCallback {
 			AuthorizeObject(s.layers, s.binding, entry, s.result, attributable);
 		auto &function_entry = entry.Cast<StandardEntry>();
 		gatekeeper::Identity source{engine::CatalogName(function_entry.schema.catalog),
-		                            engine::SchemaPath(function_entry.schema), canonical, FunctionKind(entry.type)};
+		                            engine::SchemaPath(function_entry.schema), canonical, FunctionKind(entry.type),
+		                            entry.internal};
 		// 1.5 has no retained definition after native bind callbacks replace descriptors.
 		// Refuse this untrackable caller route before callbacks, rather than inferring
 		// origin from arbitrary output leaves or all functions in a namespace.
@@ -707,7 +715,11 @@ struct LookupCallback {
 			if (targets == s.binding.dispatcher_targets_by_name.end())
 				throw BinderException("Missing aggregate dispatch targets");
 			for (const auto &name : targets->second) {
-				gatekeeper::Identity identity{"system", {"main"}, name, "aggregate"};
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				gatekeeper::Identity identity{"system", {"main"}, name, "aggregate", target.internal};
 				if (!s.layers.All(
 				        [&](const gatekeeper::Policy &p) { return gatekeeper::FunctionAllowed(p, identity); })) {
 					s.result.violations.emplace(gatekeeper::rules::FUNCTION, "dispatched aggregate is not allowed",
@@ -715,11 +727,7 @@ struct LookupCallback {
 					                            identity.type);
 					throw PermissionException("dispatched aggregate is not allowed");
 				}
-				CheckAggregateDependency(s.context, name, s.result);
-				auto &target =
-				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
-				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
-					throw BinderException("List aggregate target is not an aggregate");
+				CheckAggregateDependency(s.context, name, s.result, s.provenance);
 				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 			s.provenance.authorized_dispatchers.insert(canonical);
@@ -731,7 +739,7 @@ struct LookupCallback {
 		if (attributable && entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY &&
 		    engine::CatalogName(function_entry.schema.catalog) == "system" &&
 		    engine::SchemaPath(function_entry.schema) == gatekeeper::NamePath{"main"})
-			CheckAggregateDependency(s.context, canonical, s.result);
+			CheckAggregateDependency(s.context, canonical, s.result, s.provenance);
 		if (trusted)
 			return;
 		// A host table macro's body binds in the next child binder. So does what a table function a trusted
@@ -753,7 +761,11 @@ struct LookupCallback {
 			gatekeeper::Names targets;
 			MacroBodyNames(macro, s.provenance.caller_expansions, nullptr, &targets);
 			for (const auto &name : targets) {
-				gatekeeper::Identity selected{"system", {"main"}, name, "aggregate"};
+				auto &target =
+				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
+				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
+					throw BinderException("List aggregate target is not an aggregate");
+				gatekeeper::Identity selected{"system", {"main"}, name, "aggregate", target.internal};
 				if (!s.layers.All([&](const gatekeeper::Policy &p) {
 					    return p.defaults || gatekeeper::FunctionAllowed(p, selected);
 				    })) {
@@ -763,15 +775,11 @@ struct LookupCallback {
 					throw PermissionException("default macro aggregate is not allowed");
 				}
 				s.provenance.caller_expansion_targets.insert(name);
-				CheckAggregateDependency(s.context, name, s.result);
-				auto &target =
-				    engine::GetEntry(s.context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "system", "main", name);
-				if (target.type != CatalogType::AGGREGATE_FUNCTION_ENTRY)
-					throw BinderException("List aggregate target is not an aggregate");
+				CheckAggregateDependency(s.context, name, s.result, s.provenance);
 				auto &standard = target.Cast<StandardEntry>();
 				gatekeeper::Identity identity{engine::CatalogName(standard.schema.catalog),
 				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
-				                              FunctionKind(target.type)};
+				                              FunctionKind(target.type), target.internal};
 				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
 			}
 		}
@@ -800,10 +808,10 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 		// fallback authorizes both possibilities; evidence conservatively includes the capability even when the
 		// caller supplied an explicit value. DuckDB still chooses the value and preserves explicit precedence.
 		layers.Each([&](const gatekeeper::Policy &policy) {
-			if (!gatekeeper::FunctionAllowed(policy, {"system", {"main"}, "getvariable", "scalar"}))
+			if (!gatekeeper::FunctionAllowed(policy, {"system", {"main"}, "getvariable", "scalar", true}))
 				deny("session-variable fallback requires system.main.getvariable permission");
 		});
-		result.functions.insert({"system", {"main"}, "getvariable", "scalar"});
+		result.functions.insert({"system", {"main"}, "getvariable", "scalar", true});
 	}
 #endif
 }

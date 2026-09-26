@@ -42,7 +42,7 @@ def test_text_denials_are_all_reported_and_bind_denials_are_the_first_one(catalo
 def test_table_binding_precedes_resolved_dispatcher_check(catalog, agent, sql):
     # Target checks wait for the real system dispatcher entry; host same-leaf functions are opaque.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["main"], "name": "list_aggregate"}],
                         "blocked_functions": [{"schema_path":["*"],"name":"max"}]})
     expected = validate(catalog, sql)
     assert first(expected) == ("table", "object is not allowed", "salaries", "")
@@ -64,14 +64,14 @@ def test_the_ceiling_is_walked_before_the_request_layer(catalog, sql):
     # Two plan-level denials in one statement, one per layer: the ceiling's is reported whichever the text
     # names first, because the plan is walked once per layer and the ceiling's walk is the first.
     enable(catalog)
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}],
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["main"], "name": "list_aggregate"}],
                         "blocked_functions": [{"schema_path":["*"],"name":"max"}]})
     expected = validate(catalog, sql, {"blocked_functions": [{"schema_path":["*"],"name":"min"}]})
     assert first(expected) == ("function", "dispatched aggregate is not allowed", "", "max")
     [record] = decisions(catalog, "mode = 'validate'")
     assert record["violations"] == expected["violations"]
     # Only the request layer's denial remains once the ceiling allows the other name.
-    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["*"], "name": "list_aggregate"}]})
+    configure(catalog, {"allowed_tables": [REPORTING], "allowed_functions": [{"schema_path": ["main"], "name": "list_aggregate"}]})
     assert first(validate(catalog, sql, {"blocked_functions": [{"schema_path":["*"],"name":"min"}]})) == (
         "function", "dispatched aggregate is not allowed", "", "min")
 

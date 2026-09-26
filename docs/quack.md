@@ -4,6 +4,10 @@ Gatekeeper evidence (`objects`, `caller_objects`, `functions`, and the same audi
 describes the **checked local binding**, not recursively complete remote lineage. There is
 no allow-remote override and no evidence-completeness field. Decisions and audit evidence are
 host-only; they may disclose trusted definitions and must not be forwarded to untrusted callers.
+Resolved remote-object refusals retain `object_type` (`table` or `view`), and resolved
+opaque-function refusals retain `function_type`, alongside their exact catalog/schema/name
+in validation and audit violations. The other kind field is empty; success-only evidence
+lists remain empty on denial. These identities describe the local entry, not server lineage.
 
 Trusted definitions retain their general table/function allowlist, block, and caller never-bind
 exemptions. Those exemptions do not expand the **supported execution scope** or bypass
@@ -52,6 +56,10 @@ optimizers when configuring an existing host). Gatekeeper does not silently chan
   that view's Quack dependencies: it refuses opaque delegation and remote views on both engines,
   and all attached Quack objects on 1.5. A trusted local view over a 2.0 base table can use the
   supported local-binding route in the matrix. See [qualified function rules](qualified-functions.md).
+  Grants and blocks match exact entry names, including aliases: a `read_parquet` grant does
+  not authorize `parquet_scan`, or vice versa. Held prepared handles are reauthorized against
+  the current policy. Internal entries require exact schema components for explicit grants;
+  the actual entry metadata determines this, not the extension's namespace.
 * **Deferred trusted-body binding is unsupported.** For example, a host view containing
   `quack_query_by_name(...)`, a remote view, or the attachment's `.query()` macro can execute
   remotely when a parameterized statement binds it before Gatekeeper's private check. The final

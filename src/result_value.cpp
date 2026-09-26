@@ -11,7 +11,8 @@ static LogicalType ViolationType() {
 	                            {"table", LogicalType::VARCHAR},
 	                            {"function_name", LogicalType::VARCHAR},
 	                            {"position", LogicalType::BIGINT},
-	                            {"function_type", LogicalType::VARCHAR}});
+	                            {"function_type", LogicalType::VARCHAR},
+	                            {"object_type", LogicalType::VARCHAR}});
 }
 
 static LogicalType IdentityType(bool object) {
@@ -38,9 +39,10 @@ static Value Position(int64_t position) { return position < 0 ? Value(LogicalTyp
 Value ResultValue(const gatekeeper::Result &result) {
 	vector<Value> violations;
 	for (auto &v : result.violations) {
-		violations.push_back(Value::STRUCT(
-		    ViolationType(), {Value(v.rule), Value(v.message), Value(v.catalog), gatekeeper::PathValue(v.schema_path),
-			                  Value(v.table), Value(v.function_name), Position(v.position), Value(v.function_type)}));
+		violations.push_back(Value::STRUCT(ViolationType(), {Value(v.rule), Value(v.message), Value(v.catalog),
+		                                                     gatekeeper::PathValue(v.schema_path), Value(v.table),
+		                                                     Value(v.function_name), Position(v.position),
+		                                                     Value(v.function_type), Value(v.object_type)}));
 	}
 	auto identities = [&](const std::set<gatekeeper::Identity> &entries, bool object) {
 		vector<Value> values;

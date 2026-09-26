@@ -1,7 +1,7 @@
 # Default function identity provenance
 
 `inventories/default_identities.json` translates the **953 historically reviewed compute
-names** into **919 explicit identities covering 913 names**, with **40 explicit namespace
+names** into **921 explicit identities covering 913 names**, with **40 explicit namespace
 exclusions**. There are **zero unresolved names**. Historical classifications, implementation
 review notes and `baselines/duckdb-1.5.5.json` remain unchanged.
 
@@ -11,7 +11,7 @@ review notes and `baselines/duckdb-1.5.5.json` remain unchanged.
 | aggregate | 83 |
 | macro | 76 |
 | table | 19 |
-| window | 13 |
+| window | 15 |
 
 Each grant expands to `{catalog: "system", schema_path: ["main"], name, type}`.
 `type` is mandatory. No wildcard matching occurs for these defaults; `*` is the exact
@@ -64,10 +64,15 @@ classification remains trusted, but does not justify a fabricated `system.main` 
   `duckdb_functions.cpp:194-220` constructs temporary reporting entries (OID zero) and
   labels them `aggregate`, with an explicit FIXME that the label should be `window`.
   These are not executable aggregate registrations. No aggregate grants are justified
-  by those rows. `first` and `last` have independent real aggregate registrations.
+  by those rows. `first` and `last` have independent real aggregate registrations,
+  and `WindowFunctions` explicitly maps their parsed spellings to intrinsic window
+  nodes. Both 1.5 parsers retain the spelling: each therefore has its own exact
+  window default alongside its aggregate default (`window-spellings-1.5` evidence).
+  These two window defaults are not reporting discrepancies or alias equivalence.
 - DuckDB 2.0's window registration inputs explicitly register those thirteen names
-  as `window`, including `rank_dense`. The same window-only grants cover both engines;
-  runtime reporting never broadens the kind set.
+  as `window`, including `rank_dense`. Its parser rewrites `first/last OVER` to
+  `first_value/last_value`, so the two additional 1.5 intrinsic identities are not
+  observed on 2.0. Runtime reporting never broadens the kind set.
 - `unnest` has a registered table identity and a source-defined SELECT-list binder
   intrinsic represented by Gatekeeper as `system.main.unnest` of kind `scalar`.
   Both are explicit. A table registration never implicitly authorizes scalar dispatch.
@@ -75,7 +80,8 @@ classification remains trusted, but does not justify a fabricated `system.main` 
   scalar registrations in the pinned 2.0 math registration inputs. Both kinds are recorded.
 - `range`, `generate_series`, and `repeat` each have independently registered scalar
   and table forms. These plus scalar `unnest` and two rounding transitions explain the
-  six identities beyond the 913 granted names.
+  six identities beyond the 913 granted names; `first`/`last` window intrinsics add
+  two more, for eight additional identities.
 
 The 13 removed synthetic aggregate grants are `cume_dist`, `dense_rank`, `fill`,
 `first_value`, `lag`, `last_value`, `lead`, `nth_value`, `ntile`, `percent_rank`, `rank`,
@@ -103,17 +109,19 @@ new qualified observations are checked in separately under `inventories/runtime/
 - [DuckDB 1.5.5, macOS ARM64](../inventories/runtime/duckdb-1.5.5-osx_arm64/README.md):
   locked replay succeeded for 28 of 29 extension setups, including the extensions above.
   MotherDuck was installed but deliberately not loaded. The independent captures observe
-  903 of 919 default identities. The 16 unobserved identities are the 13 window intrinsics
-  reported as aggregates, the two 2.0-only rounding scalars, and scalar `unnest` (a binder
-  intrinsic). No target-added default-name identity falls outside the grants; the aggregate
+  903 of 921 current default identities. The 18 unobserved identities are the 13 windows
+  reported only as synthetic aggregates, the two `first`/`last` window spellings whose
+  actual aggregates are reported instead, the two 2.0-only rounding scalars, and scalar
+  `unnest` (a binder intrinsic). No target-added default-name identity falls outside the grants; the aggregate
   report still flags the 13 synthetic window labels. `vortex_version` is the only added
   name absent from the historical classifications.
 - [DuckDB 2.0 candidate, macOS ARM64](../inventories/runtime/duckdb-2.0-d4e72566aa-osx_arm64/README.md):
   locked replay succeeded for 25 of 29 setups at `d4e72566aa`; Lance, MotherDuck, UI and
   Vortex artifacts were unavailable at the recorded coordinates. The independent captures
-  observe 913 of 919 default identities, with no default names at ungranted identities.
-  The six unobserved defaults are two ICU locale scalars, the two historical rounding
-  macros, Spatial's `st_snap`, and scalar `unnest`; the candidate report links their
+  observe 913 of 921 current default identities, with no default names at ungranted identities.
+  The eight unobserved defaults are two ICU locale scalars, the two historical rounding
+  macros, Spatial's `st_snap`, scalar `unnest`, and the 1.5 `first`/`last` window spellings;
+  the candidate report links their
   source reconciliation. Its 248 unclassified runtime names grant no permissions.
 
 These collections preserve shared qualified bases, per-extension dependency/target deltas,
@@ -121,7 +129,8 @@ artifact locks and stage hashes. Their aggregate reports are unions of independe
 not a single combined live catalog or proof of individual function ownership. They are
 runtime observations, **not accepted extension baselines**, replacements for the historical
 baseline, or new implementation reviews. Source-backed grants and classifications remain
-unchanged. Extensions with no compute names contribute no defaults; binary-only MotherDuck
+independent of the runtime observations. Extensions with no compute names contribute no
+defaults; binary-only MotherDuck
 continues to contribute none. No source-limited name was silently dropped.
 
 The reproducible checks are each collection's `qualified-report.json`, generated by
@@ -139,8 +148,11 @@ without native extension replays. It explicitly checks the version-specific miss
 sets above, reporting-only window labels, optional-extension registration kinds,
 dependency/target stages, and corruption of base/stage/final-delta/lock hashes.
 Unknown additions are reported and never granted. The historical `report.json` files
-retain exploratory fields as evidence; their aggregate coverage claims are recomputed
-too, while current per-stage policy checks use the qualified reports. No historical
+retain the original 919-default claims as immutable evidence, verified by canonical
+JSON hashes independently of today's map. Their capture-time map hash is pinned to
+the map at commit `69198e3149916532390f5d9876cfc2b04fc1ee6c`; it is not a hash of the
+current policy. Observation-only aggregate claims are still compared with reconstructed
+captures, while current per-stage policy checks use the regenerated qualified reports. No historical
 snapshot is rewritten or relabeled to make a check pass.
 
 New captures retain catalog, kind and full schema paths. On engines exposing nested
