@@ -124,15 +124,24 @@ def test_process_isolation_removes_tokens_and_user_paths(tmp_path, monkeypatch):
 
 
 @requires_posix
-@pytest.mark.parametrize("body,status", [("import time; time.sleep(30)", "timeout"),
-                                        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", "crash"),
-                                        ("raise RuntimeError('/private/token=secret')", "failed")])
+@pytest.mark.parametrize("body,status", [
+    pytest.param("import signal; signal.pause()", "timeout", id="timeout"),
+    pytest.param("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", "crash", id="crash"),
+    pytest.param("raise RuntimeError('/private/token=secret')", "failed", id="nonzero-exit"),
+    # A fixed startup delay exceeds the old 0.5s budget, without depending on host load.
+    pytest.param("import os, signal, time; time.sleep(0.75); os.kill(os.getpid(), signal.SIGKILL)",
+                 "crash", id="slow-startup-crash"),
+])
 def test_native_failure_and_timeout_do_not_leak_output(tmp_path, monkeypatch, body, status):
     fake = tmp_path / "fake.py"
-    fake.write_text(body)
+    fake.write_text("import sys\n"
+                    "print('/private/token=secret', flush=True)\n"
+                    "print('/private/token=secret', file=sys.stderr, flush=True)\n" + body)
     monkeypatch.setattr(capture, "__file__", str(fake))
-    result = capture.run_child(sys.executable, {}, 0.5)
+    # Only the timeout case needs a short wait; other cases must reach their exit.
+    result = capture.run_child(sys.executable, {}, 0.5 if status == "timeout" else 10)
     assert result["status"] == status
+    assert result["error"]["code"] == ("process_timeout" if status == "timeout" else "process_exit")
     assert "private" not in json.dumps(result)
     assert "secret" not in json.dumps(result)
 
