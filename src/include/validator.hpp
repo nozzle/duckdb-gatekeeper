@@ -124,6 +124,9 @@ inline Result FixedLimitExceeded(std::string message) {
 }
 inline Result InvalidInput(std::string message) { return {false, codes::INVALID_INPUT, "", std::move(message)}; }
 struct BindingPolicy {
+	// Caller-written parameter identifiers and their earliest known position. Collect before binding so
+	// parameters in AT, COLUMNS and PIVOT IN are covered too; trusted definitions are not part of this walk.
+	std::map<std::string, int64_t> caller_parameters;
 	// Ambiguous caller syntax: enforce only the implementation actually looked up.
 	Names synthesized_functions;
 	Names literal_constructors;

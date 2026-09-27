@@ -780,6 +780,14 @@ execute. A failure at any step raises; nothing executes.
 
 - Objects are authorized by their **resolved** identity. Views and the tables behind them
   must both pass.
+- On DuckDB 2.0, validation of `$name` falling back to a session variable requires
+  `getvariable` permission in both policy layers. Enforced connections require that grant for a
+  caller-written named parameter colliding with a session variable, **even when an explicit value is
+  supplied**, including at prepare time. With permission, explicit values still take precedence and
+  evidence conservatively includes the capability. Without permission, use a noncolliding name or
+  positional `$1` instead. The engine's early hook cannot distinguish supplied inputs. DuckDB 1.5
+  has no implicit fallback and keeps explicit-value precedence. See the
+  [fallback decision](docs/parameter-fallback.md) for the upstream hook needed to lift this restriction.
 - Prepared parameters validate only when DuckDB can finish binding without values
   (`WHERE id = ?`, `LIMIT ?`, `$1::INTEGER`). Bare `SELECT $1` returns `binding`.
   Deferred function binds (`list_sum($1)`) and incompatible uses of one parameter
@@ -810,7 +818,7 @@ db.execute("CREATE TABLE reporting.orders AS SELECT 20.0 AS amount")
 tables = [{"catalog": "memory", "schema_path": ["reporting"], "table": "*"}]
 db.execute("CALL gatekeeper_configure(allowed_tables := ?)", [tables])
 db.execute("CALL enable_logging('Gatekeeper')")
-db.execute("SET gatekeeper_log_only = false")  # true while rolling out: record denials, refuse nothing
+db.execute("SET gatekeeper_log_only = false")  # true: observe policy denials; routing controls stay refused
 db.execute("SET lock_configuration = true")
 
 # Enforced connection: hand this cursor to the agent. Denials raise duckdb.PermissionException.

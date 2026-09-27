@@ -8,6 +8,13 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
+  named parameters read session variables, and reports that fixed capability as function evidence.
+  Enforced 2.0 connections require that permission for named-parameter/session-variable collisions
+  before binding, including explicit arguments and prepares: current hooks cannot distinguish supplied
+  inputs. When granted, DuckDB preserves explicit-value precedence and Gatekeeper conservatively records
+  the capability. Without permission, use a noncolliding name or positional parameter. Log-only records
+  denials and lets DuckDB proceed. DuckDB 1.5 is unchanged. (#107)
 - DuckDB 2.0 local enforcement activation now refuses CONNECT-ed state, including stale targets,
   when the local latch is reached. Native callback-counter regressions verify that CONNECT on a
   local enforced connection is refused before remote dispatch. Hosts must activate and keep

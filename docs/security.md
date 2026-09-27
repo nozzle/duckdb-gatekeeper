@@ -60,6 +60,29 @@ bind the submitted SQL again; preparing a call does not cache an authorization d
 Validation also rejects non-null placeholder plans with unresolved parameter types;
 otherwise execution could rebind to an implementation the validator never authorized.
 
+On DuckDB 2.0, caller-written `$name` references with a same-named session variable require the
+fixed `system.main.getvariable` capability before validation binds anything. Both policy layers
+must allow it; blocks win. Successful validation includes `{catalog: 'system', schema_path: ['main'],
+name: 'getvariable', type: 'scalar'}` in `functions`, without variable values. A present NULL variable
+is still a fallback input. Positional `$1` never falls back. References introduced only by trusted
+views remain the definition's own, outside caller policy.
+
+Enforcement is conservative: **caller named-parameter/session-variable collisions require
+`getvariable` permission before binding, even with explicit arguments**. QueryBegin
+cannot see arguments; the 2.0 prepared-rebind hook sees arguments after implicit defaults were merged.
+When granted, both possible sources are authorized: DuckDB preserves explicit-value precedence and
+the decision conservatively includes the capability even when no fallback was actually read.
+Preparing colliding text also requires the grant because the early hook cannot distinguish that
+operation. Retained handles are checked at QueryBegin on every execution. Noncolliding explicit
+inputs and DuckDB 1.5 retain their existing behavior. Log-only records one denial per statement and
+lets the engine proceed. A colliding explicit input without the grant remains conservatively refused.
+See [the feasibility decision](parameter-fallback.md) for the missing hook and deferred value-input API.
+
+Capability evidence contains only the fixed identity, never variable values. Raw validation/audit
+diagnostics are host-facing and retain the engine's messages, which can include values in regex,
+path or cast errors. Enforcement engine errors likewise propagate unchanged; this is not a
+diagnostic-redaction boundary.
+
 Use `SELECT allowed FROM gatekeeper_validate(...)` to select an individual column,
 or select `*` for all result columns.
 Empty option lists are accepted regardless of element type, since DuckDB resolves
