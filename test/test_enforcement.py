@@ -5,10 +5,20 @@ import threading
 import duckdb
 import pytest
 
-from support.artifact import by_engine, connect, literal
+from support.artifact import ENGINE_MAJOR, by_engine, connect, literal
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce, settle
 from support.typed_helpers import configure, validate
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="CONNECT routing was introduced in DuckDB 2.0")
+@pytest.mark.parametrize("sql", ["CONNECT missing_remote", "CONNECT ':memory:'", "CONNECT LOCAL", "CONNECT", "DISCONNECT"])
+def test_connect_is_refused_before_target_lookup_or_implicit_attach(agent, sql):
+    # A missing target or plain DuckCatalog would fail later with an engine error if binding/execution
+    # were reached. The native remote-catalog probe separately counts actual dispatch callbacks.
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute(sql).fetchall()
+    assert agent.execute("SELECT 42").fetchone() == (42,)
 
 
 @pytest.mark.parametrize("sql", PARITY_CORPUS)

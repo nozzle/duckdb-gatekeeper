@@ -1,4 +1,4 @@
-"""Log-only mode: enforced connections make and record every decision, and refuse nothing."""
+"""Log-only previews policy denials; CONNECT/DISCONNECT routing controls stay refused."""
 import re
 import threading
 import time
@@ -6,7 +6,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import by_engine, connect, literal
+from support.artifact import ENGINE_MAJOR, by_engine, connect, literal
 from support.audit import decisions, enable, records
 from support.corpus import CATALOG_POLICY, CATALOG_SQL, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -124,6 +124,29 @@ def test_flip_applies_at_the_next_statement_in_both_directions(catalog, agent):
     assert [(r["new_value"], r["log_level"]) for r in changes] == [("true", "INFO"), ("false", "INFO"),
                                                                     ("true", "INFO"), ("false", "INFO")]
     assert all(r["mode"] is None and r["statement"] is None and r["allowed"] is None for r in changes)
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="CONNECT routing was introduced in DuckDB 2.0")
+@pytest.mark.parametrize("sql, recorded", [("CONNECT missing_remote", "CONNECT missing_remote"),
+                                          ("/* routing */ CoNnEcT ':memory:'", "CoNnEcT ':memory:'"),
+                                          ("-- routing\n DiScOnNeCt", "DiScOnNeCt"),
+                                          ("CONNECT LOCAL", "CONNECT LOCAL"), ("CONNECT", "CONNECT")])
+def test_log_only_routing_controls_are_refused_and_audited_as_enforced(catalog, agent, sql, recorded):
+    enable(catalog, "debug")
+    catalog.execute("SET gatekeeper_log_only = true")
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute(sql).fetchall()
+    [record] = decisions(catalog)
+    assert (record["mode"], record["boundary"], record["allowed"], record["code"]) == (
+        "enforce", "binding", False, "unsupported")
+    # The engine strips leading comments before presenting the statement to QueryBegin.
+    assert record["statement"] == recorded
+    assert agent.execute("SELECT 'CONNECT remote'").fetchone() == ("CONNECT remote",)
+    agent.execute("CREATE TABLE log_only_local(i INTEGER)")
+    assert decisions(catalog, "statement = 'CREATE TABLE log_only_local(i INTEGER)'")[0]["mode"] == "log_only"
+    catalog.execute("SET gatekeeper_log_only = false")
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
+        agent.execute("CREATE TABLE after_log_only(i INTEGER)")
 
 
 def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalog, agent, tmp_path):
@@ -330,7 +353,8 @@ def test_posture_warning_names_the_switch(db):
     assert any("lock_configuration" in w and "gatekeeper_log_only" in w for w in warnings)
     db.execute("SET gatekeeper_log_only = true")
     warnings = enforce(db.cursor())
-    assert warnings[0] == "gatekeeper_log_only is true: this connection records decisions and refuses nothing"
+    assert warnings[0] == ("gatekeeper_log_only is true: this connection records policy decisions without refusing "
+                           "them; CONNECT/DISCONNECT routing controls remain refused")
 
 
 def test_concurrent_flips_never_leave_a_statement_unrecorded_or_half_decided(catalog):

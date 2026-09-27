@@ -1,0 +1,72 @@
+# name: test/sql/connect.test
+# description: Local enforced connections reject CONNECT before binding, including implicit attach forms.
+# group: [gatekeeper]
+
+# CONNECT is DuckDB 2.0 syntax; both 2.0 compatibility jobs set this engine-feature marker.
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
+
+require gatekeeper
+
+statement ok
+CALL gatekeeper_enforce();
+
+statement error
+CONNECT missing_remote;
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT ':memory:';
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT LOCAL;
+----
+Gatekeeper denied this statement
+
+statement error
+CONNECT;
+----
+Gatekeeper denied this statement
+
+statement error
+DISCONNECT;
+----
+Gatekeeper denied this statement
+
+query I
+SELECT 42;
+----
+42
+
+# The rollout switch must never permit routing-state changes. Host policy denials still run.
+statement ok host
+SET gatekeeper_log_only = true;
+
+statement error
+/* routing */ CoNnEcT ':memory:';
+----
+Gatekeeper denied this statement
+
+statement error
+-- routing
+DiScOnNeCt;
+----
+Gatekeeper denied this statement
+
+statement ok
+CREATE TABLE log_only_local(i INTEGER);
+
+query T
+SELECT 'CONNECT remote';
+----
+CONNECT remote
+
+statement ok host
+SET gatekeeper_log_only = false;
+
+statement error
+CREATE TABLE after_log_only(i INTEGER);
+----
+Gatekeeper denied this statement
