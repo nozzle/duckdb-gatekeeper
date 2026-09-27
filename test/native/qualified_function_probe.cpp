@@ -365,7 +365,7 @@ int main() {
 	CheckInternalFunctions(connection, database);
 	replacement_binds = 0;
 	// Alias policy is exact. A host same-leaf grant cannot hide a block on the
-	// actual parsed spelling. 2.0 first/last OVER is parser syntax for *_value.
+	// actual operation. Both engines' first/last OVER execute the *_value intrinsic.
 	Query(connection, "CREATE SCHEMA window_host");
 	for (const auto &alias : {"rank_dense", "first", "last"}) {
 		auto canonical = string(alias) == "rank_dense" ? "dense_rank" : string(alias) + "_value";
@@ -381,12 +381,14 @@ int main() {
 			Query(window_agent, string("SELECT window_host.") + alias + "()");
 			for (const auto &name : {string(alias), string(canonical)}) {
 				auto sql = "SELECT " + name + "(" + args + ") OVER ()";
-				auto parsed = name;
-#if GATEKEEPER_DUCKDB_MAJOR >= 2
+				auto intrinsic = name;
 				if (name == "first" || name == "last")
-					parsed += "_value";
+					intrinsic += "_value";
+				bool denied = blocked == intrinsic;
+#if GATEKEEPER_DUCKDB_MAJOR < 2
+				// The 1.5 binder also retrieves the written first/last aggregate entry.
+				denied = denied || ((name == "first" || name == "last") && blocked == name);
 #endif
-				bool denied = blocked == parsed;
 				if ((Cell(connection, "SELECT code FROM gatekeeper_validate('" + sql + "')").ToString() ==
 				     "forbidden") != denied ||
 				    window_agent.Query(sql)->HasError() != denied)
@@ -396,6 +398,27 @@ int main() {
 	}
 	Query(connection, "CALL gatekeeper_configure()");
 	Query(connection, "CREATE SCHEMA admitted; CREATE SCHEMA denied");
+	// Retained native handles must reauthorize the intrinsic after a policy change.
+	for (const auto &name : {"first", "last", "first_value", "last_value"}) {
+		Query(connection, "CALL gatekeeper_configure()");
+		Connection window_agent(database);
+		auto handle = window_agent.Prepare(string("SELECT ") + name + "($1) OVER ()");
+		if (handle->HasError())
+			return 33;
+		Query(window_agent, "CALL gatekeeper_enforce()");
+		if (handle->Execute(1)->HasError())
+			return 34;
+		Query(connection, "CALL gatekeeper_configure(blocked_functions := "
+		                  "[{catalog:'system',schema_path:['main'],name:'first_value',type:'window'}, "
+		                  "{catalog:'system',schema_path:['main'],name:'last_value',type:'window'}])");
+		if (!handle->Execute(2)->HasError())
+			return 35;
+		Query(connection, "SET GLOBAL gatekeeper_log_only=true");
+		if (handle->Execute(3)->HasError())
+			return 36;
+		Query(connection, "SET GLOBAL gatekeeper_log_only=false");
+	}
+	Query(connection, "CALL gatekeeper_configure()");
 	Register(connection, "admitted");
 	Register(connection, "denied");
 	Query(connection, "CREATE MACRO admitted.f(x) AS x; CREATE MACRO denied.f(x) AS x");

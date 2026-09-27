@@ -800,7 +800,7 @@ Reviewed defaults already carry exact identities; the flag is not added to publi
 Configurable grants and blocks match **exact catalog-entry names without alias canonicalization**.
 This includes Parquet (`read_parquet` / `parquet_scan`), JSON extraction (`json_extract` /
 `json_extract_path` / `->`, and `json_extract_string` / `json_extract_path_text` / `->>`), and
-window names (`rank_dense` / `dense_rank`, `first` / `first_value`, `last` / `last_value`).
+window entries (`rank_dense` / `dense_rank`, `first_value`, `last_value`).
 Cover each intended entry explicitly. Parquet file shorthand selects `parquet_scan`; granting
 `read_parquet` alone does not authorize that replacement reader. Pre-resolution refusals preserve
 the screened spelling; resolved violations and successful dependency lists retain observed identities.
@@ -809,8 +809,10 @@ reader caller-attributable, or vice versa.
 
 Source-defined parser/binder rewriting is an attribution mechanism, not general semantic equivalence
 or a configurable policy alias. Authorization follows parsed operations and selected entries.
-DuckDB 1.5 intrinsic windows lack catalog selection, so Gatekeeper preserves the parsed spelling
-for the intrinsic operation rather than requiring an invented canonical entry. See
+DuckDB 1.5 maps `first/last OVER` to the `first_value/last_value` intrinsic implementations,
+which Gatekeeper authorizes as windows, matching 2.0's parser rewrite. The real `first/last`
+aggregate entries retrieved by 1.5 still require separate authorization and appear in evidence;
+a kindless block on those names therefore still denies that shorthand on 1.5 only. See
 [qualified function rules](qualified-functions.md) for the engine-specific details.
 
 **Trusted definitions are opaque to table and function policy.** A view, scalar macro, or

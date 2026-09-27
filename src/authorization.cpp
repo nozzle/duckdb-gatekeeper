@@ -339,13 +339,16 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 	};
 	auto window_function = [&](const gatekeeper::Identity &identity) {
 		bool callers = attributable(identity.name);
-		// 1.5's WindowFunctions maps parsed spellings to an intrinsic node, without
-		// selecting a canonical catalog entry. Authorize the actual parsed spelling(s),
-		// not an invented second capability. 2.0's catalog windows take the normal path.
+		// 1.5's WindowFunctions maps first/last to the *_VALUE intrinsic, matching
+		// 2.0's parser rewrite. Preserve other spellings (notably rank_dense), which
+		// 2.0 registers independently. Actual 1.5 aggregate lookups remain authorized
+		// separately. This recovery applies only to caller intrinsic window syntax.
 		auto written = binding.intrinsic_windows.find(gatekeeper::Lower(identity.name));
 		if (gatekeeper::SystemIdentity(identity) && written != binding.intrinsic_windows.end()) {
-			for (const auto &name : written->second)
-				function({identity.catalog, identity.schema_path, name, "window", true}, true);
+			for (const auto &name : written->second) {
+				auto intrinsic = name == "first" || name == "last" ? identity.name : name;
+				function({identity.catalog, identity.schema_path, intrinsic, "window", true}, true);
+			}
 			return;
 		}
 		function(identity, callers);

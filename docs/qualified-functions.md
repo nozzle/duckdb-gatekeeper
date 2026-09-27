@@ -28,8 +28,9 @@ names, without alias canonicalization**, including all three formerly grouped fa
 - Parquet table readers: `read_parquet` and `parquet_scan` are separate entries.
 - JSON scalars: `json_extract`, `json_extract_path`, and `->` are separate entries, as are
   `json_extract_string`, `json_extract_path_text`, and `->>`.
-- Windows: `rank_dense`/`dense_rank`, `first`/`first_value`, and `last`/`last_value` do not
-  share configurable permissions.
+- Windows: `rank_dense` and `dense_rank` are distinct identities. `first` and `last`
+  are aggregate entries; their `OVER` syntax executes the `first_value`/`last_value`
+  windows as described below.
 
 Grant or block each entry the policy intends to cover. A shared implementation or equivalent
 SQL result does not make two names interchangeable in policy. Host spellings also remain exact
@@ -38,11 +39,17 @@ system `parquet_scan` reader to the caller, or vice versa.
 
 Parser/binder rewriting is separate from policy matching. DuckDB may rewrite syntax before
 Gatekeeper sees it; authorization follows the parsed operation and actual entries selected.
-On 1.5, intrinsic windows retain an expression kind rather than a catalog selection, so
-Gatekeeper preserves the parsed spelling for that operation instead of inventing a second
-canonical permission. With defaults disabled, first/last OVER calls also need grants for any
-aggregate entries the binder retrieves. Source-defined implementation substitutions below
-preserve attribution, not general semantic equivalence.
+On 1.5, `WindowFunctions` maps `first/last OVER` to the `FIRST_VALUE/LAST_VALUE`
+intrinsic; Gatekeeper authorizes `system.main.first_value/last_value` with kind `window`,
+matching 2.0's parser rewrite before catalog selection. Thus a `first_value/window` block
+denies both `first OVER` and `first_value OVER` on either engine. With defaults disabled,
+1.5 additionally needs an exact grant for the real `first/aggregate` entry its binder
+retrieves (likewise `last`). A kindless `first` block therefore still denies `first OVER`
+on 1.5, but not on 2.0; the additional lookup remains visible in evidence. A `first/window`
+grant never substitutes for `first_value/window`. `rank_dense` keeps its own identity,
+independently registered on 2.0. Host macros named `first`/`last` retain their actual
+identities and do not attribute trusted window bodies to the caller. See the
+[source evidence](default-provenance.md#intrinsics-and-supported-kind-transitions).
 
 ### Internal-entry grants
 
