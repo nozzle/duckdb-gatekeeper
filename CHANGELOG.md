@@ -33,9 +33,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
   Update consumers that pin the violation STRUCT schema to include both trailing fields.
 
-- Preserve caller attribution for source-defined window aliases when DuckDB 1.5 binds an
-  intrinsic expression kind: authorize the parsed spelling without inventing a second canonical
-  permission. Parser/binder rewriting is separate from configurable policy matching.
+- Authorize `first/last OVER` as the `first_value/last_value` windows on both engines,
+  following 1.5's intrinsic mapping and 2.0's parser rewrite. The real `first/last` aggregate
+  lookups on 1.5 retain separate authorization and evidence; `rank_dense` retains its own
+  identity. Remove the unsupported `first/window` and `last/window` defaults (919 identities).
+  Parser/binder rewriting is separate from configurable policy matching.
 
 - **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
