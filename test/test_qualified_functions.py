@@ -103,9 +103,10 @@ def test_deferred_window_alias_blocks(db, alias, canonical, args, block_alias, k
     assert validate(db, f"SELECT host.{alias}()")["allowed"]
     for spelling in (alias, canonical):
         sql = f"SELECT {spelling}({args}) OVER ()"
-        # 2.0 PEG rewrites first/last OVER; both 1.5 parsers retain the spelling.
-        parsed = canonical if spelling in {"first", "last"} and ENGINE_MAJOR >= 2 else spelling
-        denied = parsed == blocked[0]["name"]
+        # Both engines execute *_value; 1.5 additionally retrieves the real aggregate.
+        intrinsic = canonical if spelling in {"first", "last"} else spelling
+        denied = intrinsic == blocked[0]["name"] or (
+            ENGINE_MAJOR == 1 and spelling in {"first", "last"} and block_alias and kind is None)
         assert validate(db, sql)["allowed"] is not denied
         assert validate(db, sql, {"blocked_functions": []})["allowed"] is not denied
         with db.cursor() as agent:
@@ -130,8 +131,8 @@ def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args
     configure(db, {"use_default_functions": False,
                    "allowed_functions": grants(granted, catalog="system", schema_path=("main",), type="window") + dependencies})
     for spelling in (alias, canonical):
-        parsed = canonical if spelling in {"first", "last"} and ENGINE_MAJOR >= 2 else spelling
-        assert validate(db, f"SELECT {spelling}({args}) OVER ()")["allowed"] is (parsed == granted)
+        intrinsic = canonical if spelling in {"first", "last"} else spelling
+        assert validate(db, f"SELECT {spelling}({args}) OVER ()")["allowed"] is (intrinsic == granted)
     db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{alias}() AS 1; CREATE MACRO host.{canonical}() AS 2")
     configure(db, {"allowed_functions": grants(alias, catalog="memory", schema_path=("host",), type="macro"),
                    "blocked_functions": grants(canonical, catalog="memory", schema_path=("host",))})
@@ -145,6 +146,73 @@ def test_window_alias_grants_stay_in_window_namespace(db, alias, canonical, args
 @pytest.mark.parametrize("name", ["first", "last", "first_value", "last_value"])
 def test_window_spellings_have_explicit_defaults(db, name):
     sql = f"SELECT {name}(1) OVER ()"
+    assert validate(db, sql)["allowed"]
+    with db.cursor() as agent:
+        enforce(agent)
+        assert agent.execute(sql).fetchone() == (1,)
+
+
+@pytest.mark.parametrize("name", ["first", "last"])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_value_window_identity_evidence_strict_grants_and_audit(db, name, explicit):
+    implementation = name + "_value"
+    spelling = implementation if explicit else name
+    sql = f"SELECT {spelling}(x) OVER (ORDER BY x) FROM (VALUES (1), (2)) t(x)"
+    window = grants(implementation, catalog="system", schema_path=("main",), type="window")
+    aggregate = grants(name, catalog="system", schema_path=("main",), type="aggregate")
+    configure(db, {"use_default_functions": False, "allowed_functions": window})
+    assert validate(db, sql)["allowed"] is (explicit or ENGINE_MAJOR >= 2)
+    configure(db, {"use_default_functions": False, "allowed_functions": window + aggregate})
+    result = validate(db, sql)
+    assert result["allowed"], result
+    expected = {(implementation, "window")}
+    if ENGINE_MAJOR == 1 and not explicit:
+        expected.add((name, "aggregate"))
+    # 2.0 can additionally report its uncatalogued __cast helper for VALUES.
+    evidence = [f for f in result["functions"] if f["name"] in {name, implementation}]
+    assert {(f["name"], f["type"]) for f in evidence} == expected
+    assert all(f["catalog"] == "system" and f["schema_path"] == ["main"] for f in evidence)
+    # A window grant for the shorthand never admits the implementation.
+    configure(db, {"use_default_functions": False, "allowed_functions": aggregate +
+                   grants(name, catalog="system", schema_path=("main",), type="window")})
+    assert validate(db, sql)["code"] == "forbidden"
+    configure(db, {"use_default_functions": False, "allowed_functions": window + aggregate})
+    db.execute("CALL enable_logging('Gatekeeper')")
+    with db.cursor() as agent:
+        enforce(agent)
+        assert len(agent.execute(sql).fetchall()) == 2
+        # Keep the leaf eligible in another namespace, forcing a resolved refusal
+        # rather than the intentionally unqualified early eligibility diagnostic.
+        configure(db, {"blocked_functions": window, "allowed_functions":
+                       grants(implementation, catalog="memory", schema_path=("host",), type="macro")})
+        denied = validate(db, sql)
+        assert denied["code"] == "forbidden"
+        violation = denied["violations"][0]
+        assert (violation["catalog"], violation["schema_path"], violation["function_name"], violation["function_type"]) == (
+            "system", ["main"], implementation, "window")
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql)
+        db.execute("SET gatekeeper_log_only=true")
+        assert len(agent.execute(sql).fetchall()) == 2
+        rows = db.execute("SELECT allowed, code, violations FROM duckdb_logs_parsed('Gatekeeper') "
+                          "WHERE statement=? AND mode='log_only'", [sql]).fetchall()
+        assert rows
+        assert all(not allowed and code == "forbidden" and any(
+            v["catalog"] == "system" and v["schema_path"] == ["main"] and
+            v["function_name"] == implementation and v["function_type"] == "window" for v in violations)
+            for allowed, code, violations in rows)
+
+
+@pytest.mark.parametrize("name", ["first", "last"])
+def test_host_value_name_does_not_attribute_trusted_window(db, name):
+    implementation = name + "_value"
+    db.execute(f"CREATE SCHEMA host; CREATE MACRO host.{name}(x) AS x; "
+               f"CREATE VIEW trusted_window AS SELECT {implementation}(x) OVER () AS x FROM (VALUES (1)) t(x)")
+    configure(db, {"use_default_functions": False,
+                   "allowed_functions": grants(name, catalog="memory", schema_path=("host",), type="macro"),
+                   "allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "trusted_window"}],
+                   "blocked_functions": grants(implementation, catalog="system", schema_path=("main",), type="window")})
+    sql = f"SELECT host.{name}(x) FROM trusted_window"
     assert validate(db, sql)["allowed"]
     with db.cursor() as agent:
         enforce(agent)

@@ -31,9 +31,15 @@ for supported kinds.
 Configurable grants and blocks match exact catalog-entry names, without alias canonicalization.
 Cover each intended Parquet reader (`read_parquet`, `parquet_scan`), JSON extraction entry
 (`json_extract`, `json_extract_path`, `->`, `json_extract_string`, `json_extract_path_text`, `->>`),
-and window entry (`rank_dense`, `dense_rank`, `first`, `first_value`, `last`, `last_value`)
+and window entry (`rank_dense`, `dense_rank`, `first_value`, `last_value`)
 explicitly. Parquet file shorthand selects `parquet_scan`. Source-defined parser/binder rewriting
 determines the parsed operation or selected entry; it does not make policy names interchangeable.
+
+On both engines, `first/last OVER` requires the `first_value/last_value` window permission.
+With defaults off, 1.5 also requires `first/last` aggregate grants for the real entries its
+binder retrieves; explicit `first_value/last_value OVER` does not. Consequently a kindless
+`first/last` block still denies that shorthand on 1.5 only. `first/window` and `last/window`
+are not identities to grant. `rank_dense/window` remains distinct from `dense_rank/window`.
 
 Internal table/view grants require exact schema components and an exact table name; internal
 function grants require exact schema components and the always-required exact function name.

@@ -75,16 +75,15 @@ def test_version_specific_intrinsics_and_reporting_labels_remain_explicit(collec
     _, base, _, report = collection
     missing = {identity_key(row) for row in report["defaults_not_observed"]}
     windows = {identity_key(row) for row in load_default_identities() if row["type"] == "window"}
-    spelling_intrinsics = {("system", ("main",), n, "window") for n in ("first", "last")}
     scalar_unnest = {("system", ("main",), "unnest", "scalar")}
     if base["duckdb_version"] == "v1.5.5":
         expected = scalar_unnest | windows | {("system", ("main",), n, "scalar")
                                              for n in ("round_even", "roundbankers")}
         assert {identity_key(row) for row in report["default_names_at_ungranted_identities"]} == {
-            (c, s, n, "aggregate") for c, s, n, _ in windows - spelling_intrinsics}
-        assert set(report["reporting_discrepancies"][0]["names"]) == {row[2] for row in windows - spelling_intrinsics}
+            (c, s, n, "aggregate") for c, s, n, _ in windows}
+        assert set(report["reporting_discrepancies"][0]["names"]) == {row[2] for row in windows}
     else:
-        expected = scalar_unnest | spelling_intrinsics | {("system", ("main",), n, "macro") for n in ("round_even", "roundbankers")} | {
+        expected = scalar_unnest | {("system", ("main",), n, "macro") for n in ("round_even", "roundbankers")} | {
             ("system", ("main",), n, "scalar") for n in ("icu_collate_yue", "icu_collate_yue_cn", "st_snap")}
         assert report["reporting_discrepancies"] == []
         assert report["default_names_at_ungranted_identities"] == []
@@ -95,12 +94,16 @@ def test_version_specific_intrinsics_and_reporting_labels_remain_explicit(collec
 
 def test_historical_policy_claims_do_not_follow_new_defaults(collection):
     path, _, _, current = collection
-    assert current["compiled_defaults"] == 921
+    assert current["compiled_defaults"] == 919
     historical = json.loads((path / "report.json").read_text())
     historical_missing = historical.get("qualified_source_mapping", historical)["defaults_not_observed"]
-    additions = {("system", ("main",), n, "window") for n in ("first", "last")}
+    # Removing the invented window spellings restores the historical identity set,
+    # not its map hash: current source rationale and historical provenance differ.
     assert {identity_key(row) for row in current["defaults_not_observed"]} == {
-        identity_key(row) for row in historical_missing} | additions
+        identity_key(row) for row in historical_missing}
+    changed = copy.deepcopy(current)
+    changed["compiled_defaults"] += 1
+    verify_historical_report(path, changed)  # Historical policy claims stay immutable.
     verify_historical_report(path, current)
 
 
