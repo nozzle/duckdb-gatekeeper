@@ -1,0 +1,131 @@
+# name: test/sql/object_violation_identity.test
+# description: Public violations distinguish resolved tables/views in validation and all audit modes.
+# group: [gatekeeper]
+
+require gatekeeper
+
+require parquet
+
+statement ok
+CREATE TABLE object_t(i INTEGER);
+
+statement ok
+CREATE VIEW object_v AS SELECT 1 AS i;
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := []);
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+query IIIIIII
+SELECT code, violations[1].rule, violations[1].catalog, violations[1].schema_path,
+       violations[1]."table", violations[1].object_type, violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT * FROM object_t');
+----
+forbidden	table	memory	[main]	object_t	table	true
+
+query IIIIIII
+SELECT code, violations[1].rule, violations[1].catalog, violations[1].schema_path,
+       violations[1]."table", violations[1].object_type, violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT * FROM object_v');
+----
+forbidden	table	memory	[main]	object_v	view	true
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+statement error agent
+SELECT * FROM object_t;
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM object_v;
+----
+Gatekeeper denied this statement
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I agent
+SELECT * FROM object_t;
+----
+
+query I agent
+SELECT * FROM object_v;
+----
+1
+
+# The result serializer is also the audit serializer; kinds survive every decision mode,
+# while all three success-only evidence lists remain empty on denials.
+query IIIIIIIII rowsort
+SELECT mode, code, violations[1]."table", violations[1].object_type,
+       typeof(violations[1].object_type), len(objects), len(functions), len(caller_objects), allowed
+FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision';
+----
+enforce	forbidden	object_t	table	VARCHAR	0	0	0	false
+enforce	forbidden	object_v	view	VARCHAR	0	0	0	false
+log_only	forbidden	object_t	table	VARCHAR	0	0	0	false
+log_only	forbidden	object_v	view	VARCHAR	0	0	0	false
+validate	forbidden	object_t	table	VARCHAR	0	0	0	false
+validate	forbidden	object_v	view	VARCHAR	0	0	0	false
+
+# Explicit blocks retain the same actual kinds as allowlist misses.
+statement ok
+CALL gatekeeper_configure(blocked_tables := [{schema_path:['main'], 'table':'object_t'}, {schema_path:['main'], 'table':'object_v'}]);
+
+query IIIIII
+SELECT violations[1].rule, violations[1].message, violations[1].object_type,
+       len(objects), len(functions), len(caller_objects)
+FROM gatekeeper_validate('SELECT * FROM object_t');
+----
+table	object is blocked	table	0	0	0
+
+query IIIIII
+SELECT violations[1].rule, violations[1].message, violations[1].object_type,
+       len(objects), len(functions), len(caller_objects)
+FROM gatekeeper_validate('SELECT * FROM object_v');
+----
+table	object is blocked	view	0	0	0
+
+query IIIIII
+SELECT violations[1].rule, violations[1].catalog, violations[1].schema_path,
+       violations[1]."table", violations[1].object_type, violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT * FROM duckdb_tables');
+----
+internal_object	system	[main]	duckdb_tables	view	true
+
+statement ok
+CALL gatekeeper_configure(blocked_tables := [{catalog:'system', schema_path:['main'], 'table':'duckdb_tables'}]);
+
+query III
+SELECT violations[1].rule, violations[1].message, violations[1].object_type
+FROM gatekeeper_validate('SELECT * FROM duckdb_tables');
+----
+table	object is blocked	view
+
+# Written object-looking names (including replacement paths) do not establish a catalog kind.
+query III
+SELECT code, violations[1].rule, violations[1].object_type = ''
+FROM gatekeeper_validate('DROP TABLE missing');
+----
+unsupported	statement	true
+
+query III
+SELECT code, violations[1].rule, violations[1].object_type = ''
+FROM gatekeeper_validate('SELECT * FROM ''/nonexistent/gatekeeper.parquet''');
+----
+forbidden	function	true
+
+query III
+SELECT code, violations[1].rule, violations[1].object_type = ''
+FROM gatekeeper_validate('SELECT range(3)', blocked_functions := [{schema_path:['*'], name:'range'}]);
+----
+forbidden	function	true
+
+query IIIII
+SELECT code, len(violations), len(objects), len(functions), len(caller_objects)
+FROM gatekeeper_validate('SELECT * FROM missing_object');
+----
+binding	0	0	0	0

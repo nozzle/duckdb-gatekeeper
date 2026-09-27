@@ -1,0 +1,33 @@
+{
+  "inventory": "tpch",
+  "extension": "tpch",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpch.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpch.duckdb_extension.gz",
+      "compressed_sha256": "be043f8499f75d04cfb7826bbbf195645524ee342d6785d536c8116a0b7f9cf4",
+      "decompressed_sha256": "50734d1a7331785f477a7be18a7b55152ba8edb3c5f212bb3c4cb0628c723ca4",
+      "compressed_bytes": 6056417,
+      "decompressed_bytes": 22084574,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/tpch",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

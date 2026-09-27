@@ -10,9 +10,9 @@ enum class CatalogType : uint8_t;
 const char *FunctionKind(CatalogType type);
 // Authorizes one catalog entry the binder retrieved against each layer, ceiling first, when the entry is
 // attributable to the caller: tables and views by identity against table policy, function entries against the
-// never-bind list and the layer's blocks. Gatekeeper's control plane is refused whoever names it. Records the
-// violation and throws PermissionException at the first denial. Every entry is recorded as evidence. A lookup made
-// while binding a trusted definition's body is not attributable; see gatekeeper::Provenance.
+// qualified grants, never-bind list and the layer's blocks. Gatekeeper's control plane is refused whoever names it.
+// Records the violation and throws PermissionException at the first denial. Every entry is recorded as evidence. A
+// lookup made while binding a trusted definition's body is not attributable; see gatekeeper::Provenance.
 void AuthorizeObject(const gatekeeper::Layers &layers, const gatekeeper::BindingPolicy &binding, CatalogEntry &entry,
                      gatekeeper::Result &result, bool attributable);
 // Authorizes every bound function, aggregate, window, table function, lambda body and dispatched aggregate in a

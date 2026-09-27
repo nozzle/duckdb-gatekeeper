@@ -1,0 +1,258 @@
+{
+  "active_extension": "avro",
+  "artifacts": [
+    {
+      "bytes": 7872958,
+      "download_sha256": "5531e2418d553b069bf4cc36e6ddefadffd01f179915b1007ce5d778bbbae220",
+      "name": "avro",
+      "repository": "core",
+      "sha256": "70d760068024347b7c766e822ba842a62e6cd01fcee11fc3d7d6439aad4574ae",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/avro.duckdb_extension.gz",
+      "version": "f9d5902"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2905,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "avro"
+  ],
+  "inventory": "avro",
+  "load_names": [
+    "avro"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "avro",
+      "version": "f9d5902"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "avro",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "a2288b19399c4b20fa456ede6533fb9ab49a59e9d9e1132c22baad4acb5617cf",
+      "load_name": "avro",
+      "loaded_extensions": [
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "avro",
+          "version": "f9d5902"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "f8f3e66c6d1a7bf99aa0f4e5fcf78a9bc7dd8f106cd04e0e978fcdce962850fb",
+  "status": "ok"
+}

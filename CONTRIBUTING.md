@@ -18,7 +18,7 @@ For existing clones run `git submodule update --init --recursive`. The artifact 
 build the CLI.
 
 Generation (`scripts/generate.py`, run at CMake configure time) derives the SQL grammar
-from the DuckDB source actually being compiled and compiles the function name list into
+from the DuckDB source actually being compiled and compiles explicit reviewed function identities into
 the build tree. It needs only the Python standard library. Our submodule and release
 tooling remain pinned for reproducibility, but community builds can use another engine.
 DuckDB's normal extension checks require a matching binary, and Gatekeeper re-checks
@@ -164,7 +164,7 @@ In this mode they disable automatic linked-extension loading, load core function
 load the named artifact; they refuse to proceed if Gatekeeper was already loaded. This permits
 linking a probe against an existing matching engine library while testing a newly built loadable,
 without silently exercising the engine library's older linked Gatekeeper. Without the environment
-variable, the normal CI probes still test the statically linked extension. Both probes share this
+variable, the normal CI probes still test the statically linked extension. All probes share this
 setup in `test/native/probe_database.hpp`.
 
 ### Running the suite on DuckDB 2.0
@@ -183,10 +183,11 @@ cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release 
   -DOVERRIDE_GIT_DESCRIBE=<library_version from PRAGMA version> \
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
-cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe
+cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe gatekeeper_qualified_probe
 GATEKEEPER_TEST_ENGINE_MAJOR=2 GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/v2/test/unittest 'test/sql/*'
 build/v2/extension/gatekeeper/gatekeeper_prepared_probe
 build/v2/extension/gatekeeper/gatekeeper_remote_probe
+build/v2/extension/gatekeeper/gatekeeper_qualified_probe
 python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
 GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \

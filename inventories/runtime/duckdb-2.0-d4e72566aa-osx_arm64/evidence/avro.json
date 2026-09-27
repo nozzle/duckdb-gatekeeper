@@ -1,0 +1,38 @@
+{
+  "inventory": "avro",
+  "extension": "avro",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+      "compressed_sha256": "d40bd9f818a4f82b359d56b1651a7fcd2f2c287ab5f2c8885e39b8a710c5a227",
+      "decompressed_sha256": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
+      "compressed_bytes": 5743111,
+      "decompressed_bytes": 20442958,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "36a4d8ac56",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/avro.cmake",
+    "descriptor_sha256": "40d7c8dbf412d93a6033094d3d7d8be5d16f1488a6845fa1aee777b80db4682a",
+    "descriptor_text": "if (NOT MINGW)\n    duckdb_extension_load(avro\n            LOAD_TESTS\n            GIT_URL https://github.com/duckdb/duckdb-avro\n            GIT_TAG 36a4d8ac56647e0810529a3c725162b0976ee73f\n\t    SUBMODULES \"third_party/avro-c\"\n    )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-avro",
+    "revision": "36a4d8ac56647e0810529a3c725162b0976ee73f",
+    "source_url": "https://github.com/duckdb/duckdb-avro/tree/36a4d8ac56647e0810529a3c725162b0976ee73f",
+    "engine_patch_files": []
+  }
+}

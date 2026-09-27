@@ -1,0 +1,4989 @@
+{
+  "extensions": {
+    "autocomplete": {
+      "artifact": {
+        "artifact_name": "autocomplete",
+        "compressed_bytes": 2854749,
+        "compressed_sha256": "2f35b3bc5ceb73acf93299467abc99db13039d0880e0eddec37220c46beb49d8",
+        "decompressed_bytes": 10820518,
+        "decompressed_sha256": "568ce627778715e9a5fd1ade65eb331cefeb8076c2e0ff2048ec2c57998c6019",
+        "extension": "autocomplete",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/autocomplete.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:14.572473+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/autocomplete.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "autocomplete"
+          },
+          {
+            "action": "load_target",
+            "name": "autocomplete"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "0518102d0b061668148a66ecfd3048e2b590e814fbb5000881fd763d58455106",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "avro": {
+      "artifact": {
+        "artifact_name": "avro",
+        "compressed_bytes": 2177846,
+        "compressed_sha256": "5531e2418d553b069bf4cc36e6ddefadffd01f179915b1007ce5d778bbbae220",
+        "decompressed_bytes": 7872958,
+        "decompressed_sha256": "70d760068024347b7c766e822ba842a62e6cd01fcee11fc3d7d6439aad4574ae",
+        "extension": "avro",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/avro.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "f9d5902",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:14.572908+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/avro.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "avro"
+          },
+          {
+            "action": "load_target",
+            "name": "avro"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "4a73cc3509ba4c427001cb562754c89eb06cb01ff57367447142cadc6bf23b1f",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "aws": {
+      "artifact": {
+        "artifact_name": "aws",
+        "compressed_bytes": 6397896,
+        "compressed_sha256": "2bde12c71c010ef3e4e510504dce276eb4ae77dea150ade1a4de632832604bbf",
+        "decompressed_bytes": 20065358,
+        "decompressed_sha256": "39c5d8143f5af2cbfd95db4693aa61168ab75f06c87eb14fc02b64769bc48032",
+        "extension": "aws",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/aws.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "efa54a9",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:14.573087+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/aws.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs"
+      ],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_target",
+            "name": "aws"
+          },
+          {
+            "action": "load_target",
+            "name": "aws"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "b98d02e38c6c39e35d77e4644a128e80bbf4b89b9f00c7156a91b0e076e41ac5",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "c380ecc7d854e1aa3fe933d5b89cd641b35bbe33d7d81e4eb598bb38e62ce158",
+        "dependency-httpfs": "c380ecc7d854e1aa3fe933d5b89cd641b35bbe33d7d81e4eb598bb38e62ce158"
+      }
+    },
+    "azure": {
+      "artifact": {
+        "artifact_name": "azure",
+        "compressed_bytes": 4857768,
+        "compressed_sha256": "1cd2eb0c523f2d1ddd862c493f8b4c27f99da17771523e81353566855b48dcfb",
+        "decompressed_bytes": 12606510,
+        "decompressed_sha256": "3eba9d7c57ccdbd036cd96166db7412828d0decd94fbe901cc0aa636ce8acde2",
+        "extension": "azure",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/azure.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "003214c",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:14.573214+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/azure.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "azure"
+          },
+          {
+            "action": "load_target",
+            "name": "azure"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "f4518c99b11db07edddd72b70c33898329aca39bc467ebbd9538b4f38e00d182",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "delta": {
+      "artifact": {
+        "artifact_name": "delta",
+        "compressed_bytes": 18429829,
+        "compressed_sha256": "aa33355c116772f78a60db655f8965653993fdf98eed1942c814f7959638f6d5",
+        "decompressed_bytes": 62421838,
+        "decompressed_sha256": "9cb1c3dc3341c7c58896a4b2c2836737b6fa200bf1afcfd26c45d7594ad5fdef",
+        "extension": "delta",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/delta.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "45c4087",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:15.220595+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/delta.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs"
+      ],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_target",
+            "name": "delta"
+          },
+          {
+            "action": "load_target",
+            "name": "delta"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "278a1d0bbb40f7f49c1227e311eee63f407b588d2db51122351130805f53e320",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b",
+        "dependency-httpfs": "2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b"
+      }
+    },
+    "ducklake": {
+      "artifact": {
+        "artifact_name": "ducklake",
+        "compressed_bytes": 8416561,
+        "compressed_sha256": "d89175054de53a830e9b2682655b640d29c9a74120f28a310fccc4bef981a0bd",
+        "decompressed_bytes": 27580398,
+        "decompressed_sha256": "1b72fc42164dbf21948e5a912cefc383b24071852f9e70209874ebd0a73b7caa",
+        "extension": "ducklake",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ducklake.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "d8a1881e",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:15.268259+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ducklake.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs"
+      ],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_target",
+            "name": "ducklake"
+          },
+          {
+            "action": "load_target",
+            "name": "ducklake"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "83b45d2427964c099ed02dce94fbef36667d4a1788e3c1dd86fdf542df54959b",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "d0cb46ede7ab798fae699a1dd6565b10fc0543de011db2e7ad3b53e021d8f39e",
+        "dependency-httpfs": "d0cb46ede7ab798fae699a1dd6565b10fc0543de011db2e7ad3b53e021d8f39e"
+      }
+    },
+    "encodings": {
+      "artifact": {
+        "artifact_name": "encodings",
+        "compressed_bytes": 21554086,
+        "compressed_sha256": "167c60c70f68de7cf3e217024bcc5a30871bc2832c5d9429e1a9fa2ed2820875",
+        "decompressed_bytes": 143114686,
+        "decompressed_sha256": "7648c0f010c6d51ae5a598bf4adb53d617b0e3a94fc08144b68524c652f0be1c",
+        "extension": "encodings",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/encodings.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "06295e7",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:15.683426+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/encodings.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "encodings"
+          },
+          {
+            "action": "load_target",
+            "name": "encodings"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "acc1b5c42e076effc928277d5eebd2f010eb07fa352c2465dc8f0e37c785e319",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "excel": {
+      "artifact": {
+        "artifact_name": "excel",
+        "compressed_bytes": 2141913,
+        "compressed_sha256": "1167dd3d36ad7747413655d8f415c425132b8970ddcfb3bb08e12ddb58364938",
+        "decompressed_bytes": 7841566,
+        "decompressed_sha256": "9500a2841e8b3dda698e1e541fb58e76920f25ac752931de61d9b0fc7d8e97ec",
+        "extension": "excel",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/excel.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "f4c72b5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:15.759131+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/excel.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "excel"
+          },
+          {
+            "action": "load_target",
+            "name": "excel"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "77a0da1615dc6d883f9f9449784598d707ac4182aca52d267d7313253e9785bd",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "fts": {
+      "artifact": {
+        "artifact_name": "fts",
+        "compressed_bytes": 1552256,
+        "compressed_sha256": "b6b8d0a13e0457f3ce368e4e7c2ff8de48637eea5ca61e5ff983c05018e7f315",
+        "decompressed_bytes": 5483438,
+        "decompressed_sha256": "11b2be6278306c44bc2af7fd9c0fd6c4f0762a8235cbfa6208433ff33cd3db53",
+        "extension": "fts",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/fts.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "6814ec9",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:16.773283+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/fts.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "fts"
+          },
+          {
+            "action": "load_target",
+            "name": "fts"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "569878d76973b5e3ddf8fa072129391bee3e187f85c182963e24a2ee33b4e0cb",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "httpfs": {
+      "artifact": {
+        "artifact_name": "httpfs",
+        "compressed_bytes": 5567359,
+        "compressed_sha256": "758acc0b0c4fbf09506f387ff6f52826b1038b7b6849ded39928d2f992945230",
+        "decompressed_bytes": 16010974,
+        "decompressed_sha256": "10514b4ef19f80bf4ec4bf90c124f5d34625f2606263b40ae8ec7979905bb779",
+        "extension": "httpfs",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/httpfs.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "827222f",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:16.847925+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/httpfs.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "httpfs"
+          },
+          {
+            "action": "load_target",
+            "name": "httpfs"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "86a9c91b9e684f470c3bf631824f118ba8450e1669750139e8b78446d3fdb23f",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "iceberg": {
+      "artifact": {
+        "artifact_name": "iceberg",
+        "compressed_bytes": 11396047,
+        "compressed_sha256": "b9bddab02268434dcdef49f16bbd7d78d3a35beae74cb79c4ecdbb143e106c8a",
+        "decompressed_bytes": 34055742,
+        "decompressed_sha256": "b324a24c4c1941d8e11a8a79483ee76ab73e786ef647032f7de491398491228a",
+        "extension": "iceberg",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/iceberg.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "45163a28",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:17.123313+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/iceberg.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs",
+        "aws",
+        "avro"
+      ],
+      "initial_load": {
+        "error": "Invalid Input Error: Initialization function \"iceberg_duckdb_cpp_init\" from file \"<worktree>/build/inventory-release/artifacts/iceberg.duckdb_extension\" threw an exception: \"An error occurred while trying to automatically install the required extension 'avro':\nExtension \"<worktree>/build/inventory-release/homes/iceberg/extensions/v1.5.5/osx_arm64/avro.duckdb_extension\" not found.\nExtension \"avro\" is an existing extension.\n\nInstall it first using \"INSTALL avro\".\"",
+        "error_type": "InvalidInputException",
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_and_load_dependency",
+            "name": "aws"
+          },
+          {
+            "action": "install_target",
+            "name": "iceberg"
+          }
+        ],
+        "status": "load_failed",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_and_load_dependency",
+            "name": "aws"
+          },
+          {
+            "action": "install_and_load_dependency",
+            "name": "avro"
+          },
+          {
+            "action": "install_target",
+            "name": "iceberg"
+          },
+          {
+            "action": "load_target",
+            "name": "iceberg"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "e7feb76acc86cc8b3c2e20f0bdacac284f1954f09d73ddebd2f9336235e992a3",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22",
+        "dependency-avro": "b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22",
+        "dependency-aws": "a5add8a45a05e712a419ba1316ce60af61ec39917a97926d9a899718b3ae57ae",
+        "dependency-httpfs": "9bad8c7eea897e1ec496b6cd81576fb3873adefdbf7ee19a04655ec03399f50d"
+      }
+    },
+    "icu": {
+      "artifact": {
+        "artifact_name": "icu",
+        "compressed_bytes": 4626928,
+        "compressed_sha256": "491b00aa8148f10720481ca1890c1a58fdb1290de0b0a8632ece8ecaa258d014",
+        "decompressed_bytes": 15248014,
+        "decompressed_sha256": "c8471011daf059fb98173ba5b5bc66803dde3e95b660542d4e65ac9c46111fec",
+        "extension": "icu",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/icu.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:17.246534+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/icu.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "icu"
+          },
+          {
+            "action": "load_target",
+            "name": "icu"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "638b3d6c0f5d136477b03d1e47151c84229548f507f758b39ae81c401b49cd7e",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "inet": {
+      "artifact": {
+        "artifact_name": "inet",
+        "compressed_bytes": 1538406,
+        "compressed_sha256": "6670b9047cdad58c6384c1007377e908324ec954fb2afd06ed429f2ac3871a46",
+        "decompressed_bytes": 5398750,
+        "decompressed_sha256": "17cd6f532548276cb33afb987d38548c981cb13324cd87345ab7260a3c65d7fc",
+        "extension": "inet",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/inet.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "fe7f60b",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:17.476585+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/inet.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "inet"
+          },
+          {
+            "action": "load_target",
+            "name": "inet"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "f64acc44a04e6af8ecc226235afed378fb6fd46466ace99c83839fe8dee6adbe",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "json": {
+      "artifact": {
+        "artifact_name": "json",
+        "compressed_bytes": 7821252,
+        "compressed_sha256": "861480ec15437ffa203dd79796384c0b132eaf12847e9c507e2d6c97bf423abc",
+        "decompressed_bytes": 25950318,
+        "decompressed_sha256": "a103cf3194d2ec19090e64fa11544888d1293ea045356804e66d01789029f03f",
+        "extension": "json",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/json.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:18.264608+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/json.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "json"
+          },
+          {
+            "action": "load_target",
+            "name": "json"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "4978820e948b3c6f96c9ed30549b2ea7e5d645b92bb51f005fa2c0349b04c73e",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "lance": {
+      "artifact": {
+        "artifact_name": "lance",
+        "compressed_bytes": 57503872,
+        "compressed_sha256": "9c4e51633101be4e51d6a790859a2464d115784eda767608708e23ea5e955b19",
+        "decompressed_bytes": 198277054,
+        "decompressed_sha256": "b0753f592047d3016465ad661275ba45def627b566461b54eb842e27dd5fb85a",
+        "extension": "lance",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/lance.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "2f167ea",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:18.391514+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/lance.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs"
+      ],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_target",
+            "name": "lance"
+          },
+          {
+            "action": "load_target",
+            "name": "lance"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "05e34bc1726bbd702a3922dd7de4e4319e7d95cab378175fb9d089b021dca6b7",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "62542f3020f63a29df61cdf6fe99da8ffbbe3bde1df850119d19c8a291630e9a",
+        "dependency-httpfs": "62542f3020f63a29df61cdf6fe99da8ffbbe3bde1df850119d19c8a291630e9a"
+      }
+    },
+    "motherduck": {
+      "artifact": {
+        "artifact_name": "motherduck",
+        "compressed_bytes": 3998811,
+        "compressed_sha256": "8763242ab74fd656b480c56698c6ffbe76434ac694e2ce677b1b7a520ea9eb96",
+        "decompressed_bytes": 10922230,
+        "decompressed_sha256": "ec176e5ae01d27b7f4dbc24208d8edbb0dbe8557d147e253f358a171c1eef528",
+        "extension": "motherduck",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/motherduck.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5-2026-09-355",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:18.445722+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/motherduck.duckdb_extension.gz"
+      },
+      "coverage_limitation": "network_runtime_service_required: LOAD attempted api.motherduck.com/extension_version and failed under network-denying sandbox. No authentication, attachment, or successful service contact; no post-load snapshot.",
+      "dependencies": [],
+      "load": {
+        "error": "Invalid Input Error: Initialization function \"motherduck_duckdb_cpp_init\" from file \"<worktree>/build/inventory-release/artifacts/motherduck.duckdb_extension\" threw an exception: \"Failed to download \"http://api.motherduck.com/extension_version\" (attempt 5): Could not establish connection\"",
+        "error_type": "InvalidInputException",
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "motherduck"
+          }
+        ],
+        "status": "load_failed",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "mysql": {
+      "artifact": {
+        "artifact_name": "mysql_scanner",
+        "compressed_bytes": 10214509,
+        "compressed_sha256": "653cdf0780e0a399017f9accc011998ace3055c5e86bf742537bacf3748e9b70",
+        "decompressed_bytes": 30898918,
+        "decompressed_sha256": "0aced636acf1da9d742edb11fc10556356302b9e7bc424107a69b4f481b500b1",
+        "extension": "mysql",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "7267164",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:19.090252+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "mysql_scanner"
+          },
+          {
+            "action": "load_target",
+            "name": "mysql_scanner"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "14122f30ab151be53d67376dd407ea4e22e5f107905a75c64288c17d9ff2a0c4",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "odbc": {
+      "artifact": {
+        "artifact_name": "odbc",
+        "error": "HTTP Error 404: Not Found",
+        "extension": "odbc",
+        "http_status": 404,
+        "retrieved_at": "2026-09-26T05:03:20.548684+00:00",
+        "status": "unavailable",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/odbc.duckdb_extension.gz"
+      },
+      "coverage_limitation": "Official version/platform binary URL returned HTTP 404. No local binary to load.",
+      "dependencies": [],
+      "load": {
+        "reason": "Official version/platform artifact download did not succeed.",
+        "status": "unavailable"
+      },
+      "stages": {}
+    },
+    "parquet": {
+      "artifact": {
+        "artifact_name": "parquet",
+        "compressed_bytes": 3814752,
+        "compressed_sha256": "7e2ec1543664fd7ee4ee10997686b49c35c22385f6e21f1f616ae0eb729844b8",
+        "decompressed_bytes": 13064654,
+        "decompressed_sha256": "62c63f98e65a3ad91375f9a24f35575fd26cc2aba36d67a6ba30bd65cdc13edf",
+        "extension": "parquet",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/parquet.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:20.971066+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/parquet.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "parquet"
+          },
+          {
+            "action": "load_target",
+            "name": "parquet"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "5384940702fce1d2a57304afbeadae7b966c342120af2b5655584a4d58936c46",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "postgres": {
+      "artifact": {
+        "artifact_name": "postgres_scanner",
+        "compressed_bytes": 10229655,
+        "compressed_sha256": "4fb5079e67b00e6643e6ee91545a355010004d1dad50b43f1c060de0cb789c8e",
+        "decompressed_bytes": 30945398,
+        "decompressed_sha256": "f39dd59bf57679d0242e19e180d90b4222e5cdb691ab67c7506658f3548c0e05",
+        "extension": "postgres",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/postgres_scanner.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "41223e5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:21.981245+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/postgres_scanner.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "postgres_scanner"
+          },
+          {
+            "action": "load_target",
+            "name": "postgres_scanner"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "5cfa18fbfc946fb886edd3c38364c8f238ab8f92659dbea9f00bbd2ccd4c2097",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "quack": {
+      "artifact": {
+        "artifact_name": "quack",
+        "compressed_bytes": 7777084,
+        "compressed_sha256": "a551db5ca9db6964a48f3c1f77076be0875bbdb0f335b139f77798c8fa92df51",
+        "decompressed_bytes": 25945838,
+        "decompressed_sha256": "80ef881b569105f8a0733a4b41298b7219e074ca8637880261fc1ac1e42a9f28",
+        "extension": "quack",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/quack.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "c154811",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:22.459331+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/quack.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "quack"
+          },
+          {
+            "action": "load_target",
+            "name": "quack"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "35051a0e69d9e916fcab06b910e43d066e23555eced2a3cc339ada579d960891",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "spatial": {
+      "artifact": {
+        "artifact_name": "spatial",
+        "compressed_bytes": 20203982,
+        "compressed_sha256": "49e17088e4c8a25a5c949be0d4acb25336da8afed3865079e614454fd2b3795f",
+        "decompressed_bytes": 59591422,
+        "decompressed_sha256": "81b73514ef95301f0e8b3229bdbdf7946827600dfd63a42d3b3193fa322c4c5a",
+        "extension": "spatial",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/spatial.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "eb1e57c",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:22.636423+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/spatial.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "spatial"
+          },
+          {
+            "action": "load_target",
+            "name": "spatial"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "fb585bf32f366f43ea2ec3be1f684712228460365a3f029b7b28e0e74f82f712",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "sqlite": {
+      "artifact": {
+        "artifact_name": "sqlite_scanner",
+        "compressed_bytes": 8440967,
+        "compressed_sha256": "d7514249b0cce24bb63856b4c752a889ef2f739c6fd821109988e4e13afd7058",
+        "decompressed_bytes": 27038870,
+        "decompressed_sha256": "a3548846bd643cb717265a0a11352af2e830a466ca068f4cae2552af658879f2",
+        "extension": "sqlite",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "f79b1db",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:22.923351+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/sqlite_scanner.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "sqlite_scanner"
+          },
+          {
+            "action": "load_target",
+            "name": "sqlite_scanner"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "2fd6a2388b79e68444a3265c0823400c8d261e45ba3f011162533c5a3a3a840e",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "tpcds": {
+      "artifact": {
+        "artifact_name": "tpcds",
+        "compressed_bytes": 4333738,
+        "compressed_sha256": "1375278ec49135adbc9600bd009e275efbe56acab65d243a6a5335fd3847fff8",
+        "decompressed_bytes": 14839838,
+        "decompressed_sha256": "4849ab2e8070505477f20cb87f22697bdd3e4d854d744c3369e41a0f4105c71c",
+        "extension": "tpcds",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/tpcds.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:23.427913+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/tpcds.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "tpcds"
+          },
+          {
+            "action": "load_target",
+            "name": "tpcds"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "35eada40af5c193ff618785177a4d414227bf6328200155818467d72893a50c8",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "tpch": {
+      "artifact": {
+        "artifact_name": "tpch",
+        "compressed_bytes": 3844218,
+        "compressed_sha256": "8f4594b1fdeac4629f5ba70f9a5c4909d78107ff3b7807704e32bcfde16fd280",
+        "decompressed_bytes": 13639534,
+        "decompressed_sha256": "2ea825d6f14ab0bb3c4a04d136e60528655910a2892ca090331813f1e9ca929f",
+        "extension": "tpch",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/tpch.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "v1.5.5",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:23.663073+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/tpch.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "tpch"
+          },
+          {
+            "action": "load_target",
+            "name": "tpch"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "4ba2ded76c1a9dcb77cc5009afc5b371344ab5a27b7ca214c3d4bf1b30bf08ba",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "ui": {
+      "artifact": {
+        "artifact_name": "ui",
+        "compressed_bytes": 10114868,
+        "compressed_sha256": "6525f80d490295f29daf951c0118c8c796f5a952183e20b50d7b6bd34025e40d",
+        "decompressed_bytes": 30957238,
+        "decompressed_sha256": "819e5676ad161b01e09bf7ad4dbdc25e4d6e655c7b4b5fbd3ef71e788d89d78d",
+        "extension": "ui",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ui.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "26084e6",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:23.959021+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/ui.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "initial_load": {
+        "error": "Invalid Input Error: Initialization function \"ui_duckdb_cpp_init\" from file \"<worktree>/build/inventory-release/artifacts/ui.duckdb_extension\" threw an exception: \"Failed to create directory \"<worktree>/build/inventory-release/homes/ui/.duckdb/extension_data\": No such file or directory\"",
+        "error_type": "InvalidInputException",
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "ui"
+          }
+        ],
+        "status": "load_failed",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "ui"
+          },
+          {
+            "action": "load_target",
+            "name": "ui"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "612216fd143894c4f27bd7ca51ad3df8c957f52380235c958cd2d8a1c06cd462",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "unity_catalog": {
+      "artifact": {
+        "artifact_name": "unity_catalog",
+        "compressed_bytes": 7627272,
+        "compressed_sha256": "b1b157f1292ffa661d2fbe6cc8ff2d2fe7081810ab3352a590a8fdb8a788a292",
+        "decompressed_bytes": 25394854,
+        "decompressed_sha256": "e51f0388555c9b4833bba392c09690817194914a7576441acda09dece63c2b2a",
+        "extension": "unity_catalog",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/unity_catalog.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "fd85147",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:24.244340+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/unity_catalog.duckdb_extension.gz"
+      },
+      "dependencies": [
+        "httpfs",
+        "aws"
+      ],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_and_load_dependency",
+            "name": "httpfs"
+          },
+          {
+            "action": "install_and_load_dependency",
+            "name": "aws"
+          },
+          {
+            "action": "install_target",
+            "name": "unity_catalog"
+          },
+          {
+            "action": "load_target",
+            "name": "unity_catalog"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "3aa171d11d3b8a4cbc225ac579b63cbfcb2e41230b1b12fce7906f9ba8704edb",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "6aac6c4dae17bea5be1db7b088b12e22ac4a3e939d5eb10f60302b8551b32a7a",
+        "dependency-aws": "6aac6c4dae17bea5be1db7b088b12e22ac4a3e939d5eb10f60302b8551b32a7a",
+        "dependency-httpfs": "99c96f699ad095f52ba8bf73770ea59922b05ace423127ecae185de0fffa7291"
+      }
+    },
+    "vortex": {
+      "artifact": {
+        "artifact_name": "vortex",
+        "compressed_bytes": 18059371,
+        "compressed_sha256": "3d167ee9312b156a5c65d25a878d9739eeae4b04e974bae3865347bc3a6c2d56",
+        "decompressed_bytes": 57183710,
+        "decompressed_sha256": "341e77acaba45f065e6febdca16b01ae860bede890b024a58ca345217b19903f",
+        "extension": "vortex",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vortex.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "9a8eb67",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:24.493969+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vortex.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "vortex"
+          },
+          {
+            "action": "load_target",
+            "name": "vortex"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "1e903edd610c1000934c377c07ae11901e287fb22b54d1238e90c6e1f964729a",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    },
+    "vss": {
+      "artifact": {
+        "artifact_name": "vss",
+        "compressed_bytes": 7678313,
+        "compressed_sha256": "74ddab07d8db831dfb97f2cbe9b30d8699da2baa6254fa8f19c2f2ec0964665b",
+        "decompressed_bytes": 25562974,
+        "decompressed_sha256": "0d2643871203c4aa07649f5aa4ed8fc7fe8f2b3a6761bc9c6f1160e97cbe7685",
+        "extension": "vss",
+        "final_url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vss.duckdb_extension.gz",
+        "footer": {
+          "abi": "CPP",
+          "engine_or_c_api_version": "v1.5.5",
+          "extension_version": "b833341",
+          "magic": "4",
+          "platform": "osx_arm64",
+          "remaining_fields": [
+            "",
+            "",
+            ""
+          ]
+        },
+        "http_status": 200,
+        "retrieved_at": "2026-09-26T05:03:25.161502+00:00",
+        "status": "downloaded",
+        "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/vss.duckdb_extension.gz"
+      },
+      "dependencies": [],
+      "load": {
+        "returncode": 0,
+        "stages": [
+          {
+            "action": "install_target",
+            "name": "vss"
+          },
+          {
+            "action": "load_target",
+            "name": "vss"
+          }
+        ],
+        "status": "loaded",
+        "stderr": "",
+        "stdout": "",
+        "timeout_seconds": 90
+      },
+      "stages": {
+        "after": "7f551268728426190bcba7d6d2d9db201c688055587918bd70c653c67254b412",
+        "base": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c",
+        "before": "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c"
+      }
+    }
+  },
+  "function_order": "json.dumps(row, sort_keys=True), ascending; preserve duplicate rows",
+  "note": "Exploratory stage metadata and hashes; final outcomes are in summary.json. functions_ref names base.json or a final collector extension_delta. Reconstruct function rows from base plus that delta, then combine with exact metadata and verify original SHA-256.",
+  "original_full_snapshots": {
+    "0518102d0b061668148a66ecfd3048e2b590e814fbb5000881fd763d58455106": {
+      "functions_ref": "autocomplete.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Adds support for autocomplete in the shell",
+            "extension_name": "autocomplete",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/autocomplete/extensions/v1.5.5/osx_arm64/autocomplete.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/autocomplete.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "autocomplete",
+            "v1.5.5"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "05e34bc1726bbd702a3922dd7de4e4319e7d95cab378175fb9d089b021dca6b7": {
+      "functions_ref": "lance.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/lance/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for querying Lance datasets",
+            "extension_name": "lance",
+            "extension_version": "2f167ea",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/lance/extensions/v1.5.5/osx_arm64/lance.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/lance.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "lance",
+            "2f167ea"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "14122f30ab151be53d67376dd407ea4e22e5f107905a75c64288c17d9ff2a0c4": {
+      "functions_ref": "mysql.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "mysql"
+            ],
+            "description": "Adds support for connecting to a MySQL database",
+            "extension_name": "mysql_scanner",
+            "extension_version": "7267164",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/mysql/extensions/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/mysql_scanner.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "mysql_scanner",
+            "7267164"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "1e903edd610c1000934c377c07ae11901e287fb22b54d1238e90c6e1f964729a": {
+      "functions_ref": "vortex.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing files using the Vortex file format",
+            "extension_name": "vortex",
+            "extension_version": "9a8eb67",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/vortex/extensions/v1.5.5/osx_arm64/vortex.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/vortex.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "vortex",
+            "9a8eb67"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "278a1d0bbb40f7f49c1227e311eee63f407b588d2db51122351130805f53e320": {
+      "functions_ref": "delta.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for Delta Lake",
+            "extension_name": "delta",
+            "extension_version": "45c4087",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/delta/extensions/v1.5.5/osx_arm64/delta.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/delta.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/delta/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "delta",
+            "45c4087"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "2c157afec696803065fe2e09a469b8dc77ea111247324c0fab95a5c220fe057b": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/delta/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "2fd6a2388b79e68444a3265c0823400c8d261e45ba3f011162533c5a3a3a840e": {
+      "functions_ref": "sqlite.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "sqlite",
+              "sqlite3"
+            ],
+            "description": "Adds support for reading and writing SQLite database files",
+            "extension_name": "sqlite_scanner",
+            "extension_version": "f79b1db",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/sqlite/extensions/v1.5.5/osx_arm64/sqlite_scanner.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/sqlite_scanner.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "sqlite_scanner",
+            "f79b1db"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "35051a0e69d9e916fcab06b910e43d066e23555eced2a3cc339ada579d960891": {
+      "functions_ref": "quack.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "The DuckDB 'Quack' Client/Server Protocol",
+            "extension_name": "quack",
+            "extension_version": "c154811",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/quack/extensions/v1.5.5/osx_arm64/quack.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/quack.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "quack",
+            "c154811"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "35eada40af5c193ff618785177a4d414227bf6328200155818467d72893a50c8": {
+      "functions_ref": "tpcds.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds TPC-DS data generation and query support",
+            "extension_name": "tpcds",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/tpcds/extensions/v1.5.5/osx_arm64/tpcds.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/tpcds.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "tpcds",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "3aa171d11d3b8a4cbc225ac579b63cbfcb2e41230b1b12fce7906f9ba8704edb": {
+      "functions_ref": "unity_catalog.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "uc_catalog"
+            ],
+            "description": "Adds support for connecting to Unity Catalog",
+            "extension_name": "unity_catalog",
+            "extension_version": "fd85147",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/unity_catalog.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/unity_catalog.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "unity_catalog",
+            "fd85147"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "4978820e948b3c6f96c9ed30549b2ea7e5d645b92bb51f005fa2c0349b04c73e": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/json/extensions/v1.5.5/osx_arm64/json.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/json.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "4a73cc3509ba4c427001cb562754c89eb06cb01ff57367447142cadc6bf23b1f": {
+      "functions_ref": "avro.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Adds support for reading Avro files",
+            "extension_name": "avro",
+            "extension_version": "f9d5902",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/avro/extensions/v1.5.5/osx_arm64/avro.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/avro.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "avro",
+            "f9d5902"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "4ba2ded76c1a9dcb77cc5009afc5b371344ab5a27b7ca214c3d4bf1b30bf08ba": {
+      "functions_ref": "tpch.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds TPC-H data generation and query support",
+            "extension_name": "tpch",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/tpch/extensions/v1.5.5/osx_arm64/tpch.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/tpch.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "tpch",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "5384940702fce1d2a57304afbeadae7b966c342120af2b5655584a4d58936c46": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/parquet/extensions/v1.5.5/osx_arm64/parquet.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/parquet.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "569878d76973b5e3ddf8fa072129391bee3e187f85c182963e24a2ee33b4e0cb": {
+      "functions_ref": "fts.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for Full-Text Search Indexes",
+            "extension_name": "fts",
+            "extension_version": "6814ec9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/fts/extensions/v1.5.5/osx_arm64/fts.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/fts.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "fts",
+            "6814ec9"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "5cfa18fbfc946fb886edd3c38364c8f238ab8f92659dbea9f00bbd2ccd4c2097": {
+      "functions_ref": "postgres.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "postgres"
+            ],
+            "description": "Adds support for connecting to a Postgres database",
+            "extension_name": "postgres_scanner",
+            "extension_version": "41223e5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/postgres/extensions/v1.5.5/osx_arm64/postgres_scanner.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/postgres_scanner.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "postgres_scanner",
+            "41223e5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "612216fd143894c4f27bd7ca51ad3df8c957f52380235c958cd2d8a1c06cd462": {
+      "functions_ref": "ui.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds local UI for DuckDB",
+            "extension_name": "ui",
+            "extension_version": "26084e6",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/ui-retry/extensions/v1.5.5/osx_arm64/ui.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/ui.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "ui",
+            "26084e6"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "62542f3020f63a29df61cdf6fe99da8ffbbe3bde1df850119d19c8a291630e9a": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/lance/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "638b3d6c0f5d136477b03d1e47151c84229548f507f758b39ae81c401b49cd7e": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/icu/extensions/v1.5.5/osx_arm64/icu.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/icu.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "6aac6c4dae17bea5be1db7b088b12e22ac4a3e939d5eb10f60302b8551b32a7a": {
+      "functions_ref": "aws.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "713673578b10abab7dff322c6ed9039970025a14d545d44341f5c13b8a39316c": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "77a0da1615dc6d883f9f9449784598d707ac4182aca52d267d7313253e9785bd": {
+      "functions_ref": "excel.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for Excel-like format strings",
+            "extension_name": "excel",
+            "extension_version": "f4c72b5",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/excel/extensions/v1.5.5/osx_arm64/excel.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/excel.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "excel",
+            "f4c72b5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "7f551268728426190bcba7d6d2d9db201c688055587918bd70c653c67254b412": {
+      "functions_ref": "vss.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds indexing support to accelerate Vector Similarity Search",
+            "extension_name": "vss",
+            "extension_version": "b833341",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/vss/extensions/v1.5.5/osx_arm64/vss.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/vss.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "vss",
+            "b833341"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "83b45d2427964c099ed02dce94fbef36667d4a1788e3c1dd86fdf542df54959b": {
+      "functions_ref": "ducklake.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for DuckLake, SQL as a Lakehouse Format",
+            "extension_name": "ducklake",
+            "extension_version": "d8a1881e",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/ducklake/extensions/v1.5.5/osx_arm64/ducklake.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/ducklake.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/ducklake/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "ducklake",
+            "d8a1881e"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "86a9c91b9e684f470c3bf631824f118ba8450e1669750139e8b78446d3fdb23f": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/httpfs/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "99c96f699ad095f52ba8bf73770ea59922b05ace423127ecae185de0fffa7291": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/unity_catalog/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "9bad8c7eea897e1ec496b6cd81576fb3873adefdbf7ee19a04655ec03399f50d": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "a5add8a45a05e712a419ba1316ce60af61ec39917a97926d9a899718b3ae57ae": {
+      "functions_ref": "aws.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "acc1b5c42e076effc928277d5eebd2f010eb07fa352c2465dc8f0e37c785e319": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "All unicode encodings to UTF-8",
+            "extension_name": "encodings",
+            "extension_version": "06295e7",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/encodings/extensions/v1.5.5/osx_arm64/encodings.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/encodings.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "encodings",
+            "06295e7"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "b6cb0077538a0906f43bf6aa225a034a598a5fac612713bf747d528914749f22": {
+      "functions_ref": "iceberg.json#stage=3",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Adds support for reading Avro files",
+            "extension_name": "avro",
+            "extension_version": "f9d5902",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/avro.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/avro.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "avro",
+            "f9d5902"
+          ],
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "b98d02e38c6c39e35d77e4644a128e80bbf4b89b9f00c7156a91b0e076e41ac5": {
+      "functions_ref": "aws.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/aws/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/aws/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "c380ecc7d854e1aa3fe933d5b89cd641b35bbe33d7d81e4eb598bb38e62ce158": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/aws/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "d0cb46ede7ab798fae699a1dd6565b10fc0543de011db2e7ad3b53e021d8f39e": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/ducklake/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "e7feb76acc86cc8b3c2e20f0bdacac284f1954f09d73ddebd2f9336235e992a3": {
+      "functions_ref": "iceberg.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Adds support for reading Avro files",
+            "extension_name": "avro",
+            "extension_version": "f9d5902",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/avro.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/avro.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Provides features that depend on the AWS SDK",
+            "extension_name": "aws",
+            "extension_version": "efa54a9",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/aws.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/aws.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [
+              "http",
+              "https",
+              "s3"
+            ],
+            "description": "Adds support for reading and writing files over a HTTP(S) connection",
+            "extension_name": "httpfs",
+            "extension_version": "827222f",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/httpfs.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/httpfs.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for Apache Iceberg",
+            "extension_name": "iceberg",
+            "extension_version": "45163a28",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/iceberg-retry/extensions/v1.5.5/osx_arm64/iceberg.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/iceberg.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "avro",
+            "f9d5902"
+          ],
+          [
+            "aws",
+            "efa54a9"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "httpfs",
+            "827222f"
+          ],
+          [
+            "iceberg",
+            "45163a28"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "f4518c99b11db07edddd72b70c33898329aca39bc467ebbd9538b4f38e00d182": {
+      "functions_ref": "base.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Adds a filesystem abstraction for Azure blob storage to DuckDB",
+            "extension_name": "azure",
+            "extension_version": "003214c",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/azure/extensions/v1.5.5/osx_arm64/azure.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/azure.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "azure",
+            "003214c"
+          ],
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "f64acc44a04e6af8ecc226235afed378fb6fd46466ace99c83839fe8dee6adbe": {
+      "functions_ref": "inet.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for IP-related data types and functions",
+            "extension_name": "inet",
+            "extension_version": "fe7f60b",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/inet/extensions/v1.5.5/osx_arm64/inet.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/inet.duckdb_extension",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "inet",
+            "fe7f60b"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    },
+    "fb585bf32f366f43ea2ec3be1f684712228460365a3f029b7b28e0e74f82f712": {
+      "functions_ref": "spatial.json",
+      "metadata": {
+        "duckdb_version": "v1.5.5",
+        "engine_codename": "Variegata",
+        "engine_source_id": "d8cdaa33fd",
+        "extension_details": [
+          {
+            "aliases": [],
+            "description": "Core function library",
+            "extension_name": "core_functions",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for time zones and collations using the ICU library",
+            "extension_name": "icu",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for JSON operations",
+            "extension_name": "json",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Adds support for reading and writing parquet files",
+            "extension_name": "parquet",
+            "extension_version": "v1.5.5",
+            "install_mode": "STATICALLY_LINKED",
+            "install_path": "(BUILT-IN)",
+            "installed": true,
+            "installed_from": "",
+            "loaded": true
+          },
+          {
+            "aliases": [],
+            "description": "Geospatial extension that adds support for working with spatial data and functions",
+            "extension_name": "spatial",
+            "extension_version": "eb1e57c",
+            "install_mode": "CUSTOM_PATH",
+            "install_path": "<worktree>/build/inventory-release/homes/spatial/extensions/v1.5.5/osx_arm64/spatial.duckdb_extension",
+            "installed": true,
+            "installed_from": "<worktree>/build/inventory-release/artifacts/spatial.duckdb_extension",
+            "loaded": true
+          }
+        ],
+        "loaded_extensions": [
+          [
+            "core_functions",
+            "v1.5.5"
+          ],
+          [
+            "icu",
+            "v1.5.5"
+          ],
+          [
+            "json",
+            "v1.5.5"
+          ],
+          [
+            "parquet",
+            "v1.5.5"
+          ],
+          [
+            "spatial",
+            "eb1e57c"
+          ]
+        ],
+        "platform": "osx_arm64"
+      }
+    }
+  },
+  "reconstruction": "reconstruct.py",
+  "schema_version": 1,
+  "snapshot_encoding": "UTF-8 json.dumps(indent=2, sort_keys=True) plus newline"
+}

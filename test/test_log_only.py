@@ -214,7 +214,7 @@ def test_a_reader_that_fails_to_bind_is_still_recorded(catalog, agent):
     assert (enforced["mode"], logged["mode"]) == ("enforce", "log_only")
     for column in ["boundary", "code", "violations", "statement", "policy_hash"]:
         assert enforced[column] == logged[column], column
-    assert logged["boundary"] == "replacement_scan" and logged["violations"][0]["function_name"] == "read_parquet"
+    assert logged["boundary"] == "replacement_scan" and logged["violations"][0]["function_name"] == "parquet_scan"
     assert logged["statement"] == sql
     # The same through Prepare(). Under DuckDB 1.5 the gate decides the bind outside any statement (no text is
     # available), the failed bind runs no pre-screen, and the mark it left is cleared with that prepare attempt,

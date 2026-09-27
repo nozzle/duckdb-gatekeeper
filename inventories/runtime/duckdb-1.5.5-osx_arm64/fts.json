@@ -1,0 +1,202 @@
+{
+  "active_extension": "fts",
+  "artifacts": [
+    {
+      "bytes": 5483438,
+      "download_sha256": "b6b8d0a13e0457f3ce368e4e7c2ff8de48637eea5ca61e5ff983c05018e7f315",
+      "name": "fts",
+      "repository": "core",
+      "sha256": "11b2be6278306c44bc2af7fd9c0fd6c4f0762a8235cbfa6208433ff33cd3db53",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/fts.duckdb_extension.gz",
+      "version": "6814ec9"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2904,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "scalar",
+        "macro": null,
+        "name": "stem",
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": "VARCHAR",
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": false,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "fts"
+  ],
+  "inventory": "fts",
+  "load_names": [
+    "fts"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "fts",
+      "version": "6814ec9"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "fts",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "scalar",
+            "macro": null,
+            "name": "stem",
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": "VARCHAR",
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": false,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "c7b1e14780b80acd4ee547f5012c8227e7ab7dedd8a1c5f3739a968eac1b4247",
+      "load_name": "fts",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "fts",
+          "version": "6814ec9"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "0c4c34491b44797ba8dfcd93f62d5d55324a65e4aad3bccc9dfeb7603651d731",
+  "status": "ok"
+}

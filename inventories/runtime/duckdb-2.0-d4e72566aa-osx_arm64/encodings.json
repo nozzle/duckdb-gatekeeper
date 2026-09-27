@@ -1,0 +1,200 @@
+{
+  "active_extension": "encodings",
+  "artifacts": [
+    {
+      "bytes": 123751614,
+      "download_sha256": "c62d6158e61b5e078f3655178c5a19615042836370146d8633e6bed75c57e909",
+      "name": "encodings",
+      "repository": "core",
+      "sha256": "7977e5c3c49ef5361ceb0626591644c7240bbf94b1046ec29b301cfe516ae1aa",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/encodings.duckdb_extension.gz",
+      "version": "f3e4d03ecf"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
+  "function_count": 3208,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "duckdb_encodings",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "install_names": [
+    "encodings"
+  ],
+  "inventory": "encodings",
+  "load_names": [
+    "encodings"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "encodings",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "f3e4d03ecf"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "encodings",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "duckdb_encodings",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "5766f7a3b9826c3c18953dbecfeebd641b0287ae2c6c73c1d34a00b92929658c",
+      "load_name": "encodings",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "encodings",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "f3e4d03ecf"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "2eb9c0750a1575ef23de8e944ad9af249fca2081f727b3a08c834ae54afb0ec5",
+  "status": "ok"
+}

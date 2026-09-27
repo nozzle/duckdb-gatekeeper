@@ -1,0 +1,576 @@
+{
+  "collection": {
+    "adaptation": "Existing sandboxed captures exported using capture_extensions.function_delta/digest schema; stages and target_functions preserve dependency attribution.",
+    "capture_function": "scripts/audit_inventory.py:capture_functions",
+    "capture_source_sha256": "110e9f68ccb0bc5fef61b5f02dc6f2bb8e413deeb7bb3a6ce249040129fa255d",
+    "engine": {
+      "codename": "Cyanoptera",
+      "extension_abi": "v2.0.0-alpha42986",
+      "library_version": "v2.0.0-alpha42986",
+      "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+      "platform": "osx_arm64",
+      "python_package_version": "2.0.0.dev2609221243",
+      "python_version": "3.13.2",
+      "source_id": "d4e72566aa"
+    },
+    "engine_source_revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143",
+    "exploratory_runner_sha256": "78586a359e68568cee88b4173788571ea6508638be2e36a369a34da6f3d5ccde",
+    "finalized_at": "2026-09-26T05:09:56.575441+00:00",
+    "inventories": [
+      "autocomplete",
+      "avro",
+      "aws",
+      "azure",
+      "delta",
+      "ducklake",
+      "encodings",
+      "excel",
+      "fts",
+      "httpfs",
+      "iceberg",
+      "icu",
+      "inet",
+      "json",
+      "lance",
+      "motherduck",
+      "mysql",
+      "odbc",
+      "parquet",
+      "postgres",
+      "quack",
+      "spatial",
+      "sqlite",
+      "tpcds",
+      "tpch",
+      "ui",
+      "unity_catalog",
+      "vortex",
+      "vss"
+    ],
+    "isolation": {
+      "automatic_install_and_load": false,
+      "environment": "HOME, TMPDIR, PATH=/usr/bin:/bin, LANG=C.UTF-8, AWS_EC2_METADATA_DISABLED=true, PYTHONNOUSERSITE=1 only",
+      "fresh_home_and_extension_directory": true,
+      "fresh_process_and_memory_database_per_attempt": true,
+      "persistent_secrets": false,
+      "sandbox": "(version 1)(allow default)(deny network*)",
+      "timeout_seconds": 120,
+      "unsigned_extensions": false
+    },
+    "notes": [
+      "Downloads occurred outside the network-denied load process.",
+      "No authentication, cloud connections, external attachments, or server functions were invoked.",
+      "MotherDuck and UI had no matching archive and were not loaded.",
+      "Downloaded ICU/JSON/Parquet archives are provenance evidence only: the Python-linked copies supplied the runtime rows.",
+      "core_functions is initially linked and included in base.json.",
+      "functions is the total delta; target_functions excludes preloaded dependency stages. Built-in ownership cannot be isolated by this Python runtime.",
+      "Unavailable archive state is scoped to the exact version/source and tested platforms, not a universal platform-support claim.",
+      "No grants or historical review records were changed."
+    ],
+    "schema_version": 1,
+    "totals": {
+      "already_linked": 3,
+      "inventories": 29,
+      "loaded": 22,
+      "recovered_load_failures": 1,
+      "unavailable": 4,
+      "unresolved_load_failures": 0
+    }
+  },
+  "extensions": {
+    "autocomplete": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "bc3704aac2e9496f0d8da6edc8bae358f5bdb441677977a6eecc6dcf62c744ba",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "avro": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "cf4ba230ace2b10fd972d220a24949f152b79a1c77b1fba6593c64257c7b2d5e",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "aws": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "669899e918b35feb733de103ce58873133c40fddf47251f3e65d3faf5239de33",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "azure": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "0a0ac0c197953a3f8a3fcd5f7586adac6365257eaa1959b764d07396193fcadc",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "delta": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "939bd7f1e6c9c5de97b660117c51fadfe9f48023e022c0b4d95d04845719f787",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "ducklake": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "a5ec11ffaeee0f4014b593197978051d4286e680d353b2709e0c996269341006",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "encodings": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "e1127b95a6bc5affcbde1743624951059c48f60d1110a334d1cf011ab9aafcd0",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "excel": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "71ae05288f58691e3c0e7b8b2faba572f16388df137b27082b5614ef3ed81a03",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "fts": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "a8162547fb18348139d38d9cec633ef30d5f00fcb9b9650925e83255d775c2c1",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "httpfs": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "c993f7d01208b606b94639b3df8bfa2fce6b8bebc0c22161b7663d7c550c4276",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "iceberg": {
+      "attempts": [
+        {
+          "dependency": "avro",
+          "error": "Invalid Input Error: Initialization function \"iceberg_duckdb_cpp_init\" from file \"<worktree>/build/inventory-candidate/runs/iceberg/extensions/v2.0.0-alpha42986/osx_arm64/iceberg.duckdb_extension\" threw an exception: \"An error occurred while trying to automatically install the required extension 'avro:\nExtension \"<worktree>/build/inventory-candidate/runs/iceberg/extensions/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension\" not found.\nExtension \"avro\" is an existing extension.\n\nInstall it first using \"INSTALL avro\".\"",
+          "functions": {
+            "added": [],
+            "changed": [],
+            "removed": []
+          },
+          "phase": "load",
+          "status": "needs_dependency"
+        },
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "avro"
+      ],
+      "metadata_sha256": "90cba70260b4dd044b16bd5d7c9f149367c1901bc59ee63dd8fc68703d0db7b8",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "icu": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "052bc55844aa5af685ca2425f0b9df888b84c170dc1a338f3a5270a3945ee452",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "inet": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "387c6b559b6d39c3c516f6237f4e27fb653c4ef50559912a523242b177816e9d",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "json": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "3ce135c52dc5e79f54be3586d0689c788abfe9e7ef801a2eb43cc041180af1aa",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "lance": {
+      "attempts": [
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/lance.duckdb_extension.gz"
+        },
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/lance.duckdb_extension.gz"
+        }
+      ],
+      "metadata_sha256": "a02d796c308482d9a5efb54e7be746a9116ca1c77621e3d95398f2adc16b9447",
+      "status": "unavailable"
+    },
+    "motherduck": {
+      "attempts": [
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/motherduck.duckdb_extension.gz"
+        },
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/motherduck.duckdb_extension.gz"
+        }
+      ],
+      "metadata_sha256": "2a7243d6bdcdad981ac3ec62b6418904ac1b7dc808656a12d1bb9ae7cbf7368b",
+      "status": "unavailable"
+    },
+    "mysql": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "3b5cbbadbae6e4d36c23f49663a32f8599ec35f0de0f218399c0a538ad449d0f",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "odbc": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "c7edb2016974d98e0354315f20c9a6701ddd632ccd8581e9e4a17cfa8872dd39",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "parquet": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "13ba65ef63a3948b3ade00d69ee42b6d5ad1f65968dd503819d016887e78964f",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "postgres": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "2da7377cba37060351076fa5064ab5726a3d7e1e850f65e2e93cb18fd109c5fd",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "quack": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "d1b995287f4cb1ed862aa50618348d6ec48dac1c48395b95ec650efef92a130c",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "spatial": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "be8e06ecc5b715fcdbd4692a2a46b6b08e92fd5b0b4a9537fb9837e034ac2e7a",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "sqlite": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "d0229955cd7876abe26fb48e1143df3b1d3d3c38d3d78c5226420921cbbe4f5f",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "tpcds": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "c6fc45aa88fb6907c2e2ea8137ec0e7b11220fed26f76e883273e73ccd3ef91b",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "tpch": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "cf3aa147fbbfcd6ea0278811093199749c4f477ea73b322d319c7fee03edaaee",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "ui": {
+      "attempts": [
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/ui.duckdb_extension.gz"
+        },
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/ui.duckdb_extension.gz"
+        }
+      ],
+      "metadata_sha256": "f4671377edb6407a681a586806d3b28e1c211a55293c434da22bc4f002725bd8",
+      "status": "unavailable"
+    },
+    "unity_catalog": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "982bf380e41e7559f038e44e2a2c049e2a9ead45878419dd35f1c80cb455c281",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    },
+    "vortex": {
+      "attempts": [
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/vortex.duckdb_extension.gz"
+        },
+        {
+          "error": "HTTP Error 404: Not Found",
+          "http_status": 404,
+          "phase": "download",
+          "status": "unavailable",
+          "url": "https://extensions.duckdb.org/d4e72566aa/osx_arm64/vortex.duckdb_extension.gz"
+        }
+      ],
+      "metadata_sha256": "84c8d99b187d2262e9e8e3c29784e30c91078cd2062a005831521dd01a18711d",
+      "status": "unavailable"
+    },
+    "vss": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "metadata_sha256": "7292937444cf80729dbdc8f3ff757001008ba241248c98434dbc16b8c86157c8",
+      "process": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "status": "ok"
+    }
+  },
+  "label": "Preliminary exploratory capture; superseded by actual protocol-v2 locked replay."
+}

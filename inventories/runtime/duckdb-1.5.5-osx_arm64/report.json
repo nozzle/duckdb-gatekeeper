@@ -1,0 +1,6618 @@
+{
+  "historical_base_comparison": {
+    "added": [],
+    "changed": [],
+    "extensions_changed": false,
+    "removed": [],
+    "version_changed": false
+  },
+  "per_extension": {
+    "autocomplete": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/autocomplete/artifact",
+          "name": "autocomplete",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "check_peg_parser",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "disable_peg_parser",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "enable_peg_parser",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "sql_auto_complete",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "avro": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/avro/artifact",
+          "name": "avro",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "f9d5902"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "read_avro",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "aws": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/aws/artifact",
+          "name": "aws",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "efa54a9"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "load_aws_credentials",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "azure": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/azure/artifact",
+          "name": "azure",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "003214c"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "delta": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/delta/artifact",
+          "name": "delta",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "45c4087"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "copy_dir",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_domain_metadata",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_filter_pushdown_log",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_filter_pushdown_log_tpcds",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_get_transaction_version",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_list_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "delta_set_transaction_version",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "get_delta_test_expression",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "parse_delta_filter_logline",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "write_blob",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "ducklake": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/ducklake/artifact",
+          "name": "ducklake",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "d8a1881e"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "ducklake_add_data_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_cleanup_old_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_commit",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_current_snapshot",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_delete_orphaned_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_expire_snapshots",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_flush_inlined_data",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_last_committed_snapshot",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_list_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_merge_adjacent_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_options",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_rewrite_data_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_set_commit_message",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_set_option",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_settings",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_snapshots",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_table_changes",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_table_deletions",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_table_info",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ducklake_table_insertions",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "murmur3_32",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "encodings": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/encodings/artifact",
+          "name": "encodings",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "06295e7"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "excel": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/excel/artifact",
+          "name": "excel",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "f4c72b5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "excel_text",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "read_xlsx",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "text",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "fts": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/fts/artifact",
+          "name": "fts",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "6814ec9"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "stem",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "httpfs": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "iceberg": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/avro/artifact",
+          "name": "avro",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "f9d5902"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/aws/artifact",
+          "name": "aws",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "efa54a9"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/iceberg/artifact",
+          "name": "iceberg",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "45163a28"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "iceberg_bucket",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_column_stats",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_load_table_response",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_metadata",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_partition_stats",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_schema_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_snapshots",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_table_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_to_ducklake",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_truncate",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "iceberg_verify_equality_deletes",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "remove_iceberg_schema_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "remove_iceberg_table_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "set_iceberg_schema_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "set_iceberg_table_properties",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "icu": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [
+        "age",
+        "century",
+        "current_date",
+        "current_localtime",
+        "current_localtimestamp",
+        "date_diff",
+        "date_part",
+        "date_sub",
+        "date_trunc",
+        "datediff",
+        "datepart",
+        "datesub",
+        "datetrunc",
+        "day",
+        "dayname",
+        "dayofmonth",
+        "dayofweek",
+        "dayofyear",
+        "decade",
+        "epoch",
+        "era",
+        "generate_series",
+        "get_current_time",
+        "hour",
+        "icu_calendar_names",
+        "icu_collate_af",
+        "icu_collate_am",
+        "icu_collate_ar",
+        "icu_collate_ar_sa",
+        "icu_collate_as",
+        "icu_collate_az",
+        "icu_collate_be",
+        "icu_collate_bg",
+        "icu_collate_bn",
+        "icu_collate_bo",
+        "icu_collate_br",
+        "icu_collate_bs",
+        "icu_collate_ca",
+        "icu_collate_ceb",
+        "icu_collate_chr",
+        "icu_collate_cs",
+        "icu_collate_cy",
+        "icu_collate_da",
+        "icu_collate_de",
+        "icu_collate_de_at",
+        "icu_collate_dsb",
+        "icu_collate_dz",
+        "icu_collate_ee",
+        "icu_collate_el",
+        "icu_collate_en",
+        "icu_collate_en_us",
+        "icu_collate_eo",
+        "icu_collate_es",
+        "icu_collate_et",
+        "icu_collate_fa",
+        "icu_collate_fa_af",
+        "icu_collate_ff",
+        "icu_collate_fi",
+        "icu_collate_fil",
+        "icu_collate_fo",
+        "icu_collate_fr",
+        "icu_collate_fr_ca",
+        "icu_collate_fy",
+        "icu_collate_ga",
+        "icu_collate_gl",
+        "icu_collate_gu",
+        "icu_collate_ha",
+        "icu_collate_haw",
+        "icu_collate_he",
+        "icu_collate_he_il",
+        "icu_collate_hi",
+        "icu_collate_hr",
+        "icu_collate_hsb",
+        "icu_collate_hu",
+        "icu_collate_hy",
+        "icu_collate_id",
+        "icu_collate_id_id",
+        "icu_collate_ig",
+        "icu_collate_is",
+        "icu_collate_it",
+        "icu_collate_ja",
+        "icu_collate_ka",
+        "icu_collate_kk",
+        "icu_collate_kl",
+        "icu_collate_km",
+        "icu_collate_kn",
+        "icu_collate_ko",
+        "icu_collate_kok",
+        "icu_collate_ku",
+        "icu_collate_ky",
+        "icu_collate_lb",
+        "icu_collate_lij",
+        "icu_collate_lkt",
+        "icu_collate_ln",
+        "icu_collate_lo",
+        "icu_collate_lt",
+        "icu_collate_lv",
+        "icu_collate_mk",
+        "icu_collate_ml",
+        "icu_collate_mn",
+        "icu_collate_mr",
+        "icu_collate_ms",
+        "icu_collate_mt",
+        "icu_collate_my",
+        "icu_collate_nb",
+        "icu_collate_nb_no",
+        "icu_collate_ne",
+        "icu_collate_nl",
+        "icu_collate_nn",
+        "icu_collate_noaccent",
+        "icu_collate_nso",
+        "icu_collate_om",
+        "icu_collate_or",
+        "icu_collate_pa",
+        "icu_collate_pa_in",
+        "icu_collate_pl",
+        "icu_collate_ps",
+        "icu_collate_pt",
+        "icu_collate_ro",
+        "icu_collate_ru",
+        "icu_collate_sa",
+        "icu_collate_se",
+        "icu_collate_si",
+        "icu_collate_sk",
+        "icu_collate_sl",
+        "icu_collate_smn",
+        "icu_collate_sq",
+        "icu_collate_sr",
+        "icu_collate_sr_ba",
+        "icu_collate_sr_me",
+        "icu_collate_sr_rs",
+        "icu_collate_st",
+        "icu_collate_sv",
+        "icu_collate_sw",
+        "icu_collate_ta",
+        "icu_collate_te",
+        "icu_collate_th",
+        "icu_collate_tk",
+        "icu_collate_tn",
+        "icu_collate_to",
+        "icu_collate_tr",
+        "icu_collate_ug",
+        "icu_collate_uk",
+        "icu_collate_ur",
+        "icu_collate_uz",
+        "icu_collate_vi",
+        "icu_collate_wae",
+        "icu_collate_wo",
+        "icu_collate_xh",
+        "icu_collate_yi",
+        "icu_collate_yo",
+        "icu_collate_yue",
+        "icu_collate_yue_cn",
+        "icu_collate_zh",
+        "icu_collate_zh_cn",
+        "icu_collate_zh_hk",
+        "icu_collate_zh_mo",
+        "icu_collate_zh_sg",
+        "icu_collate_zh_tw",
+        "icu_collate_zu",
+        "icu_sort_key",
+        "isodow",
+        "isoyear",
+        "julian",
+        "last_day",
+        "make_timestamptz",
+        "microsecond",
+        "millennium",
+        "millisecond",
+        "minute",
+        "month",
+        "monthname",
+        "pg_timezone_names",
+        "quarter",
+        "range",
+        "second",
+        "time_bucket",
+        "timezone",
+        "timezone_hour",
+        "timezone_minute",
+        "today",
+        "week",
+        "weekday",
+        "weekofyear",
+        "year",
+        "yearweek"
+      ],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "inet": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/inet/artifact",
+          "name": "inet",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "fe7f60b"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [
+        "+",
+        "-"
+      ],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "<<=",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": ">>=",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "broadcast",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "family",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "host",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "html_escape",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "html_unescape",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "netmask",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "network",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [
+          {
+            "catalog": "system",
+            "name": "+",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "-",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "json": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [
+        "->>",
+        "array_to_json",
+        "from_json",
+        "from_json_strict",
+        "json",
+        "json_array",
+        "json_array_length",
+        "json_contains",
+        "json_deserialize_sql",
+        "json_each",
+        "json_exists",
+        "json_extract",
+        "json_extract_path",
+        "json_extract_path_text",
+        "json_extract_string",
+        "json_group_array",
+        "json_group_object",
+        "json_group_structure",
+        "json_keys",
+        "json_merge_patch",
+        "json_object",
+        "json_pretty",
+        "json_quote",
+        "json_serialize_sql",
+        "json_structure",
+        "json_transform",
+        "json_transform_strict",
+        "json_tree",
+        "json_type",
+        "json_valid",
+        "json_value",
+        "row_to_json",
+        "to_json"
+      ],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "lance": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/lance/artifact",
+          "name": "lance",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "2f167ea"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "__lance_cleanup_old_versions",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_compact_files",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_exec",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_namespace_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_optimize_index",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_set_auto_cleanup",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_show_auto_cleanup",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "__lance_truncate_table",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "lance_fts",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "lance_hybrid_search",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "lance_vector_search",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "mysql": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/mysql/artifact",
+          "name": "mysql_scanner",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "7267164"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "mysql_clear_cache",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "mysql_debug_execution_plan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "mysql_execute",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "mysql_explain_federated",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "mysql_query",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "odbc": {
+      "unclassified_added_names": []
+    },
+    "parquet": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [
+        "variant_bytes_to_variant",
+        "variant_to_parquet_variant"
+      ],
+      "target_identities": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "postgres": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/postgres/artifact",
+          "name": "postgres_scanner",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "41223e5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "pg_clear_cache",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_attach",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_configure_pool",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_execute",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_hstore_get",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_hstore_to_json",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_query",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "postgres_scan_pushdown",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "read_postgres_binary",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "quack": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/quack/artifact",
+          "name": "quack",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "c154811"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "quack_active_connections",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_check_token",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_clear_cache",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_identify",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_nop_authorization",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_query",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_query_by_name",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_serve",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_server_list",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_stop",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "quack_uri_parser",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "whoami",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "spatial": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/spatial/artifact",
+          "name": "spatial",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "eb1e57c"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [
+        "st_astext",
+        "st_aswkb",
+        "st_geomfromwkb",
+        "st_intersects_extent"
+      ],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "duckdb_proj_compiled_version",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "duckdb_proj_version",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "pragma_rtree_index_info",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "rtree_index_dump",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "rtree_index_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "shapefile_meta",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_affine",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_area",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_area_spheroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_asgeojson",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_ashexwkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_asmvt",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_asmvtgeom",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_assvg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_azimuth",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_boundary",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_buffer",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_buildarea",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_centroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_closestpoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_collect",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_collectionextract",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_concavehull",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_contains",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_containsproperly",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_convexhull",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coverageclean",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coverageinvalidedges",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coverageinvalidedges_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coveragesimplify",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coveragesimplify_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coverageunion",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coverageunion_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_coveredby",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_covers",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_crosses",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_difference",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_dimension",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_disjoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_distance",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_distance_geos",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_distance_sphere",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_distance_spheroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_drivers",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_dump",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_dwithin",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_dwithin_geos",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_dwithin_spheroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_endpoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_envelope",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_envelope_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_equals",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_expand",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_extent",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_extent_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_extent_approx",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_exteriorring",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_flipcoordinates",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_force2d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_force3dm",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_force3dz",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_force4d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_generatepoints",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_geometrytype",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_geomfromgeojson",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_geomfromhexewkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_geomfromhexwkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_geomfromtext",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_hasm",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_hasz",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_hilbert",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_interiorringn",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_interpolatepoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_intersection",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_intersection_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_intersects",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_isclosed",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_isempty",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_isring",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_issimple",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_isvalid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_length",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_length_spheroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_lineinterpolatepoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_lineinterpolatepoints",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_linelocatepoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_linemerge",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_linestring2dfromwkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_linesubstring",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_locatealong",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_locatebetween",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_m",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makebox2d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makeenvelope",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makeline",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makepoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makepolygon",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_makevalid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_maximuminscribedcircle",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_memunion_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_minimumrotatedrectangle",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_mmax",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_mmin",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_multi",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_ngeometries",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_ninteriorrings",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_node",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_normalize",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_npoints",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_numgeometries",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_numinteriorrings",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_numpoints",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_overlaps",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_perimeter",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_perimeter_spheroid",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_point",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_point2d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_point2dfromwkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_point3d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_point4d",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_pointn",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_pointonsurface",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_points",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_polygon2dfromwkb",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_polygonize",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_quadkey",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_read",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_read_meta",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_readosm",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_readshp",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "st_reduceprecision",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_removerepeatedpoints",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_reverse",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_rotate",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_rotatex",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_rotatey",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_rotatez",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_scale",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_shortestline",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_simplify",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_simplifypreservetopology",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_snap",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_startpoint",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_symdifference",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_tileenvelope",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_touches",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_transform",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_translate",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_transscale",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          },
+          {
+            "catalog": "system",
+            "name": "st_union",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_union_agg",
+            "schema_path": [
+              "main"
+            ],
+            "type": "aggregate"
+          },
+          {
+            "catalog": "system",
+            "name": "st_voronoidiagram",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_within",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_withinproperly",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_x",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_xmax",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_xmin",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_y",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_ymax",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_ymin",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_z",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_zmax",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_zmflag",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          },
+          {
+            "catalog": "system",
+            "name": "st_zmin",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "changed": [
+          {
+            "catalog": "system",
+            "name": "st_astext",
+            "schema_path": [
+              "main"
+            ],
+            "type": "scalar"
+          }
+        ],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "sqlite": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/sqlite/artifact",
+          "name": "sqlite_scanner",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "f79b1db"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "sqlite_attach",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "sqlite_query",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "sqlite_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "tpcds": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/tpcds/artifact",
+          "name": "tpcds",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "dsdgen",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "tpcds_answers",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "tpcds_queries",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "tpch": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/tpch/artifact",
+          "name": "tpch",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "v1.5.5"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "dbgen",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "tpch_answers",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "tpch_queries",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "ui": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/ui/artifact",
+          "name": "ui",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "26084e6"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "get_ui_url",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "start_ui",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "start_ui_server",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "stop_ui_server",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "ui_is_started",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "unity_catalog": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "artifact_ref": "original-evidence.json#/extensions/aws/artifact",
+          "name": "aws",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "efa54a9"
+        },
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/httpfs/artifact",
+          "name": "httpfs",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "827222f"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/unity_catalog/artifact",
+          "name": "unity_catalog",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "fd85147"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "unity_catalog_checkpoint_table",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "unity_catalog_force_checkpoint_table",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    },
+    "vortex": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/vortex/artifact",
+          "name": "vortex",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "9a8eb67"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "read_vortex",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "vortex_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "vortex_version",
+            "schema_path": [
+              "main"
+            ],
+            "type": "macro"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": [
+        "vortex_version"
+      ]
+    },
+    "vss": {
+      "added_default_names_at_ungranted_identities": [],
+      "loaded_extension_origins": [
+        {
+          "name": "core_functions",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "icu",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "json",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "name": "parquet",
+          "origin": "Python native module (collection.json runtime_package); statically linked in clean base",
+          "present_in_base": true,
+          "version": "v1.5.5"
+        },
+        {
+          "artifact_ref": "original-evidence.json#/extensions/vss/artifact",
+          "name": "vss",
+          "origin": "Official repository artifact installed and loaded locally",
+          "present_in_base": false,
+          "version": "b833341"
+        }
+      ],
+      "source_compute_names_not_observed": [],
+      "source_compute_names_present_before_target_load": [],
+      "target_identities": {
+        "added": [
+          {
+            "catalog": "system",
+            "name": "hnsw_index_scan",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "pragma_hnsw_index_info",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table"
+          },
+          {
+            "catalog": "system",
+            "name": "vss_join",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          },
+          {
+            "catalog": "system",
+            "name": "vss_match",
+            "schema_path": [
+              "main"
+            ],
+            "type": "table_macro"
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "unclassified_added_names": []
+    }
+  },
+  "qualified_source_mapping": {
+    "added": [
+      {
+        "catalog": "system",
+        "name": "<<=",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": ">>=",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_cleanup_old_versions",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_compact_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_exec",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_namespace_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_optimize_index",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_set_auto_cleanup",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_show_auto_cleanup",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "__lance_truncate_table",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "broadcast",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "check_peg_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "copy_dir",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "dbgen",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_domain_metadata",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_filter_pushdown_log",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_filter_pushdown_log_tpcds",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_get_transaction_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_list_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "delta_set_transaction_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "disable_peg_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "dsdgen",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "duckdb_proj_compiled_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "duckdb_proj_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_add_data_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_cleanup_old_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_commit",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_current_snapshot",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_delete_orphaned_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_expire_snapshots",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_flush_inlined_data",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_last_committed_snapshot",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_list_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_merge_adjacent_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_options",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_rewrite_data_files",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_set_commit_message",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_set_option",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_settings",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_snapshots",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_table_changes",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_table_deletions",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_table_info",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ducklake_table_insertions",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "enable_peg_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "excel_text",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "family",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "get_delta_test_expression",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "get_ui_url",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "hnsw_index_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "host",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "html_escape",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "html_unescape",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_bucket",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_column_stats",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_load_table_response",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_metadata",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_partition_stats",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_schema_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_snapshots",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_table_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_to_ducklake",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_truncate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "iceberg_verify_equality_deletes",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "lance_fts",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "lance_hybrid_search",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "lance_vector_search",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "load_aws_credentials",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "murmur3_32",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "mysql_clear_cache",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "mysql_debug_execution_plan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "mysql_execute",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "mysql_explain_federated",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "mysql_query",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "netmask",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "network",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_begin_transaction",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_bind_params",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_close",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_commit",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_connect",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_copy",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_create_params",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_list_data_sources",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_list_drivers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_query",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "odbc_rollback",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "parse_delta_filter_logline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "pg_clear_cache",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_attach",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_configure_pool",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_execute",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_hstore_get",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_hstore_to_json",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_query",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "postgres_scan_pushdown",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "pragma_hnsw_index_info",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "pragma_rtree_index_info",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_active_connections",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_check_token",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_clear_cache",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_identify",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_nop_authorization",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_query",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_query_by_name",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_serve",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_server_list",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_stop",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "quack_uri_parser",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "read_avro",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "read_postgres_binary",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "read_vortex",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "read_xlsx",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "remove_iceberg_schema_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "remove_iceberg_table_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "rtree_index_dump",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "rtree_index_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "set_iceberg_schema_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "set_iceberg_table_properties",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "shapefile_meta",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "sql_auto_complete",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "sqlite_attach",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "sqlite_query",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "sqlite_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_affine",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_area",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_area_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asgeojson",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ashexwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asmvt",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_asmvtgeom",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_assvg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_azimuth",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_boundary",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_buffer",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_buildarea",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_centroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_closestpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_collect",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_collectionextract",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_concavehull",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_contains",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_containsproperly",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_convexhull",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageclean",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageinvalidedges",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageinvalidedges_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveragesimplify",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveragesimplify_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageunion",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coverageunion_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_coveredby",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_covers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_crosses",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_difference",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dimension",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_disjoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_geos",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_sphere",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_distance_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_drivers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dump",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin_geos",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_dwithin_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_endpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_envelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_envelope_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_equals",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_expand",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_extent_approx",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_exteriorring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_flipcoordinates",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force3dm",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force3dz",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_force4d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_generatepoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geometrytype",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromgeojson",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromhexewkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromhexwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_geomfromtext",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hasm",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hasz",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_hilbert",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_interiorringn",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_interpolatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersection",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersection_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_intersects",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isclosed",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isempty",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_issimple",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_isvalid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_length",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_length_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_lineinterpolatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_lineinterpolatepoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linelocatepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linemerge",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linestring2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_linesubstring",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_locatealong",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_locatebetween",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_m",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makebox2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makeenvelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makeline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makepoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makepolygon",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_makevalid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_maximuminscribedcircle",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_memunion_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_minimumrotatedrectangle",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_mmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_mmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_multi",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ngeometries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ninteriorrings",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_node",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_normalize",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_npoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numgeometries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numinteriorrings",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_numpoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_overlaps",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_perimeter",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_perimeter_spheroid",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point2d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point3d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_point4d",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_pointn",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_pointonsurface",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_points",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_polygon2dfromwkb",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_polygonize",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_quadkey",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_read",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_read_meta",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_readosm",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_readshp",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "st_reduceprecision",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_removerepeatedpoints",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_reverse",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatex",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatey",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_rotatez",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_scale",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_shortestline",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_simplify",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_simplifypreservetopology",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_snap",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_startpoint",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_symdifference",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_tileenvelope",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_touches",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_transform",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_translate",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_transscale",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "st_union",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_union_agg",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "st_voronoidiagram",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_within",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_withinproperly",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_x",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_xmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_xmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_y",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ymax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_ymin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_z",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmax",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmflag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_zmin",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "start_ui",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "start_ui_server",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "stem",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "stop_ui_server",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "text",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "tpcds_answers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpcds_queries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpch_answers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "tpch_queries",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "ui_is_started",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "unity_catalog_checkpoint_table",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "unity_catalog_force_checkpoint_table",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "vortex_scan",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table"
+      },
+      {
+        "catalog": "system",
+        "name": "vortex_version",
+        "schema_path": [
+          "main"
+        ],
+        "type": "macro"
+      },
+      {
+        "catalog": "system",
+        "name": "vss_join",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "vss_match",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "whoami",
+        "schema_path": [
+          "main"
+        ],
+        "type": "table_macro"
+      },
+      {
+        "catalog": "system",
+        "name": "write_blob",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      }
+    ],
+    "baseline_qualified": true,
+    "candidate_qualified": true,
+    "changed": [
+      {
+        "catalog": "system",
+        "name": "+",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "-",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "st_astext",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      }
+    ],
+    "default_names_at_ungranted_identities": [
+      {
+        "catalog": "system",
+        "name": "cume_dist",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "dense_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "fill",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "first_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "lag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "last_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "lead",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "nth_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "ntile",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "percent_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "rank_dense",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      },
+      {
+        "catalog": "system",
+        "name": "row_number",
+        "schema_path": [
+          "main"
+        ],
+        "type": "aggregate"
+      }
+    ],
+    "defaults_not_observed": [
+      {
+        "catalog": "system",
+        "name": "cume_dist",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "dense_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "fill",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "first_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "lag",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "last_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "lead",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "nth_value",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "ntile",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "percent_rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "rank",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "rank_dense",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "round_even",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "roundbankers",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      },
+      {
+        "catalog": "system",
+        "name": "row_number",
+        "schema_path": [
+          "main"
+        ],
+        "type": "window"
+      },
+      {
+        "catalog": "system",
+        "name": "unnest",
+        "schema_path": [
+          "main"
+        ],
+        "type": "scalar"
+      }
+    ],
+    "removed": []
+  },
+  "reporting_discrepancies": [
+    {
+      "catalog": "system",
+      "duckdb_version": "v1.5.5",
+      "evidence": "windows",
+      "names": [
+        "cume_dist",
+        "dense_rank",
+        "fill",
+        "first_value",
+        "lag",
+        "last_value",
+        "lead",
+        "nth_value",
+        "ntile",
+        "percent_rank",
+        "rank",
+        "rank_dense",
+        "row_number"
+      ],
+      "note": "Synthetic reporting convention; rows unchanged. This is not an aggregate grant or proof of row provenance. Qualified aggregate collisions remain ungranted.",
+      "reported_type": "aggregate",
+      "schema_path": [
+        "main"
+      ],
+      "type": "window"
+    }
+  ],
+  "scope": "Union of independently observed registrations, not one combined live catalog.",
+  "unclassified_added_names": [
+    "vortex_version"
+  ]
+}

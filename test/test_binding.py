@@ -23,23 +23,23 @@ def test_binding_errors_and_no_execution(db):
     with pytest.raises(duckdb.BinderException, match="Invalid named parameter"):
         validate(db,"SELECT * FROM missing",{"unknown":False})
     db.execute("CREATE TABLE t(x INT); CREATE SEQUENCE seq")
-    assert not validate(db,"SELECT nextval('seq')",{"allowed_functions":["nextval"]})["allowed"]
+    assert not validate(db,"SELECT nextval('seq')",{"allowed_functions":[{"schema_path": ["*"], "name": "nextval"}]})["allowed"]
     assert db.execute("SELECT nextval('seq')").fetchone()==(1,)
 
 
 def test_trusted_views_and_macros(db):
     # A trusted definition is opaque to table policy: the view or macro the caller names must pass, and what its
     # body reads is its own. The caller's own reference to the same table is still the caller's.
-    configure(db, {"allowed_functions": ["report"]})
+    configure(db, {"allowed_functions": [{"schema_path": ["*"], "name": "report"}]})
     db.execute("CREATE SCHEMA reporting; CREATE SCHEMA secret; CREATE TABLE secret.t(x INT); CREATE VIEW reporting.v AS SELECT * FROM secret.t; CREATE MACRO report() AS TABLE SELECT * FROM secret.t")
     reporting = {"catalog": "*", "schema_path": ["reporting"], "table": "*"}
     secret = {"catalog": "*", "schema_path": ["secret"], "table": "*"}
     assert validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[reporting]})["allowed"]
     assert not validate(db,"SELECT * FROM reporting.v",{"allowed_tables":[secret]})["allowed"]
     assert not validate(db,"SELECT * FROM reporting.v, secret.t",{"allowed_tables":[reporting]})["allowed"]
-    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[reporting]})["allowed"]
-    assert validate(db,"SELECT * FROM report()",{"allowed_functions":["report"],"allowed_tables":[]})["allowed"]
-    assert not validate(db,"SELECT * FROM report(), secret.t",{"allowed_functions":["report"],"allowed_tables":[reporting]})["allowed"]
+    assert validate(db,"SELECT * FROM report()",{"allowed_functions":[{"schema_path": ["*"], "name": "report"}],"allowed_tables":[reporting]})["allowed"]
+    assert validate(db,"SELECT * FROM report()",{"allowed_functions":[{"schema_path": ["*"], "name": "report"}],"allowed_tables":[]})["allowed"]
+    assert not validate(db,"SELECT * FROM report(), secret.t",{"allowed_functions":[{"schema_path": ["*"], "name": "report"}],"allowed_tables":[reporting]})["allowed"]
 
 
 def test_attached_database_and_trusted_reader(db,tmp_path):
@@ -54,13 +54,13 @@ def test_attached_database_and_trusted_reader(db,tmp_path):
     assert validate(db,"SELECT * FROM lake.main.file_view",options)["allowed"]
     # The view's reader is the view's: a block on it does not reach into the body, but it still governs the
     # caller's own call, alone or next to the view.
-    assert validate(db,"SELECT * FROM lake.main.file_view",{**options,"blocked_functions":["read_parquet"]})["allowed"]
-    assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":["read_parquet"]})["allowed"]
-    assert not validate(db,f"SELECT * FROM lake.main.file_view, read_parquet('{path}')",{**options,"allowed_functions":["read_parquet"],"blocked_functions":["read_parquet"]})["allowed"]
+    assert validate(db,"SELECT * FROM lake.main.file_view",{**options,"blocked_functions":[{"schema_path":["*"],"name":"read_parquet"}]})["allowed"]
+    assert not validate(db,f"SELECT * FROM read_parquet('{path}')",{"blocked_functions":[{"schema_path":["*"],"name":"read_parquet"}]})["allowed"]
+    assert not validate(db,f"SELECT * FROM lake.main.file_view, read_parquet('{path}')",{**options,"allowed_functions":[{"schema_path": ["*"], "name": "read_parquet"}],"blocked_functions":[{"schema_path":["*"],"name":"read_parquet"}]})["allowed"]
 
 
 def test_ceiling_shared_and_replacement_is_global(db):
-    configure(db,{"blocked_functions":["md5"]})
+    configure(db,{"blocked_functions":[{"schema_path":["*"],"name":"md5"}]})
     with db.cursor() as other:
         assert not validate(other,"SELECT md5('x')")["allowed"]
         assert not validate(other,"SELECT md5('x')",{"blocked_functions":[]})["allowed"]
@@ -82,7 +82,7 @@ def test_invalid_configuration_does_not_lock(db):
 def test_prepared_validation_observes_defaults(db):
     db.execute("PREPARE v AS SELECT allowed FROM gatekeeper_validate('SELECT md5(''x'')')")
     assert db.execute("EXECUTE v").fetchone()[0]
-    configure(db,{"blocked_functions":["md5"]})
+    configure(db,{"blocked_functions":[{"schema_path":["*"],"name":"md5"}]})
     assert not db.execute("EXECUTE v").fetchone()[0]
 
 
@@ -90,13 +90,13 @@ def test_configuration_race(db):
     def attempt(i):
         with db.cursor() as conn:
             try:
-                configure(conn,{"allowed_functions":[f"custom_{i}"]})
+                configure(conn,{"allowed_functions":[{"schema_path":["main"],"name":f"custom_{i}"}]})
                 return True
             except duckdb.Error:
                 return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(attempt,range(8)))==8
-    assert policy(db)["allowed_functions"] in [[f"custom_{i}"] for i in range(8)]
+    assert policy(db)["allowed_functions"] in [[{"catalog":"", "schema_path":["main"], "name":f"custom_{i}", "type":""}] for i in range(8)]
 
 
 def test_binding_preserves_temp_and_transaction_context(db):
@@ -120,6 +120,6 @@ def test_bound_cte_and_policy_override(db):
     db.execute("CREATE TABLE secret(x INT)")
     sql="SELECT * FROM secret WHERE EXISTS (WITH secret AS (SELECT 1) SELECT * FROM secret)"
     assert not validate(db,sql,{"allowed_tables":[]})["allowed"]
-    configure(db,{"allowed_tables":[],"allowed_functions":["custom"]})
+    configure(db,{"allowed_tables":[],"allowed_functions":[{"schema_path": ["*"], "name": "custom"}]})
     assert not validate(db,"SELECT * FROM secret",{"allowed_tables":[{"schema_path":["main"],"table":"secret"}]})["allowed"]
-    assert validate(db,"SELECT mystery(1)",{"allowed_functions":["mystery"]})["code"]=="forbidden"
+    assert validate(db,"SELECT mystery(1)",{"allowed_functions":[{"schema_path": ["*"], "name": "mystery"}]})["code"]=="forbidden"

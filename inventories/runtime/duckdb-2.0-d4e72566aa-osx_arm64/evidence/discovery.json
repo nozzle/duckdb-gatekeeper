@@ -1,0 +1,631 @@
+{
+  "extensions": {
+    "autocomplete": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "autocomplete"
+      ],
+      "load_names": [
+        "autocomplete"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "490561f9a40d174d4b927a3fa558f1eeb19fd20a4dc2ba8f61528e79a5e29019",
+      "status": "ok"
+    },
+    "avro": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "avro"
+      ],
+      "load_names": [
+        "avro"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "2068b9b91fbe8f3e85aa908d012348715664f10f98599d007510003007abac3b",
+      "status": "ok"
+    },
+    "aws": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "install_names": [
+        "httpfs",
+        "aws"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "4d0e4ced60a336f18d4ff0575a947e42a2adca52fc00186ea7a732fc802d0322",
+      "status": "ok"
+    },
+    "azure": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "azure"
+      ],
+      "load_names": [
+        "azure"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "0b9b9311cf6aa3257b2d222398538d6f2b8c15800d2f7e689fad9028ea31f606",
+      "status": "ok"
+    },
+    "delta": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "install_names": [
+        "httpfs",
+        "delta"
+      ],
+      "load_names": [
+        "httpfs",
+        "delta"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "14c8f17d94eb7fc878e6285bf06e0af94fb93dd4265a305e74a5c66058240449",
+      "status": "ok"
+    },
+    "ducklake": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "httpfs"
+      ],
+      "install_names": [
+        "httpfs",
+        "ducklake"
+      ],
+      "load_names": [
+        "httpfs",
+        "ducklake"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "1cb4a7895cdb4570fe9fb80b9ccedb3d14373a1f918169ed7c9cc1fd3349e94c",
+      "status": "ok"
+    },
+    "encodings": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "encodings"
+      ],
+      "load_names": [
+        "encodings"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "2eb9c0750a1575ef23de8e944ad9af249fca2081f727b3a08c834ae54afb0ec5",
+      "status": "ok"
+    },
+    "excel": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "excel"
+      ],
+      "load_names": [
+        "excel"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "07167cfb88ca536684ab6352e54a06c7c60faa33b1045f4064957f8f59a8bfd1",
+      "status": "ok"
+    },
+    "fts": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "fts"
+      ],
+      "load_names": [
+        "fts"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "c7734455520989a23431bb0cb0050ac671ae60ec5bde248e59fc7b2bf7337390",
+      "status": "ok"
+    },
+    "httpfs": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "httpfs"
+      ],
+      "load_names": [
+        "httpfs"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "c1a309f60116e56aa12c3f5ba67e71fdcfeec1fdf7f47516a0c7079d7296b3ba",
+      "status": "ok"
+    },
+    "iceberg": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "avro",
+        "aws",
+        "httpfs"
+      ],
+      "install_names": [
+        "httpfs",
+        "aws",
+        "avro",
+        "iceberg"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws",
+        "avro",
+        "iceberg"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "7f8d0cfa434244ecccb76772a1bce7f71b6a053139f4708d1d35476b463610f4",
+      "status": "ok"
+    },
+    "icu": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "icu"
+      ],
+      "load_names": [
+        "icu"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "be70303e9a4fc54881462fae86d926af51291b6f52db84aef1edbbeb8ee87662",
+      "status": "ok"
+    },
+    "inet": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "inet"
+      ],
+      "load_names": [
+        "inet"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "46104595146d27e647b261069acf3145687b463e1496a8b03ac1fac144756e6c",
+      "status": "ok"
+    },
+    "json": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "json"
+      ],
+      "load_names": [
+        "json"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "ea8b81085ac7bc1ed29bb0b7d930c78a1b880c259dcda9f547aadb8833195cda",
+      "status": "ok"
+    },
+    "lance": {
+      "attempts": [
+        {
+          "artifacts": [
+            {
+              "bytes": 19246078,
+              "download_sha256": "40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20",
+              "name": "httpfs",
+              "repository": "core",
+              "sha256": "0693029cd42cf41f9b64edce5802edbf59847792662f6388de94648db8caa3b0",
+              "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extension.gz",
+              "version": "0507d4ae49"
+            }
+          ],
+          "error": {
+            "code": "http_error",
+            "http_status": 404
+          },
+          "phase": "download",
+          "status": "unavailable"
+        }
+      ],
+      "error": {
+        "code": "http_error",
+        "http_status": 404
+      },
+      "install_names": [
+        "httpfs",
+        "lance"
+      ],
+      "load_names": [
+        "httpfs",
+        "lance"
+      ],
+      "phase": "download",
+      "status": "unavailable"
+    },
+    "motherduck": {
+      "attempts": [
+        {
+          "error": {
+            "code": "http_error",
+            "http_status": 404
+          },
+          "phase": "download",
+          "status": "unavailable"
+        }
+      ],
+      "error": {
+        "code": "http_error",
+        "http_status": 404
+      },
+      "install_names": [
+        "motherduck"
+      ],
+      "load_names": [
+        "motherduck"
+      ],
+      "phase": "download",
+      "status": "unavailable"
+    },
+    "mysql": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "mysql_scanner"
+      ],
+      "load_names": [
+        "mysql_scanner"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "a1eb1b10e46fff4413df2cb1d8b30a77147b76d3f94905d2ccbc2ecbce687790",
+      "status": "ok"
+    },
+    "odbc": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "odbc_scanner"
+      ],
+      "load_names": [
+        "odbc_scanner"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "f1b93da4e4f0da817ad5b8dc01a65a1300c28586f186e6463f1d07c9dade2fb0",
+      "status": "ok"
+    },
+    "parquet": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "parquet"
+      ],
+      "load_names": [
+        "parquet"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "32d5aa0921207ef0a63e7e366cc4c4f92eba4adb6a57f6a67b81e50d1cfd7cf0",
+      "status": "ok"
+    },
+    "postgres": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "postgres_scanner"
+      ],
+      "load_names": [
+        "postgres_scanner"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "e02af656b6340698983b3b4edf837f0e75cb87cbaadcffe00c565873b94b3dd2",
+      "status": "ok"
+    },
+    "quack": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "quack"
+      ],
+      "load_names": [
+        "quack"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "d7273ac769e3d07ffba216689015ebc3bea1d8e5f36ca3afccae367b14148971",
+      "status": "ok"
+    },
+    "spatial": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "spatial"
+      ],
+      "load_names": [
+        "spatial"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "aaea8c89726c0dd6e32819062ac32be1082e8fd339af4d8e35f6a8db0f3b988e",
+      "status": "ok"
+    },
+    "sqlite": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "sqlite_scanner"
+      ],
+      "load_names": [
+        "sqlite_scanner"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "8bb61f5d4ad139b2bd52dc50a4d5089aeccbdea8682d4da7eb184203d907886a",
+      "status": "ok"
+    },
+    "tpcds": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "tpcds"
+      ],
+      "load_names": [
+        "tpcds"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "c597cdf9f8e4825ba35487497a6b95d7c3ae67e1f1e1e167469f879ee139ccb3",
+      "status": "ok"
+    },
+    "tpch": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "tpch"
+      ],
+      "load_names": [
+        "tpch"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "795e082ee6c89d63a8d14da3ccfa0ab24b99d719db8e2579d739d180b111d8f7",
+      "status": "ok"
+    },
+    "ui": {
+      "attempts": [
+        {
+          "error": {
+            "code": "http_error",
+            "http_status": 404
+          },
+          "phase": "download",
+          "status": "unavailable"
+        }
+      ],
+      "error": {
+        "code": "http_error",
+        "http_status": 404
+      },
+      "install_names": [
+        "ui"
+      ],
+      "load_names": [
+        "ui"
+      ],
+      "phase": "download",
+      "status": "unavailable"
+    },
+    "unity_catalog": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [
+        "aws",
+        "httpfs"
+      ],
+      "install_names": [
+        "httpfs",
+        "aws",
+        "unity_catalog"
+      ],
+      "load_names": [
+        "httpfs",
+        "aws",
+        "unity_catalog"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "f2da5b29c1aa8d290129ae38c40028146c5a4aea2c6a614e5ef12bc16d16ae4d",
+      "status": "ok"
+    },
+    "vortex": {
+      "attempts": [
+        {
+          "error": {
+            "code": "http_error",
+            "http_status": 404
+          },
+          "phase": "download",
+          "status": "unavailable"
+        }
+      ],
+      "error": {
+        "code": "http_error",
+        "http_status": 404
+      },
+      "install_names": [
+        "vortex"
+      ],
+      "load_names": [
+        "vortex"
+      ],
+      "phase": "download",
+      "status": "unavailable"
+    },
+    "vss": {
+      "attempts": [
+        {
+          "phase": "extension_capture",
+          "status": "ok"
+        }
+      ],
+      "dependencies_loaded": [],
+      "install_names": [
+        "vss"
+      ],
+      "load_names": [
+        "vss"
+      ],
+      "phase": "extension_capture",
+      "stages_sha256": "df80b31fefa4c5279993a4c2b6dc0a41892eca9f1312df92196c0bb7bfd144a8",
+      "status": "ok"
+    }
+  },
+  "summary": {
+    "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+    "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+    "collector_sha256": "46601d3211e03283284a282bbe6ef83fa44129812e737d4610c0221e6eeefcf0",
+    "evidence_kind": "collector_discovery",
+    "extensions": {
+      "autocomplete": "ok",
+      "avro": "ok",
+      "aws": "ok",
+      "azure": "ok",
+      "delta": "ok",
+      "ducklake": "ok",
+      "encodings": "ok",
+      "excel": "ok",
+      "fts": "ok",
+      "httpfs": "ok",
+      "iceberg": "ok",
+      "icu": "ok",
+      "inet": "ok",
+      "json": "ok",
+      "lance": "unavailable",
+      "motherduck": "unavailable",
+      "mysql": "ok",
+      "odbc": "ok",
+      "parquet": "ok",
+      "postgres": "ok",
+      "quack": "ok",
+      "spatial": "ok",
+      "sqlite": "ok",
+      "tpcds": "ok",
+      "tpch": "ok",
+      "ui": "unavailable",
+      "unity_catalog": "ok",
+      "vortex": "unavailable",
+      "vss": "ok"
+    },
+    "mode": "discovery",
+    "schema_version": 2
+  }
+}

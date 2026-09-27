@@ -1,0 +1,342 @@
+{
+  "active_extension": "avro",
+  "artifacts": [
+    {
+      "bytes": 20442958,
+      "download_sha256": "d40bd9f818a4f82b359d56b1651a7fcd2f2c287ab5f2c8885e39b8a710c5a227",
+      "name": "avro",
+      "repository": "core",
+      "sha256": "37c9af0e6ecad5c78e07974121b8151dea49a8647c115a28d17e6ed7142dd7d6",
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/avro.duckdb_extension.gz",
+      "version": "36a4d8ac56"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "86094727e85884dd2d80ec5e4808eae545cb3a713eaa772988c9b57143ae2454",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Cyanoptera",
+    "extension_abi": "v2.0.0-alpha42986",
+    "library_version": "v2.0.0-alpha42986",
+    "native_module_sha256": "e90a6500d9857776c01e69c541f4b3bd8aec5cd6f96743f017590f87e7ef413d",
+    "platform": "osx_arm64",
+    "python_package_version": "2.0.0.dev2609221243",
+    "python_version": "3.13.2",
+    "source_id": "d4e72566aa"
+  },
+  "function_count": 3211,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "avro_metadata",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "ANY[]"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "read_avro",
+        "named_parameters": {
+          "allow_empty": "BOOLEAN",
+          "filename": "ANY",
+          "hive_partitioning": "BOOLEAN",
+          "hive_types": "ANY",
+          "hive_types_autocast": "BOOLEAN",
+          "union_by_name": "BOOLEAN"
+        },
+        "parameters": [
+          "VARIANT"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "install_names": [
+    "avro"
+  ],
+  "inventory": "avro",
+  "load_names": [
+    "avro"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "avro",
+      "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+      "version": "36a4d8ac56"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v2.0.0-alpha42986"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v2.0.0-alpha42986"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "avro",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "89044cda2321ca7d7df7d5ed25ddca3b63628f3aabe15747e99172f6d480dbc3",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "avro_metadata",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "ANY[]"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "read_avro",
+            "named_parameters": {
+              "allow_empty": "BOOLEAN",
+              "filename": "ANY",
+              "hive_partitioning": "BOOLEAN",
+              "hive_types": "ANY",
+              "hive_types_autocast": "BOOLEAN",
+              "union_by_name": "BOOLEAN"
+            },
+            "parameters": [
+              "VARIANT"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "659643b86dd2ddbb12d4771949d9cd1e3755180dc30bb0cfcea5629038cca07a",
+      "load_name": "avro",
+      "loaded_extensions": [
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "avro",
+          "signature_key_fingerprint": "sha256:a319de1f13bc85a0af0c51d5ca47e3aff9680d8333e895a3a35e5ff97a69dc12",
+          "version": "36a4d8ac56"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v2.0.0-alpha42986"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v2.0.0-alpha42986"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "2068b9b91fbe8f3e85aa908d012348715664f10f98599d007510003007abac3b",
+  "status": "ok"
+}

@@ -1,0 +1,33 @@
+{
+  "inventory": "autocomplete",
+  "extension": "autocomplete",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/autocomplete.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/autocomplete.duckdb_extension.gz",
+      "compressed_sha256": "b2fa78ebc50534cf1bd9c6ab598f25f03aef6afbd749b182bcbb3669ecbbc18e",
+      "decompressed_sha256": "5f796d26edbe414342c6a269bdf95b26cfd961a11e178079f327317b4226a51e",
+      "compressed_bytes": 3326014,
+      "decompressed_bytes": 11746918,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/autocomplete",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

@@ -1,0 +1,332 @@
+{
+  "active_extension": "mysql_scanner",
+  "artifacts": [
+    {
+      "bytes": 30898918,
+      "download_sha256": "653cdf0780e0a399017f9accc011998ace3055c5e86bf742537bacf3748e9b70",
+      "name": "mysql_scanner",
+      "repository": "core",
+      "sha256": "0aced636acf1da9d742edb11fc10556356302b9e7bc424107a69b4f481b500b1",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/mysql_scanner.duckdb_extension.gz",
+      "version": "7267164"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2908,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "mysql_clear_cache",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "mysql_debug_execution_plan",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "mysql_execute",
+        "named_parameters": {
+          "params": "ANY"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "mysql_explain_federated",
+        "named_parameters": {},
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "mysql_query",
+        "named_parameters": {
+          "params": "ANY",
+          "stream_results": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR",
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "mysql_scanner"
+  ],
+  "inventory": "mysql",
+  "load_names": [
+    "mysql_scanner"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "mysql_scanner",
+      "version": "7267164"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "mysql_scanner",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "mysql_clear_cache",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "mysql_debug_execution_plan",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "mysql_execute",
+            "named_parameters": {
+              "params": "ANY"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "mysql_explain_federated",
+            "named_parameters": {},
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "mysql_query",
+            "named_parameters": {
+              "params": "ANY",
+              "stream_results": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR",
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "df2c4f32112acb2f2904b002e37db9e6ff25cb3b618609eb471ed49694eef6d6",
+      "load_name": "mysql_scanner",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "mysql_scanner",
+          "version": "7267164"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "68c4eeebbd43869dfcae24e863544d91495b8eb9e040848e9365021544132a07",
+  "status": "ok"
+}

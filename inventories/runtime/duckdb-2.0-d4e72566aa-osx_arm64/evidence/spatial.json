@@ -1,0 +1,111 @@
+{
+  "inventory": "spatial",
+  "extension": "spatial",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/spatial.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/spatial.duckdb_extension.gz",
+      "compressed_sha256": "53e0ac37a22b9201b74fa51e767d4c9bbef5301b24204f04dc829b9abc4e4f9f",
+      "decompressed_sha256": "fa05cf9af56e4852e8a1ac53f572090a9cf042051ae3f7e8bce2aa6e2a69b5ff",
+      "compressed_bytes": 23734258,
+      "decompressed_bytes": 72430542,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "686950e980",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/spatial.cmake",
+    "descriptor_sha256": "16bb1828041e4c5b142b8a9e7a1acf40758de3b7dfc359cbe9f5338869c02f97",
+    "descriptor_text": "if (${BUILD_COMPLETE_EXTENSION_SET} AND NOT ${WASM_ENABLED})\n################# SPATIAL\nduckdb_extension_load(spatial\n    DONT_LINK LOAD_TESTS\n    GIT_URL https://github.com/duckdb/duckdb-spatial\n    GIT_TAG 686950e980a0629c5ffbc788b498681e2b06e75e\n    INCLUDE_DIR src/spatial\n    TEST_DIR test/sql\n    APPLY_PATCHES\n    )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-spatial",
+    "revision": "686950e980a0629c5ffbc788b498681e2b06e75e",
+    "source_url": "https://github.com/duckdb/duckdb-spatial/tree/686950e980a0629c5ffbc788b498681e2b06e75e",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0001-pruned-transitive-includes.patch",
+        "sha256": "9e8983468e18bdac1de2ac505f331eabea20e2d2b70963a342303ec657a85450"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0002-aggregate-state-input-callbacks.patch",
+        "sha256": "9e46d2bd5603f7796f5896a38b168e98abf7b7ef00d1d8567ae153da7b8756df"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0003-copy-option-identifier-map.patch",
+        "sha256": "9afc2200d956229aedbf2ba588745bd1e305cc15edee00e03dfdc8e0144dfe1c"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0003-table-function-bind-identifiers.patch",
+        "sha256": "3c14da9bbab2041bff64aa2d68348571ec6df0aa53dc98f5b9d4ab23069eefd2"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0004-mark-wkb-deserializers-fallible.patch",
+        "sha256": "12639da45aa549528f279d01722b5aea716e4d41107322647f957f2e6149e8ea"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0005-immutable-logical-type.patch",
+        "sha256": "837e3f7c4fba1a582171c48e547b9334624cd26e04ca12149840b89eb6971cd7"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0005-keep-folded-arguments.patch",
+        "sha256": "5440c67882193458fa07eb30889552866c7dfb582502b92977d0b8e29b93554c"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0005-remove-geojson-functions.patch",
+        "sha256": "be21ab58ff9642205eba34813aafdc8f85d5063f5816d3ca9adfb6fbdeeb7688"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0006-identifier-quoting-in-error-messages.patch",
+        "sha256": "c17244f5bd5efa1e0f145412774e4df1d965efa16a3da8c0f374ca48f437ecfc"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0007-compression-file-open-options.patch",
+        "sha256": "0ca22512202fe75ea33f885514c3cd64921012079689d3942dbd83fd3634257d"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0007-function-set-shared-ptr.patch",
+        "sha256": "0f2813bb71739364820869046e8c056cdd857cc9e22b80977d71bf5808f42ab8"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0008-index-lifetime.patch",
+        "sha256": "fa6a7ce919990952da043a4c065ef11e15ce5046829eccda096fe97b55ab2c8a"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0009-index-constraint-message-const.patch",
+        "sha256": "ac5393a4f2a9d314d92e295b3cf707a6a8eafb39049fb14f0f9f2a61f6ae48e7"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0010-index-inmemory-size-const.patch",
+        "sha256": "77f0dba9188d88f555b3a35e1f30dfaebe87bcd13307d055d12ffbb93a0c6e86"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0011-catalog-logical-operator-includes.patch",
+        "sha256": "3b919ebbd9ee1af51b1140894cd3af07098e7e9cb0dd6315ac2ca0da02a3b4d2"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0011-fix-ninja-1.13-meson-install.patch",
+        "sha256": "8f045792aab38611fb72094ee8deb7dbaff686790f136e2a5f7a4de5716e124a"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0011-literal-constant-expression.patch",
+        "sha256": "437c0ed2b7724d7b25b71737d42987f2177e86c224899dad5a1bb37d93348b85"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/spatial/0012-add-index-api.patch",
+        "sha256": "76fff5c737d3237069f46a89c3c3c36a5ed9443f78a0592b8767b40ce74a1816"
+      }
+    ]
+  }
+}

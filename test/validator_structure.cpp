@@ -13,7 +13,7 @@ int main() {
 	if (!doc)
 		return 1;
 	gatekeeper::Policy policy;
-	policy.blocked_functions = {"md5", "list_value"};
+	policy.blocked_functions = {{"*", {"*"}, "md5", ""}, {"*", {"*"}, "list_value", ""}};
 	gatekeeper::BindingPolicy binding;
 	auto result = gatekeeper::Validate(yyjson_doc_get_root(doc.get()), policy, &binding);
 	std::cout << result.code;

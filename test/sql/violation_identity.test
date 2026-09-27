@@ -1,0 +1,91 @@
+# name: test/sql/violation_identity.test
+# description: Public violation identity retains the resolved function kind in validation and all audit modes.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['*'], name:'range'}], blocked_functions := [{catalog:'system', schema_path:['main'], name:'range'}]);
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+query IIIIIII
+SELECT code, violations[1].catalog, violations[1].schema_path, violations[1].function_name,
+       violations[1].function_type, typeof(violations[1].function_type), len(functions)
+FROM gatekeeper_validate('SELECT range(3)');
+----
+forbidden	system	[main]	range	scalar	VARCHAR	0
+
+query IIIIIII
+SELECT code, violations[1].catalog, violations[1].schema_path, violations[1].function_name,
+       violations[1].function_type, typeof(violations[1].function_type), len(functions)
+FROM gatekeeper_validate('SELECT * FROM range(3)');
+----
+forbidden	system	[main]	range	table	VARCHAR	0
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+statement error agent
+SELECT range(3);
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT * FROM range(3);
+----
+Gatekeeper denied this statement
+
+statement ok
+SET gatekeeper_log_only = true;
+
+query I agent
+SELECT range(3);
+----
+[0, 1, 2]
+
+query I agent
+SELECT * FROM range(3);
+----
+0
+1
+2
+
+# Parsing the audit's serialized STRUCT must retain exactly the same complete denied identity.
+query IIIIIIIII rowsort
+SELECT mode, code, violations[1].catalog, violations[1].schema_path, violations[1].function_name,
+       violations[1].function_type, typeof(violations[1].function_type), len(functions), allowed
+FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision';
+----
+enforce	forbidden	system	[main]	range	scalar	VARCHAR	0	false
+enforce	forbidden	system	[main]	range	table	VARCHAR	0	false
+log_only	forbidden	system	[main]	range	scalar	VARCHAR	0	false
+log_only	forbidden	system	[main]	range	table	VARCHAR	0	false
+validate	forbidden	system	[main]	range	scalar	VARCHAR	0	false
+validate	forbidden	system	[main]	range	table	VARCHAR	0	false
+
+# A wildcard block can refuse before resolution; syntax does not invent a kind or a namespace.
+query IIII
+SELECT code, violations[1].catalog = '', violations[1].schema_path = [], violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT range(3)', blocked_functions := [{schema_path:['*'], name:'range'}]);
+----
+forbidden	true	true	true
+
+query IIII
+SELECT code, violations[1].catalog = '', violations[1].schema_path = [], violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT * FROM range(3)', blocked_functions := [{schema_path:['*'], name:'range'}]);
+----
+forbidden	true	true	true
+
+query IIII
+SELECT code, violations[1].catalog = '', violations[1].schema_path = [], violations[1].function_type = ''
+FROM gatekeeper_validate('SELECT missing_function(3)', blocked_functions := [{schema_path:['*'], name:'missing_function'}]);
+----
+forbidden	true	true	true
+
+query III
+SELECT code, violations[1].rule, violations[1].function_type = ''
+FROM gatekeeper_validate('DROP TABLE t');
+----
+unsupported	statement	true

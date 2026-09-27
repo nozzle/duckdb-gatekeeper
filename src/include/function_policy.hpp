@@ -77,22 +77,56 @@ inline const Names &ListLambdaFunctions() {
 	return names;
 }
 
-inline std::string CanonicalFunction(std::string name) {
+// 1.5 WindowExpression::WindowFunctions maps syntax directly to an expression kind;
+// it does not select a second catalog entry. Used only to recover parsed provenance.
+inline std::string WindowImplementationName(std::string name) {
 	name = Lower(std::move(name));
-	// Explicit aliases reviewed in DuckDB's Parquet registration; no runtime discovery.
-	if (name == "parquet_scan")
-		return "read_parquet";
-	if (name == "->>" || name == "json_extract_path_text")
-		return "json_extract_string";
-	if (name == "->" || name == "json_extract_path")
-		return "json_extract";
+	if (name == "rank_dense")
+		return "dense_rank";
+	if (name == "first" || name == "last")
+		return name + "_value";
 	return name;
 }
 
-// The never-bind list: functions no policy can admit on any caller-authored route.
-inline bool NeverBind(const std::string &name) {
-	return NeverBindFunctions().count(Lower(name)) || NeverBindFunctions().count(CanonicalFunction(name));
+bool SystemIdentity(const Identity &identity);
+
+// Implementation substitutions, not policy aliases. These edges require an observed system entry.
+// 1.5 uses the possible set conservatively; 2.0 checks an actual retained-definition edge.
+// minmax.cpp BindMinMax, date_part.cpp DatePartBind, quantile.cpp DiscreteQuantile{List,}Function::Bind
+// on both supported engines. No catalog discovery or arbitrary same-leaf host inference.
+inline Names FunctionImplementations(const Identity &source, int engine_major) {
+	Names names{Lower(source.name)};
+	if (!SystemIdentity(source) || source.internal != true)
+		return names;
+	if (source.type == "aggregate") {
+		if (source.name == "min")
+			names.insert("arg_min");
+		if (source.name == "max")
+			names.insert("arg_max");
+		if (source.name == "quantile")
+			names.insert("quantile_disc");
+	}
+	if (source.type == "scalar" && (source.name == "date_part" || source.name == "datepart")) {
+		names.insert("epoch");
+		names.insert("julian");
+		// 2.0 DatePartBind replaces every constant part. DatePartUnaryFunctionName
+		// maps DOW/DOY and the plural micro/milliseconds to their registration names;
+		// all remaining valid DatePartSpecifier values use the lowercase enum name.
+		// 1.5 DatePartBind replaces only EPOCH and JULIAN_DAY.
+		if (engine_major >= 2) {
+			static const Names unary = {"year",          "month",          "day",         "decade", "century",
+			                            "millennium",    "microsecond",    "millisecond", "second", "minute",
+			                            "hour",          "dayofweek",      "isodow",      "week",   "isoyear",
+			                            "quarter",       "dayofyear",      "yearweek",    "era",    "timezone",
+			                            "timezone_hour", "timezone_minute"};
+			names.insert(unary.begin(), unary.end());
+		}
+	}
+	return names;
 }
+
+// The never-bind list: functions no policy can admit on any caller-authored route.
+inline bool NeverBind(const std::string &name) { return NeverBindFunctions().count(Lower(name)); }
 
 // Gatekeeper's own control plane: the policy and the lifecycle of the log that records its decisions. These
 // are refused on every route, trusted definitions included. A host view or macro that exposed one would let
@@ -104,23 +138,15 @@ inline const Names &ControlPlaneFunctions() {
 	return names;
 }
 
-inline bool ControlPlane(const std::string &name) {
-	return ControlPlaneFunctions().count(Lower(name)) || ControlPlaneFunctions().count(CanonicalFunction(name));
-}
+inline bool ControlPlane(const std::string &name) { return ControlPlaneFunctions().count(Lower(name)); }
 
 // The policy's explicit blocks. They govern names attributable to the caller: the caller's text, the
 // implementations binding derives from it, and the readers its file paths choose. A host view, macro, or
 // attached table is a trusted definition; nothing inside one is subject to blocks.
-inline bool FunctionBlocked(const Policy &policy, const std::string &name) {
-	auto canonical = CanonicalFunction(name);
-	for (const auto &blocked : policy.blocked_functions)
-		if (CanonicalFunction(blocked) == canonical)
-			return true;
-	return false;
-}
+bool FunctionBlocked(const Policy &policy, const Identity &identity);
 
-inline bool FunctionDenied(const Policy &policy, const std::string &name) {
-	return NeverBind(name) || FunctionBlocked(policy, name);
+inline bool FunctionDenied(const Policy &policy, const Identity &identity) {
+	return NeverBind(identity.name) || FunctionBlocked(policy, identity);
 }
 
 // Functions DuckDB binds for a collation (function.cpp: nocase, noaccent, nfc; the ICU extension registers
@@ -131,5 +157,9 @@ inline bool CollationFunction(const std::string &name) {
 	       lower.compare(0, 12, "icu_collate_") == 0;
 }
 
-bool FunctionAllowed(const Policy &policy, const std::string &name);
+// Eligibility is only a pre-bind leaf screen, never a resolved authorization decision.
+bool FunctionEligible(const Policy &policy, const std::string &name);
+bool FunctionAllowed(const Policy &policy, const Identity &identity);
+bool SystemIdentity(const Identity &identity);
+bool SupportedFunctionKind(const std::string &kind);
 } // namespace gatekeeper

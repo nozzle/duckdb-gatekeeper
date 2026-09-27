@@ -1,0 +1,35 @@
+# name: test/sql/parser_window_policy.test
+# description: DuckDB 2.0 first/last OVER parser rewrite chooses the *_value window entry.
+# group: [gatekeeper]
+
+require gatekeeper
+
+require-env GATEKEEPER_TEST_ENGINE_MAJOR 2
+
+# PEG TransformFunctionExpression rewrites first/last OVER before catalog lookup.
+# The policy name is the selected first_value/last_value window entry, not the
+# first/last aggregate entry that was never selected. A block on first must not
+# block first_value. rank_dense, unlike first, remains its own catalog entry.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'first_value',type:'window'}, {schema_path:['main'],name:'last_value',type:'window'}], blocked_functions := [{schema_path:['main'],name:'first'}, {schema_path:['main'],name:'last'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(1) OVER (), last(1) OVER ()');
+----
+ok
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first_value(1) OVER (), last_value(1) OVER ()');
+----
+ok
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'first',type:'window'}, {schema_path:['main'],name:'last',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(1) OVER (), last(1) OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure();

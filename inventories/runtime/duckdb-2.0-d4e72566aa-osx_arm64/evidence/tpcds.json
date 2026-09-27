@@ -1,0 +1,33 @@
+{
+  "inventory": "tpcds",
+  "extension": "tpcds",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpcds.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/tpcds.duckdb_extension.gz",
+      "compressed_sha256": "070cdb63207da24366ed1b51e8b1fd820289a4f18723f8a1b2a27a51d380112a",
+      "decompressed_sha256": "1c9058182fe61ddc3b3e943c5fad5a8e52caa488b1348dab629d74b7a4a79642",
+      "compressed_bytes": 6551439,
+      "decompressed_bytes": 23246686,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/tpcds",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

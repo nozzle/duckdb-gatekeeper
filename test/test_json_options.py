@@ -7,7 +7,7 @@ import pytest
 
 from support.artifact import ROOT
 from support.audit import decisions, enable, records
-from support.typed_helpers import configure, policy, validate
+from support.typed_helpers import configure, function_rules, policy, validate
 
 
 SCHEMA = json.loads((ROOT / "docs/policy-v2.schema.json").read_text())
@@ -34,15 +34,15 @@ def test_schema_is_valid_and_covers_the_sql_options(db):
 
 
 VALID_OPTIONS = [
-    {}, {"use_default_functions": False}, {"allowed_functions": ["ABS", "abs", "+", "*", "λ", "a\nb"]},
-    {"blocked_functions": ["MD5"]}, {"allowed_functions": [], "blocked_functions": []},
+    {}, {"use_default_functions": False}, {"allowed_functions": [{"schema_path": ["*"], "name": n} for n in ["ABS", "abs", "+", "*", "λ", "a\nb"]]},
+    {"blocked_functions": function_rules("MD5")}, {"allowed_functions": [], "blocked_functions": []},
     {"allowed_tables": []}, {"blocked_tables": []},
     {"allowed_tables": [{"schema_path": ["MAIN"], "table": "t"}]},
     {"allowed_tables": [{"catalog": None, "schema_path": ["main"], "table": "t"}]},
     {"allowed_tables": [{"catalog": "memory", "schema_path": ["main"], "table": "t"},
                         {"schema_path": ["main"], "table": "secret"}]},
     {"blocked_tables": [{"catalog": "*", "schema_path": ["*"], "table": "secret"}]},
-    {"use_default_functions": False, "allowed_functions": ["abs"], "blocked_functions": ["md5"],
+    {"use_default_functions": False, "allowed_functions": [{"schema_path": ["*"], "name": "abs"}], "blocked_functions": function_rules("md5"),
      "allowed_tables": [{"schema_path": ["main"], "table": "*"}],
      "blocked_tables": [{"schema_path": ["main"], "table": "secret"}]},
     {"allowed_tables": [{"schema_path": ["finance", "reports"], "table": "t"}]},
@@ -82,12 +82,17 @@ def schema_cases():
         yield document({name: []}), False
     for value in [None, 0, 1, "false", [], {}]:
         yield document({"use_default_functions": value}), False
-    for name in ["allowed_functions", "blocked_functions"]:
+    for name in ["blocked_functions"]:
         for value in [None, "md5", {}, True, [None], [1], [True], [{}], [[]], [""], ["a\0b"], ["\0\n"],
                       ["\ud800"], ["\udfff"], ["a\ud800b"], ["\udc00\ud800"]]:
             yield document({name: value}), False
-        for value in [[], ["a", "a"], ["\n"], ["*"], ["a\nb"], ["😀"], ["\ud83d\ude00"]]:
+        for value in [[], *[function_rules(n) for n in ["a", "\n", "*", "a\nb", "😀", "\ud83d\ude00"]]]:
             yield document({name: value}), True
+    for value in [None, "abs", ["abs"], [None], [{}], [{"name":"abs"}],
+                  [{"schema_path":["main"],"name":"abs","type":"pragma"}]]:
+        yield document({"allowed_functions": value}), False
+    for kind in [None, "scalar", "ScAlAr", "aggregate", "table", "macro", "table_macro", "window"]:
+        yield document({"allowed_functions": [{"catalog":None,"schema_path":["*"],"name":"abs","type":kind}]}), True
     for name in ["allowed_tables", "blocked_tables"]:
         for value in [None, {}, "main.t", [None], [1], ["main.t"], [[]], [{}],
                       [{"schema_path": ["main"]}], [{"table": "t"}],
@@ -111,7 +116,7 @@ def schema_cases():
 @pytest.mark.parametrize("value,accepted", list(schema_cases()))
 def test_schema_and_both_decoders_agree(db, value, accepted):
     assert SCHEMA_VALIDATOR.is_valid(value) is accepted
-    configure(db, {"blocked_functions": ["md5"]})
+    configure(db, {"blocked_functions": function_rules("md5")})
     before = policy(db)
     arguments = {"json": json.dumps(value)}
     result = validate(db, "SELECT 1", arguments)
@@ -129,14 +134,14 @@ def test_schema_and_both_decoders_agree(db, value, accepted):
     '{/* comment */"version":2,"options":{}}', '{"version":NaN,"options":{}}',
     '{"version":2,"options":{},"version":2}',
     '{"version":2,"options":{},"options":{}}',
-    '{"version":2,"options":{"blocked_functions":[],"blocked_functions":["md5"]}}',
-    '{"version":2,"options":{"blocked_functions":[],"blocked_\\u0066unctions":["md5"]}}',
+    '{"version":2,"options":{"blocked_functions":[],"blocked_functions":[{"schema_path":["*"],"name":"md5"}]}}',
+    '{"version":2,"options":{"blocked_functions":[],"blocked_\\u0066unctions":[{"schema_path":["*"],"name":"md5"}]}}',
     '{"version":2,"options":{"allowed_tables":[{"schema_path":["main"],"table":"t","catalog":"a","catalog":"b"}]}}',
-    '{"version":2,"options":{"allowed_functions":["\\ud800"]}}',
+    '{"version":2,"options":{"allowed_functions":[{"schema_path":["main"],"name":"\\ud800"}]}}',
     '{"version":2,"options":{}}\0',
 ])
 def test_invalid_json_text_fails_closed(db, text):
-    configure(db, {"blocked_functions": ["md5"]})
+    configure(db, {"blocked_functions": function_rules("md5")})
     before = policy(db)
     result = validate(db, "SELECT 1", {"json": text})
     assert result["code"] == "invalid_input" and not result["allowed"]
@@ -169,7 +174,7 @@ def test_duplicate_json_argument_is_a_bind_error(db):
 
 def test_json_inherits_and_cannot_widen_the_current_global_policy(db):
     db.execute("CREATE TABLE t(x INT); CREATE TABLE secret(x INT)")
-    configure(db, encoded({"blocked_functions": ["md5"], "allowed_tables": [{"schema_path": ["main"], "table": "t"}]}))
+    configure(db, encoded({"blocked_functions": function_rules("md5"), "allowed_tables": [{"schema_path": ["main"], "table": "t"}]}))
     for options in [{}, {"blocked_functions": [], "allowed_tables": [{"schema_path": ["*"], "table": "*"}]}]:
         assert validate(db, "SELECT md5('x')", encoded(options))["code"] == "forbidden"
         assert validate(db, "SELECT * FROM secret", encoded(options))["code"] == "forbidden"
@@ -185,11 +190,11 @@ def test_json_inherits_and_cannot_widen_the_current_global_policy(db):
 def test_prepared_json_validation_rechecks_policy_and_parameters(db):
     db.execute("PREPARE validation AS SELECT code FROM gatekeeper_validate($1, json := $2)")
     assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{}}')").fetchone() == ("ok",)
-    configure(db, encoded({"blocked_functions": ["md5"]}))
+    configure(db, encoded({"blocked_functions": function_rules("md5")}))
     assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{}}')").fetchone() == ("forbidden",)
     assert db.execute("EXECUTE validation('SELECT 1', 'bad json')").fetchone() == ("invalid_input",)
     configure(db)
-    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{\"blocked_functions\":[\"md5\"]}}')").fetchone() == ("forbidden",)
+    assert db.execute("EXECUTE validation('SELECT md5(''x'')', '{\"version\":2,\"options\":{\"blocked_functions\":[{\"schema_path\":[\"*\"],\"name\":\"md5\"}]}}')").fetchone() == ("forbidden",)
 
 
 def test_prepared_json_configuration_only_mutates_on_execution_and_obeys_lock(db):
@@ -199,31 +204,31 @@ def test_prepared_json_configuration_only_mutates_on_execution_and_obeys_lock(db
     db.execute("EXPLAIN CALL gatekeeper_configure(json := '{\"version\":2,\"options\":{}}')")
     assert policy(db) == before
     # Unread on purpose: the configure runs when its statement runs, on either engine.
-    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[\"md5\"]}}')")
-    assert policy(db)["blocked_functions"] == ["md5"]
-    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[\"lower\"]}}')")
-    assert policy(db)["blocked_functions"] == ["lower"]
+    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[{\"catalog\":\"*\",\"schema_path\":[\"*\"],\"name\":\"md5\"}]}}')")
+    assert policy(db)["blocked_functions"] == function_rules("md5", type="")
+    db.execute("EXECUTE cfg('{\"version\":2,\"options\":{\"blocked_functions\":[{\"catalog\":\"*\",\"schema_path\":[\"*\"],\"name\":\"lower\"}]}}')")
+    assert policy(db)["blocked_functions"] == function_rules("lower", type="")
     db.execute("SET lock_configuration = true")
     for sql in ["EXECUTE cfg('{\"version\":2,\"options\":{}}')", "EXECUTE fixed"]:
         with pytest.raises(duckdb.Error, match="locked"):
             db.execute(sql)
-    assert policy(db)["blocked_functions"] == ["lower"]
+    assert policy(db)["blocked_functions"] == function_rules("lower", type="")
 
 
 def test_json_configuration_shared_with_enforced_connections(db):
     with db.cursor() as agent:
         agent.execute("CALL gatekeeper_enforce()")
-        configure(db, encoded({"blocked_functions": ["md5"]}))
+        configure(db, encoded({"blocked_functions": function_rules("md5")}))
         with pytest.raises(duckdb.PermissionException):
             agent.execute("SELECT md5('x')")
         with pytest.raises(duckdb.PermissionException):
             agent.execute("CALL gatekeeper_configure(json := '{\"version\":2,\"options\":{}}')")
-        assert policy(db)["blocked_functions"] == ["md5"]
+        assert policy(db)["blocked_functions"] == function_rules("md5", type="")
 
 
 def test_json_uses_existing_audit_records(db):
     enable(db)
-    options = {"blocked_functions": ["md5"]}
+    options = {"blocked_functions": function_rules("md5")}
     configure(db, options)
     configure(db, encoded(options))
     changes = records(db, "event = 'policy_changed'")

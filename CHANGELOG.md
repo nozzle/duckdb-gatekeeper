@@ -6,7 +6,90 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+- Keep DuckDB 1.5 `first`/`last` window calls available under defaults with two explicit
+  source-backed window identities, and preserve non-internal native function provenance
+  across mixed-case catalog, schema, and function names.
+
 ### Changed
+
+- Keep function replacement blocks effective through no-op casts, `coalesce`, and identity
+  macros. DuckDB 1.5 conservatively refuses ambiguous mixed caller/trusted replacement
+  names; 2.0 uses retained definitions to avoid unrelated replacement attribution.
+
+- Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
+  including cross-namespace replacements, without attributing ordinary casts to unrelated
+  caller functions. Refuse caller non-system callbacks whose expression origin cannot be
+  retained (native bind/extended-bind callbacks on 1.5; expression-replacement callbacks on both engines).
+  Lambda-type callbacks alone remain permitted.
+
+- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR` followed
+  by `object_type VARCHAR`, also
+  observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
+  Known denied functions retain their complete catalog/schema/name/kind identity even when
+  the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
+  denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
+  `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
+  Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
+  The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
+  Update consumers that pin the violation STRUCT schema to include both trailing fields.
+
+- Authorize `first/last OVER` as the `first_value/last_value` windows on both engines,
+  following 1.5's intrinsic mapping and 2.0's parser rewrite. The real `first/last` aggregate
+  lookups on 1.5 retain separate authorization and evidence; `rank_dense` retains its own
+  identity. Remove the unsupported `first/window` and `last/window` defaults (919 identities).
+  Parser/binder rewriting is separate from configurable policy matching.
+
+- **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
+  `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
+  Legacy string rules and `schema` fields receive consistent actionable diagnostics; see the
+  [policy v2 migration guide](docs/policy-migration.md), including typed empty lists and canonical settings.
+  Catalog/schema wildcards follow table rules;
+  the leaf is required and exact (`*` is multiplication); schema-wide function permission is unsupported.
+  Optional kinds are scalar, aggregate, table, macro,
+  table_macro, and window. Both policy layers authorize resolved entries before callbacks on the
+  private binder's catalog path. Defaults contain explicit reviewed catalog/schema/name/kind identities;
+  same-name functions of another kind do not inherit defaults. Host shadows and `system.pg_catalog`
+  compatibility macros need explicit grants. Configurable grants and blocks match exact catalog-entry
+  names without alias canonicalization, including Parquet readers, JSON extraction aliases, and window
+  aliases. Cover each intended entry explicitly; Parquet file shorthand requires `parquet_scan`, not
+  `read_parquet`. Scoped blocks wait for actual catalog resolution;
+  blocks covering every eligible identity retain early no-bind refusal.
+- Internal table/view and function grants require exact schema components; table/view grants also
+  require an exact table name. Catalog may be omitted, NULL, or `*`, and block namespace wildcards
+  still match internal entries. The actual entry's `internal` flag controls this, not its catalog name;
+  non-internal entries can use schema patterns. Unknown bound-function internal origin cannot use
+  schema-wildcard grants. Reviewed defaults already name exact identities.
+- Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
+  caller implementation identities fail closed. Selected aggregate specializations on both engines may retain
+  an unambiguous system definition recorded by the same authorizing bind; see
+  [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
+  `functions` remains combined host-facing evidence of caller-attributable functions and trusted
+  dependencies. A public `caller_functions` evidence field is explicitly deferred and is not implemented;
+  `caller_objects` remains the existing conservative catalog-table/view subset of `objects`.
+- Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
+  `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian` on 1.5 or every constant
+  unary date part on 2.0, and `quantile` to
+  `quantile_disc`. Caller implementations obey qualified blocks and require their own grants
+  when defaults are disabled; source grants do not alias those implementation grants. Host
+  alias-like names retain exact spelling and identity for attribution, so a host `read_parquet`
+  macro does not attribute a trusted body's `parquet_scan` reader to the caller, or vice versa.
+- Quantile fraction/options checks now follow resolution of the system aggregate, before its
+  private bind callback. Granted host functions/macros with those names retain their own argument
+  contracts. System quantiles, including windows, require unqualified positional calls with literal
+  or bindable-parameter options; named and dotted/method calls conservatively refuse because
+  the hook cannot map receivers or reordered arguments. Earlier resolution errors remain `binding`.
+- Disabling defaults requires explicit qualified grants for default-macro expansion functions and
+  literal aggregate targets as well as the macro itself. Host macro bodies remain opaque. Implicit
+  arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates;
+  1.5 host aggregates with bind callbacks are separately refused for missing retained provenance.
+- Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
+  `system.main` aggregate after resolving the system scalar dispatcher, before its bind callbacks.
+  Computed/parameterized targets and named/dotted/method dispatcher calls are refused; unrelated host
+  functions/macros with dispatcher-like names retain their own argument contracts. IN-list,
+  SIMILAR TO and canonicalized JSON arrow helpers cannot select explicitly granted host shadows.
+  Caller `COLLATE` on 1.5 uses exact system collation entries to identify its unstamped scalar
+  capabilities; qualified grants and blocks apply to surviving implementations. Trusted macro/view bodies retain their existing trust. Replacement readers
+  are resolved and pinned before reader binding; implicit helper shadows are refused even if granted.
 
 - DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
   named parameters read session variables, and reports that fixed capability as function evidence.

@@ -1,3 +1,4 @@
+#include "function_policy.hpp"
 #include "validator.hpp"
 #include <cstdlib>
 
@@ -8,6 +9,59 @@ static void Check(bool condition) {
 
 int main() {
 	using namespace gatekeeper;
+	Policy functions;
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", true}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions.insert({"system", {"main"}, "abs", "scalar"});
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions = {{"system", {"*"}, "abs", "scalar"}};
+	Check(FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	functions.allowed_functions.clear();
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "table"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "macro"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"", {}, "abs", "scalar"}));
+	functions.defaults = false;
+	functions.allowed_functions = {{"", {"finance", "*"}, "f", "scalar"},
+	                               {"system", {"main"}, "*", "scalar"},
+	                               {"system", {"main"}, "read_parquet", "table"}};
+	Check(FunctionEligible(functions, "f"));
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar", true}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "scalar"}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance", "reports", "deep"}, "f", "scalar", false}));
+	Check(!FunctionAllowed(functions, {"lake", {"finance.reports"}, "f", "scalar", false}));
+	Check(FunctionAllowed(functions, {"system", {"main"}, "*", "scalar"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "abs", "scalar"}));
+	Check(!FunctionAllowed(functions, {"system", {"main"}, "parquet_scan", "table"}));
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"memory", {"main"}, "read_parquet", ""});
+	Check(!FunctionAllowed(functions, {"memory", {"main"}, "parquet_scan", "table"}));
+	functions.allowed_functions.insert({"", {"finance", "reports"}, "f", ""});
+	Check(FunctionAllowed(functions, {"lake", {"finance", "reports"}, "f", "table"}));
+	functions.blocked_functions.insert({"system", {"main"}, "parquet_scan", "table"});
+	Check(FunctionAllowed(functions, {"system", {"main"}, "read_parquet", "table"}));
+	functions.allowed_functions.insert({"*", {"*"}, "nextval", ""});
+	Check(!FunctionEligible(functions, "nextval"));
+	Policy blocks;
+	blocks.defaults = false;
+	blocks.allowed_functions = {{"*", {"a", "*"}, "f", ""}};
+	blocks.blocked_functions = {{"*", {"a", "b"}, "f", ""}};
+	Check(FunctionEligible(blocks, "f"));
+	Check(!FunctionAllowed(blocks, {"host", {"a", "b"}, "f", "scalar", false}));
+	Check(FunctionAllowed(blocks, {"host", {"a", "c"}, "f", "scalar", false}));
+	Check(!FunctionBlocked(blocks, {"host", {"a", "b", "c"}, "f", "scalar"}));
+	Check(!FunctionAllowed(blocks, {"", {}, "f", "scalar"}));
+	blocks.blocked_functions.clear();
+	for (const auto &kind : {"scalar", "aggregate", "table", "macro", "table_macro", "window"})
+		blocks.blocked_functions.insert({"*", {"a", "*"}, "f", kind});
+	Check(!FunctionEligible(blocks, "f"));
+	blocks.allowed_functions.insert({"other", {"a", "*", "*"}, "f", "scalar"});
+	Check(FunctionEligible(blocks, "f")); // A one-depth block cannot suppress a deeper eligible identity.
 	Policy policy;
 	policy.tables = true;
 	policy.allowed_tables = {{"memory", {"finance", "*"}, "orders"}};
@@ -34,6 +88,20 @@ int main() {
 	Check(!NamesObject({{"memory", "finance", "reports", "orders"}}, "lake", {"finance", "reports"}, "orders"));
 
 	Provenance provenance;
+	Identity mixed{"MiXeD", {"FiNaNcE", "RePoRtS"}, "FuNc", "ScAlAr", false};
+	provenance.RecordFunction(mixed, true, 2);
+	auto function_key = FunctionKey({"MIXED", {"finance", "REPORTS"}, "FUNC", "scalar"});
+	Check(provenance.function_entries.count(function_key));
+	Check(provenance.function_entries.find(function_key)->internal == false);
+	Check(provenance.caller_implementations.count(function_key));
+	Check(mixed.catalog == "MiXeD" && mixed.name == "FuNc");
+	Provenance legacy, retained;
+	Identity minimum{"system", {"main"}, "min", "aggregate", true};
+	legacy.RecordFunction(minimum, true, 1);
+	retained.RecordFunction(minimum, true, 2);
+	Check(legacy.caller_implementations.count({"system", {"main"}, "arg_min", "aggregate"}));
+	Check(!retained.caller_implementations.count({"system", {"main"}, "arg_min", "aggregate"}));
+	Check(retained.caller_implementations.count(minimum));
 	auto finance = ObjectKey("memory", {"finance", "reports"}, "orders");
 	auto sales = ObjectKey("memory", {"sales", "reports"}, "orders");
 	provenance.caller_objects.insert(finance);

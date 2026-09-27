@@ -1,0 +1,47 @@
+{
+  "inventory": "mysql",
+  "extension": "mysql_scanner",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/mysql_scanner.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/mysql_scanner.duckdb_extension.gz",
+      "compressed_sha256": "d8488511585daf4c6d2ea4b430128291c567e1af33987465fd16f6d48fb309f8",
+      "decompressed_sha256": "8a404c80eae753b6a7b4d27702966600f75bf44532750a211facb6c05c2fbe8d",
+      "compressed_bytes": 13664026,
+      "decompressed_bytes": 43470598,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "c40fd3d3e1",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/mysql_scanner.cmake",
+    "descriptor_sha256": "94cb1a315fdf02612fc230686d9dd6306739f5425c294123a8ad0ce049357c3e",
+    "descriptor_text": "if (NOT MINGW AND NOT ${WASM_ENABLED})\n    duckdb_extension_load(mysql_scanner\n            DONT_LINK\n            GIT_URL https://github.com/duckdb/duckdb-mysql\n            GIT_TAG c40fd3d3e16ad7061f0a32b9affecb6604f71015\n            SUBMODULES database-connector\n            APPLY_PATCHES\n            )\nendif()\n",
+    "repository": "https://github.com/duckdb/duckdb-mysql",
+    "revision": "c40fd3d3e16ad7061f0a32b9affecb6604f71015",
+    "source_url": "https://github.com/duckdb/duckdb-mysql/tree/c40fd3d3e16ad7061f0a32b9affecb6604f71015",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/mysql_scanner/0002-cast-expression-target-type.patch",
+        "sha256": "599c793dc613154031cfe0d88c11d4f64fb718049c369c1d409fc6a6799b5cb6"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/mysql_scanner/0003-literal-constant-expression.patch",
+        "sha256": "37e11cd3b776e364529c30fc1cb32448248230cbd892493bf8451f8472758627"
+      }
+    ]
+  }
+}

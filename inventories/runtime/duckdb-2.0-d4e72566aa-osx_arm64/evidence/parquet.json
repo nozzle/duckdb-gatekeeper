@@ -1,0 +1,33 @@
+{
+  "inventory": "parquet",
+  "extension": "parquet",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/parquet.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/parquet.duckdb_extension.gz",
+      "compressed_sha256": "230e7e17c9f01b6031dc3276e34a67b5d14063358c036d065ea3aafeb9377a97",
+      "decompressed_sha256": "e41435b05db719f63a2eabeb7d3400409f0f3a0ecf836a79d54b0744b75b2ac4",
+      "compressed_bytes": 7015742,
+      "decompressed_bytes": 24440942,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "v2.0.0-alpha42986",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "source_url": "https://github.com/duckdb/duckdb/tree/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/extension/parquet",
+    "revision": "d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143"
+  }
+}

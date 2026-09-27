@@ -1,0 +1,431 @@
+{
+  "active_extension": "unity_catalog",
+  "artifacts": [
+    {
+      "bytes": 16010974,
+      "download_sha256": "758acc0b0c4fbf09506f387ff6f52826b1038b7b6849ded39928d2f992945230",
+      "name": "httpfs",
+      "repository": "core",
+      "sha256": "10514b4ef19f80bf4ec4bf90c124f5d34625f2606263b40ae8ec7979905bb779",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/httpfs.duckdb_extension.gz",
+      "version": "827222f"
+    },
+    {
+      "bytes": 20065358,
+      "download_sha256": "2bde12c71c010ef3e4e510504dce276eb4ae77dea150ade1a4de632832604bbf",
+      "name": "aws",
+      "repository": "core",
+      "sha256": "39c5d8143f5af2cbfd95db4693aa61168ab75f06c87eb14fc02b64769bc48032",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/aws.duckdb_extension.gz",
+      "version": "efa54a9"
+    },
+    {
+      "bytes": 25394854,
+      "download_sha256": "b1b157f1292ffa661d2fbe6cc8ff2d2fe7081810ab3352a590a8fdb8a788a292",
+      "name": "unity_catalog",
+      "repository": "core",
+      "sha256": "e51f0388555c9b4833bba392c09690817194914a7576441acda09dece63c2b2a",
+      "url": "https://extensions.duckdb.org/v1.5.5/osx_arm64/unity_catalog.duckdb_extension.gz",
+      "version": "fd85147"
+    }
+  ],
+  "attempts": [
+    {
+      "phase": "extension_capture",
+      "status": "ok"
+    }
+  ],
+  "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
+  "capture_protocol": "gatekeeper-isolated-staged-capture-v2",
+  "dependencies_loaded": [
+    "aws",
+    "httpfs"
+  ],
+  "engine": {
+    "codename": "Variegata",
+    "extension_abi": "v1.5.5",
+    "library_version": "v1.5.5",
+    "native_module_sha256": "52cf823c8d5adab72c7fcc8c1d10cf15acb6a1beab1fb8ea4358b88b8f77b9ae",
+    "platform": "osx_arm64",
+    "python_package_version": "1.5.5",
+    "python_version": "3.13.2",
+    "source_id": "d8cdaa33fd"
+  },
+  "function_count": 2907,
+  "functions": {
+    "added": [
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "load_aws_credentials",
+        "named_parameters": {
+          "redact_secret": "BOOLEAN",
+          "set_region": "BOOLEAN"
+        },
+        "parameters": [],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "unity_catalog_checkpoint_table",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      },
+      {
+        "catalog": "system",
+        "kind": "table",
+        "macro": null,
+        "name": "unity_catalog_force_checkpoint_table",
+        "named_parameters": {},
+        "parameters": [
+          "VARCHAR"
+        ],
+        "returns": null,
+        "schema_path": [
+          "main"
+        ],
+        "side_effects": null,
+        "varargs": null
+      }
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "initial_extensions": [
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    }
+  ],
+  "install_names": [
+    "httpfs",
+    "aws",
+    "unity_catalog"
+  ],
+  "inventory": "unity_catalog",
+  "load_names": [
+    "httpfs",
+    "aws",
+    "unity_catalog"
+  ],
+  "loaded_extensions": [
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "aws",
+      "version": "efa54a9"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "core_functions",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "httpfs",
+      "version": "827222f"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "icu",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "json",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "STATICALLY_LINKED",
+      "name": "parquet",
+      "version": "v1.5.5"
+    },
+    {
+      "install_mode": "CUSTOM_PATH",
+      "name": "unity_catalog",
+      "version": "fd85147"
+    }
+  ],
+  "mode": "verified",
+  "phase": "extension_capture",
+  "repository": "core",
+  "resolved_name": "unity_catalog",
+  "schema_version": 2,
+  "snapshot_type": "extension_delta",
+  "stages": [
+    {
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "before"
+    },
+    {
+      "functions": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "b3a7a67b474d9a5cf3c479d23d2d3d925bb015cae6230137ff4e2fd4d28c2f67",
+      "load_name": "httpfs",
+      "loaded_extensions": [
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "httpfs",
+          "version": "827222f"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "dependency"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "load_aws_credentials",
+            "named_parameters": {
+              "redact_secret": "BOOLEAN",
+              "set_region": "BOOLEAN"
+            },
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "load_aws_credentials",
+            "named_parameters": {
+              "redact_secret": "BOOLEAN",
+              "set_region": "BOOLEAN"
+            },
+            "parameters": [],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "b227913c942dcb09664f2c6453befea925f70bf0d15139b82b52b7ea630e0677",
+      "load_name": "aws",
+      "loaded_extensions": [
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "aws",
+          "version": "efa54a9"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "httpfs",
+          "version": "827222f"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        }
+      ],
+      "stage": "dependency"
+    },
+    {
+      "functions": {
+        "added": [
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "unity_catalog_checkpoint_table",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          },
+          {
+            "catalog": "system",
+            "kind": "table",
+            "macro": null,
+            "name": "unity_catalog_force_checkpoint_table",
+            "named_parameters": {},
+            "parameters": [
+              "VARCHAR"
+            ],
+            "returns": null,
+            "schema_path": [
+              "main"
+            ],
+            "side_effects": null,
+            "varargs": null
+          }
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "functions_sha256": "8631c9656ebd5932d339f7f307c8d46498c4a8acdfb473c56661433a2c262cd6",
+      "load_name": "unity_catalog",
+      "loaded_extensions": [
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "aws",
+          "version": "efa54a9"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "core_functions",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "httpfs",
+          "version": "827222f"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "icu",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "json",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "STATICALLY_LINKED",
+          "name": "parquet",
+          "version": "v1.5.5"
+        },
+        {
+          "install_mode": "CUSTOM_PATH",
+          "name": "unity_catalog",
+          "version": "fd85147"
+        }
+      ],
+      "stage": "target"
+    }
+  ],
+  "stages_sha256": "bf957e7bc8f188b40eeecc0ba19803e9ed464899be3e5840333954292ec4d78a",
+  "status": "ok"
+}

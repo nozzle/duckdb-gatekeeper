@@ -108,7 +108,8 @@ void CheckParameterHandles(Connection &catalog) {
 	CreateTableFunctionInfo info(
 	    TableFunction("parameter_probe", {LogicalType::BIGINT}, ParameterProbe, BindParameterProbe));
 	agent.context->RegisterFunction(info);
-	Run(catalog, "CALL gatekeeper_configure(allowed_functions := ['parameter_probe', 'getvariable'])");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}, "
+	             "{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	auto handle = agent.Prepare("SELECT * FROM parameter_probe($x)");
 	if (handle->HasError())
 		Fail("parameter probe prepare: " + handle->GetError());
@@ -142,8 +143,8 @@ void CheckParameterHandles(Connection &catalog) {
 	expect_value(empty, Value(LogicalType::BIGINT));
 	variables[Identifier("x")] = Value::BIGINT(99);
 	expect_value(empty, Value::BIGINT(99));
-	Run(catalog, "CALL gatekeeper_configure(allowed_functions := ['parameter_probe'], "
-	             "blocked_functions := ['getvariable'])");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	parameter_bind_calls = 0;
 	ExpectRefused(Drain(handle->Execute(empty)), "native handle implicit fallback");
 	ExpectRefused(Drain(handle->Execute(explicit_values)), "native handle ambiguous explicit input");
@@ -160,8 +161,8 @@ void CheckParameterHandles(Connection &catalog) {
 		Fail("refused fallback reached the table function bind callback");
 	// Validation can authorize a known fallback, but must refuse it before binding when blocked.
 	ClientConfig::GetConfig(*catalog.context).user_variables[Identifier("x")] = Value::BIGINT(42);
-	Run(catalog, "CALL gatekeeper_configure(allowed_functions := ['parameter_probe'], "
-	             "blocked_functions := ['getvariable'])");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	auto validation =
 	    catalog.Query("SELECT allowed, code FROM gatekeeper_validate('SELECT * FROM parameter_probe($x)')");
 	if (validation->HasError())
@@ -174,11 +175,12 @@ void CheckParameterHandles(Connection &catalog) {
 	ExpectRefused(Drain(handle->Execute(empty)), "native handle after variable change");
 	if (parameter_bind_calls != 0)
 		Fail("changed policy or variable reached the table function bind callback");
-	Run(catalog, "CALL gatekeeper_configure(allowed_functions := ['parameter_probe', 'getvariable'])");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}, "
+	             "{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	expect_value(empty, Value::BIGINT(99));
 	expect_value(explicit_values, Value::BIGINT(7));
-	Run(catalog, "CALL gatekeeper_configure(allowed_functions := ['parameter_probe'], "
-	             "blocked_functions := ['getvariable'])");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'parameter_probe'}], "
+	             "blocked_functions := [{catalog:'system',schema_path:['main'],name:'getvariable',type:'scalar'}])");
 	variables.erase(Identifier("x"));
 	ExpectRows(Drain(handle->Execute(explicit_values)), 0, "same handle after collision removed");
 	ExpectRows(Drain(agent.context->Query("SELECT * FROM parameter_probe($x)", direct_parameters)), 0,
@@ -215,6 +217,14 @@ int main() {
 	// Prepare both shapes while the table is allowed, and keep the handles.
 	const vector<Value> one{Value::INTEGER(0)};
 	const vector<Value> none;
+	Run(catalog, "CREATE MACRO reporting.identity_function(x) AS x");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := "
+	             "[{catalog:'memory',schema_path:['reporting'],name:'identity_function',type:'macro'}])");
+	auto function_handle = agent.Prepare("SELECT reporting.identity_function(?::INTEGER)");
+	ExpectRows(Execute(*function_handle, one), 1, "qualified function before policy change");
+	Run(catalog, "CALL gatekeeper_configure()");
+	ExpectRefused(Execute(*function_handle, one), "prepared qualified grant withdrawal");
+	Allow(catalog, "*");
 	auto with_parameter = agent.Prepare("SELECT x FROM reporting.leak WHERE x > ?");
 	auto without_parameter = agent.Prepare("SELECT x FROM reporting.leak");
 	if (with_parameter->HasError())

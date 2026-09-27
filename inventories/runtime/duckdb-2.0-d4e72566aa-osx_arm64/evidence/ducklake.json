@@ -1,0 +1,51 @@
+{
+  "inventory": "ducklake",
+  "extension": "ducklake",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/ducklake.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/ducklake.duckdb_extension.gz",
+      "compressed_sha256": "d59a6c4109cc80e3d93159151bc461f1344c342bd1c03a3d4c01bb6066629947",
+      "decompressed_sha256": "344d30fe9879fa28af5678bad54da6eb19f0c6110945871e88506efd65e6bc2f",
+      "compressed_bytes": 11975433,
+      "decompressed_bytes": 40488718,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "e8924cfc9c",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/ducklake.cmake",
+    "descriptor_sha256": "5daef8aafda68a8bcb169abb3692dd4cf31ced05f6bf2151fb547ee9d967d811",
+    "descriptor_text": "duckdb_extension_load(ducklake\n    LOAD_TESTS\n    GIT_URL https://github.com/duckdb/ducklake\n    GIT_TAG e8924cfc9ccbb9a1a148e8ff367b75d493ca9df5\n    APPLY_PATCHES\n)\n",
+    "repository": "https://github.com/duckdb/ducklake",
+    "revision": "e8924cfc9ccbb9a1a148e8ff367b75d493ca9df5",
+    "source_url": "https://github.com/duckdb/ducklake/tree/e8924cfc9ccbb9a1a148e8ff367b75d493ca9df5",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/ducklake/0012-single-query-result-type.patch",
+        "sha256": "ad76fd6dd7cc87be22b9f84856340ba50c3a875f83b9c198d29846086319202f"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/ducklake/0013-skip-slow-musl-tests.patch",
+        "sha256": "35fdbae736418c46e2b3d3f4e99500af0dd7506aadc06cf9943c58e470f8f770"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/ducklake/0014-skip-schema-cache-tests-on-musl.patch",
+        "sha256": "b497d516c812f305bbd94b146a402e4262e1a34387bce9c8e14b6f9162540be4"
+      }
+    ]
+  }
+}

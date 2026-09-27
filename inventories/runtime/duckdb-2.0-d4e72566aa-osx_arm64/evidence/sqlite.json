@@ -1,0 +1,38 @@
+{
+  "inventory": "sqlite",
+  "extension": "sqlite_scanner",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/sqlite_scanner.duckdb_extension.gz",
+      "compressed_sha256": "8527957f5f9ba2692ac086efc1efe61d07a13578f851b65784ff6780e2be2f1d",
+      "decompressed_sha256": "bbfc1744fe7913920736fa758ff4eee220edebd793d6dc9aa946469abde8a6bb",
+      "compressed_bytes": 11942189,
+      "decompressed_bytes": 39726022,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "982cb44841",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/sqlite_scanner.cmake",
+    "descriptor_sha256": "a26dd19986ad5e657b5f78102a64e82d69bd99f743edfa5482183459eb03a00e",
+    "descriptor_text": "# Static linking on windows does not properly work due to symbol collision\nif (WIN32)\n    set(STATIC_LINK_SQLITE \"DONT_LINK\")\nelse ()\n    set(STATIC_LINK_SQLITE \"\")\nendif()\nduckdb_extension_load(sqlite_scanner\n        ${STATIC_LINK_SQLITE} LOAD_TESTS\n        GIT_URL https://github.com/duckdb/duckdb-sqlite\n        GIT_TAG 982cb44841b847e15d44a927adf0ac17f0657f81\n        SUBMODULES database-connector\n        )\n",
+    "repository": "https://github.com/duckdb/duckdb-sqlite",
+    "revision": "982cb44841b847e15d44a927adf0ac17f0657f81",
+    "source_url": "https://github.com/duckdb/duckdb-sqlite/tree/982cb44841b847e15d44a927adf0ac17f0657f81",
+    "engine_patch_files": []
+  }
+}

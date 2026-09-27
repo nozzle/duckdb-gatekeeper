@@ -1,0 +1,79 @@
+{
+  "inventory": "excel",
+  "extension": "excel",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/excel.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/excel.duckdb_extension.gz",
+      "compressed_sha256": "61853eebd8836ef4f06656709f5b822b83be8a10c06ac6e1a156ccbe13ffc321",
+      "decompressed_sha256": "4817fc3e4e96c870d2d093f21832cf90a0dfc7bf34e588e6ddc1c1907e5a8d3f",
+      "compressed_bytes": 3501693,
+      "decompressed_bytes": 12129822,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "9421a2d75b",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/excel.cmake",
+    "descriptor_sha256": "da251b61c0337077c944980dce44dee460c0772fec37348e6259ac3e863e9416",
+    "descriptor_text": "duckdb_extension_load(excel\n    LOAD_TESTS\n    GIT_URL https://github.com/duckdb/duckdb-excel\n    GIT_TAG 9421a2d75bd7544336caa73e5f9e6063cc7f6992\n    INCLUDE_DIR src/excel/include\n    APPLY_PATCHES\n    )\n",
+    "repository": "https://github.com/duckdb/duckdb-excel",
+    "revision": "9421a2d75bd7544336caa73e5f9e6063cc7f6992",
+    "source_url": "https://github.com/duckdb/duckdb-excel/tree/9421a2d75bd7544336caa73e5f9e6063cc7f6992",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0001-vector-fix.patch",
+        "sha256": "a0a4cf1633400cd7ef0b23ece0bc7f099c82ecb535d2a1ded73cebd972f674e2"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0002_vector_sizes.patch",
+        "sha256": "4b9b6d59538d287c9438b366ff8585b4cbbe20b902ea8ae526d59d94b7421a87"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0003-function-expr.patch",
+        "sha256": "a70e727b45c74c2360b1df7fe02af42eb8f41233bc07ec286242d1724302a6c3"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0004-identifier-refactor.patch",
+        "sha256": "b2273567a6056af87bfdb63890eca697431986f8a9a77b11aff2ea35bed87164"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0005-timebase.patch",
+        "sha256": "64a5b55ed0c1ad1d94819fd6d0468d2d1546b8683981ad8e0caac501d8fd0e58"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0006-copy-option-identifier-map.patch",
+        "sha256": "fab8c757f522545adcbd75278123c7eeaefd2762763852fcfae63f7d923d4f99"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0006-table-function-bind-identifiers.patch",
+        "sha256": "295e2e436290e5613c5b2072aaa528879d509754f9443dde074a0dd9552988f8"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0007-value-optional-trycast.patch",
+        "sha256": "8bd67aab4bdd4b595650c32c8a8a008f8744d287e4a98c30e017e07ce1ff2bae"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0008-copy-bind-identifiers.patch",
+        "sha256": "b9bdb25a4ba0ef3e4ca4634ed71ffb39492ce43084eb41661d34ce2d0bfb840c"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/excel/0009-literal-constant-expression.patch",
+        "sha256": "95e5a7ca2a33386a7a9c484efcbd9bf423a85ade87616bd55f10a8ff80caba33"
+      }
+    ]
+  }
+}

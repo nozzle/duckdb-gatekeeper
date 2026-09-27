@@ -1,0 +1,63 @@
+# name: test/sql/value_window_identity.test
+# description: first/last OVER authorize the *_value intrinsic on both engines.
+# group: [gatekeeper]
+
+require gatekeeper
+
+# 1.5 additionally retrieves first/last's real aggregate entries. Grant those
+# explicitly so identical SQL and policy exercise the window on either engine.
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{catalog:'system',schema_path:['main'],name:'first',type:'aggregate'}, {catalog:'system',schema_path:['main'],name:'last',type:'aggregate'}, {catalog:'system',schema_path:['main'],name:'first_value',type:'window'}, {catalog:'system',schema_path:['main'],name:'last_value',type:'window'}], blocked_functions := [{schema_path:['main'],name:'first',type:'window'}, {schema_path:['main'],name:'last',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(x) OVER (ORDER BY x), last(x) OVER (ORDER BY x), first_value(x) OVER (), last_value(x) OVER () FROM (VALUES (1), (2)) t(x)');
+----
+ok
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+query IIII agent
+SELECT first(1) OVER (), last(2) OVER (), first_value(3) OVER (), last_value(4) OVER ();
+----
+1	2	3	4
+
+statement ok
+CALL gatekeeper_configure(blocked_functions := [{catalog:'system',schema_path:['main'],name:'first_value',type:'window'}, {catalog:'system',schema_path:['main'],name:'last_value',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(1) OVER ()');
+----
+forbidden
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT last(1) OVER ()');
+----
+forbidden
+
+statement error agent
+SELECT first(1) OVER ();
+----
+Gatekeeper denied this statement
+
+statement error agent
+SELECT last_value(1) OVER ();
+----
+Gatekeeper denied this statement
+
+# Aggregate permissions and implementation window permissions remain distinct.
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(x), last(x) FROM (VALUES (1)) t(x)');
+----
+ok
+
+statement ok
+CALL gatekeeper_configure(use_default_functions := false, allowed_functions := [{schema_path:['main'],name:'first',type:'aggregate'}, {schema_path:['main'],name:'last',type:'aggregate'}, {schema_path:['main'],name:'first',type:'window'}, {schema_path:['main'],name:'last',type:'window'}]);
+
+query T
+SELECT code FROM gatekeeper_validate('SELECT first(1) OVER (), last(1) OVER ()');
+----
+forbidden
+
+statement ok
+CALL gatekeeper_configure();

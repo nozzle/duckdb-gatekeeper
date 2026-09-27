@@ -1,0 +1,51 @@
+{
+  "inventory": "postgres",
+  "extension": "postgres_scanner",
+  "attempts": [
+    {
+      "url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/postgres_scanner.duckdb_extension.gz",
+      "http_status": 200,
+      "final_url": "https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/postgres_scanner.duckdb_extension.gz",
+      "compressed_sha256": "d9415c538b7a5ba4a60f869e87e11bd0c12681a47e3f3f7e9412d3088f4b4ea1",
+      "decompressed_sha256": "9e05dfefc8cf39c4f9bf6aeed25f4f83dfff5d1d8428e0e29862ed457f4215db",
+      "compressed_bytes": 13743412,
+      "decompressed_bytes": 43672022,
+      "result": "downloaded",
+      "footer": {
+        "magic": "4",
+        "platform": "osx_arm64",
+        "engine_or_c_api_version": "v2.0.0-alpha42986",
+        "extension_version": "bc6aab54de",
+        "abi": "CPP",
+        "remaining_fields": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "other_platform_probes": [],
+  "source": {
+    "descriptor_url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/config/extensions/postgres_scanner.cmake",
+    "descriptor_sha256": "49cd3e83aebc831140b68be1829521ee902d42f668f41f9964498cbb4b4598dc",
+    "descriptor_text": "# Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test\n#       uses a remote rds server but that's not something we want to run here.\nif (NOT MINGW AND NOT ${WASM_ENABLED})\n    duckdb_extension_load(postgres_scanner\n            DONT_LINK\n            GIT_URL https://github.com/duckdb/duckdb-postgres\n            GIT_TAG bc6aab54dea43be1f4e218aa7cca06d915ad18ea\n            SUBMODULES database-connector\n            APPLY_PATCHES\n            )\n endif()\n",
+    "repository": "https://github.com/duckdb/duckdb-postgres",
+    "revision": "bc6aab54dea43be1f4e218aa7cca06d915ad18ea",
+    "source_url": "https://github.com/duckdb/duckdb-postgres/tree/bc6aab54dea43be1f4e218aa7cca06d915ad18ea",
+    "engine_patch_files": [
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/postgres_scanner/0001-fix-ninja-1.13-meson-install.patch",
+        "sha256": "8f045792aab38611fb72094ee8deb7dbaff686790f136e2a5f7a4de5716e124a"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/postgres_scanner/0002-table-catalog-entry-columns.patch",
+        "sha256": "921c5fa2ee1b0737593950b7a4a8d01472c010f8c51ffda246d6557321407bca"
+      },
+      {
+        "url": "https://github.com/duckdb/duckdb/blob/d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143/.github/patches/extensions/postgres_scanner/0003-literal-constant-expression.patch",
+        "sha256": "21018c942e794fc243906f4d3c8c474cc367eca20ba18653bc4b8d9473bb8702"
+      }
+    ]
+  }
+}
