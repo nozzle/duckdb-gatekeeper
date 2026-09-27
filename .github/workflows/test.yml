@@ -61,6 +61,9 @@ jobs:
           python -m pip install --require-hashes -r test/integration/requirements.txt
           python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL iceberg; INSTALL ducklake; INSTALL httpfs')"
           python scripts/test_lakehouses.py
+      - name: Local Quack scope integration
+        if: runner.os == 'Linux'
+        run: python scripts/test_quack.py
       - name: Native fuzz smoke test
         if: runner.os == 'Linux'
         run: |
