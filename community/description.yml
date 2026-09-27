@@ -285,7 +285,7 @@ docs:
     - **Binding can perform I/O.** Prepared statements may bind before enforcement hooks run.
       Unsupported deferred Quack bodies and native DuckDB 1.5 preparation of constant remote
       SQL can execute remotely before a later refusal; see
-      [remote scope and preparation limits](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.3.0/docs/quack.md).
+      [remote scope and preparation limits](https://github.com/nozzle/duckdb-gatekeeper/blob/main/docs/quack.md).
     - **Parsing can have side effects.** DuckDB evaluates some `PRAGMA` arguments before
       enforcement; validate complete text first if your host cannot accept that residual.
     - **The host controls the environment.** Restrict external access and autoloading where
