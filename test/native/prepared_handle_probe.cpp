@@ -88,6 +88,26 @@ void ExpectRefused(const Outcome &outcome, const string &what) {
 		Fail(what + ": admitted with " + std::to_string(outcome.rows) + " rows, expected a refusal");
 }
 
+void SecureViews(Connection &catalog, Connection &agent) {
+	if (string(DuckDB::LibraryVersion()).find("v2.") != 0)
+		return; // Secure views are not part of the 1.5 grammar.
+	Run(catalog, "INSERT INTO secret.salaries VALUES (1), (2); "
+	             "CREATE SECURE VIEW reporting.secure AS SELECT x FROM secret.salaries WHERE x = 1");
+	Allow(catalog, "secure");
+	auto parameterized = agent.Prepare("SELECT x FROM reporting.secure WHERE x > ?");
+	auto plain = agent.Prepare("SELECT x FROM reporting.secure");
+	const vector<Value> one{Value::INTEGER(0)};
+	const vector<Value> none;
+	ExpectRows(Execute(*parameterized, one), 1, "secure view parameterized handle");
+	ExpectRows(Execute(*plain, none), 1, "secure view parameterless handle");
+	Allow(catalog, "orders");
+	ExpectRefused(Execute(*parameterized, one), "secure view parameterized handle after withdrawal");
+	ExpectRefused(Execute(*plain, none), "secure view parameterless handle after withdrawal");
+	Allow(catalog, "secure");
+	ExpectRows(Execute(*parameterized, one), 1, "secure view parameterized handle after restoration");
+	ExpectRows(Execute(*plain, none), 1, "secure view parameterless handle after restoration");
+}
+
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 static idx_t parameter_bind_calls = 0;
 static Value last_parameter;
@@ -261,6 +281,7 @@ int main() {
 		ExpectRows(Execute(*prepared_while_withdrawn, none), 2,
 		           "handle prepared while withdrawn, after the table was restored");
 
+	SecureViews(catalog, agent);
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	CheckParameterHandles(catalog);
 #endif

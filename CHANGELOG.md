@@ -12,6 +12,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Changed
 
+- DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
+  preserving the engine's optimization boundary and transitive host evidence. Validation results
+  and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
+  its conservative query-wide attribution can include hidden dependencies whose names match
+  caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
+
 - Keep function replacement blocks effective through no-op casts, `coalesce`, and identity
   macros. DuckDB 1.5 conservatively refuses ambiguous mixed caller/trusted replacement
   names; 2.0 uses retained definitions to avoid unrelated replacement attribution.

@@ -2,15 +2,17 @@
 import pytest
 
 from support.audit import decisions, enable
+from support.artifact import ENGINE_MAJOR
 from support.enforcement import attempt, enforce
 from support.typed_helpers import configure, function_rules, validate
 
 
-@pytest.mark.parametrize("kind", ["table", "view"])
+@pytest.mark.parametrize("kind", ["table", "view", pytest.param(
+    "secure view", marks=pytest.mark.skipif(ENGINE_MAJOR < 2, reason="Secure views require DuckDB 2.0"))])
 @pytest.mark.parametrize("blocked", [False, True])
 @pytest.mark.parametrize("log_only", [False, True])
 def test_resolved_object_identity_in_validation_and_audit(db, kind, blocked, log_only):
-    # The same spelling is a table or a view in separate databases: syntax and rule cannot tell them apart.
+    # The same spelling is a table or a (secure) view: syntax and rule cannot tell them apart.
     db.execute('CREATE SCHEMA "Reporting.Path"')
     definition = "(i INTEGER)" if kind == "table" else "AS SELECT 1 AS i"
     db.execute(f'CREATE {kind} "Reporting.Path"."Orders" {definition}')
@@ -24,7 +26,8 @@ def test_resolved_object_identity_in_validation_and_audit(db, kind, blocked, log
     [violation] = expected["violations"]
     assert violation == {
         "rule": "table", "message": "object is blocked" if blocked else "object is not allowed",
-        **object_rule, "function_name": "", "position": None, "function_type": "", "object_type": kind,
+        **object_rule, "function_name": "", "position": None, "function_type": "",
+        "object_type": "table" if kind == "table" else "view",
     }
     assert expected["objects"] == expected["functions"] == expected["caller_objects"] == []
     [validation] = decisions(db, "mode = 'validate'")
