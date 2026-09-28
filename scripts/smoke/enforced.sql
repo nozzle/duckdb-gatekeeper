@@ -38,12 +38,9 @@ CALL enable_logging('Gatekeeper');
 -- @host
 SET logging_level = 'debug';
 
--- Only `enforced` is read here: on the DuckDB 2.0 alpha, an expression over both columns of this row
--- (`enforced AND warnings IS NOT NULL`) raises an internal error, and `warnings IS NOT NULL` evaluated after
--- `enforced` returns false; see nozzle/duckdb-gatekeeper#102. scripts/smoke_loadable.py reads both as
--- separate columns, which is correct on both engines.
+-- Exercise both vector cardinalities in one expression (#102).
 -- @agent
-SELECT CASE WHEN NOT coalesce(enforced, false) THEN error('gatekeeper_enforce did not latch') END
+SELECT CASE WHEN NOT coalesce(enforced AND warnings IS NOT NULL, false) THEN error('gatekeeper_enforce did not latch') END
 FROM gatekeeper_enforce();
 
 -- The engine executes what the policy allows and refuses the rest before it runs, through the host's hooks.

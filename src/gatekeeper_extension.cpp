@@ -123,9 +123,7 @@ static void GatekeeperValidate(ClientContext &context, TableFunctionInput &input
 	       decision);
 	auto result = ResultValue(decision);
 	auto &fields = StructValue::GetChildren(result);
-	for (idx_t column = 0; column < fields.size(); column++)
-		output.SetValue(column, 0, fields[column]);
-	output.SetCardinality(1);
+	engine::AppendResultRow(output, fields);
 	state.finished = true;
 }
 
