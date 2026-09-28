@@ -1,3 +1,7 @@
+# name: test/sql/result_cardinality.test
+# description: Result vectors retain one-row cardinality through projections and filters.
+# group: [gatekeeper]
+
 require gatekeeper
 
 query II first
