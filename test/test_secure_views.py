@@ -124,7 +124,7 @@ def test_private_and_execution_scan_accounting_audit_and_log_only_parity(secure,
         settle(agent)
     mode = "log_only" if log_only else "enforce"
     [record] = decisions(secure, f"mode = '{mode}' AND statement = {literal(sql)}")
-    for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
+    for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects", "caller_functions"]:
         assert record[column] == expected[column], (column, record, expected)
     if expected["allowed"]:
         assert record["boundary"] == "execution"
@@ -195,7 +195,7 @@ def test_secure_view_substitution_origin_and_violation_audit(db, expression, tar
         settle(agent)
     mode = "log_only" if log_only else "enforce"
     [record] = decisions(db, f"mode = '{mode}' AND statement = {literal(sql)}")
-    for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
+    for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects", "caller_functions"]:
         assert record[column] == denied[column], (column, record, denied)
 
 

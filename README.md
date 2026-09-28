@@ -243,7 +243,7 @@ result columns. Inspect the global policy with `current_setting('gatekeeper_poli
 ### Result
 
 Each call returns exactly one row unless it raises an exception. `violations`,
-`objects`, `functions`, and `caller_objects` remain lists of STRUCTs within their respective columns.
+`objects`, `functions`, `caller_objects`, and `caller_functions` remain lists of STRUCTs within their respective columns.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
@@ -256,6 +256,7 @@ Each call returns exactly one row unless it raises an exception. `violations`,
 | `objects` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `table`, `type` (`table`/`view`/`replacement`) the query bound to. Empty unless `ok`. |
 | `functions` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `name`, `type` (`scalar`, `aggregate`, `table`, `macro`, `table_macro`, `pragma`, `window`). Empty unless `ok`. |
 | `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
+| `caller_functions` | STRUCT[] | Identities in `functions` checked by caller-scoped function policy at any authorization point. Same identity fields; sorted, deduplicated, empty unless `ok`. |
 
 Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
 `replacement_scan`, `bind_time_expression`, `statement`, `limit`, `unsupported_structure`.
@@ -272,12 +273,14 @@ identify the denied table or view. `object_type` is `table` or `view` for allowl
 explicit blocks, and internal-object denials; `rule = 'table'` alone does not distinguish
 a table from a view. `object_type = ''` for unresolved objects and function-only or other
 nonobject violations, including replacement-reader denials whose `table` holds a written
-path. No kind is guessed from SQL syntax. The `objects`, `functions`, and `caller_objects`
+path. No kind is guessed from SQL syntax. The `objects`, `functions`, `caller_objects`, and `caller_functions`
 evidence lists remain empty on every failure.
 
 The same shape is returned in `duckdb_logs_parsed('Gatekeeper')` for validation, enforced,
 and log-only decisions. Consumers that pin the violation STRUCT schema must include both
 trailing fields, `function_type VARCHAR` and `object_type VARCHAR`.
+`caller_functions` appends validation column 10. In audit records it precedes `statement`,
+shifting `statement`, `statement_length`, `policy_hash`, and `new_value` by one position.
 
 > [!TIP]
 > Branch on `code` and `violations[].rule`, not on message text.
@@ -286,9 +289,9 @@ trailing fields, `function_type VARCHAR` and `object_type VARCHAR`.
 SELECT * FROM gatekeeper_validate('SELECT 1');
 ```
 
-| allowed | code | violations | error_type | error_message | position | objects | functions | caller_objects |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| true | ok | [] | '' | '' | NULL | [] | [] | [] |
+| allowed | code | violations | error_type | error_message | position | objects | functions | caller_objects | caller_functions |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| true | ok | [] | '' | '' | NULL | [] | [] | [] | [] |
 
 In these result tables, `''` denotes an empty string and `NULL` a SQL NULL.
 
@@ -339,7 +342,7 @@ FROM gatekeeper_validate('SELECT * FROM missing_table');
 | --- | --- | --- | --- | --- |
 | false | binding | [] | Catalog | Table with name missing_table does not exist! |
 
-All three denials return empty `objects`, `functions`, and `caller_objects` lists. Policy denials
+All three denials return empty `objects`, `functions`, `caller_objects`, and `caller_functions` lists. Policy denials
 have empty `error_type` and `error_message`; the details are in `violations`.
 
 </details>
@@ -357,7 +360,7 @@ For Quack, this evidence describes checked local binding, not recursively comple
 lineage; see the [remote support matrix](docs/quack.md).
 
 Validation results and audit diagnostics are **privileged host information**, including
-`objects`, `functions`, `caller_objects`, violations, and engine errors. On DuckDB 2.0,
+`objects`, `functions`, `caller_objects`, `caller_functions`, violations, and engine errors. On DuckDB 2.0,
 secure views use the same table rules and `type = 'view'` identity as ordinary views;
 their transitive dependencies remain in host evidence. `caller_objects` is conservative
 query-wide attribution: a caller-written name can match a dependency inside a trusted
@@ -366,8 +369,9 @@ to untrusted callers. Applications may expose a minimal decision or a separately
 projection. See [secure views and host-only evidence](docs/security.md#secure-views-and-host-only-evidence).
 
 `functions` remains combined host-facing evidence of caller-attributable functions and
-trusted dependencies. A public `caller_functions` evidence field is explicitly deferred and
-is not implemented; `caller_objects` is the existing conservative catalog-table/view subset.
+trusted dependencies. `caller_functions` is its caller-scoped authorization subset, including
+implied capabilities and conservative over-attribution, not a lexical call list or public-safe
+projection. See [function evidence scope](docs/qualified-functions.md#caller-function-evidence).
 
 ## Table ACL
 

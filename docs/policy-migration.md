@@ -57,3 +57,14 @@ accepts the complete canonical setting: DuckDB casts it before Gatekeeper can
 inspect it, so a legacy field may instead be reported as a NULL canonical field.
 Canonical catalog/type wildcards use empty strings, not NULL; round-trip the value
 returned by `current_setting('gatekeeper_policy')` when using `SET`.
+## Caller function evidence in 0.4.0
+
+Validation appends `caller_functions` as column 10, using the same identity STRUCT as
+`functions`. Existing validation columns retain their positions. Audit records also include it;
+because the result is embedded before audit metadata, `statement`, `statement_length`,
+`policy_hash`, and `new_value` each move one position. Use named fields or update positional
+readers alongside the `function_type`/`object_type` violation-shape migration.
+
+The field is empty on every failed decision, including log-only. See
+[caller function evidence](qualified-functions.md#caller-function-evidence) for the operational
+contract, conservative attribution, unbound preflight names, and unaddressable engine helpers.

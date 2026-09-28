@@ -130,6 +130,14 @@ struct Result {
 	// Resolved catalog tables/views attributed to the caller, a subset of objects. Replacement scans are
 	// reader capabilities, not catalog identities. Like all evidence, exposed only for an allowed result.
 	std::set<Identity> caller_objects;
+	std::set<Identity> caller_functions;
+	void RecordFunction(const Identity &identity, bool caller) {
+		functions.insert(identity);
+		// Lookup and plan authorization enforce independently. A later trusted classification
+		// cannot erase evidence of an earlier caller-scoped policy check on the same identity.
+		if (caller)
+			caller_functions.insert(identity);
+	}
 };
 // Results for the denials that more than one boundary reports, so every boundary spells each one the same way.
 inline constexpr const char *UNSUPPORTED_STATEMENT = "only supported read statements are permitted";

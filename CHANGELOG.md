@@ -6,9 +6,16 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
-- Keep DuckDB 1.5 `first`/`last` window calls available under defaults with two explicit
-  source-backed window identities, and preserve non-internal native function provenance
-  across mixed-case catalog, schema, and function names.
+- Preserve non-internal native function provenance across mixed-case catalog, schema, and
+  function names.
+
+- Append `caller_functions` to validation results and audit decisions: the sorted, deduplicated
+  subset of `functions` checked by caller-scoped policy at any authorization point. Evidence
+  remains empty on failure, including log-only denials. It includes implied capabilities and
+  conservative attribution, not exact lexical calls. Existing validation columns keep their
+  positions; audit `statement`, `statement_length`, `policy_hash`, and `new_value` move by one.
+  See [evidence scope](docs/qualified-functions.md#caller-function-evidence) for unbound preflight
+  names and uncatalogued helpers. Existing authorization and evidence fields are unchanged.
 
 ### Changed
 
@@ -23,7 +30,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
   preserving the engine's optimization boundary and transitive host evidence. Validation results
-  and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
+  and audit diagnostics are explicitly host-only, including engine errors, `caller_functions`, and `caller_objects`:
   its conservative query-wide attribution can include hidden dependencies whose names match
   caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
 
@@ -45,7 +52,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
   `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
   Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
-  The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
+  The `objects`, `functions`, `caller_objects`, and `caller_functions` evidence lists remain empty on failure.
   Update consumers that pin the violation STRUCT schema to include both trailing fields.
 
 - Authorize `first/last OVER` as the `first_value/last_value` windows on both engines,
@@ -79,7 +86,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   an unambiguous system definition recorded by the same authorizing bind; see
   [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
   `functions` remains combined host-facing evidence of caller-attributable functions and trusted
-  dependencies. A public `caller_functions` evidence field is explicitly deferred and is not implemented;
+  dependencies. `caller_functions` exposes the caller-scoped function-policy subset;
   `caller_objects` remains the existing conservative catalog-table/view subset of `objects`.
 - Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
   `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian` on 1.5 or every constant

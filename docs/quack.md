@@ -1,6 +1,6 @@
 # Quack authorization scope
 
-Gatekeeper evidence (`objects`, `caller_objects`, `functions`, and the same audit fields)
+Gatekeeper evidence (`objects`, `caller_objects`, `functions`, `caller_functions`, and the same audit fields)
 describes the **checked local binding**, not recursively complete remote lineage. There is
 no allow-remote override and no evidence-completeness field. Decisions and audit evidence are
 host-only; they may disclose trusted definitions and must not be forwarded to untrusted callers.

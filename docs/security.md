@@ -56,7 +56,7 @@ NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled 
 See [global policy](../README.md#global-policy) in the README.
 
 Validation returns one row with `allowed`, `code`, `violations`, `error_type`,
-`error_message`, `position`, `objects`, `functions`, and `caller_objects` as named columns. Require
+`error_message`, `position`, `objects`, `functions`, `caller_objects`, and `caller_functions` as named columns. Require
 `allowed = true` and `code = 'ok'`. The diagnostic/dependency lists retain nested
 STRUCT elements. SQL text and options accept constant expressions or host-bound
 parameters, not correlated/lateral per-row expressions. For multiple SQL strings,
@@ -225,12 +225,26 @@ if actual != expected:
 Let validation exceptions propagate as failures. The global ceiling must also allow the
 declared objects. A successful decision already establishes the allowed-input subset;
 the equality comparison additionally detects unused declarations. Select named columns:
-`caller_objects` is appended to the result and also included in audit decisions, so positional
-`SELECT *` consumers must accept a ninth column. Existing refusal ordering is unchanged.
+`caller_objects` is column nine and `caller_functions` appends column ten. Both are included
+in audit decisions, where the latter shifts subsequent metadata positions; see the
+[migration note](policy-migration.md#caller-function-evidence-in-040). Existing refusal ordering is unchanged.
 
 `functions` remains combined host-facing evidence, including caller-attributable functions
-and trusted dependencies. A public `caller_functions` evidence field is explicitly deferred
-and is not implemented. `caller_objects` is the existing conservative catalog-table/view subset.
+and trusted dependencies. `caller_functions` is the subset checked by caller-scoped function
+policy at any authorization point; `caller_objects` is the conservative catalog-table/view subset.
+
+For declared function capabilities, require successful validation and check permitted-set
+inclusion: every non-default `caller_functions` identity must be covered by a declared function
+rule. Do not require equality: declarations may be unused and defaults contribute identities.
+Determine default coverage from the reviewed qualified default identities, not a name-only list;
+actual internal-origin checks remain Gatekeeper's responsibility. Prefer passing the declared
+grants as policy so Gatekeeper enforces them directly. Evidence is not a policy replacement.
+See [function evidence scope](qualified-functions.md#caller-function-evidence) for preflight-only
+names, implied capabilities, and engine-specific conservative attribution.
+
+On a function-policy denial, `violations` identifies the offending function (possibly only its
+preflight name); `caller_functions` and all other evidence lists are empty, including log-only
+denials. Hosts cannot mine denied audit evidence for a complete grant set.
 
 **Evidence contract:**
 
@@ -277,7 +291,7 @@ beneath the boundary. DuckDB retains control of its predicate, plan-display, and
 barriers; admitting a secure view does not disable them.
 
 **Validation results and audit diagnostics are privileged host information.** This includes
-`objects`, `functions`, `caller_objects`, violation messages, and engine errors. Secure views
+`objects`, `functions`, `caller_objects`, `caller_functions`, violation messages, and engine errors. Secure views
 do not redact these lists: host evidence retains transitive dependencies under the same
 binding-evidence limits as ordinary views. There is no new identity kind, redaction field,
 or claim of completeness after redaction.
@@ -288,7 +302,8 @@ caller-written name also matches it, even if that name resolves to a CTE in the 
 scope. A refusal can also name that hidden object in `violations`. The tested 2.0 engine
 does not sanitize missing-dependency binding errors inside secure views: dropping a backing
 table can reveal its name in the engine error. Gatekeeper preserves the engine diagnostic,
-including in log-only mode; failed decisions retain the usual empty evidence lists.
+including in log-only mode; failed decisions have empty `objects`, `functions`, `caller_objects`,
+and `caller_functions` lists.
 
 Applications may deliberately expose a minimal decision or a separately reviewed projection
 and should mediate execution errors as well as validation output if names must stay hidden.
@@ -678,7 +693,7 @@ and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
 gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
 `DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
-`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`), so the
+`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`, `caller_functions`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
 the enforcement parity corpus. Each violation has fields in this order:
 `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`,
@@ -687,8 +702,8 @@ Known denied functions retain their catalog/schema/name identity and kind (`func
 Resolved catalog-object denials retain `object_type = 'table'` or `'view'`, including
 allowlist misses, explicit blocks, and `internal_object` denials. The `table` rule can deny
 either kind. Each kind field is `''` when unresolved or inapplicable; replacement-reader
-denials do not infer an object kind from their written path. `objects`, `functions`, and
-`caller_objects` remain empty on failure. This applies equally to `validate`, `enforce`,
+denials do not infer an object kind from their written path. `objects`, `functions`,
+`caller_objects`, and `caller_functions` remain empty on failure. This applies equally to `validate`, `enforce`,
 and `log_only` records returned by `duckdb_logs_parsed('Gatekeeper')`; consumers pinning
 the STRUCT schema must include both trailing kind fields. The rest of the record is:
 

@@ -197,7 +197,7 @@ def test_log_only_connection_records_lake_decisions_and_refuses_nothing(lake, tm
             (write, False, "unsupported", "INFO")], found
         for record in found:
             expected = validate(db, record["statement"], policy)
-            for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects"]:
+            for column in ["allowed", "code", "violations", "objects", "functions", "caller_objects", "caller_functions"]:
                 assert record[column] == expected[column], (record["statement"], column, record, expected)
         assert found[0]["objects"] == [{"catalog": "lake", "schema_path": [schema], "table": "orders", "type": "table"}]
         assert SCAN[kind] in {f["name"] for f in found[0]["functions"]}, found[0]
