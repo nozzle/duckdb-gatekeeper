@@ -123,7 +123,11 @@ Uncatalogued engine helpers can occur in `functions` with empty `catalog`/`schem
 (for example 2.0 `__cast` and PIVOT's `IS NOT DISTINCT FROM`). They never occur in
 `caller_functions`; exact catalog policy rules cannot address them. For addressable identities,
 blocking an exact identity including its kind denies a previously successful validation iff
-that identity is in `caller_functions`, with the catalog, policy layers, and inputs held stable.
+that identity is in `caller_functions`, with the catalog, policy layers, and inputs held stable,
+except for additional written-name preflight denials. An unused CTE can mention `md5` while
+a trusted view binds `md5`: it appears only in `functions`, yet an exact block can still deny
+the unbound caller-written name at preflight. Grant-replay preflight failures likewise name
+functions absent from `caller_functions`, not necessarily absent from combined `functions`.
 
 For `SELECT * FROM 'f.parquet'`, the replacement path occurs in `objects`, never
 `caller_objects`; the caller-attributed `parquet_scan` reader occurs in `caller_functions`.

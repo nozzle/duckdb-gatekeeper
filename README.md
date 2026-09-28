@@ -342,7 +342,7 @@ FROM gatekeeper_validate('SELECT * FROM missing_table');
 | --- | --- | --- | --- | --- |
 | false | binding | [] | Catalog | Table with name missing_table does not exist! |
 
-All three denials return empty `objects`, `functions`, and `caller_objects` lists. Policy denials
+All three denials return empty `objects`, `functions`, `caller_objects`, and `caller_functions` lists. Policy denials
 have empty `error_type` and `error_message`; the details are in `violations`.
 
 </details>
@@ -360,7 +360,7 @@ For Quack, this evidence describes checked local binding, not recursively comple
 lineage; see the [remote support matrix](docs/quack.md).
 
 Validation results and audit diagnostics are **privileged host information**, including
-`objects`, `functions`, `caller_objects`, violations, and engine errors. On DuckDB 2.0,
+`objects`, `functions`, `caller_objects`, `caller_functions`, violations, and engine errors. On DuckDB 2.0,
 secure views use the same table rules and `type = 'view'` identity as ordinary views;
 their transitive dependencies remain in host evidence. `caller_objects` is conservative
 query-wide attribution: a caller-written name can match a dependency inside a trusted

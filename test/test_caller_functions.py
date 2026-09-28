@@ -10,6 +10,17 @@ def key(identity):
     return identity["catalog"], tuple(identity["schema_path"]), identity["name"], identity["type"]
 
 
+def assert_preflight(result, names):
+    assert result["code"] == "forbidden" and result["violations"], result
+    for violation in result["violations"]:
+        name = violation["function_name"]
+        assert violation["rule"] == "function"
+        assert violation["catalog"] == violation["function_type"] == ""
+        assert violation["schema_path"] == []
+        assert violation["message"] == f"function is not allowed: {name}"
+        assert name in names, result
+
+
 def assert_oracles(db, sql, options=None):
     options = options or {}
     result = validate(db, sql, options)
@@ -23,14 +34,9 @@ def assert_oracles(db, sql, options=None):
     if not replay["allowed"]:
         # Written-name preflight also checks functions in syntax the engine never binds.
         # Classify that structural limit; every identity-level replay failure is a bug.
-        assert replay["code"] == "forbidden" and replay["violations"], (sql, result, replay)
-        for violation in replay["violations"]:
-            name = violation["function_name"]
-            assert violation["rule"] == "function"
-            assert violation["catalog"] == violation["function_type"] == ""
-            assert violation["schema_path"] == []
-            assert violation["message"] == f"function is not allowed: {name}"
-            assert name not in {f["name"].lower() for f in result["functions"]}, (sql, result, replay)
+        names = {v["function_name"] for v in replay["violations"]}
+        assert_preflight(replay, names)
+        assert not names & {f["name"].lower() for f in callers}, (sql, result, replay)
     for identity in result["functions"]:
         # Uncatalogued helpers cannot be expressed as exact policy rules (empty paths
         # are invalid). They must not receive caller-scoped authorization.
@@ -39,7 +45,10 @@ def assert_oracles(db, sql, options=None):
             continue
         rule = identity
         blocked = validate(db, sql, {**options, "blocked_functions": [*options.get("blocked_functions", []), rule]})
-        assert (not blocked["allowed"]) == (identity in callers), (sql, identity, result, blocked)
+        if identity in callers:
+            assert not blocked["allowed"], (sql, identity, result, blocked)
+        elif not blocked["allowed"]:
+            assert_preflight(blocked, {identity["name"].lower()})
     return result
 
 
@@ -72,6 +81,7 @@ def functions_db(db):
     "SELECT md5(s), hashed FROM v",
     "SELECT quantile(x, 0.5), date_part('epoch', DATE '2020-01-01') FROM t",
     "WITH unused AS (SELECT md5(s) FROM t) SELECT 1",
+    "WITH unused AS (SELECT md5(s) FROM t) SELECT hashed FROM v",
     "SELECT x FROM t WHERE false AND md5(s) = 'a'",
     "SELECT CASE WHEN false THEN md5(s) ELSE s END FROM t",
 ])
@@ -89,8 +99,11 @@ def test_function_paths(functions_db, sql):
         assert {(f["name"], f["type"]) for f in result["caller_functions"]} == by_engine(
             v1={("first", "aggregate"), ("first_value", "window")}, v2={("first_value", "window")})
     assert "__cast" not in {f["name"] for f in result["caller_functions"]}
-    if "unused" in sql:
+    if "unused" in sql and "SELECT 1" in sql:
         assert result["functions"] == result["caller_functions"] == []
+    if "unused" in sql and "SELECT hashed" in sql:
+        assert "md5" in {f["name"] for f in result["functions"]}
+        assert "md5" not in {f["name"] for f in result["caller_functions"]}
     if "WHERE false" in sql or "CASE WHEN false" in sql:
         assert "md5" in {f["name"] for f in result["caller_functions"]}
 

@@ -31,6 +31,7 @@ def main():
                                "SELECT list_unique($1)", "SELECT list_sort($1)", "SELECT unnest([1,2])",
                                "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')",
                                "WITH unused AS (SELECT md5('x')) SELECT 1",
+                               "WITH unused AS (SELECT md5('x')) SELECT hashed FROM hashed_v",
                                "SELECT * FROM t WHERE false AND md5('x') = 'a'",
                                "SELECT CASE WHEN false THEN md5('x') ELSE 'a' END"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())

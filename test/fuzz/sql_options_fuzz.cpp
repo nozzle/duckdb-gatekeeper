@@ -32,7 +32,8 @@ static void Setup(Connection &connection) {
 	    "SET enable_external_access=false; SET autoload_known_extensions=false; SET "
 	    "autoinstall_known_extensions=false; "
 	    "SET threads=1; CREATE TABLE t(x INTEGER); CREATE SCHEMA secret; CREATE TABLE secret.t(x INTEGER); "
-	    "CREATE VIEW v AS SELECT * FROM t; CALL enable_logging('Gatekeeper'); SET logging_level='debug'");
+	    "CREATE VIEW v AS SELECT * FROM t; CREATE VIEW hashed_v AS SELECT md5('x') hashed FROM t; "
+	    "CALL enable_logging('Gatekeeper'); SET logging_level='debug'");
 	for (QueryResult *current = result.get(); current; current = current->next.get()) {
 		if (current->HasError())
 			std::abort();
@@ -227,6 +228,21 @@ static void CheckFunctionEvidence(Connection &connection, const string &sql) {
 		return;
 	auto &functions = ListValue::GetChildren(fields[7]);
 	auto &callers = ListValue::GetChildren(fields[9]);
+	auto preflight = [](const vector<Value> &decision, const string &name) {
+		if (decision[1].GetValue<string>() != "forbidden")
+			return false;
+		auto &violations = ListValue::GetChildren(decision[2]);
+		if (violations.empty())
+			return false;
+		for (const auto &violation : violations) {
+			auto &v = StructValue::GetChildren(violation);
+			if (v[0].GetValue<string>() != "function" || !v[2].GetValue<string>().empty() ||
+			    !ListValue::GetChildren(v[3]).empty() || !v[7].GetValue<string>().empty() ||
+			    v[5].GetValue<string>() != name || v[1].GetValue<string>() != "function is not allowed: " + name)
+				return false;
+		}
+		return true;
+	};
 	auto replay_raw = connection.Query(
 	    "SELECT * FROM gatekeeper_validate($1, use_default_functions := false, allowed_functions := $2)", Value(sql),
 	    fields[9]);
@@ -245,7 +261,7 @@ static void CheckFunctionEvidence(Connection &connection, const string &sql) {
 			    !ListValue::GetChildren(v[3]).empty() || !v[7].GetValue<string>().empty() ||
 			    v[1].GetValue<string>() != "function is not allowed: " + name)
 				Fail("function evidence: identity-level grant missing");
-			for (const auto &function : functions)
+			for (const auto &function : callers)
 				if (gatekeeper::Lower(StructValue::GetChildren(function)[2].GetValue<string>()) == name)
 					Fail("function evidence: bound preflight name missing from grants");
 		}
@@ -263,7 +279,9 @@ static void CheckFunctionEvidence(Connection &connection, const string &sql) {
 		                                    Value(sql), Value::LIST(function.type(), {function}));
 		auto blocked_value = Decision(*blocked_raw);
 		auto &blocked = StructValue::GetChildren(blocked_value);
-		if (blocked.size() != 10 || (!blocked[0].GetValue<bool>()) != caller)
+		if (blocked.size() != 10 || (caller && blocked[0].GetValue<bool>()) ||
+		    (!caller && !blocked[0].GetValue<bool>() &&
+		     !preflight(blocked, gatekeeper::Lower(parts[2].GetValue<string>()))))
 			Fail("function evidence: exact block disagrees with attribution");
 	}
 }

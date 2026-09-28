@@ -225,8 +225,9 @@ if actual != expected:
 Let validation exceptions propagate as failures. The global ceiling must also allow the
 declared objects. A successful decision already establishes the allowed-input subset;
 the equality comparison additionally detects unused declarations. Select named columns:
-`caller_objects` is appended to the result and also included in audit decisions, so positional
-`SELECT *` consumers must accept a ninth column. Existing refusal ordering is unchanged.
+`caller_objects` is column nine and `caller_functions` appends column ten. Both are included
+in audit decisions, where the latter shifts subsequent metadata positions; see the
+[migration note](policy-migration.md#caller-function-evidence-in-040). Existing refusal ordering is unchanged.
 
 `functions` remains combined host-facing evidence, including caller-attributable functions
 and trusted dependencies. `caller_functions` is the subset checked by caller-scoped function
