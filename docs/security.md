@@ -56,7 +56,7 @@ NULL-free, so a typo that displaces a canonical field (a missing or NULL-filled 
 See [global policy](../README.md#global-policy) in the README.
 
 Validation returns one row with `allowed`, `code`, `violations`, `error_type`,
-`error_message`, `position`, `objects`, `functions`, and `caller_objects` as named columns. Require
+`error_message`, `position`, `objects`, `functions`, `caller_objects`, and `caller_functions` as named columns. Require
 `allowed = true` and `code = 'ok'`. The diagnostic/dependency lists retain nested
 STRUCT elements. SQL text and options accept constant expressions or host-bound
 parameters, not correlated/lateral per-row expressions. For multiple SQL strings,
@@ -291,7 +291,7 @@ beneath the boundary. DuckDB retains control of its predicate, plan-display, and
 barriers; admitting a secure view does not disable them.
 
 **Validation results and audit diagnostics are privileged host information.** This includes
-`objects`, `functions`, `caller_objects`, violation messages, and engine errors. Secure views
+`objects`, `functions`, `caller_objects`, `caller_functions`, violation messages, and engine errors. Secure views
 do not redact these lists: host evidence retains transitive dependencies under the same
 binding-evidence limits as ordinary views. There is no new identity kind, redaction field,
 or claim of completeness after redaction.
@@ -302,7 +302,8 @@ caller-written name also matches it, even if that name resolves to a CTE in the 
 scope. A refusal can also name that hidden object in `violations`. The tested 2.0 engine
 does not sanitize missing-dependency binding errors inside secure views: dropping a backing
 table can reveal its name in the engine error. Gatekeeper preserves the engine diagnostic,
-including in log-only mode; failed decisions retain the usual empty evidence lists.
+including in log-only mode; failed decisions have empty `objects`, `functions`, `caller_objects`,
+and `caller_functions` lists.
 
 Applications may deliberately expose a minimal decision or a separately reviewed projection
 and should mediate execution errors as well as validation output if names must stay hidden.
@@ -702,7 +703,7 @@ Resolved catalog-object denials retain `object_type = 'table'` or `'view'`, incl
 allowlist misses, explicit blocks, and `internal_object` denials. The `table` rule can deny
 either kind. Each kind field is `''` when unresolved or inapplicable; replacement-reader
 denials do not infer an object kind from their written path. `objects`, `functions`, and
-`caller_objects` remain empty on failure. This applies equally to `validate`, `enforce`,
+`caller_objects`, and `caller_functions` remain empty on failure. This applies equally to `validate`, `enforce`,
 and `log_only` records returned by `duckdb_logs_parsed('Gatekeeper')`; consumers pinning
 the STRUCT schema must include both trailing kind fields. The rest of the record is:
 

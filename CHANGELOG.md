@@ -30,7 +30,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
   preserving the engine's optimization boundary and transitive host evidence. Validation results
-  and audit diagnostics are explicitly host-only, including engine errors and `caller_objects`:
+  and audit diagnostics are explicitly host-only, including engine errors, `caller_functions`, and `caller_objects`:
   its conservative query-wide attribution can include hidden dependencies whose names match
   caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
 
@@ -52,7 +52,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
   `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
   Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
-  The `objects`, `functions`, and `caller_objects` evidence lists remain empty on failure.
+  The `objects`, `functions`, `caller_objects`, and `caller_functions` evidence lists remain empty on failure.
   Update consumers that pin the violation STRUCT schema to include both trailing fields.
 
 - Authorize `first/last OVER` as the `first_value/last_value` windows on both engines,

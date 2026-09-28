@@ -170,7 +170,7 @@ docs:
     retain `object_type = 'table'` or `'view'` for allowlist misses, explicit blocks, and
     internal-object refusals; the `table` rule alone does not distinguish tables from views.
     `object_type` is `''` for unresolved objects and function-only or other nonobject violations,
-    including replacement-reader refusals whose `table` contains a written path. All three
+    including replacement-reader refusals whose `table` contains a written path. All
     evidence lists (`objects`, `functions`, `caller_objects`, `caller_functions`) remain empty on failure.
     Consumers pinning the violation STRUCT must include both trailing VARCHAR kind fields.
     Audit decisions returned by
