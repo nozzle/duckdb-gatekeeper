@@ -68,7 +68,7 @@ OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, eve
 ### Loading unsigned builds
 
 Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
-engine matching the binary (1.5.5 for our release artifacts) and explicitly enable
+engine matching the binary (1.5.6 for our release artifacts) and explicitly enable
 unsigned loading for these development artifacts:
 
 ```sh
@@ -291,7 +291,7 @@ catalog and scan function.
 
 Run `.venv/bin/python scripts/test_quack.py`
 for the disposable loopback client/server fixture.
-It downloads checksum-pinned 1.5.5 Quack/httpfs artifacts; candidate engines require explicit
+It downloads checksum-pinned 1.5.6 Quack/httpfs artifacts; candidate engines require explicit
 matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
 source pins, server-session limits, and the distinction between observed release behavior and
 candidate coverage. The opt-in tests live in `test/integration/test_quack.py`.

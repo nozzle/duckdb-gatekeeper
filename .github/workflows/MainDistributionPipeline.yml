@@ -1,15 +1,15 @@
 name: Extension distribution
 # Builds and tests Gatekeeper on every community-extension platform through the reusable
 # extension-ci-tools pipeline (linux amd64/arm64 glibc and musl, macOS amd64/arm64,
-# Windows MSVC x64/ARM64 and MinGW). This is the DuckDB community build path and our
-# Windows/musl platform matrix. Wasm EH is browser-tested here and in wasm.yml; MVP and threads
-# remain excluded (see test/wasm/README.md). Both refs below are pinned to the commit tracked by the
+# Windows MSVC x64/ARM64). MinGW and Wasm EH are temporarily deferred until matching
+# official hosts are published; MVP and threads remain excluded (test/wasm/README.md).
+# Both refs below are pinned to the commit tracked by the
 # extension-ci-tools submodule; upstream publishes 1.5.x tooling on the v1.5-variegata branch.
 #
 # Every shipped artifact is then loaded, as the loadable it is, into an official DuckDB host of the
 # pinned version and exercised across the host/loadable ABI boundary: the Python package for the six
 # targets it has wheels for (loadable-test), the musl CLI in Alpine for the two musl targets
-# (loadable-cli), the CRAN R package for MinGW (loadable-r), and Chromium for Wasm EH (browser-test).
+# (loadable-cli). Deferred host jobs remain below for the coordinated restoration.
 on:
   push:
     branches: [main]
@@ -29,9 +29,9 @@ env:
   # The snapshot must postdate the CRAN release of the duckdb package version equal to the engine pin.
   R_VERSION: '4.6.1'
   R_CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-09-01
-  # The container the musl CLI runs in (multi-arch index digest; alpine:3.22). Reviewed with the other
+  # The container the musl CLI runs in (multi-arch index digest; alpine:3.24). Reviewed with the other
   # container images in the periodic dependency pass, not engine-coupled.
-  ALPINE_IMAGE: alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+  ALPINE_IMAGE: alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 jobs:
   metadata:
     # The engine pin the reusable pipeline builds against and names its artifacts with, read from
@@ -51,19 +51,21 @@ jobs:
   build:
     name: Build extension binaries
     needs: metadata
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@72e76e99cd7fee45a99739cd118ec2db64e034ec # v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@3fd6109fc01555673b7c7123eba8d0d143fe8ce4 # v1.5-variegata
     with:
       extension_name: gatekeeper
       duckdb_version: v${{ needs.metadata.outputs.duckdb_version }}
-      ci_tools_version: 72e76e99cd7fee45a99739cd118ec2db64e034ec
+      ci_tools_version: 3fd6109fc01555673b7c7123eba8d0d143fe8ce4
       # scripts/generate.py runs at configure time; the musl images only ship Python on request.
       extra_toolchains: python3
       # Both musl targets and Windows ARM64 are opt-in at this revision.
       opt_in_archs: 'linux_amd64_musl;linux_arm64_musl;windows_arm64'
-      exclude_archs: 'wasm_mvp;wasm_threads'
+      exclude_archs: 'wasm_mvp;wasm_threads;wasm_eh;windows_amd64_mingw'
       reduced_ci_mode: disabled
 
   browser-test:
+    # Restore with the matching published Wasm runtime and its pinned toolchain.
+    if: false
     name: Distribution Wasm EH Chromium
     needs: [metadata, build]
     runs-on: ubuntu-latest
@@ -151,6 +153,8 @@ jobs:
             'apk add --no-cache libstdc++ >/dev/null && sh scripts/smoke_cli.sh build/cli/duckdb build/distributed/gatekeeper.duckdb_extension v${{ needs.metadata.outputs.duckdb_version }} ${{ matrix.arch }}'
 
   loadable-r:
+    # Restore after CRAN/Posit provides the matching engine's Windows package.
+    if: false
     # The MinGW artifact exists for DuckDB's R package, which RTools builds with MinGW; no other official
     # host loads it. scripts/smoke_loadable.R runs the portable SQL smoke through DBI, with two connections
     # for the enforced half. R's dbExecute prepares before executing, so this is also the only leg that
@@ -181,7 +185,7 @@ jobs:
 
   package:
     name: Package unsigned release artifacts
-    needs: [build, browser-test, loadable-test, loadable-cli, loadable-r]
+    needs: [build, loadable-test, loadable-cli]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

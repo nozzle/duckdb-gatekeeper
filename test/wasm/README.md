@@ -1,6 +1,12 @@
 # Wasm EH support and browser tests
 
-Gatekeeper supports the **EH (native WebAssembly exception handling)** bundle of
+**0.4.1 temporarily defers Wasm EH distribution and browser CI:** no published runtime
+embeds its DuckDB 1.5.6 release engine yet. Use the immutable v0.4.0 source/assets and
+the matching runtime below. Restore the runtime/npm lock, Emscripten pin, workflow jobs,
+package matrix and descriptor together once a 1.5.6 runtime passes these tests.
+Windows MinGW is similarly deferred pending a matching CRAN R host.
+
+Gatekeeper v0.4.0 supports the **EH (native WebAssembly exception handling)** bundle of
 DuckDB-Wasm with embedded **DuckDB 1.5.5**. The tested npm package is
 `@duckdb/duckdb-wasm@1.33.1-dev64.0`; its package version is independent of the
 engine version. Pin this package and verify its embedded engine; do not bypass engine
@@ -9,7 +15,7 @@ metadata/version checks.
 ## Build and test locally
 
 Requires Docker, Python 3.10+, Node.js 22+, and initialized repository submodules.
-From the repository root:
+From a checkout of v0.4.0 (the retained runtime does not match 0.4.1's engine):
 
 ```sh
 python3 scripts/build_wasm.py --jobs 4

@@ -11,19 +11,19 @@ import urllib.request
 import duckdb
 
 ROOT = Path(__file__).resolve().parents[1]
-# SHA256 of the compressed core-repository downloads, whose footer revisions are c154811 / 827222f.
+# SHA256 of the compressed 1.5.6 core-repository downloads (quack 7e80f7f / httpfs 4bc690d).
 PINS = {
     "linux_amd64": {
-        "quack": "7b2c417e3797c2d85673655dea420ead9bbbb24e686ee8dbe37bef9fa8768207",
-        "httpfs": "7cdd52a3135388718884a9b71e3987ba723002121e8e9de399c4ed619d824a05",
+        "quack": "ad8bb34b2f513bcac0d01b96af0406fd2025f8ee3d3b878e45e30d0e6eab7b04",
+        "httpfs": "19e6906934a845487c96f9c94beee250c71e32bb9be260eb27ad96939a1df5f0",
     },
     "linux_arm64": {
-        "quack": "3b8857a7643a527a2ab6045e49bedf11f24114bc52e86287e400f75a4e20fbdc",
-        "httpfs": "0820e0b5b74efaa23608c239df8e744a68943318d530b483a529eace19cb5475",
+        "quack": "db025c62bb79a4f50f935036b3a342c3579b3794a8c76a54814be7551e6873d6",
+        "httpfs": "b18472a0e85cbf15ca4ebbe335173f87b62a074cd0f26072d4c756205c6239d0",
     },
     "osx_arm64": {
-        "quack": "a551db5ca9db6964a48f3c1f77076be0875bbdb0f335b139f77798c8fa92df51",
-        "httpfs": "758acc0b0c4fbf09506f387ff6f52826b1038b7b6849ded39928d2f992945230",
+        "quack": "4738b82495795d77d859e87782714b5bc5e5ff0679ae6b388de3fef08c393b69",
+        "httpfs": "b9f9ca8e64d913a80d6666a370e0e518ee4cc8ecb9990a2b9d2273204d8caad4",
     },
 }
 CANDIDATE_PINS = {
@@ -42,13 +42,13 @@ def artifacts(cache, candidate=False):
     with duckdb.connect() as db:
         platform = db.execute("PRAGMA platform").fetchone()[0]
         identity = db.execute("PRAGMA version").fetchone()
-    version = "v2.0.0-alpha42986" if candidate else "v1.5.5"
+    version = "v2.0.0-alpha42986" if candidate else "v1.5.6"
     pins = CANDIDATE_PINS if candidate else PINS
     if candidate:
         if duckdb.__version__ != "2.0.0.dev2609221243" or identity[:2] != (version, "d4e72566aa"):
             raise SystemExit("Candidate fixture requires 2.0.0.dev2609221243 / alpha42986 / d4e72566aa")
-    elif duckdb.__version__ != "1.5.5":
-        raise SystemExit("Release fixture requires DuckDB 1.5.5")
+    elif duckdb.__version__ != "1.5.6":
+        raise SystemExit("Release fixture requires DuckDB 1.5.6")
     if platform not in pins:
         raise SystemExit("Automatic downloads for " + version + " support " + ", ".join(pins)
                          + "; supply both --quack and --httpfs for another matched build")

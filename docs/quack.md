@@ -112,7 +112,7 @@ Build Gatekeeper normally, then:
 .venv/bin/python scripts/test_quack.py
 ```
 
-The runner downloads **hash-verified** Quack and httpfs 1.5.5 core artifacts into ignored
+The runner downloads **hash-verified** Quack and httpfs 1.5.6 core artifacts into ignored
 `build/quack-artifacts`. Supported download platforms are Linux AMD64/ARM64 and macOS ARM64.
 It uses separate in-memory client/server databases and a loopback listener, a random token,
 explicit LOAD paths, no autoinstall/autoload, and finally cleanup. Readiness requires a successful
@@ -154,7 +154,7 @@ version 1, while the 2.0 pin is version 3; build both sides from the same set.
 The engine's `.github/config/extensions/{quack,httpfs}.cmake` descriptors are the authority:
 use their `APPLY_PATCHES`, not Quack's own different bundled engine/httpfs pins. Candidate
 patches cover table columns, binder include, literal constants, QueryResult, and nested-name
-tests. The current compatibility workflow pins a different 2.0 snapshot (`6844d1bd…`); use
+tests. The current compatibility workflow pins a different 2.0 snapshot (`d591bb1d…`); use
 each snapshot's own patch set. No engine pin in Gatekeeper is changed for this fixture.
 
 With OpenSSL/curl development dependencies available, an isolated co-build is:
@@ -170,7 +170,7 @@ cmake --build build/quack-candidate --parallel 4 --target shell unittest \
   gatekeeper_loadable_extension quack_loadable_extension httpfs_loadable_extension
 ```
 
-For release source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v1.5.5`.
+For release source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v1.5.6`.
 Keep candidate directories separate from existing builds. Follow CONTRIBUTING's exact-engine
 Python-wheel procedure before running the candidate fixture. Merely co-building the CLI does
 not provide a matching Python package.
@@ -191,7 +191,7 @@ SHA256 40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20
 
 The footers identify `fa3f82c53c` and `0507d4ae49` respectively, matching the source pins.
 Verify compressed bytes before decompression and supply the explicit paths above; automatic
-downloads default to the supported 1.5.5 release. `--candidate` selects this exact candidate
+downloads default to the supported 1.5.6 release. `--candidate` selects this exact candidate
 on Linux AMD64 or macOS ARM64, checks the Python version and engine source ID, and fails if
 any selected test skips. Both platform/version URLs can change,
 so the checksum, not the URL alone, is the artifact pin. Candidate errors can surface while

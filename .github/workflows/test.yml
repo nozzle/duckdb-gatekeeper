@@ -13,6 +13,7 @@ env:
   # Honored by CMake for every configuration in this repository, including the helper scripts.
   CMAKE_C_COMPILER_LAUNCHER: ccache
   CMAKE_CXX_COMPILER_LAUNCHER: ccache
+  GATEKEEPER_REVIEW_SOURCE: ${{ github.workspace }}/build/review-source
 jobs:
   metadata:
     # The engine pin every job below labels or checks builds against, read from versions.cmake.
@@ -44,6 +45,11 @@ jobs:
           ccache-key: release-${{ matrix.os }}
       - run: cmake -G Ninja -S duckdb -B build/release -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v${{ needs.metadata.outputs.duckdb_version }} -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake -DBUILD_UNITTESTS=OFF -DBUILD_SHELL=OFF
       - run: cmake --build build/release --target gatekeeper_loadable_extension --parallel
+      - name: Historical source checkout for provenance tooling tests
+        run: |
+          git clone --shared --no-checkout duckdb build/review-source
+          git -C build/review-source fetch https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
+          git -C build/review-source checkout --detach FETCH_HEAD
       - run: python -m pytest test -q
       - name: Python suite under the PEG parser
         # DuckDB 1.5's opt-in parser override (the default parser from 2.0). Gatekeeper parses with the
@@ -83,6 +89,11 @@ jobs:
         with:
           ccache-key: sanitized-ubuntu-latest
       - run: sudo apt-get update -qq && sudo apt-get install -y clang libclang-rt-dev
+      - name: Historical source checkout for provenance tooling tests
+        run: |
+          git clone --shared --no-checkout duckdb build/review-source
+          git -C build/review-source fetch https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
+          git -C build/review-source checkout --detach FETCH_HEAD
       # The script selects and requires Clang; see its module docstring.
       - run: python scripts/test_sanitized.py
 

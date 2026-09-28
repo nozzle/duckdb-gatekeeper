@@ -11,6 +11,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   eh:
+    # Matching published EH host is unavailable for the release engine; see test/wasm/README.md.
+    if: false
     name: Wasm EH Chromium
     runs-on: ubuntu-latest
     timeout-minutes: 20

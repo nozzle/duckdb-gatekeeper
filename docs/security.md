@@ -468,7 +468,7 @@ under residuals.
   import_database('dir')` reads `schema.sql` and `load.sql` before any hook, gated only by
   `enable_external_access` and `allowed_directories`.
 
-  There is no interception point in front of it in DuckDB 1.5.5: `TransactionBegin` fires
+  There is no interception point in front of it in DuckDB 1.5.6: `TransactionBegin` fires
   identically for `Prepare()` and carries no statement, a read-only transaction does not stop
   `nextval`, and the parser only yields to extensions through `allow_parser_override_extension`,
   which is host-gated, process-wide, and answered by whichever override loaded first (a
@@ -1202,7 +1202,7 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 ## Compatibility and review
 
-Release binaries target DuckDB 1.5.5. Source builds may use another engine checkout;
+Release binaries target DuckDB 1.5.6. Source builds may use another engine checkout;
 the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
 `allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
@@ -1303,7 +1303,7 @@ Gatekeeper parses with the connection's parser options, so it follows the engine
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
 2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ
 only in diagnostics (query locations, which stage reports `max_expression_depth`). One
-engine property does not carry over: the 1.5.5 PEG matcher recurses once per nesting level
+engine property does not carry over: the 1.5.x PEG matcher recurses once per nesting level
 with no depth guard and no stack check, so `max_expression_depth`, which is the binder's check
 under PEG, never runs on text deep enough to matter. About 1000 nested calls overflow an
 8 MiB main-thread stack in the engine's own parse, and about 75 nested calls or 100 nested
@@ -1312,7 +1312,7 @@ subqueries overflow a 512 KiB worker-thread stack (the macOS default), which is 
 Gatekeeper's own depth limit sees the statement. Upstream fixed this on `main` by moving the
 matcher's recursion to the heap ([duckdb#24618](https://github.com/duckdb/duckdb/issues/24618),
 [duckdb#25204](https://github.com/duckdb/duckdb/pull/25204)); no 1.5.x release carries the fix.
-On 1.5.5, do not enable the PEG override on a database that takes untrusted SQL text.
+On 1.5.6, do not enable the PEG override on a database that takes untrusted SQL text.
 The local tests and randomized-input checks are not a complete security audit.
 DuckDB builds and signs the binaries it distributes through its community repository.
 Local builds, CI artifacts, and this project's GitHub Release binaries are unsigned. Distribution

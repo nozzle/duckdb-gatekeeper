@@ -6,6 +6,22 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-28
+
+### Changed
+
+- Native release artifacts now target DuckDB 1.5.6. Engine source, Python lock, and
+  extension-ci-tools pins move together; reviewed defaults and historical evidence are unchanged.
+- Wasm EH and Windows MinGW distribution are temporarily deferred because matching official
+  Wasm/CRAN R hosts are not published. Use the v0.4.0 assets with DuckDB 1.5.5 for those hosts.
+  Restore both targets only after matching hosts pass the browser/R loadable tests.
+
+### Fixed
+
+- Build against newer DuckDB 2.0 snapshots whose table functions use signature-based typed
+  keyword arguments. Optional Gatekeeper arguments retain their ANY types, omitted-option
+  semantics, and duplicate/unknown-option checks; earlier engines remain supported.
+
 ## 0.4.0 - 2026-09-28
 
 ### Added

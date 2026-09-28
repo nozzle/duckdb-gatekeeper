@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = (
     "linux_amd64", "linux_arm64", "linux_amd64_musl", "linux_arm64_musl",
     "osx_amd64", "osx_arm64", "windows_amd64", "windows_arm64",
-    "windows_amd64_mingw", "wasm_eh",
 )
 
 
@@ -130,12 +129,12 @@ def package_release(tag, artifacts, output):
         (release_links(changes, tag) + "\n\n---\n\n" if changes else "") +
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
-        "They are not DuckDB-signed community binaries. The full distribution matrix "
-        "and the Chromium test of its Wasm EH artifact passed before packaging.\n\n"
+        "They are not DuckDB-signed community binaries. The eight-target native distribution matrix "
+        "passed before packaging. Wasm EH and Windows MinGW are temporarily deferred until matching "
+        "official DuckDB hosts are published; use Gatekeeper v0.4.0 with DuckDB 1.5.5 for those hosts.\n\n"
         "Select the archive matching your DuckDB platform, verify it against `SHA256SUMS`, "
         "and extract it. Each archive includes the canonical extension filename, LICENSE, "
-        "and NOTICE. Native builds require explicit unsigned loading; Wasm requires the "
-        "pinned EH runtime and unsigned-extension setting. Checksums do not provide "
+        "and NOTICE. Native builds require explicit unsigned loading. Checksums do not provide "
         "DuckDB signature verification.\n\n"
         f"See [loading instructions](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/CONTRIBUTING.md#loading-unsigned-builds), "
         f"[Wasm setup](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/test/wasm/README.md), "
