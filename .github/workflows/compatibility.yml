@@ -133,8 +133,16 @@ jobs:
         # The submodule checkout is shallow; `git describe` (1.5) and `git rev-list --count` (2.0) need the
         # history back to the last tag, exactly as the community pipeline's full-depth checkout provides it.
         run: |
-          git -C duckdb fetch --unshallow --tags origin || git -C duckdb fetch --tags origin
-          git -C duckdb fetch origin "$CANDIDATE_ENGINE"
+          for attempt in 1 2 3; do
+            if [ "$(git -C duckdb rev-parse --is-shallow-repository)" = true ]; then
+              git -C duckdb -c fetch.parallel=1 fetch --no-recurse-submodules --unshallow --tags origin && break
+            else
+              git -C duckdb fetch --no-recurse-submodules --tags origin && break
+            fi
+            sleep 5
+          done
+          test "$(git -C duckdb rev-parse --is-shallow-repository)" = false
+          git -C duckdb fetch --no-recurse-submodules origin "$CANDIDATE_ENGINE"
           git -C duckdb checkout --quiet "$CANDIDATE_ENGINE"
           git -C duckdb describe --tags --long
       - uses: ./.github/actions/setup
