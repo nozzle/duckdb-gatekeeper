@@ -749,8 +749,9 @@ Properties that make the record trustworthy as evidence:
   record is what `gatekeeper_validate` would have said (the engine then raises its own error).
   When reading a log-only trail for what enforcement would refuse, every denied record except
   `code = 'binding'` counts: `forbidden` and `unsupported` are policy decisions, `invalid_input`
-  is the text check's own rejection (its limits, multi-statement text) or a policy the host left
-  unreadable through a native write, and `parser` is Gatekeeper's own parse failing on text the
+  is the text check's rejection of empty/NUL-containing input or a policy the host left
+  unreadable through a native write (limits and multi-statement text use `forbidden`/`limit`),
+  and `parser` is Gatekeeper's own parse failing on text the
   engine accepted, all of which strict mode refuses with a Gatekeeper denial. `binding` is the
   engine rejecting the statement, recorded only in log-only mode so the trail is complete. Text
   DuckDB's parser rejects fails before any hook and is recorded in neither mode.
@@ -1087,7 +1088,7 @@ bind data is not introspected.
   plane excepted. Lookup-triggered autoload can occur before the callback; use
   the host settings above, even for names included in the default inventories.
 - No row/column authorization or execution-time memory/time/result limits.
-- Default functions are a reviewed name inventory, not a proof of harmlessness for
+- Default functions are reviewed qualified identities, not a proof of harmlessness for
   every overload or argument. Existing DuckDB implementations are trusted across
   engine upgrades; the inventory is not an exact-version compatibility gate. New
   names remain excluded until classified or explicitly allowed. The inventory admits the clock (`now`,
@@ -1097,13 +1098,16 @@ bind data is not introspected.
   alone, and a host that caches or replays tenant queries must account for that. All
   other catalog, session, configuration, or planner state is opt-in; see
   [inventories/README.md](../inventories/README.md#classification-criteria).
-- Replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
-  replacement-scan list. It runs while a validation is binding on the calling thread
+- Database-wide replacement scans are decided by a Gatekeeper callback installed first in DuckDB's
+  database-wide replacement-scan list. It runs while a validation is binding on the calling thread
   and on every enforced connection; ordinary connections are unaffected. Other callbacks only construct a table
   reference, so a denial happens before the substituted reader binds and no file is
   opened. Readers substituted by DuckDB are authorized by their resolved names
-  (`parquet_scan`, `read_csv_auto`, `read_json_auto`), with `parquet_scan` sharing
-  permission with `read_parquet`. No separate replacement-scan toggle exists. The check
+  (`parquet_scan`, `read_csv_auto`, `read_json_auto`); each requires its own exact entry
+  permission, independently of `read_parquet`, `read_csv`, or `read_json`.
+  DuckDB 2.0 connection-scoped callbacks precede this gate; see the
+  [compatibility limitation](#compatibility-and-review) below.
+  No separate replacement-scan toggle exists. The check
   applied depends on who wrote the name: a table name in the caller's text (quoted or not,
   in any clause, including `DESCRIBE`, `PIVOT`, CTEs and subqueries) is the caller's reader
   choice and must pass every allowlist layer; a name reachable only through a view or
@@ -1223,10 +1227,28 @@ unsupported. Ordinary literal payloads remain data, not executable nodes.
 
 The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`); `src/include/engine_api.hpp`
 adapts the engine APIs that differ, and `scripts/generate.py` reads either release's
-serialization schema. The decisions are the same on both engines. Where 2.0 changed what the
-engine itself does, Gatekeeper follows the engine, and these differences are worth knowing:
+serialization schema. Both engines enforce the same policy model, with engine-specific
+capabilities, conservative refusals, and diagnostics. These differences are worth knowing:
 
 - 2.0 has only the PEG parser; the 1.5 `postgres` leg does not exist there.
+- 2.0 connection-scoped replacement callbacks (including C API v2 registrations) run before
+  database-wide callbacks. Gatekeeper's early replacement gate covers only the database-wide
+  list. Ordinary catalog checks can still refuse a returned reader before its bind, but an
+  otherwise admitted replacement can bind before the final unrecorded-scan backstop refuses it.
+  This is not a pre-reader-I/O guarantee for connection-scoped replacements. Hosts requiring
+  that guarantee must use database-wide registrations; connection-scoped interception needs
+  a separate implementation and native callback-counter coverage.
+- Named-parameter/session-variable collisions on 2.0 require `getvariable` permission before
+  binding, even with explicit inputs during enforcement; see [parameter fallback](parameter-fallback.md).
+  DuckDB 1.5 has no such fallback path.
+- Native callback provenance and implementation substitutions differ: 1.5 refuses untrackable
+  caller non-system bind callbacks and conservatively attributes possible system replacements;
+  2.0 retains definitions. `first/last OVER` additionally checks the actual aggregate lookup on
+  1.5. See [qualified-function differences](qualified-functions.md#binder-substitutions-and-specialization).
+- Quack attached-object reads are refused on 1.5; supported 2.0 local base-table reads require
+  pushdown disabled and checked table provenance. See the [Quack matrix](quack.md).
+- Diagnostic positions are best-effort parser byte offsets. In particular, a caller table
+  function in `FROM` may have a NULL violation position on 2.0 where 1.5 supplies an offset.
 - 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
   grammar does not know their query nodes and refuses them as `unsupported`.
 - 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
@@ -1267,10 +1289,15 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   before the next cleanup (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement)
   fails with "Current transaction is aborted" if it directly follows a refusal on the same
   connection; any plain statement in between clears it. This is engine sequencing in
-  `ClientContext::BeginQueryInternal`'s caller, to be reported upstream; it does not weaken a
+  `ClientContext::BeginQueryInternal`'s caller, related to the leaked-query transaction tracked
+  in [duckdb/duckdb#25876](https://github.com/duckdb/duckdb/issues/25876); it does not weaken a
   refusal, it changes the error the following statement reports.
 
 Reading `enforced` and `warnings` together in projections and filters is supported on both engines.
+Use the standalone `CALL gatekeeper_enforce()` for activation. An arbitrary SELECT wrapper
+can eliminate the table function entirely: `LIMIT 0`, `WHERE false`, or an unused subquery
+can return successfully without latching on either engine. If setup uses a SELECT projection,
+require the actual returned `enforced = true` row; an empty result is not activation evidence.
 
 Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from

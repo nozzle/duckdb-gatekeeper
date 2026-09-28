@@ -6,8 +6,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
-- Preserve non-internal native function provenance across mixed-case catalog, schema, and
-  function names.
+## 0.4.0 - 2026-09-28
+
+### Added
 
 - Append `caller_functions` to validation results and audit decisions: the sorted, deduplicated
   subset of `functions` checked by caller-scoped policy at any authorization point. Evidence
@@ -15,53 +16,26 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   conservative attribution, not exact lexical calls. Existing validation columns keep their
   positions; audit `statement`, `statement_length`, `policy_hash`, and `new_value` move by one.
   See [evidence scope](docs/qualified-functions.md#caller-function-evidence) for unbound preflight
-  names and uncatalogued helpers. Existing authorization and evidence fields are unchanged.
-
-### Changed
-
-- Caller-written Quack SQL delegation is never-bind; private authorization refuses opaque
-  trusted-view expansions. Deferred trusted-body binding and native 1.5 constant preparation
-  can execute remotely before refusal and remain unsupported. The 1.5 attached-object path is refused because it loses
-  server schema qualification; 2.0 local-binding reads require remote SQL pushdown disabled and
-  table provenance. Evidence remains local binding scope, not complete remote lineage. See
-  [Quack support](docs/quack.md), including server-connection and CONNECT restrictions.
-  Resolved Quack scope refusals retain the local object's `table`/`view` kind or the opaque
-  function's kind in validation and audit violations.
+  names and uncatalogued helpers. Prechecked aggregate targets are included even when a NULL
+  list leaves no executable aggregate in the plan. (#118)
 
 - DuckDB 2.0 secure views now use ordinary view authorization and `type = 'view'` evidence,
   preserving the engine's optimization boundary and transitive host evidence. Validation results
   and audit diagnostics are explicitly host-only, including engine errors, `caller_functions`, and `caller_objects`:
   its conservative query-wide attribution can include hidden dependencies whose names match
-  caller-written references, so it is not universally safe to expose to untrusted callers. (#109)
+  caller-written references, so it is not universally safe to expose to untrusted callers. (#114)
+- A tested [Quack support matrix](docs/quack.md) covering local binding, CONNECT scope,
+  independent server-session enforcement, and unsupported early remote-execution routes. (#115)
 
-- Keep function replacement blocks effective through no-op casts, `coalesce`, and identity
-  macros. DuckDB 1.5 conservatively refuses ambiguous mixed caller/trusted replacement
-  names; 2.0 uses retained definitions to avoid unrelated replacement attribution.
+### Changed
 
-- Track DuckDB 2.0 native scalar/aggregate replacements through their retained definition,
-  including cross-namespace replacements, without attributing ordinary casts to unrelated
-  caller functions. Refuse caller non-system callbacks whose expression origin cannot be
-  retained (native bind/extended-bind callbacks on 1.5; expression-replacement callbacks on both engines).
-  Lambda-type callbacks alone remain permitted.
-
-- **Breaking (#108):** validation `violations` STRUCTs append `function_type VARCHAR` followed
-  by `object_type VARCHAR`, also
-  observable in `duckdb_logs_parsed('Gatekeeper')` for validate, enforce, and log-only decisions.
-  Known denied functions retain their complete catalog/schema/name/kind identity even when
-  the `functions` evidence list is cleared on failure; scalar and table `system.main.range`
-  denials are distinguishable. Resolved catalog-object denials retain `table` or `view` in
-  `object_type`, including allowlist misses, explicit blocks, and internal-object refusals.
-  Unresolved or inapplicable kinds use `''`; replacement-reader paths do not invent object kinds.
-  The `objects`, `functions`, `caller_objects`, and `caller_functions` evidence lists remain empty on failure.
-  Update consumers that pin the violation STRUCT schema to include both trailing fields.
-
-- Authorize `first/last OVER` as the `first_value/last_value` windows on both engines,
-  following 1.5's intrinsic mapping and 2.0's parser rewrite. The real `first/last` aggregate
-  lookups on 1.5 retain separate authorization and evidence; `rank_dense` retains its own
-  identity. Remove the unsupported `first/window` and `last/window` defaults (919 identities).
-  Parser/binder rewriting is separate from configurable policy matching.
-
-- **Breaking (#108):** `allowed_functions` and `blocked_functions` are now lists of qualified rules
+- **Breaking:** table policies, canonical settings, validation results, and audit identities replace
+  `schema VARCHAR` with `schema_path VARCHAR[]`, outermost schema first. JSON policies require
+  version 2; version 1 and the old `schema` field are rejected. DuckDB 2.0 nested schemas retain
+  full ancestry; 1.5 uses one-element paths. Wildcards match one component at exactly the stated
+  depth; `['*']` covers top-level schemas only. Replacement refusals retain the written path
+  in `table`, with no invented catalog/schema identity. See the [migration guide](docs/policy-migration.md). (#104)
+- **Breaking:** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
   Legacy string rules and `schema` fields receive consistent actionable diagnostics; see the
   [policy v2 migration guide](docs/policy-migration.md), including typed empty lists and canonical settings.
@@ -75,43 +49,24 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   names without alias canonicalization, including Parquet readers, JSON extraction aliases, and window
   aliases. Cover each intended entry explicitly; Parquet file shorthand requires `parquet_scan`, not
   `read_parquet`. Scoped blocks wait for actual catalog resolution;
-  blocks covering every eligible identity retain early no-bind refusal.
-- Internal table/view and function grants require exact schema components; table/view grants also
-  require an exact table name. Catalog may be omitted, NULL, or `*`, and block namespace wildcards
-  still match internal entries. The actual entry's `internal` flag controls this, not its catalog name;
-  non-internal entries can use schema patterns. Unknown bound-function internal origin cannot use
-  schema-wildcard grants. Reviewed defaults already name exact identities.
-- Function evidence preserves known qualified identities, including 2.0 window functions. Unknown
-  caller implementation identities fail closed. Selected aggregate specializations on both engines may retain
-  an unambiguous system definition recorded by the same authorizing bind; see
-  [qualified-function feasibility](docs/qualified-functions.md) for its scope and engine-hook limits.
-  `functions` remains combined host-facing evidence of caller-attributable functions and trusted
-  dependencies. `caller_functions` exposes the caller-scoped function-policy subset;
-  `caller_objects` remains the existing conservative catalog-table/view subset of `objects`.
-- Source-backed substitutions preserve caller/trusted origin: collated `min`/`max` to
-  `arg_min`/`arg_max`, `date_part`/`datepart` to `epoch`/`julian` on 1.5 or every constant
-  unary date part on 2.0, and `quantile` to
-  `quantile_disc`. Caller implementations obey qualified blocks and require their own grants
-  when defaults are disabled; source grants do not alias those implementation grants. Host
-  alias-like names retain exact spelling and identity for attribution, so a host `read_parquet`
-  macro does not attribute a trusted body's `parquet_scan` reader to the caller, or vice versa.
-- Quantile fraction/options checks now follow resolution of the system aggregate, before its
-  private bind callback. Granted host functions/macros with those names retain their own argument
-  contracts. System quantiles, including windows, require unqualified positional calls with literal
-  or bindable-parameter options; named and dotted/method calls conservatively refuse because
-  the hook cannot map receivers or reordered arguments. Earlier resolution errors remain `binding`.
-- Disabling defaults requires explicit qualified grants for default-macro expansion functions and
-  literal aggregate targets as well as the macro itself. Host macro bodies remain opaque. Implicit
-  arg_min/arg_max shadow checks apply only to system.main min/max, not granted host aggregates;
-  1.5 host aggregates with bind callbacks are separately refused for missing retained provenance.
-- Caller-written list aggregate dispatch requires a literal aggregate name authorized as a
-  `system.main` aggregate after resolving the system scalar dispatcher, before its bind callbacks.
-  Computed/parameterized targets and named/dotted/method dispatcher calls are refused; unrelated host
-  functions/macros with dispatcher-like names retain their own argument contracts. IN-list,
-  SIMILAR TO and canonicalized JSON arrow helpers cannot select explicitly granted host shadows.
-  Caller `COLLATE` on 1.5 uses exact system collation entries to identify its unstamped scalar
-  capabilities; qualified grants and blocks apply to surviving implementations. Trusted macro/view bodies retain their existing trust. Replacement readers
-  are resolved and pinned before reader binding; implicit helper shadows are refused even if granted.
+  blocks covering every eligible identity retain early no-bind refusal. (#113)
+  - Defaults are 919 reviewed qualified identities over 913 names. Internal grants require exact
+    schema components; internal table/view grants also need exact table leaves. Catalog wildcards
+    remain supported, and block namespace wildcards still match internal entries.
+  - Disabling defaults requires grants for default-macro dependencies and aggregate targets;
+    host bodies remain opaque. Caller implementation substitutions obey blocks through casts,
+    coalesce, and macros. 1.5 conservatively attributes possible replacements; 2.0 retains definitions.
+  - Untrackable caller non-system native callbacks are refused (bind/extended-bind callbacks on
+    1.5; expression-replacement callbacks on both). Lambda-type callbacks remain permitted.
+    See [qualified functions](docs/qualified-functions.md) for provenance, first/last window
+    identities, collation helpers, and quantile/list-dispatch argument restrictions.
+- **Breaking:** violation STRUCTs append `function_type VARCHAR` and `object_type VARCHAR`,
+  including audit decisions. Resolved refusals retain kind; unresolved/inapplicable fields are
+  empty strings. All evidence lists remain empty on failure. (#113)
+- Caller-written Quack SQL delegation is never-bind. Private authorization refuses opaque
+  trusted expansions; deferred binding and native 1.5 preparation can execute remotely first
+  and remain unsupported. 1.5 attached objects are refused; 2.0 local base-table reads require
+  pushdown disabled and table provenance. Evidence is local binding scope, not remote lineage. (#115)
 
 - DuckDB 2.0 validation now requires `system.main.getvariable` permission before caller-written
   named parameters read session variables, and reports that fixed capability as function evidence.
@@ -119,7 +74,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   before binding, including explicit arguments and prepares: current hooks cannot distinguish supplied
   inputs. When granted, DuckDB preserves explicit-value precedence and Gatekeeper conservatively records
   the capability. Without permission, use a noncolliding name or positional parameter. Log-only records
-  denials and lets DuckDB proceed. DuckDB 1.5 is unchanged. (#107)
+  denials and lets DuckDB proceed. DuckDB 1.5 is unchanged. (#112)
 - DuckDB 2.0 local enforcement activation now refuses CONNECT-ed state, including stale targets,
   when the local latch is reached. Native callback-counter regressions verify that CONNECT on a
   local enforced connection is refused before remote dispatch. Hosts must activate and keep
@@ -128,20 +83,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   rollout, recorded as `mode = 'enforce'`, so SQL cannot change the routing state before the host
   restores policy refusals. Other control-plane statements keep normal log-only semantics.
   CONNECT-mode local enforcement and automatic enforcement of remote server sessions remain
-  unsupported; see [host requirements](docs/security.md#connect-mode-and-native-host-state). (#106)
-- Lakehouse integration uses digest-pinned RustFS 1.0.0 for its disposable S3 fixture,
-  replacing MinIO's image after its registry stopped allowing anonymous pulls.
-- **Breaking:** table policies, canonical settings, validation results, and audit identities replace
-  `schema VARCHAR` with `schema_path VARCHAR[]`, outermost schema first. JSON policies now require
-  version 2 and use `docs/policy-v2.schema.json`; version 1 and the old `schema` field are rejected.
-  DuckDB 2.0 nested schemas are supported with full-path authorization and provenance; 1.5 uses
-  one-element paths. Path wildcards match one component at exactly the specified depth, never
-  recursively. Migrate `schema: 'reporting'` to `schema_path: ['reporting']`; `['*']` covers only
-  top-level schemas.
-- Replacement-scan violations now report the full written path in `table` (for example,
-  `s.file.csv`), rather than only its leaf name, with `catalog = ''` and `schema_path = []`.
-  Written qualifiers are not resolved catalog identities; pre-bind refusals likewise leave
-  catalog/schema identity empty.
+  unsupported; see [host requirements](docs/security.md#connect-mode-and-native-host-state). (#111)
 
 - Every distributed artifact is now loaded, as the loadable it is, into an official DuckDB host
   of the pinned engine and exercised across the host/loadable ABI boundary before a release is
@@ -158,8 +100,16 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - Write result rows using DuckDB 2.0's per-vector cardinality API. Combining `enforced` and
   `warnings` in projections or filters now returns correct results instead of wrong answers
-  or an internal error invalidating the database (#102). Validation and configuration use
-  the same row writer. DuckDB 1.5 retains its existing cardinality API.
+  or an internal error invalidating the database. Validation and configuration use
+  the same row writer. DuckDB 1.5 retains its existing cardinality API. (#119, fixes #102)
+- Record enforce-mode policy denials rewrapped by trusted table-macro and `query()` binding.
+  Ordinary engine errors retain their existing reporting behavior.
+- Bound audit statement sanitization before expanding NUL bytes, avoiding quadratic work for
+  invalid input while preserving the 64 KiB UTF-8-safe prefix and original input length.
+- Preserve caller attribution and written-path diagnostics for catalog-qualified replacement
+  readers on 1.5. SQL named-option keys now accept mixed case; JSON keys remain case-sensitive.
+- Restore the published v1 schema URL for existing release users. Historical schemas remain
+  available even though 0.4.0 requires policy v2.
 
 ## 0.3.0 - 2026-09-23
 

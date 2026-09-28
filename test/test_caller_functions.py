@@ -124,3 +124,15 @@ def test_prepared_validation(functions_db):
         expected = validate(functions_db, sql)["caller_functions"]
         literal = "'" + sql.replace("'", "''") + "'"
         assert functions_db.execute(f"EXECUTE evidence({literal})").fetchone()[0] == expected
+
+
+@pytest.mark.parametrize("target", ["sum", "min", "max", "count"])
+@pytest.mark.parametrize("dispatcher", [None, "list_aggregate", "list_aggr", "aggregate", "array_aggregate", "array_aggr"])
+def test_null_list_prechecked_aggregate_evidence(db, target, dispatcher):
+    options = {"allowed_functions": [{"catalog": "system", "schema_path": ["main"],
+                                      "name": dispatcher, "type": "scalar"}]} if dispatcher else {}
+    configure(db, options)
+    sql = f"SELECT {dispatcher}(NULL, '{target}')" if dispatcher else f"SELECT list_{target}(NULL)"
+    result = assert_oracles(db, sql, options)
+    assert result["allowed"], result
+    assert ("system", ("main",), target, "aggregate") in set(map(key, result["caller_functions"]))

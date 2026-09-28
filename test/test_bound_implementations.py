@@ -63,10 +63,13 @@ def test_bound_implementations_obey_blocks_where_the_caller_wrote_them(db, expre
 
 
 @pytest.mark.parametrize("expression", ["list_sum(NULL)", "list_distinct(NULL)", "list_unique(NULL)"])
-def test_null_list_has_no_executable_aggregate(db, expression):
+def test_null_list_records_only_prechecked_aggregate(db, expression):
     result = validate(db, "SELECT " + expression)
     assert result["allowed"], result
-    assert not any(f["type"] == "aggregate" for f in result["functions"])
+    # Evidence records authorization, not execution. list_sum prechecks sum even
+    # though NULL eliminates its executable bind data; fixed histogram helpers do not.
+    aggregates = [f["name"] for f in result["functions"] if f["type"] == "aggregate"]
+    assert aggregates == (["sum"] if expression == "list_sum(NULL)" else [])
 
 
 @pytest.mark.parametrize("order", ["macro_first", "caller_first"])

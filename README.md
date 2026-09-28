@@ -40,8 +40,8 @@ development artifacts and require `allow_unsigned_extensions`; see
 Each binary is specific to the DuckDB engine it was built from and refuses to load into
 any other, even when DuckDB's own footer check is disabled. The community repository
 can rebuild Gatekeeper source for newer engines; source compatibility is checked by
-builds and regression tests rather than a fixed release allowlist. Default functions are a
-name list: new names remain excluded until added, and existing implementations are
+builds and regression tests rather than a fixed release allowlist. Defaults are reviewed
+catalog/schema-path/name/kind identities: new identities remain excluded until added, and existing implementations are
 trusted across DuckDB upgrades.
 For browsers, the DuckDB-Wasm EH bundle is supported; see
 [Wasm installation and browser tests](test/wasm/README.md).
@@ -119,6 +119,7 @@ CALL gatekeeper_enforce()                                -- enforces the global 
 host-bound parameters (`?`, `$1`), so policies never need to be spliced into SQL text.
 Both also accept a mutually exclusive `json := document` argument for
 [shared JSON policies](#json-policy-documents).
+SQL named-option keys are ASCII case-insensitive; JSON keys remain case-sensitive.
 `gatekeeper_enforce` takes no options; see [Enforced connections](#enforced-connections).
 
 Select `*` for all result columns or name just the columns you need. SQL text and
@@ -520,13 +521,15 @@ casts, and callbacks used only inside trusted definitions remain usable.
 
 > [!NOTE]
 > Catalog, session, and configuration inspection (`current_schema`, `current_setting`,
-> `getvariable`, `duckdb_tables()`) is **not** a default. Grant it by name in the global
+> `getvariable`) is **not** a default. Grant an eligible capability in the global
 > policy: `allowed_functions := [{catalog:'system', schema_path:['main'], name:'current_schema'}]`. The clock (`current_date`, `now()`),
 > the connection-local RNG (`random()`, `uuid()`, `setseed()`), and PostgreSQL
-> compatibility stubs (`current_user`, `pg_typeof`) are defaults because they disclose
+> reviewed `system.main` compatibility stubs such as `current_user` are defaults because they disclose
 > nothing about the host beyond the time and its `TimeZone`/`Calendar`, and `setseed` touches only
 > the connection's own random engine. The criteria are in
 > [inventories/README.md](inventories/README.md#classification-criteria).
+> `duckdb_tables()` is never-bind and cannot be granted directly. `pg_typeof` lives only
+> in `system.pg_catalog` and needs an explicit grant; it is not a default.
 
 ### File readers
 
@@ -978,6 +981,18 @@ reach under [residuals](docs/security.md#residuals), and everything else under
 [remaining boundaries](docs/security.md#remaining-boundaries).
 Report suspected authorization bypasses privately; see [SECURITY.md](SECURITY.md).
 
+Use standalone `CALL gatekeeper_enforce()` during setup. Optimizer-eliminated SELECT wrappers
+such as `SELECT * FROM gatekeeper_enforce() LIMIT 0` can return no rows without activating
+enforcement. A SELECT-based setup must require an actual `enforced = true` result row.
+
+## Compatibility
+
+The same source supports DuckDB 1.5.5 and tested DuckDB 2.0 candidates; released GitHub
+binaries target 1.5.5. The policy model is shared, but engine capabilities, conservative
+refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
+for prepared statements, function provenance, parameter fallback, Quack, and the 2.0
+connection-scoped replacement-scan timing limitation.
+
 ## Benchmarks
 
 What each way of running Gatekeeper adds to a statement, against the same statement on a
@@ -985,14 +1000,14 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 64 µs | 3.2 ms | 3.8 ms |
-| enforced connection | 93 µs (+28 µs) | 3.4 ms (+166 µs) | 7.0 ms (+3.3 ms) |
-| enforced, audit log at debug | 142 µs (+78 µs) | 3.5 ms (+304 µs) | 7.1 ms (+3.4 ms) |
-| validate, then execute | 229 µs (+165 µs) | 3.7 ms (+453 µs) | 7.2 ms (+3.4 ms) |
-| denied on an enforced connection | 322 µs | 451 µs | 2.7 ms |
+| plain connection | 63 µs | 3.3 ms | 3.8 ms |
+| enforced connection | 92 µs (+29 µs) | 3.5 ms (+164 µs) | 7.0 ms (+3.3 ms) |
+| enforced, audit log at debug | 159 µs (+96 µs) | 3.6 ms (+320 µs) | 7.2 ms (+3.4 ms) |
+| validate, then execute | 233 µs (+170 µs) | 3.8 ms (+449 µs) | 7.2 ms (+3.4 ms) |
+| denied on an enforced connection | 322 µs | 471 µs | 2.7 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python client
-on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper 0.3.0. The
+on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.5, Gatekeeper 0.4.0. The
 plain row is the client round trip plus the engine's own work; in parentheses, what each mode
 adds to it.
 

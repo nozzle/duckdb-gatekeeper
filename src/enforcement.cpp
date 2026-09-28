@@ -144,11 +144,14 @@ struct EnforcementState : ClientContextState {
 	void Authorize(ClientContext &context, optional_ptr<const engine::ParameterMap> parameters) {
 		try {
 			duckdb::Authorize(context, Snapshot(), unit, parameters, result);
-		} catch (const PermissionException &) {
-			MarkDenied(result);
-			Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
-			return;
 		} catch (const std::exception &error) {
+			// Table-macro/query binding rethrows through ErrorData, losing the C++ subclass.
+			// Only our populated violations distinguish a policy refusal from an engine error.
+			if (!result.violations.empty() && ErrorData(error).Type() == ExceptionType::PERMISSION) {
+				MarkDenied(result);
+				Record(context, Boundary::AUTHORIZE, &policy, &context.GetCurrentQuery());
+				return;
+			}
 			if (!log_only || !DescribeError(error, true, result))
 				throw;
 			MarkDenied(result);

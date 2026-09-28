@@ -14,9 +14,9 @@ must exist and pass CI before it is submitted.
    tests refuse to release without:
    - `community/description.yml`: `extension.version`, `repo.ref`, `repo.ref_next` (the same
      tag: one source tree builds the stable engine and the next one, and the community
-     repository builds the next DuckDB from `ref_next`), the preamble comment, and every
-     `blob/vX.Y.Z/` documentation link (the gate requires all of them to name the release;
-     `grep -n 'blob/v' community/description.yml` lists them).
+     repository builds the next DuckDB from `ref_next`) and every
+     `blob/` documentation link, including `blob/main/` links (the gate requires all of them
+     to name the release; `grep -n 'blob/' community/description.yml` lists them).
    - `CHANGELOG.md`: rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` and add a fresh, empty
      `## Unreleased` above it. The gate requires the release's section to have content and
      Unreleased to be empty when a tag is packaged; that section becomes the top of the
@@ -27,6 +27,9 @@ must exist and pass CI before it is submitted.
    `test/test_release_packaging.py` runs the gate against the checkout as the release commit
    leaves it, so it fails on the release PR until every edit above is made.
    DuckDB upgrades additionally require the full [repinning checklist](../inventories/README.md#repinning-the-engine).
+   Published `docs/policy-v*.schema.json` files and their `$id` URLs are permanent. Keep
+   historical schemas unchanged when adding a new version, even after the runtime stops
+   accepting the old document format. Existing release users still resolve those URLs.
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
@@ -102,7 +105,8 @@ Each ZIP is named with the extension version, DuckDB version, platform, and `uns
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
 all ZIPs. Native and Wasm assets are unsigned development builds, not DuckDB-signed
 community binaries. The release notes open with the release's `CHANGELOG.md` section and
-link to versioned loading and security docs.
+link to versioned loading and security docs. Relative changelog links are converted to
+tag-pinned repository URLs when generating the GitHub Release body.
 
 The publisher initially creates a draft and publishes it after all uploads succeed.
 If upload/publication fails after draft creation, inspect that draft and the job logs.

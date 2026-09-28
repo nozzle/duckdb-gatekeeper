@@ -191,7 +191,8 @@ inline gatekeeper::NamePath ReplacementName(const ReplacementScanInput &input) {
 #else
 	if (!input.catalog_name.empty()) {
 		path.push_back(input.catalog_name);
-		path.push_back(input.schema_name);
+		if (!input.schema_name.empty())
+			path.push_back(input.schema_name);
 	} else if (!input.schema_name.empty())
 		path.push_back(input.schema_name);
 	path.push_back(input.table_name);

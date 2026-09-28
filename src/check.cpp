@@ -732,6 +732,7 @@ struct LookupCallback {
 				}
 				CheckAggregateDependency(s.context, name, s.result, s.provenance);
 				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+				s.result.RecordFunction(identity, true);
 			}
 			s.provenance.authorized_dispatchers.insert(canonical);
 		}
@@ -785,6 +786,7 @@ struct LookupCallback {
 				                              engine::SchemaPath(standard.schema), engine::EntryName(target),
 				                              FunctionKind(target.type), target.internal};
 				s.provenance.RecordFunction(identity, true, GATEKEEPER_DUCKDB_MAJOR);
+				s.result.RecordFunction(identity, true);
 			}
 		}
 	}

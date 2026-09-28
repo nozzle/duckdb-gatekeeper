@@ -14,6 +14,24 @@ SCHEMA = json.loads((ROOT / "docs/policy-v2.schema.json").read_text())
 SCHEMA_VALIDATOR = Draft202012Validator(SCHEMA)
 
 
+def test_published_schema_versions_remain_available():
+    for version in (1, 2):
+        schema = json.loads((ROOT / f"docs/policy-v{version}.schema.json").read_text())
+        assert schema["$id"] == f"https://raw.githubusercontent.com/nozzle/duckdb-gatekeeper/main/docs/policy-v{version}.schema.json"
+        assert schema["properties"]["version"]["const"] == version
+        Draft202012Validator.check_schema(schema)
+
+
+def test_sql_option_names_are_case_insensitive_but_json_keys_are_not(db):
+    db.execute("CREATE TABLE t(x INTEGER)")
+    db.execute("CALL gatekeeper_configure(Allowed_Tables := [])")
+    assert not validate(db, "SELECT * FROM t")["allowed"]
+    db.execute("CALL gatekeeper_configure()")
+    assert db.execute("SELECT code FROM gatekeeper_validate('SELECT * FROM t', Allowed_Tables := [])").fetchone() == ("forbidden",)
+    assert db.execute("SELECT code FROM gatekeeper_validate('SELECT 1', JSON := ?)",
+                      [json.dumps(document({"Allowed_Tables": []}))]).fetchone() == ("invalid_input",)
+
+
 def document(options):
     return {"version": 2, "options": options}
 

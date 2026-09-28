@@ -64,7 +64,7 @@ static unique_ptr<FunctionData> BindValidate(ClientContext &, TableFunctionBindI
 	auto result = make_uniq<ValidateBinding>();
 	result->sql = input.inputs[0];
 	for (const auto &option : input.named_parameters) {
-		auto &name = engine::Str(option.first);
+		auto name = gatekeeper::Lower(engine::Str(option.first));
 		auto value = option.second;
 		// ANY preserves nested field sets rather than silently coercing away unknown fields.
 		result->options.emplace_back(name, std::move(value));

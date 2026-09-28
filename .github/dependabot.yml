@@ -11,6 +11,9 @@ updates:
       prefix: "test"
 
   - package-ecosystem: "github-actions"
+    ignore:
+      # Coupled to ci_tools_version and the submodule; update all three manually.
+      - dependency-name: "duckdb/extension-ci-tools"
     # "/" covers .github/workflows; the composite actions under .github/actions are separate manifests.
     directories:
       - "/"
