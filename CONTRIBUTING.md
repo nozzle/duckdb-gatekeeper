@@ -96,6 +96,20 @@ make an unsigned extension a DuckDB-signed community build. See the
 
 ## Testing
 
+The optional provenance-tooling tests compare historical review sources, not the current
+build engine. For a full local run after the 1.5.6 repin, prepare a separate 1.5.5 checkout:
+
+```sh
+git clone --shared --no-checkout duckdb build/review-source
+git -C build/review-source fetch https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
+git -C build/review-source checkout --detach FETCH_HEAD
+export GATEKEEPER_REVIEW_SOURCE="$PWD/build/review-source"
+```
+
+Keep that environment variable set for the commands below. `GATEKEEPER_ENGINE_SOURCE`
+selects build grammar/header sources separately; it defaults to `duckdb/`. CI prepares
+the historical checkout automatically. Do not change inventory provenance to match a repin.
+
 ```sh
 .venv/bin/python -m pytest test -q
 GATEKEEPER_PARSER=peg .venv/bin/python -m pytest test -q  # the same suite under DuckDB's PEG parser

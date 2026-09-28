@@ -12,6 +12,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - Native release artifacts now target DuckDB 1.5.6. Engine source, Python lock, and
   extension-ci-tools pins move together; reviewed defaults and historical evidence are unchanged.
+  See the [dependency and compatibility review](docs/release-0.4.1-validation.md), including
+  runtime inventory drift and deferred updates.
 - Wasm EH and Windows MinGW distribution are temporarily deferred because matching official
   Wasm/CRAN R hosts are not published. Use the v0.4.0 assets with DuckDB 1.5.5 for those hosts.
   Restore both targets only after matching hosts pass the browser/R loadable tests.
