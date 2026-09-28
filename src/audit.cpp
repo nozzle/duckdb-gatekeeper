@@ -90,9 +90,8 @@ static Value PolicyHash(optional_ptr<const gatekeeper::Policy> policy) {
 	return Value(HashText(gatekeeper::PolicyValue(*policy).ToString()));
 }
 
-// Statement text as the record stores it: NUL bytes (which would truncate the message on the way into storage)
-// replaced first so every record stays parseable, then cut at the cap on a UTF-8 boundary, so the stored text
-// never exceeds MAX_LOGGED_STATEMENT bytes whatever the input contained.
+// Build the logged prefix in one bounded pass, replacing NUL bytes so storage cannot truncate the record,
+// then trim any partial UTF-8 character at the cut; at most MAX_LOGGED_STATEMENT bytes are stored.
 static Value StatementText(const string &statement) {
 	string text;
 	text.reserve(MinValue<idx_t>(statement.size(), MAX_LOGGED_STATEMENT));

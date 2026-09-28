@@ -33,7 +33,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   `schema VARCHAR` with `schema_path VARCHAR[]`, outermost schema first. JSON policies require
   version 2; version 1 and the old `schema` field are rejected. DuckDB 2.0 nested schemas retain
   full ancestry; 1.5 uses one-element paths. Wildcards match one component at exactly the stated
-  depth; `['*']` covers top-level schemas only. See the [migration guide](docs/policy-migration.md). (#104)
+  depth; `['*']` covers top-level schemas only. Replacement refusals retain the written path
+  in `table`, with no invented catalog/schema identity. See the [migration guide](docs/policy-migration.md). (#104)
 - **Breaking:** `allowed_functions` and `blocked_functions` are now lists of qualified rules
   `{catalog?, schema_path, name, type?}` in typed options, canonical settings, and JSON policy v2.
   Legacy string rules and `schema` fields receive consistent actionable diagnostics; see the
@@ -61,8 +62,7 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
     identities, collation helpers, and quantile/list-dispatch argument restrictions.
 - **Breaking:** violation STRUCTs append `function_type VARCHAR` and `object_type VARCHAR`,
   including audit decisions. Resolved refusals retain kind; unresolved/inapplicable fields are
-  empty strings. All evidence lists remain empty on failure. Replacement refusals retain the
-  written path in `table`, with no invented catalog/schema identity. (#113)
+  empty strings. All evidence lists remain empty on failure. (#113)
 - Caller-written Quack SQL delegation is never-bind. Private authorization refuses opaque
   trusted expansions; deferred binding and native 1.5 preparation can execute remotely first
   and remain unsupported. 1.5 attached objects are refused; 2.0 local base-table reads require
