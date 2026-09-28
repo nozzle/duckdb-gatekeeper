@@ -1270,10 +1270,7 @@ engine itself does, Gatekeeper follows the engine, and these differences are wor
   `ClientContext::BeginQueryInternal`'s caller, to be reported upstream; it does not weaken a
   refusal, it changes the error the following statement reports.
 
-Gatekeeper 0.4.0 writes each result vector with DuckDB 2.0's append API and checks row
-cardinality, fixing the mixed `enforced`/`warnings` projection and filter failure tracked in
-[#102](https://github.com/nozzle/duckdb-gatekeeper/issues/102). Reading those columns together
-is supported; 1.5 uses its existing chunk-cardinality API.
+Reading `enforced` and `warnings` together in projections and filters is supported on both engines.
 
 Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
 1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from

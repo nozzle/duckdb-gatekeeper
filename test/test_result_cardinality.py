@@ -19,7 +19,9 @@ def test_enforce_projection_on_fresh_connection(db, projection, expected, empty_
         db.execute("CALL enable_logging('Gatekeeper')")
         db.execute("SET enable_external_access=false; SET autoload_known_extensions=false; "
                    "SET autoinstall_known_extensions=false; SET lock_configuration=true")
-    assert db.execute(f"SELECT {projection} FROM gatekeeper_enforce()").fetchall() == [expected]
+    rows = db.execute(f"SELECT {projection}, len(warnings) FROM gatekeeper_enforce()").fetchall()
+    assert len(rows) == 1 and rows[0][:-1] == expected
+    assert (rows[0][-1] == 0) is empty_warnings
     assert db.execute("SELECT 42").fetchall() == [(42,)]
 
 
