@@ -1,3 +1,7 @@
+# name: test/sql/caller_functions.test
+# description: Function evidence distinguishes caller-scoped checks from trusted dependencies.
+# group: [gatekeeper]
+
 require gatekeeper
 
 statement ok

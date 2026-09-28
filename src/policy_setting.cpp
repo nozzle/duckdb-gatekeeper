@@ -86,8 +86,7 @@ static void Configure(ClientContext &context, TableFunctionInput &input, DataChu
 	SetPolicy(context, SetScope::GLOBAL, value);
 	config.SetOption(POLICY_SETTING, std::move(value));
 	state.finished = true;
-	output.SetCardinality(1);
-	output.SetValue(0, 0, Value::BOOLEAN(true));
+	engine::AppendResultRow(output, {Value::BOOLEAN(true)});
 }
 
 void RegisterPolicySetting(ExtensionLoader &loader) {

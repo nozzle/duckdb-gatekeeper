@@ -121,7 +121,7 @@ unique_ptr<FunctionData> BindParameterProbe(ClientContext &, TableFunctionBindIn
 	return nullptr;
 }
 
-void ParameterProbe(ClientContext &, TableFunctionInput &, DataChunk &output) { output.SetCardinality(0); }
+void ParameterProbe(ClientContext &, TableFunctionInput &, DataChunk &output) { output.CheckCardinality(0); }
 
 void CheckParameterHandles(Connection &catalog) {
 	Connection agent(*catalog.context->db);

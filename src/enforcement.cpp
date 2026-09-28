@@ -520,9 +520,7 @@ static void Enforce(ClientContext &context, TableFunctionInput &input, DataChunk
 	vector<Value> warnings;
 	for (const auto &warning : PostureWarnings(context))
 		warnings.emplace_back(warning);
-	output.SetCardinality(1);
-	output.SetValue(0, 0, Value::BOOLEAN(true));
-	output.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(warnings)));
+	engine::AppendResultRow(output, {Value::BOOLEAN(true), Value::LIST(LogicalType::VARCHAR, std::move(warnings))});
 	state.finished = true;
 }
 

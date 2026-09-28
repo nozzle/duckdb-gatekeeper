@@ -33,6 +33,24 @@
 namespace duckdb {
 namespace engine {
 
+// 2.0 tracks cardinality per vector: SetValue writes a slot without advancing its
+// size, and deprecated DataChunk::SetCardinality changes only the chunk count.
+// Append every field before checking the row, including LIST/STRUCT children.
+inline void AppendResultRow(DataChunk &output, const vector<Value> &fields) {
+	for (idx_t column = 0; column < fields.size(); column++) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		output.data[column].Append(fields[column]);
+#else
+		output.SetValue(column, 0, fields[column]);
+#endif
+	}
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	output.CheckCardinality(1);
+#else
+	output.SetCardinality(1);
+#endif
+}
+
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 //! A name as the engine's own APIs carry it: a catalog, function, column or parameter name.
 using Name = Identifier;

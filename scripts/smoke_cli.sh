@@ -82,7 +82,7 @@ EOF
 {
 	setup
 	cat <<'EOF'
-SELECT enforced FROM gatekeeper_enforce();
+SELECT enforced AND warnings IS NOT NULL FROM gatekeeper_enforce();
 SELECT sum(amount) AS allowed_sum FROM reporting.orders;
 SELECT * FROM secret;
 CREATE TABLE u(x INTEGER);
@@ -105,7 +105,7 @@ grep -q "'mode': enforce, .*'allowed': true, 'code': ok" enforce.out || fail "no
 	setup
 	cat <<'EOF'
 SET gatekeeper_log_only = true;
-SELECT enforced FROM gatekeeper_enforce();
+SELECT enforced AND warnings IS NOT NULL FROM gatekeeper_enforce();
 SELECT count(*) AS secret_rows FROM secret;
 EOF
 } | duckdb >logonly.out 2>logonly.err || true

@@ -154,13 +154,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   the upstream toolchain that leaves every `wasm_threads` extension unloadable, with the exit
   condition in [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101). (#103)
 
-### Known
+### Fixed
 
-- On the DuckDB 2.0 alpha, an expression that reads `warnings` after `enforced` from the same
-  `gatekeeper_enforce()` row mis-evaluates; read the columns separately or use `CALL`. Release
-  binaries target 1.5.5, which is unaffected.
-  See [Compatibility and review](docs/security.md#compatibility-and-review) and
-  [#102](https://github.com/nozzle/duckdb-gatekeeper/issues/102).
+- Write result rows using DuckDB 2.0's per-vector cardinality API. Combining `enforced` and
+  `warnings` in projections or filters now returns correct results instead of wrong answers
+  or an internal error invalidating the database (#102). Validation and configuration use
+  the same row writer. DuckDB 1.5 retains its existing cardinality API.
 
 ## 0.3.0 - 2026-09-23
 

@@ -1,0 +1,45 @@
+# name: test/sql/result_cardinality.test
+# description: Result vectors retain one-row cardinality through projections and filters.
+# group: [gatekeeper]
+
+require gatekeeper
+
+query II first
+SELECT enforced, warnings IS NOT NULL FROM gatekeeper_enforce();
+----
+true	true
+
+query II second
+SELECT enforced, warnings IS NULL FROM gatekeeper_enforce();
+----
+true	false
+
+query I conjunction
+SELECT enforced AND warnings IS NOT NULL FROM gatekeeper_enforce();
+----
+true
+
+query III reversed
+SELECT warnings IS NOT NULL, enforced, warnings IS NOT NULL FROM gatekeeper_enforce();
+----
+true	true	true
+
+query I arithmetic
+SELECT enforced::INTEGER + (warnings IS NOT NULL)::INTEGER FROM gatekeeper_enforce();
+----
+2
+
+query I filter
+SELECT enforced FROM gatekeeper_enforce() WHERE enforced AND warnings IS NOT NULL;
+----
+true
+
+query I conjunction
+SELECT 42;
+----
+42
+
+query III validation
+SELECT allowed, functions IS NOT NULL, allowed AND caller_functions IS NOT NULL FROM gatekeeper_validate('SELECT 1');
+----
+true	true	true
