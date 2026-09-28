@@ -338,7 +338,10 @@ CI invocation. It consumes both committed collections, checks optional-extension
 source-map kinds and exact version-specific missing identities, and rejects report,
 source-map, stage and hash mutations (including equal-count Excel scalar/table swaps).
 Source-dependent tooling tests accept `GATEKEEPER_ENGINE_SOURCE` for build grammar and
-`GATEKEEPER_REVIEW_SOURCE` for historical provenance; both default to local `duckdb/`.
+`GATEKEEPER_REVIEW_SOURCE` for historical provenance; both default to local `duckdb/`,
+so after a build-engine repin set the review variable to a separate historical checkout.
+The [testing setup](../CONTRIBUTING.md#testing) gives the exact checkout commands; CI
+performs that setup explicitly.
 The collection tests themselves need neither checkout nor extension artifact.
 
 ## Repinning the engine

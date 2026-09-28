@@ -95,9 +95,7 @@ void RegisterPolicySetting(ExtensionLoader &loader) {
 	config.AddExtensionOption(POLICY_SETTING, "Global Gatekeeper authorization ceiling", default_policy.type(),
 	                          default_policy, SetPolicy, SetScope::GLOBAL);
 	TableFunction configure("gatekeeper_configure", {}, Configure, BindConfigure, InitSingleRow);
-	for (const auto &name : gatekeeper::OptionNames())
-		configure.named_parameters[engine::ToName(name)] = LogicalType::ANY;
-	configure.named_parameters["json"] = LogicalType::ANY;
+	engine::RegisterOptions(configure, gatekeeper::OptionNames());
 	// One short sentence and no newlines; parameter names in OptionNames() order. See the description of
 	// gatekeeper_validate in gatekeeper_extension.cpp for why.
 	FunctionDescription description;

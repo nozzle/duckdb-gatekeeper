@@ -22,6 +22,8 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "name_path.hpp"
 #include "validator.hpp"
+#include <type_traits>
+#include <utility>
 
 #ifndef GATEKEEPER_DUCKDB_MAJOR
 #error "GATEKEEPER_DUCKDB_MAJOR must be defined by the Gatekeeper build"
@@ -65,6 +67,25 @@ inline const string &ToName(const string &text) { return text; }
 inline const string &Str(const string &text) { return text; }
 using NameList = vector<Name>;
 using ParameterMap = name_map_t<BoundParameterData>;
+
+// Newer 2.0 snapshots register optional table-function options as typed **kwargs.
+// Detect the old member so wheel-matched earlier 2.0 builds remain supported too.
+template <class T, class = void> struct HasNamedParameters : std::false_type {};
+template <class T>
+struct HasNamedParameters<T, std::void_t<decltype(std::declval<T &>().named_parameters)>> : std::true_type {};
+template <class T> inline void RegisterOptions(T &function, const std::vector<std::string> &names) {
+	if constexpr (HasNamedParameters<T>::value) {
+		for (const auto &name : names)
+			function.named_parameters[ToName(name)] = LogicalType::ANY;
+		function.named_parameters[ToName("json")] = LogicalType::ANY;
+	} else {
+		function.GetSignature().WithTypedKwargs(ToName("options"), [&](auto &options) {
+			for (const auto &name : names)
+				options.Add(ToName(name), LogicalType::ANY);
+			options.Add(ToName("json"), LogicalType::ANY);
+		});
+	}
+}
 
 // Bound expressions and the functions they carry.
 #if GATEKEEPER_DUCKDB_MAJOR >= 2

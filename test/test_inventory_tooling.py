@@ -170,8 +170,8 @@ def test_engine_selection_defaults(tmp_path):
     parser = argparse.ArgumentParser()
     add_engine_arguments(parser)
     # The pinned submodule is stamped with the release pin so shallow clones never produce v0.0.1.
-    assert checkout_revision(REVIEW_SOURCE) == SUPPORTED_DUCKDB_REVISION
-    assert engine_cmake_flags(parser.parse_args(["--duckdb-source", str(REVIEW_SOURCE)])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
+    assert checkout_revision(ROOT / "duckdb") == SUPPORTED_DUCKDB_REVISION
+    assert engine_cmake_flags(parser.parse_args([])) == ["-DOVERRIDE_GIT_DESCRIBE=v" + SUPPORTED_DUCKDB]
     assert engine_source(parser.parse_args([])) == (ROOT / "duckdb").resolve()
     # Other checkouts use their own Git metadata unless told otherwise. The cache entry is always
     # written (as empty) because an omitted -D would leave an earlier override in CMakeCache.txt.

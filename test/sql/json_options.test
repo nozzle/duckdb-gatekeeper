@@ -37,7 +37,7 @@ json requires VARCHAR
 statement error
 CALL gatekeeper_configure(json := '{}', json := '{}');
 ----
-duplicate Gatekeeper option
+<REGEX>:.*(duplicate Gatekeeper option|Duplicate named argument "json").*
 
 query T
 SELECT code FROM gatekeeper_validate('SELECT 1', json := NULL);

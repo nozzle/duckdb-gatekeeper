@@ -203,15 +203,14 @@ static void LoadInternal(ExtensionLoader &loader) {
 	InstallReplacementScan(config);
 	TableFunction validate("gatekeeper_validate", {LogicalType::VARCHAR}, GatekeeperValidate, BindValidate,
 	                       InitSingleRow);
-	for (const auto &name : gatekeeper::OptionNames())
-		validate.named_parameters[engine::ToName(name)] = LogicalType::ANY;
-	validate.named_parameters["json"] = LogicalType::ANY;
+	engine::RegisterOptions(validate, gatekeeper::OptionNames());
 	// Descriptions and examples feed duckdb_functions(), which the community-extensions site renders as
 	// the "Added Functions" table for this extension. Function entries do not keep CreateInfo::comment.
 	// The generator keeps only the first line of each description and shows it in one table cell, so keep
 	// these to a single short sentence and do not add newlines. Parameter names are paired positionally
 	// with named_parameters, an unordered map, so they are listed in OptionNames() order; this is only
-	// safe because every named option is ANY (pinned by test_documentation.py).
+	// safe because every named option is ANY (pinned by test_documentation.py). Newer 2.0
+	// signatures register those same optional options through typed kwargs in declaration order.
 	FunctionDescription description;
 	description.parameter_types = {LogicalType::VARCHAR};
 	description.parameter_names = {"sql"};

@@ -140,7 +140,8 @@ why `caller_functions` is not a confidentiality-safe projection.
 ## Feasibility matrix
 
 Source basis: DuckDB 1.5.5 d8cdaa33f and the inspected 2.0 candidate d4e72566a;
-the repository's compatibility workflow also pins 2.0 candidate 6844d1b. Neither engine pin is changed.
+the original compatibility run also covered 6844d1b. The 0.4.1 build pins are 1.5.6 and
+2.0 candidate d591bb1; historical source evidence remains unchanged.
 
 | Route | 1.5 provenance | 2.0 provenance | Enforcement and absent-provenance behavior |
 | --- | --- | --- | --- |

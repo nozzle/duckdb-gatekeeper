@@ -38,15 +38,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Post-1.5.5 v1.5-variegata snapshot: a different engine of the pinned release line.
+          # Retained pre-1.5.6 snapshot: prove compatibility with the earlier release-line API.
           - name: DuckDB 1.5 candidate (a3cd0de)
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
           # v2.0-cyanoptera snapshot: the next major, which labels itself v2.0.0-devN.
-          - name: DuckDB 2.0 candidate (6844d1b)
-            key: 6844d1b
-            ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+          - name: DuckDB 2.0 candidate (d591bb1)
+            key: d591bb1
+            ref: d591bb1da2de3cb12329c75aff2c31bebe922b59
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -116,9 +116,9 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          - name: DuckDB 2.0 candidate (6844d1b)
-            key: 6844d1b
-            ref: 6844d1bd8b80cc6637b4fe9411419a154f80ad39
+          - name: DuckDB 2.0 candidate (d591bb1)
+            key: d591bb1
+            ref: d591bb1da2de3cb12329c75aff2c31bebe922b59
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -133,8 +133,16 @@ jobs:
         # The submodule checkout is shallow; `git describe` (1.5) and `git rev-list --count` (2.0) need the
         # history back to the last tag, exactly as the community pipeline's full-depth checkout provides it.
         run: |
-          git -C duckdb fetch --unshallow --tags origin || git -C duckdb fetch --tags origin
-          git -C duckdb fetch origin "$CANDIDATE_ENGINE"
+          for attempt in 1 2 3; do
+            if [ "$(git -C duckdb rev-parse --is-shallow-repository)" = true ]; then
+              git -C duckdb -c fetch.parallel=1 fetch --no-recurse-submodules --unshallow --tags origin && break
+            else
+              git -C duckdb fetch --no-recurse-submodules --tags origin && break
+            fi
+            sleep 5
+          done
+          test "$(git -C duckdb rev-parse --is-shallow-repository)" = false
+          git -C duckdb fetch --no-recurse-submodules origin "$CANDIDATE_ENGINE"
           git -C duckdb checkout --quiet "$CANDIDATE_ENGINE"
           git -C duckdb describe --tags --long
       - uses: ./.github/actions/setup

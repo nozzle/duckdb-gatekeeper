@@ -65,7 +65,7 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path, monkeypatch):
     output = tmp_path / "release"
     release.package_release(tag, artifacts, output)
     lines = (output / "SHA256SUMS").read_text().splitlines()
-    assert len(lines) == 10
+    assert len(lines) == 8
     for line in lines:
         digest, name = line.split("  ")
         assert name.startswith(f"gatekeeper-{TAG}-duckdb-{ENGINE_TAG}-")

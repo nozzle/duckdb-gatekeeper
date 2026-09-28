@@ -9,6 +9,12 @@ must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
+For 0.4.1 the shipped matrix has eight native targets. Wasm EH and Windows MinGW are
+temporarily excluded because their official hosts still embed 1.5.5. The full-matrix
+procedure below describes restoration: update the runtime/CRAN pins, enable the retained
+browser/R jobs, restore their packaging dependencies, platform list and descriptor entries,
+then require all host tests before shipping them again. MVP/threads exclusions remain separate.
+
 1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
    the generated C++ constants consume) and a set of coupled edits the package gate and the
    tests refuse to release without:
@@ -33,7 +39,9 @@ must exist and pass CI before it is submitted.
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
-3. Require the full distribution matrix: Linux amd64/arm64 glibc and musl, macOS
+3. Require the release's declared distribution matrix. For 0.4.1 this is Linux amd64/arm64
+   glibc and musl, macOS amd64/arm64, and Windows amd64/ARM64 MSVC (eight targets).
+   The restoration target is the full matrix: Linux amd64/arm64 glibc and musl, macOS
    amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native artifact
    is tested in two ways and Wasm EH in the browser, and the checklist is only what actually
    runs:
@@ -71,8 +79,9 @@ git push origin vX.Y.Z
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
-the full platform builds/tests and Chromium against the distribution Wasm EH artifact.
-Only after both succeed does the release job package the artifacts and publish a
+every declared platform's build and official-host tests. In 0.4.1 that excludes the
+deferred Wasm/R jobs; when restored, those jobs must gate packaging again.
+Only after the required jobs succeed does the release job package the artifacts and publish a
 GitHub Release. The tag must match the CMake and runtime extension versions.
 Packaging also runs on PRs and `main`, uploading `gatekeeper-release-assets` as a CI
 artifact so archive creation is tested before tagging. Only a version-tag push publishes
@@ -148,7 +157,7 @@ silently overwritten. Do not move a published version tag.
 
 ## After community deployment
 
-Using DuckDB 1.5.5 with normal signature verification and a fresh extension directory,
+Using DuckDB 1.5.6 with normal signature verification and a fresh extension directory,
 verify installation, loading, and the descriptor's hello-world queries:
 
 ```sql

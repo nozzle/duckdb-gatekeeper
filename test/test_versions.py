@@ -79,6 +79,19 @@ def test_ci_tools_workflow_input_and_submodule_pins_agree():
     assert 'dependency-name: "duckdb/extension-ci-tools"' in dependabot
 
 
+def test_distribution_platforms_match_descriptor_and_packaging():
+    from package_release import PLATFORMS
+    full = {"linux_amd64", "linux_arm64", "linux_amd64_musl", "linux_arm64_musl",
+            "osx_amd64", "osx_arm64", "windows_amd64", "windows_arm64",
+            "windows_amd64_mingw", "wasm_eh", "wasm_mvp", "wasm_threads"}
+    workflow = (ROOT / ".github/workflows/MainDistributionPipeline.yml").read_text()
+    descriptor = (ROOT / "community/description.yml").read_text()
+    for text, key in [(workflow, "exclude_archs"), (descriptor, "excluded_platforms")]:
+        excluded = set(re.search(rf"{key}: '([^']+)'", text)[1].split(";"))
+        assert excluded <= full
+        assert set(PLATFORMS) == full - excluded
+
+
 def test_engine_guard_uses_build_engine(db):
     """The artifact under test is stamped with the engine that just accepted it, and the stamp is inspectable."""
     version, source_id = db.execute("PRAGMA version").fetchone()[:2]

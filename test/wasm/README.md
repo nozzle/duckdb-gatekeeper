@@ -1,6 +1,12 @@
 # Wasm EH support and browser tests
 
-Gatekeeper supports the **EH (native WebAssembly exception handling)** bundle of
+**0.4.1 temporarily defers Wasm EH distribution and browser CI:** no published runtime
+embeds its DuckDB 1.5.6 release engine yet. Use the immutable v0.4.0 source/assets and
+the matching runtime below. Restore the runtime/npm lock, Emscripten pin, workflow jobs,
+package matrix and descriptor together once a 1.5.6 runtime passes these tests.
+Windows MinGW is similarly deferred pending a matching CRAN R host.
+
+Gatekeeper v0.4.0 supports the **EH (native WebAssembly exception handling)** bundle of
 DuckDB-Wasm with embedded **DuckDB 1.5.5**. The tested npm package is
 `@duckdb/duckdb-wasm@1.33.1-dev64.0`; its package version is independent of the
 engine version. Pin this package and verify its embedded engine; do not bypass engine
@@ -9,7 +15,7 @@ metadata/version checks.
 ## Build and test locally
 
 Requires Docker, Python 3.10+, Node.js 22+, and initialized repository submodules.
-From the repository root:
+From a checkout of v0.4.0 (the retained runtime does not match 0.4.1's engine):
 
 ```sh
 python3 scripts/build_wasm.py --jobs 4
@@ -98,7 +104,8 @@ against a user who controls their browser.
 When repinning DuckDB, coordinate the npm runtime pin and lockfile, this documentation,
 and Emscripten compatibility with `extension-ci-tools`. `smoke.mjs` reads the engine pin
 from `versions.cmake` and fails when the runtime embeds a different engine. DuckDB-Wasm is excluded from routine Dependabot updates.
-Other npm test dependencies receive monthly updates. Browser CI builds and tests
-EH on every PR; the distribution workflow also builds the standard `wasm_eh`
-artifact through the community tooling, downloads that exact artifact, and runs
-the same browser checks against it.
+Other npm test dependencies receive monthly updates. In 0.4.1 both browser jobs are
+explicitly disabled and `wasm_eh` is excluded from distribution: the retained runtime
+embeds 1.5.5, not the release's 1.5.6. After a matching runtime is published and pinned,
+restore PR browser builds, the distribution-artifact browser test, packaging dependencies,
+and descriptor/platform entries together. The v0.4.0 tag retains the validated EH pipeline.

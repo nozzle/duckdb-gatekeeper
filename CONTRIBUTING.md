@@ -38,7 +38,7 @@ sanitizer and fuzzer options, targets, the Emscripten container) stays in each s
 accepts an engine identifying as that release). `--duckdb-version` tells the engine build how
 to label itself; the identity CMake then computes is what `scripts/generate.py` bakes into the
 load-time guard, through its own `--engine-version-label`/`--engine-source-id`. A checkout at exactly the pinned engine
-revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because a shallow
+revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.6`), because a shallow
 clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy `v0.0.1`
 that no real engine loads. Every other checkout, including another revision inside `duckdb/`,
 uses its own Git metadata unless `--duckdb-version vX.Y.Z` overrides it; the `Makefile`
@@ -68,7 +68,7 @@ OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, eve
 ### Loading unsigned builds
 
 Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
-engine matching the binary (1.5.5 for our release artifacts) and explicitly enable
+engine matching the binary (1.5.6 for our release artifacts) and explicitly enable
 unsigned loading for these development artifacts:
 
 ```sh
@@ -95,6 +95,20 @@ make an unsigned extension a DuckDB-signed community build. See the
 [Wasm instructions](test/wasm/README.md) for EH loading and its pinned runtime.
 
 ## Testing
+
+The optional provenance-tooling tests compare historical review sources, not the current
+build engine. For a full local run after the 1.5.6 repin, prepare a separate 1.5.5 checkout:
+
+```sh
+git clone --shared --no-checkout duckdb build/review-source
+git -C build/review-source fetch https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
+git -C build/review-source checkout --detach FETCH_HEAD
+export GATEKEEPER_REVIEW_SOURCE="$PWD/build/review-source"
+```
+
+Keep that environment variable set for the commands below. `GATEKEEPER_ENGINE_SOURCE`
+selects build grammar/header sources separately; it defaults to `duckdb/`. CI prepares
+the historical checkout automatically. Do not change inventory provenance to match a repin.
 
 ```sh
 .venv/bin/python -m pytest test -q
@@ -291,7 +305,7 @@ catalog and scan function.
 
 Run `.venv/bin/python scripts/test_quack.py`
 for the disposable loopback client/server fixture.
-It downloads checksum-pinned 1.5.5 Quack/httpfs artifacts; candidate engines require explicit
+It downloads checksum-pinned 1.5.6 Quack/httpfs artifacts; candidate engines require explicit
 matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
 source pins, server-session limits, and the distinction between observed release behavior and
 candidate coverage. The opt-in tests live in `test/integration/test_quack.py`.
