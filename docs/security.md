@@ -702,7 +702,7 @@ Known denied functions retain their catalog/schema/name identity and kind (`func
 Resolved catalog-object denials retain `object_type = 'table'` or `'view'`, including
 allowlist misses, explicit blocks, and `internal_object` denials. The `table` rule can deny
 either kind. Each kind field is `''` when unresolved or inapplicable; replacement-reader
-denials do not infer an object kind from their written path. `objects`, `functions`, and
+denials do not infer an object kind from their written path. `objects`, `functions`,
 `caller_objects`, and `caller_functions` remain empty on failure. This applies equally to `validate`, `enforce`,
 and `log_only` records returned by `duckdb_logs_parsed('Gatekeeper')`; consumers pinning
 the STRUCT schema must include both trailing kind fields. The rest of the record is:
