@@ -169,6 +169,10 @@ setup in `test/native/probe_database.hpp`.
 
 ### Running the suite on DuckDB 2.0
 
+The Quack candidate workflow also runs the full Python suite against its hash-pinned 2.0
+wheel and matching loadable. The separate compatibility workflow tests the newer engine
+snapshot through SQL and native probes; historical inventory captures retain their own pins.
+
 The same source builds against `v2.0-cyanoptera` (see
 [Compatibility and review](docs/security.md#compatibility-and-review) for what the engine
 does differently there). The deep suite runs inside a `duckdb` Python package, and the load-time

@@ -94,13 +94,25 @@ static Value PolicyHash(optional_ptr<const gatekeeper::Policy> policy) {
 // replaced first so every record stays parseable, then cut at the cap on a UTF-8 boundary, so the stored text
 // never exceeds MAX_LOGGED_STATEMENT bytes whatever the input contained.
 static Value StatementText(const string &statement) {
-	string text = statement;
-	for (size_t at = text.find('\0'); at != string::npos; at = text.find('\0', at + 3))
-		text.replace(at, 1, "\xEF\xBF\xBD");
-	auto length = MinValue<idx_t>(text.size(), MAX_LOGGED_STATEMENT);
-	while (length > 0 && length < text.size() && (static_cast<uint8_t>(text[length]) & 0xC0) == 0x80)
-		length--;
-	text.resize(length);
+	string text;
+	text.reserve(MinValue<idx_t>(statement.size(), MAX_LOGGED_STATEMENT));
+	size_t at = 0;
+	for (; at < statement.size() && text.size() < MAX_LOGGED_STATEMENT; at++) {
+		if (statement[at] == '\0') {
+			if (MAX_LOGGED_STATEMENT - text.size() < 3)
+				break;
+			text += "\xEF\xBF\xBD";
+		} else {
+			text += statement[at];
+		}
+	}
+	// If the next byte continues a UTF-8 character, remove its partial prefix.
+	if (at < statement.size() && (static_cast<uint8_t>(statement[at]) & 0xC0) == 0x80) {
+		while (!text.empty() && (static_cast<uint8_t>(text.back()) & 0xC0) == 0x80)
+			text.pop_back();
+		if (!text.empty())
+			text.pop_back();
+	}
 	return Value(std::move(text));
 }
 

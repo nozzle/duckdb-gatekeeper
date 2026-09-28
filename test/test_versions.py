@@ -69,6 +69,16 @@ def test_distribution_engine_pins():
     assert SUPPORTED_DUCKDB_REVISION in descriptor
 
 
+def test_ci_tools_workflow_input_and_submodule_pins_agree():
+    workflow = (ROOT / ".github/workflows/MainDistributionPipeline.yml").read_text()
+    ref = re.search(r"_extension_distribution.yml@([0-9a-f]{40})", workflow)[1]
+    assert re.search(r"ci_tools_version: ([0-9a-f]{40})", workflow)[1] == ref
+    tracked = subprocess.check_output(["git", "ls-tree", "HEAD", "extension-ci-tools"], cwd=ROOT, text=True)
+    assert tracked.split()[2] == ref
+    dependabot = (ROOT / ".github/dependabot.yml").read_text()
+    assert 'dependency-name: "duckdb/extension-ci-tools"' in dependabot
+
+
 def test_engine_guard_uses_build_engine(db):
     """The artifact under test is stamped with the engine that just accepted it, and the stamp is inspectable."""
     version, source_id = db.execute("PRAGMA version").fetchone()[:2]

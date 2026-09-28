@@ -1,0 +1,40 @@
+# name: test/sql/release_regressions.test
+# description: Pre-release evidence and rewrapped-denial audit regressions.
+# group: [gatekeeper]
+
+require gatekeeper
+
+query I
+SELECT len(list_filter(caller_functions, lambda f: f.name = 'sum' AND f.type = 'aggregate')) FROM gatekeeper_validate('SELECT list_sum(NULL)');
+----
+1
+
+statement ok
+CALL gatekeeper_configure(Allowed_Functions := [{catalog:'system',schema_path:['main'],name:'list_aggregate',type:'scalar'}]);
+
+query I
+SELECT len(list_filter(caller_functions, lambda f: f.name = 'sum' AND f.type = 'aggregate')) FROM gatekeeper_validate('SELECT list_aggregate(NULL, ''sum'')');
+----
+1
+
+statement ok
+CREATE MACRO activation() AS TABLE SELECT * FROM gatekeeper_enforce();
+
+statement ok
+CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'activation'}]);
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+statement error agent
+SELECT * FROM activation();
+----
+Gatekeeper denied this statement
+
+query ITT
+SELECT count(*), min(code), min(boundary) FROM duckdb_logs_parsed('Gatekeeper') WHERE mode='enforce' AND statement='SELECT * FROM activation();';
+----
+1	forbidden	authorize

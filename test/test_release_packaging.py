@@ -20,7 +20,8 @@ CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 # heading and Unreleased is left empty. Between releases the checkout is not in that state, so a test that
 # packages a tag starts from it; the version's own section must already exist, which is the coupled edit
 # docs/releasing.md asks for and these tests refuse to do without.
-PINNED_LINKS = (("community/description.yml", "/blob/main/", f"/blob/{TAG}/"),)
+PINNED_LINKS = ((("community/description.yml", "/blob/main/", f"/blob/{TAG}/"),)
+                if "/blob/main/" in (ROOT / "community/description.yml").read_text() else ())
 RELEASED = (("CHANGELOG.md", release.changelog_sections(CHANGELOG).get("Unreleased", ""), ""),) + PINNED_LINKS
 
 
@@ -82,7 +83,7 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path, monkeypatch):
     if tag:
         # The notes lead with the release's own changelog section, then the boilerplate.
         changes = release.changelog_sections(CHANGELOG)[EXTENSION_VERSION]
-        assert changes and notes.startswith(changes + "\n\n---\n\n")
+        assert changes and notes.startswith(release.release_links(changes, tag) + "\n\n---\n\n")
 
 
 @pytest.mark.parametrize("damage", ["missing_target", "empty_binary", "extra_target", "extra_file", "wrong_engine"])
@@ -193,6 +194,13 @@ def test_development_documentation_links_are_only_allowed_without_a_tag(tmp_path
 ])
 def test_changelog_gate(tmp_path, monkeypatch, tag, edits, message):
     # These cases isolate changelog errors from the separate release-link gate.
-    checkout(tmp_path, monkeypatch, edits if PINNED_LINKS[0] in edits else PINNED_LINKS + edits)
+    checkout(tmp_path, monkeypatch, edits if not PINNED_LINKS or PINNED_LINKS[0] in edits else PINNED_LINKS + edits)
     with pytest.raises(ValueError, match=message):
         release.release_version(tag)
+
+
+def test_release_note_links_are_tag_pinned():
+    text = "[guide](docs/policy-migration.md#results) [web](https://example.com) [section](#added)"
+    assert release.release_links(text, "v0.4.0") == (
+        "[guide](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.4.0/docs/policy-migration.md#results) "
+        "[web](https://example.com) [section](#added)")

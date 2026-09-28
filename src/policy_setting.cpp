@@ -64,7 +64,7 @@ static unique_ptr<FunctionData> BindConfigure(ClientContext &, TableFunctionBind
 		gatekeeper::Policy policy;
 		std::vector<std::pair<std::string, Value>> options;
 		for (const auto &option : input.named_parameters)
-			options.emplace_back(engine::Str(option.first), option.second);
+			options.emplace_back(gatekeeper::Lower(engine::Str(option.first)), option.second);
 		gatekeeper::ApplyArguments(policy, options);
 		types.push_back(LogicalType::BOOLEAN);
 		names.push_back("Success");

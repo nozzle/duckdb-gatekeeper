@@ -78,6 +78,16 @@ def release_version(tag):
     return version
 
 
+def release_links(text, tag):
+    """Changelog links must resolve from the release page, not its URL directory."""
+    def replace(match):
+        target = match[1]
+        if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith(("/", "#")):
+            return match[0]
+        return "](https://github.com/nozzle/duckdb-gatekeeper/blob/" + tag + "/" + target + ")"
+    return re.sub(r"\]\(([^\s)]+)\)", replace, text)
+
+
 def package_release(tag, artifacts, output):
     version = release_version(tag)
     tag = tag or f"v{version}"
@@ -117,7 +127,7 @@ def package_release(tag, artifacts, output):
     # packaging check between releases carries the previous release's).
     changes = changelog_sections((ROOT / "CHANGELOG.md").read_text(encoding="utf-8")).get(version, "")
     (output / "RELEASE_NOTES.md").write_text(
-        (changes + "\n\n---\n\n" if changes else "") +
+        (release_links(changes, tag) + "\n\n---\n\n" if changes else "") +
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
         "They are not DuckDB-signed community binaries. The full distribution matrix "

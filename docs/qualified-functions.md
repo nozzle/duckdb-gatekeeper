@@ -107,6 +107,8 @@ enforcement. Three important sources of conservative attribution are:
 
 Caller expressions passed into host macros or lambda bodies remain caller-attributable.
 `list_sum(l)` includes `list_sum/macro`, `list_aggr/scalar`, and `sum/aggregate`.
+This includes `list_sum(NULL)`: the aggregate permission is checked before binding even
+when the engine's NULL-list fast path leaves no executable aggregate in the plan.
 `first(x) OVER ()` reports `first/aggregate` plus `first_value/window` on 1.5, and only
 `first_value/window` on 2.0. Neither is configurable alias equivalence.
 

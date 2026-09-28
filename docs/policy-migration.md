@@ -57,6 +57,27 @@ accepts the complete canonical setting: DuckDB casts it before Gatekeeper can
 inspect it, so a legacy field may instead be reported as a NULL canonical field.
 Canonical catalog/type wildcards use empty strings, not NULL; round-trip the value
 returned by `current_setting('gatekeeper_policy')` when using `SET`.
+
+## Result schemas in 0.4.0
+
+All object/function evidence and violation structs replace the scalar `schema VARCHAR`
+field with `schema_path VARCHAR[]`. Preserve the path as components; joining it with dots
+loses the distinction between nested schemas and quoted identifiers containing dots.
+Object lists (`objects`, `caller_objects`) contain `{catalog, schema_path, table, type}`;
+function lists (`functions`, `caller_functions`) contain `{catalog, schema_path, name, type}`.
+
+Violations now contain these fields in order:
+
+```text
+rule VARCHAR, message VARCHAR, catalog VARCHAR, schema_path VARCHAR[],
+table VARCHAR, function_name VARCHAR, position BIGINT,
+function_type VARCHAR, object_type VARCHAR
+```
+
+The two trailing kind fields identify resolved denials even though failed decisions have
+empty evidence lists. Unresolved/inapplicable kinds are empty strings; unavailable positions
+are NULL. Update native/Arrow/STRUCT consumers and audit readers that pin the complete type.
+
 ## Caller function evidence in 0.4.0
 
 Validation appends `caller_functions` as column 10, using the same identity STRUCT as

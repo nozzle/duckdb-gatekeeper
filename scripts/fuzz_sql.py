@@ -27,7 +27,7 @@ def main():
                                "SELECT * FROM t WHERE x=? LIMIT $n", "SELECT 1 LIMIT len(repeat('x',20000000))",
                                "SELECT $1", "SELECT * FROM range($1)", "SELECT 1; SELECT 2",
                                "SELECT 1;", "SELECT ';'", "SELECT * FROM missing; DROP TABLE t",
-                               "SELECT list_sum([1,2])", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
+                               "SELECT list_sum([1,2])", "SELECT list_sum(NULL)", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
                                "SELECT list_unique($1)", "SELECT list_sort($1)", "SELECT unnest([1,2])",
                                "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')",
                                "WITH unused AS (SELECT md5('x')) SELECT 1",

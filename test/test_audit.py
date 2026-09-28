@@ -1,13 +1,16 @@
 """Audit log: every decision Gatekeeper makes is a structured record of log type 'Gatekeeper'."""
 import concurrent.futures
 import json
+import os
+import subprocess
+import sys
 import threading
 import time
 
 import duckdb
 import pytest
 
-from support.artifact import by_parser, literal
+from support.artifact import EXTENSION, by_parser, literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -284,6 +287,74 @@ def test_multibyte_text_is_cut_on_a_character_boundary(db):
     [record] = decisions(db)
     assert record["statement_length"] == len(sql.encode())
     assert record["statement"].encode() == sql.encode()[:65535]  # backed off one byte to the character boundary
+
+
+def test_large_nul_rejection_has_bounded_logging_work():
+    # A subprocess deadline catches quadratic whole-input expansion without leaving a
+    # blocked engine thread in pytest. The old implementation takes minutes for 4 MiB.
+    script = """
+import duckdb, os
+c = duckdb.connect(config={'allow_unsigned_extensions': True})
+c.execute("LOAD '" + os.environ['GATEKEEPER_EXTENSION'].replace("'", "''") + "'")
+c.execute("CALL enable_logging('Gatekeeper')")
+assert c.execute('SELECT code FROM gatekeeper_validate(?)', ['\\0' * (4 * 1024 * 1024)]).fetchone() == ('invalid_input',)
+text, size = c.execute("SELECT statement, statement_length FROM duckdb_logs_parsed('Gatekeeper')").fetchone()
+assert text == '\\ufffd' * (65536 // 3) and size == 4 * 1024 * 1024
+"""
+    subprocess.run([sys.executable, "-c", script], check=True, timeout=15,
+                   env={**os.environ, "GATEKEEPER_EXTENSION": str(EXTENSION)})
+
+
+@pytest.mark.parametrize("body", ["SELECT * FROM gatekeeper_enforce()",
+                                  "SELECT * FROM query('SELECT * FROM gatekeeper_enforce()')"])
+@pytest.mark.parametrize("log_only", [False, True])
+def test_rewrapped_trusted_body_denial_is_recorded(db, body, log_only):
+    db.execute(f"CREATE MACRO activation() AS TABLE {body}")
+    configure(db, {"allowed_functions": [{"schema_path": ["main"], "name": "activation"}]})
+    enable(db)
+    with db.cursor() as agent:
+        enforce(agent)
+        db.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
+        if log_only:
+            agent.execute("SELECT * FROM activation()").fetchall()
+        else:
+            with pytest.raises(duckdb.PermissionException, match=DENIED):
+                agent.execute("SELECT * FROM activation()").fetchall()
+    [record] = [r for r in decisions(db) if r["statement"] == "SELECT * FROM activation()"]
+    assert record["mode"] == ("log_only" if log_only else "enforce")
+    assert record["code"] == "forbidden" and record["boundary"] == "authorize"
+    assert record["violations"][0]["function_name"] == "gatekeeper_enforce"
+    assert record["functions"] == record["caller_functions"] == []
+
+
+def test_null_list_aggregate_audit_evidence(db):
+    enable(db, "debug")
+    with db.cursor() as agent:
+        enforce(agent)
+        agent.execute("SELECT list_sum(NULL)").fetchall()
+    [record] = decisions(db, "mode = 'enforce'")
+    assert {"catalog": "system", "schema_path": ["main"], "name": "sum", "type": "aggregate"} in record["caller_functions"]
+
+
+@pytest.mark.parametrize("log_only", [False, True])
+def test_engine_permission_error_is_not_a_policy_denial(db, log_only):
+    configure(db, {"allowed_functions": [{"catalog": "system", "schema_path": ["main"],
+                                        "name": "read_csv", "type": "table"}]})
+    db.execute("SET enable_external_access = false")
+    enable(db)
+    sql = "SELECT * FROM read_csv('gatekeeper-no-access.csv')"
+    with db.cursor() as agent:
+        enforce(agent)
+        db.execute(f"SET gatekeeper_log_only = {str(log_only).lower()}")
+        with pytest.raises(duckdb.Error, match="external access.*disabled|file system.*disabled") as caught:
+            agent.execute(sql).fetchall()
+        assert not DENIED.search(str(caught.value))
+    found = decisions(db)
+    if log_only:
+        assert len(found) == 1 and found[0]["code"] == "binding"
+        assert found[0]["violations"] == [] and found[0]["error_type"] == "Permission"
+    else:
+        assert found == []
 
 
 def test_sandboxed_connection_cannot_reach_the_log(catalog, agent, tmp_path):

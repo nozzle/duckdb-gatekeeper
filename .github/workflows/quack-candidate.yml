@@ -44,3 +44,8 @@ jobs:
         # Downloads exact hash-pinned fa3f82c53c Quack and 0507d4ae49 httpfs artifacts.
         # --candidate verifies Python's PRAGMA version and makes any pytest skip fail the job.
         run: python scripts/test_quack.py --candidate
+      - name: Full Python suite against the matching DuckDB 2.0 loadable
+        env:
+          GATEKEEPER_ENGINE_SOURCE: ${{ github.workspace }}/build/quack-source
+        # Inventory tooling verifies the release pin; it runs in the release-engine jobs.
+        run: python -m pytest test -q --ignore test/test_inventory_tooling.py
