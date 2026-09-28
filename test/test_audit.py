@@ -71,11 +71,13 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
         # functions gatekeeper_validate reports cover those the shape the data selected bound.
         if rewritten:
             assert set(union(found, "functions")) <= set(union([expected], "functions")), (sql, found)
+            assert set(union(found, "caller_functions")) <= set(union([expected], "caller_functions")), (sql, found)
         else:
             assert record["functions"] == expected["functions"], (sql, record)
+            assert record["caller_functions"] == expected["caller_functions"], (sql, record)
     else:
         assert record["boundary"] in {"binding", "authorize", "execution", "replacement_scan"}
-        assert record["objects"] == record["functions"] == record["caller_objects"] == []
+        assert record["objects"] == record["functions"] == record["caller_objects"] == record["caller_functions"] == []
 
 
 def union(records, column):

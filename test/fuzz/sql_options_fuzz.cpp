@@ -49,7 +49,7 @@ static Value Decision(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!chunk || chunk->size() != 1)
 		std::abort();
-	if (chunk->ColumnCount() != 9)
+	if (chunk->ColumnCount() != 10)
 		std::abort();
 	child_list_t<Value> columns;
 	for (idx_t i = 0; i < chunk->ColumnCount(); i++)
@@ -59,9 +59,9 @@ static Value Decision(QueryResult &result) {
 	if (extra && extra->size())
 		std::abort();
 	auto &fields = StructValue::GetChildren(value);
-	if (fields.size() != 9)
+	if (fields.size() != 10)
 		std::abort();
-	for (size_t i : {size_t(6), size_t(7), size_t(8)}) {
+	for (size_t i : {size_t(6), size_t(7), size_t(8), size_t(9)}) {
 		const auto &entries = ListValue::GetChildren(fields[i]);
 		if (!fields[0].GetValue<bool>() && !entries.empty())
 			std::abort();
@@ -99,6 +99,16 @@ static Value Decision(QueryResult &result) {
 			std::abort();
 	}
 	const auto &violations = ListValue::GetChildren(fields[2]);
+	for (const auto &caller : ListValue::GetChildren(fields[9])) {
+		auto &parts = StructValue::GetChildren(caller);
+		if (parts[0].GetValue<string>().empty() || ListValue::GetChildren(parts[1]).empty())
+			std::abort();
+		bool found = false;
+		for (const auto &function : ListValue::GetChildren(fields[7]))
+			found |= Value::NotDistinctFrom(caller, function);
+		if (!found)
+			std::abort();
+	}
 	const auto error = fields[4].GetValue<std::string>();
 	if (fields[0].GetValue<bool>() != (code == "ok"))
 		std::abort();
@@ -207,6 +217,55 @@ static bool GatekeeperDenial(const ErrorData &error) {
 static void Fail(const char *why) {
 	fprintf(stderr, "gatekeeper fuzz: %s\n", why);
 	std::abort();
+}
+
+static void CheckFunctionEvidence(Connection &connection, const string &sql) {
+	auto raw = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
+	auto value = Decision(*raw);
+	auto &fields = StructValue::GetChildren(value);
+	if (fields.size() != 10 || !fields[0].GetValue<bool>())
+		return;
+	auto &functions = ListValue::GetChildren(fields[7]);
+	auto &callers = ListValue::GetChildren(fields[9]);
+	auto replay_raw = connection.Query(
+	    "SELECT * FROM gatekeeper_validate($1, use_default_functions := false, allowed_functions := $2)", Value(sql),
+	    fields[9]);
+	auto replay_value = Decision(*replay_raw);
+	auto &replay = StructValue::GetChildren(replay_value);
+	if (replay.size() != 10)
+		Fail("function evidence: invalid grant replay");
+	if (!replay[0].GetValue<bool>()) {
+		auto &violations = ListValue::GetChildren(replay[2]);
+		if (replay[1].GetValue<string>() != "forbidden" || violations.empty())
+			Fail("function evidence: grant replay failed outside preflight");
+		for (const auto &violation : violations) {
+			auto &v = StructValue::GetChildren(violation);
+			auto name = v[5].GetValue<string>();
+			if (v[0].GetValue<string>() != "function" || !v[2].GetValue<string>().empty() ||
+			    !ListValue::GetChildren(v[3]).empty() || !v[7].GetValue<string>().empty() ||
+			    v[1].GetValue<string>() != "function is not allowed: " + name)
+				Fail("function evidence: identity-level grant missing");
+			for (const auto &function : functions)
+				if (gatekeeper::Lower(StructValue::GetChildren(function)[2].GetValue<string>()) == name)
+					Fail("function evidence: bound preflight name missing from grants");
+		}
+	}
+	// Bound replay cost per fuzz input; the corpus pytest checks every identity.
+	for (idx_t i = 0; i < functions.size() && i < 8; i++) {
+		auto &function = functions[i];
+		auto &parts = StructValue::GetChildren(function);
+		if (parts[0].GetValue<string>().empty() || ListValue::GetChildren(parts[1]).empty())
+			continue; // Decision() already forbids uncatalogued caller evidence.
+		bool caller = false;
+		for (const auto &entry : callers)
+			caller |= Value::NotDistinctFrom(function, entry);
+		auto blocked_raw = connection.Query("SELECT * FROM gatekeeper_validate($1, blocked_functions := $2)",
+		                                    Value(sql), Value::LIST(function.type(), {function}));
+		auto blocked_value = Decision(*blocked_raw);
+		auto &blocked = StructValue::GetChildren(blocked_value);
+		if (blocked.size() != 10 || (!blocked[0].GetValue<bool>()) != caller)
+			Fail("function evidence: exact block disagrees with attribution");
+	}
 }
 
 // Whether the text is one PRAGMA statement, which DuckDB rewrites into a SELECT before any hook runs: the
@@ -982,6 +1041,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		return 0;
 	}
 	if (data[0] % 16 == 12) {
+		CheckFunctionEvidence(connection, bytes);
 		CheckEnforcedParity(database, connection, bytes);
 		return 0;
 	}
@@ -991,7 +1051,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		                 "SELECT * FROM gatekeeper_validate($1, blocked_functions := "
 		                 "[{schema_path:['*'],name:'json_extract'},{schema_path:['*'],name:'struct_extract'}])",
 		                 text, limit);
-		if (StructValue::GetChildren(first).size() == 9) {
+		if (StructValue::GetChildren(first).size() == 10) {
 			for (const auto &violation : ListValue::GetChildren(StructValue::GetChildren(first)[2])) {
 				auto &fields = StructValue::GetChildren(violation);
 				if (fields[0].GetValue<string>() != "function")
@@ -1009,7 +1069,7 @@ static int Fuzz(const uint8_t *data, size_t size) {
 					    "[{schema_path:['*'],name:'json_extract'},{schema_path:['*'],name:'struct_extract'}])",
 					    Value("SELECT \"" + quoted + "\"(1)"), limit);
 				auto &decision = StructValue::GetChildren(explicit_result);
-				if (decision.size() != 9 || decision[1].GetValue<string>() != "forbidden")
+				if (decision.size() != 10 || decision[1].GetValue<string>() != "forbidden")
 					std::abort();
 			}
 		}

@@ -82,9 +82,54 @@ schema fields, both function rule lists, typed empty lists, and canonical settin
 ## Public evidence
 
 `functions` remains combined host-facing binding evidence, including caller-attributable
-functions and trusted dependencies. A public `caller_functions` evidence field is explicitly
-deferred and is not implemented. `caller_objects` is the existing conservative catalog-table/view
+functions and trusted dependencies. `caller_functions` records the identities checked by
+caller-scoped function policy at any authorization point. `caller_objects` is the conservative catalog-table/view
 subset of `objects`; see [declared input validation](security.md#declared-input-validation).
+
+### Caller function evidence
+
+`caller_functions` is the identities in `functions` to which caller-scoped function policy
+was applied at any authorization point. Both use `{catalog, schema_path, name, type}` identities
+in the engine's spelling, sorted and deduplicated. Membership is a union: lookup and plan
+authorization enforce independently, so a later trusted classification cannot erase an earlier
+caller-scoped check. All evidence is empty on failure, including enforce/log-only audit denials.
+
+It may over-include relative to lexical SQL, never under-include relative to identity-level
+enforcement. Three important sources of conservative attribution are:
+
+- DuckDB 1.5 speculative implementation edges: a trusted view using `arg_min`, queried with
+  caller `min`, can have `arg_min` blocked and reported in `caller_functions` even though only
+  the trusted body wrote it. 2.0 retained definitions distinguish this case.
+- Query-wide synthesized-name, collation, and dispatcher rules when caller and trusted bodies
+  use the same names.
+- `getvariable` for a named-parameter/session-variable collision even when an explicit argument
+  takes precedence. The hooks cannot distinguish supplied inputs before binding.
+
+Caller expressions passed into host macros or lambda bodies remain caller-attributable.
+`list_sum(l)` includes `list_sum/macro`, `list_aggr/scalar`, and `sum/aggregate`.
+`first(x) OVER ()` reports `first/aggregate` plus `first_value/window` on 1.5, and only
+`first_value/window` on 2.0. Neither is configurable alias equivalence.
+
+#### Evidence scope
+
+With defaults disabled, grants from `caller_functions` satisfy identity-level checks. The
+written-name preflight additionally requires every caller-written function name to be eligible.
+A name the engine never binds has no identity to report: an unused CTE containing `md5`, or
+an empty-enum PIVOT containing `count(*)`, can therefore require a name grant absent from
+the evidence. Dead branches that still bind (a false predicate or CASE branch) do report their
+functions. Evidence is not a complete minimal grant recipe or an execution trace.
+
+Uncatalogued engine helpers can occur in `functions` with empty `catalog`/`schema_path`
+(for example 2.0 `__cast` and PIVOT's `IS NOT DISTINCT FROM`). They never occur in
+`caller_functions`; exact catalog policy rules cannot address them. For addressable identities,
+blocking an exact identity including its kind denies a previously successful validation iff
+that identity is in `caller_functions`, with the catalog, policy layers, and inputs held stable.
+
+For `SELECT * FROM 'f.parquet'`, the replacement path occurs in `objects`, never
+`caller_objects`; the caller-attributed `parquet_scan` reader occurs in `caller_functions`.
+An attached catalog's internal reader is not caller-attributed merely because its table is named.
+All these fields remain privileged host information: the 1.5 `arg_min` example alone shows
+why `caller_functions` is not a confidentiality-safe projection.
 
 ## Feasibility matrix
 

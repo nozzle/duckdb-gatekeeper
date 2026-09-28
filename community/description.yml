@@ -158,6 +158,7 @@ docs:
     | `objects` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `table`, `type` (`table`, `view`, `replacement`), including trusted dependencies. See `caller_objects` for the caller-attributable catalog subset. Empty unless `ok`. |
     | `functions` | STRUCT[] | Resolved `catalog`, `schema_path VARCHAR[]`, `name`, `type` the query bound to. Empty unless `ok`. |
     | `caller_objects` | STRUCT[] | Caller-attributable catalog tables/views, with the same fields as `objects`. Sorted, deduplicated subset of `objects`; empty unless `ok`. |
+    | `caller_functions` | STRUCT[] | Identities in `functions` checked by caller-scoped policy at any authorization point. Same fields; sorted, deduplicated, empty unless `ok`. |
 
     Violation `rule` values: `function`, `table`, `internal_object`, `dynamic_sql`,
     `replacement_scan`, `bind_time_expression`, `statement`, `limit`,
@@ -170,14 +171,15 @@ docs:
     internal-object refusals; the `table` rule alone does not distinguish tables from views.
     `object_type` is `''` for unresolved objects and function-only or other nonobject violations,
     including replacement-reader refusals whose `table` contains a written path. All three
-    evidence lists (`objects`, `functions`, `caller_objects`) remain empty on failure.
+    evidence lists (`objects`, `functions`, `caller_objects`, `caller_functions`) remain empty on failure.
     Consumers pinning the violation STRUCT must include both trailing VARCHAR kind fields.
     Audit decisions returned by
     `duckdb_logs_parsed('Gatekeeper')` carry the same violation shape.
 
     `functions` remains combined host-facing evidence of caller-attributable functions and trusted
-    dependencies. A public `caller_functions` evidence field is explicitly deferred and is not
-    implemented. `caller_objects` is the existing conservative catalog-table/view subset of `objects`.
+    dependencies. `caller_functions` is its caller-scoped authorization subset, including implied
+    capabilities and conservative over-attribution; it is not a lexical call list or public-safe
+    projection. `caller_objects` remains the conservative catalog-table/view subset of `objects`.
 
     ### Global policy
 

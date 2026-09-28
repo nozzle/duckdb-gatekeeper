@@ -123,7 +123,7 @@ static void AuthorizeObjectAgainst(const gatekeeper::Policy &policy, const gatek
 			                          -1, kind);
 			throw PermissionException("untrusted bind-time constructor");
 		}
-		result.functions.insert({catalog, schema, name, kind, entry.internal});
+		result.RecordFunction({catalog, schema, name, kind, entry.internal}, attributable);
 		return;
 	}
 	if (entry.type != CatalogType::TABLE_ENTRY && entry.type != CatalogType::VIEW_ENTRY)
@@ -335,7 +335,7 @@ static void AuthorizePlanAgainst(const gatekeeper::Policy &policy, const gatekee
 		if (callers && !policy.defaults && provenance.caller_implementations.count(key))
 			grant = true;
 		AuthorizeFunction(policy, binding, identity, callers, result, grant);
-		result.functions.insert(identity);
+		result.RecordFunction(identity, callers);
 	};
 	auto window_function = [&](const gatekeeper::Identity &identity) {
 		bool callers = attributable(identity.name);

@@ -106,6 +106,8 @@ try {
       check('typed aggregate parameter still blocked', d.code === 'forbidden');
       d = await decision('SELECT list_sum([1,2])');
       check('list aggregate dependency', d.allowed && d.functions.some(f => f.name === 'sum' && f.type === 'aggregate'));
+      check('caller aggregate evidence', d.caller_functions.some(f => f.name === 'sum' && f.type === 'aggregate') &&
+        d.caller_functions.every(f => d.functions.some(g => JSON.stringify(f) === JSON.stringify(g))));
       await con.query('CREATE TABLE t(x INT); CREATE TABLE secret(x INT); CREATE VIEW v AS SELECT * FROM t');
       d = await decision('SELECT * FROM v');
       check('view dependencies', d.allowed && d.objects.some(o => o.table === 'v') && d.objects.some(o => o.table === 't'));
@@ -119,7 +121,7 @@ try {
       } finally {await prepared.close();}
       d = await decision("SELECT md5('x')", ', blocked_functions := []');
       check('function ceiling', !d.allowed && d.code === 'forbidden');
-      check('denial dependencies empty', d.objects.length === 0 && d.functions.length === 0 && d.caller_objects.length === 0);
+      check('denial dependencies empty', d.objects.length === 0 && d.functions.length === 0 && d.caller_objects.length === 0 && d.caller_functions.length === 0);
       d = await decision('SELECT * FROM secret', ", allowed_tables := [{schema_path:['main'], 'table':'secret'}]");
       check('object ceiling', !d.allowed && d.code === 'forbidden');
       check('authorized view under ceiling', (await decision('SELECT * FROM v')).allowed);

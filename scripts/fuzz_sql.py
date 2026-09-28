@@ -29,7 +29,10 @@ def main():
                                "SELECT 1;", "SELECT ';'", "SELECT * FROM missing; DROP TABLE t",
                                "SELECT list_sum([1,2])", "SELECT list_sum($1)", "SELECT list_sum($1::INTEGER[])",
                                "SELECT list_unique($1)", "SELECT list_sort($1)", "SELECT unnest([1,2])",
-                               "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')"]):
+                               "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')",
+                               "WITH unused AS (SELECT md5('x')) SELECT 1",
+                               "SELECT * FROM t WHERE false AND md5('x') = 'a'",
+                               "SELECT CASE WHEN false THEN md5('x') ELSE 'a' END"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
         (corpus / f"enforced-{i}").write_bytes(bytes([12,0,0,0]) + query.encode())

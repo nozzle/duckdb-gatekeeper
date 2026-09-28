@@ -514,6 +514,8 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 		}
 		if (scope) {
 			scope->bind.result.functions.insert(reader_result.functions.begin(), reader_result.functions.end());
+			scope->bind.result.caller_functions.insert(reader_result.caller_functions.begin(),
+			                                           reader_result.caller_functions.end());
 			for (const auto &identity : reader_result.functions)
 				scope->bind.provenance.RecordFunction(identity, caller_written, GATEKEEPER_DUCKDB_MAJOR);
 			if (caller_written)
@@ -813,7 +815,7 @@ void CheckParameterFallbacks(ClientContext &context, const gatekeeper::Layers &l
 			if (!gatekeeper::FunctionAllowed(policy, {"system", {"main"}, "getvariable", "scalar", true}))
 				deny("session-variable fallback requires system.main.getvariable permission");
 		});
-		result.functions.insert({"system", {"main"}, "getvariable", "scalar", true});
+		result.RecordFunction({"system", {"main"}, "getvariable", "scalar", true}, true);
 	}
 #endif
 }

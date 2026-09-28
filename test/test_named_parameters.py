@@ -59,7 +59,7 @@ def test_fallback_requires_both_layers_and_records_fixed_identity(db):
     # A host shadow is not the capability that the engine uses for $x.
     db.execute("CREATE MACRO main.getvariable(n) AS 999")
     result = validate(db, "SELECT $x, $X")
-    assert result["allowed"] and result["functions"] == [CAPABILITY], result
+    assert result["allowed"] and result["functions"] == result["caller_functions"] == [CAPABILITY], result
     for options in [{"allowed_functions": []}, {"blocked_functions": [CAPABILITY]}]:
         assert validate(db, "SELECT $x", options)["code"] == "forbidden"
     db.execute("SET VARIABLE x = NULL")
@@ -121,6 +121,7 @@ def test_granted_collision_preserves_values_and_records_conservative_evidence(db
     found = decisions(db, "mode = 'enforce' AND statement = 'SELECT $x' AND boundary = 'execution'")
     # Explicit typed inputs can also introduce cast evidence; the implied capability remains deduplicated.
     assert found and all(r["allowed"] and r["functions"].count(CAPABILITY) == 1 for r in found), found
+    assert all(r["caller_functions"].count(CAPABILITY) == 1 for r in found), found
     assert all(set(f) == {"catalog", "schema_path", "name", "type"} for r in found for f in r["functions"])
 
 

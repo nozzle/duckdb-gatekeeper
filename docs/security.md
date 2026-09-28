@@ -229,8 +229,21 @@ the equality comparison additionally detects unused declarations. Select named c
 `SELECT *` consumers must accept a ninth column. Existing refusal ordering is unchanged.
 
 `functions` remains combined host-facing evidence, including caller-attributable functions
-and trusted dependencies. A public `caller_functions` evidence field is explicitly deferred
-and is not implemented. `caller_objects` is the existing conservative catalog-table/view subset.
+and trusted dependencies. `caller_functions` is the subset checked by caller-scoped function
+policy at any authorization point; `caller_objects` is the conservative catalog-table/view subset.
+
+For declared function capabilities, require successful validation and check permitted-set
+inclusion: every non-default `caller_functions` identity must be covered by a declared function
+rule. Do not require equality: declarations may be unused and defaults contribute identities.
+Determine default coverage from the reviewed qualified default identities, not a name-only list;
+actual internal-origin checks remain Gatekeeper's responsibility. Prefer passing the declared
+grants as policy so Gatekeeper enforces them directly. Evidence is not a policy replacement.
+See [function evidence scope](qualified-functions.md#caller-function-evidence) for preflight-only
+names, implied capabilities, and engine-specific conservative attribution.
+
+On a function-policy denial, `violations` identifies the offending function (possibly only its
+preflight name); `caller_functions` and all other evidence lists are empty, including log-only
+denials. Hosts cannot mine denied audit evidence for a complete grant set.
 
 **Evidence contract:**
 
@@ -678,7 +691,7 @@ and every change to its global settings made through SQL (`SET`, `RESET`, `CALL
 gatekeeper_configure`, `SET gatekeeper_log_only`), is written as a structured entry of DuckDB log type `Gatekeeper`. A native
 `DBConfig::SetOption` write bypasses the `SET` callback and leaves no entry; the next decision's
 `policy_hash` still changes. The record's decision columns are exactly `gatekeeper_validate`'s (`allowed`,
-`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`), so the
+`code`, `violations`, `error_type`, `error_message`, `position`, `objects`, `functions`, `caller_objects`, `caller_functions`), so the
 log and the function describe a statement the same way; `test/test_audit.py` asserts this over
 the enforcement parity corpus. Each violation has fields in this order:
 `rule`, `message`, `catalog`, `schema_path VARCHAR[]`, `table`, `function_name`,

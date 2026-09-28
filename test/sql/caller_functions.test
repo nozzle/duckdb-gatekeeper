@@ -1,0 +1,43 @@
+require gatekeeper
+
+statement ok
+CREATE TABLE cf_t AS SELECT 'x' s;
+
+statement ok
+CREATE VIEW cf_v AS SELECT md5(s) hashed, s FROM cf_t;
+
+query I
+SELECT len(caller_functions) FROM gatekeeper_validate('SELECT * FROM cf_v');
+----
+0
+
+query T
+SELECT list_transform(caller_functions, lambda f: f.name) FROM gatekeeper_validate('SELECT md5(s), hashed FROM cf_v');
+----
+[md5]
+
+query I
+SELECT len(list_filter(caller_functions, lambda f: f.name IN ('list_aggr', 'list_sum', 'sum'))) FROM gatekeeper_validate('SELECT list_sum([1,2])');
+----
+3
+
+query I
+SELECT len(caller_functions) FROM gatekeeper_validate('SELECT md5(s) FROM cf_t', blocked_functions := [{catalog:'system',schema_path:['main'],name:'md5',type:'scalar'}]);
+----
+0
+
+query II
+SELECT len(functions), len(caller_functions) FROM gatekeeper_validate('WITH unused AS (SELECT md5(s) FROM cf_t) SELECT 1');
+----
+0	0
+
+query T
+SELECT violations[1].message FROM gatekeeper_validate('WITH unused AS (SELECT md5(s) FROM cf_t) SELECT 1', use_default_functions := false);
+----
+function is not allowed: md5
+
+statement ok
+DROP VIEW cf_v;
+
+statement ok
+DROP TABLE cf_t;
