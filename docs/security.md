@@ -341,8 +341,9 @@ connection that executes untrusted SQL.
 
 The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counted
 `DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
-trace covers the CI 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
+trace originally covered 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
 (`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
+The native probe also passes the current CI snapshot `d591bb1da2` for 0.4.1.
 
 | Route | Boundary and result |
 | --- | --- |

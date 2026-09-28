@@ -23,6 +23,7 @@
 #include "name_path.hpp"
 #include "validator.hpp"
 #include <type_traits>
+#include <utility>
 
 #ifndef GATEKEEPER_DUCKDB_MAJOR
 #error "GATEKEEPER_DUCKDB_MAJOR must be defined by the Gatekeeper build"

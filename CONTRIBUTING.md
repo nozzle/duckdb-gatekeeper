@@ -38,7 +38,7 @@ sanitizer and fuzzer options, targets, the Emscripten container) stays in each s
 accepts an engine identifying as that release). `--duckdb-version` tells the engine build how
 to label itself; the identity CMake then computes is what `scripts/generate.py` bakes into the
 load-time guard, through its own `--engine-version-label`/`--engine-source-id`. A checkout at exactly the pinned engine
-revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.5`), because a shallow
+revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.6`), because a shallow
 clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy `v0.0.1`
 that no real engine loads. Every other checkout, including another revision inside `duckdb/`,
 uses its own Git metadata unless `--duckdb-version vX.Y.Z` overrides it; the `Makefile`
