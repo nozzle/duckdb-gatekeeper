@@ -6,6 +6,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Fixed
+
+- Read the host engine identity through result chunks, supporting newer DuckDB 2.0
+  query-result APIs while preserving the loadable's mismatched-engine refusal.
+
 ## 0.4.1 - 2026-09-28
 
 ### Changed

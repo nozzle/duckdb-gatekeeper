@@ -88,7 +88,9 @@ class RemoteCatalog : public DuckCatalog {
 	bool Supports(RemoteCapability capability) const override { return capability == RemoteCapability::CONNECT; }
 	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override {
 		state.calls.push_back(sql); // The observable effect occurs before QueryBegin can refuse anything.
-		Parser parser(context.GetParserOptions());
+		// This is the mock server's local response SQL, not client text. Newer engines
+		// attach a remote grammar to connected parser options, which would wrap it again.
+		Parser parser;
 		parser.ParseQuery(state.local_activation ? "SELECT * FROM gatekeeper_enforce()" : "SELECT 42 AS remote_value");
 		return make_uniq<SubqueryRef>(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])));
 	}
@@ -201,18 +203,29 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	Require(state.calls.size() == before + 1 && state.calls.back() == "CREATE TABLE untrusted_text(i INTEGER)",
 	        "native-mutated session no longer exhibits pre-hook dispatch; review the upstream boundary");
 	auto plain_result = plain->Execute();
-	Require(!plain_result->HasError() && state.calls.size() == before + 2,
-	        "parameterless handle on native-mutated session did not route");
+	Require(state.calls.size() == before + 2, "parameterless handle on native-mutated session did not route");
+	// Newer connected grammars expose a remote statement at the text hook, so this
+	// unsupported native-mutated route may now be refused, still AFTER dispatch.
+	if (plain_result->HasError())
+		Denied(std::move(plain_result));
+	std::printf("remote-catalog probe: native-mutated parameterless execution after dispatch: %s\n",
+	            plain_result ? "success" : "Gatekeeper permission refusal");
 	auto parameterized_result = parameterized->Execute(42);
 	Require(parameterized_result->HasError() &&
 	            parameterized_result->GetError().find("Parameterized prepared statements") != string::npos &&
 	            state.calls.size() == before + 2,
 	        "engine parameterized connected execution refusal changed");
 	auto remote_prepare = agent.Prepare("SELECT 42");
-	Require(remote_prepare->HasError() &&
-	            remote_prepare->GetError().find("prepared statement was not registered") != string::npos &&
-	            state.calls.size() == before + 3,
-	        "Prepare on native-mutated session did not dispatch before its missing-handle error");
+	Require(remote_prepare->HasError() && state.calls.size() == before + 3,
+	        "Prepare on native-mutated session did not dispatch before refusal");
+	Require(remote_prepare->GetError().find("prepared statement was not registered") != string::npos ||
+	            (remote_prepare->GetErrorObject().Type() == ExceptionType::PERMISSION &&
+	             remote_prepare->GetError().find("Gatekeeper denied this statement") != string::npos),
+	        "unexpected connected prepare error: " + remote_prepare->GetError());
+	std::printf("remote-catalog probe: native-mutated preparation after dispatch: %s\n",
+	            remote_prepare->GetError().find("prepared statement was not registered") != string::npos
+	                ? "missing local handle"
+					: "Gatekeeper permission refusal");
 	agent.context->DisconnectFromCatalog();
 
 	// Detached targets retain IsConnected. Engine refuses before hooks, not a Gatekeeper decision.

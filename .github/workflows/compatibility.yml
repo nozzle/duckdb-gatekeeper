@@ -44,9 +44,9 @@ jobs:
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
           # v2.0-cyanoptera snapshot: the next major, which labels itself v2.0.0-devN.
-          - name: DuckDB 2.0 candidate (d591bb1)
-            key: d591bb1
-            ref: d591bb1da2de3cb12329c75aff2c31bebe922b59
+          - name: DuckDB 2.0 candidate (8b3c3b7)
+            key: 8b3c3b7
+            ref: 8b3c3b7dbf40f491c52792c582cd0681de4bd359
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -116,9 +116,9 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          - name: DuckDB 2.0 candidate (d591bb1)
-            key: d591bb1
-            ref: d591bb1da2de3cb12329c75aff2c31bebe922b59
+          - name: DuckDB 2.0 candidate (8b3c3b7)
+            key: 8b3c3b7
+            ref: 8b3c3b7dbf40f491c52792c582cd0681de4bd359
             nested_schemas: '1'
             engine_major: '2'
     env:

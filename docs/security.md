@@ -343,7 +343,12 @@ The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counte
 `DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
 trace originally covered 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
 (`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
-The native probe also passes the current CI snapshot `d591bb1da2` for 0.4.1.
+The native probe also passed the 0.4.1 CI snapshot `d591bb1da2`.
+The subsequent `8b3c3b7dbf` snapshot adds connected parser grammars: parameterless
+prepared execution and preparation on native-mutated connected sessions can now receive
+a Gatekeeper text refusal after remote dispatch, rather than success or a missing-handle
+error. The callback still runs first; these routes remain unsupported. The probe parses
+its mock server response with default parser options, independently of the connected client.
 
 | Route | Boundary and result |
 | --- | --- |
@@ -353,7 +358,7 @@ The native probe also passes the current CI snapshot `d591bb1da2` for 0.4.1.
 | Local activation body reached while `IsConnected()` is true | The latch throws a Permission Error and installs no enforcement state, even in log-only mode. It tests the flag, not just the live target, so stale/expired targets are refused too. |
 | SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
 | SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
-| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. In the tested engine, client Prepare also dispatches before failing to register a local handle; bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
+| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. Client Prepare also dispatches first: older snapshots then fail to register a local handle, while `8b3c3b7dbf` can report a Gatekeeper text refusal instead. Bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
 | CONNECT/DISCONNECT while log-only is on | Routing controls are identified by parsed statement type before log-only can waive a denial. They retain `mode = 'enforce'` and are refused before binding, with zero remote callbacks on local sessions. Turning log-only off therefore restores policy refusals on the same local route. Native-mutated connected state remains unsupported and must be restored through trusted native setup or the connection replaced. |
 
 Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
