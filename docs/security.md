@@ -343,7 +343,12 @@ The boundaries, verified by `test/native/remote_catalog_probe.cpp` with a counte
 `DuckCatalog` subclass implementing `RemoteExecute(string)`, are below. The dispatch/latch
 trace originally covered 2.0 snapshot `6844d1bd8b` and the wheel-matched `d4e72566aa`
 (`v2.0.0-alpha42986`); their relevant client-context and attachment implementations agree.
-The native probe also passes the current CI snapshot `d591bb1da2` for 0.4.1.
+The native probe also passed the 0.4.1 CI snapshot `d591bb1da2`.
+The subsequent `8b3c3b7dbf` snapshot adds connected parser grammars: parameterless
+prepared execution and preparation on native-mutated connected sessions can now receive
+a Gatekeeper text refusal after remote dispatch, rather than success or a missing-handle
+error. The callback still runs first; these routes remain unsupported. The probe parses
+its mock server response with local parser options, independently of the connected client.
 
 | Route | Boundary and result |
 | --- | --- |

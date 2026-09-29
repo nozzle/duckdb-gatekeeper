@@ -173,8 +173,13 @@ static void CheckBuildEngine(DatabaseInstance &db) {
 		if (result->RowCount() != 1) {
 			throw InvalidInputException("pragma_version() returned %llu rows", result->RowCount());
 		}
-		host_version = result->GetValue(0, 0).ToString();
-		host_source_id = result->GetValue(1, 0).ToString();
+		// Read through the chunk API shared by materialized and newer retained results.
+		// QueryResult no longer provides random-access GetValue on newer 2.0 engines.
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() != 1 || chunk->ColumnCount() != 2)
+			throw InvalidInputException("pragma_version() returned an invalid result chunk");
+		host_version = chunk->GetValue(0, 0).ToString();
+		host_source_id = chunk->GetValue(1, 0).ToString();
 	} catch (std::exception &error) {
 		throw InvalidInputException("Gatekeeper %s cannot determine the host DuckDB engine: %s", gatekeeper::VERSION,
 		                            error.what());

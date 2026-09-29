@@ -160,7 +160,7 @@ the 0.4.1 release fixture was rerun on 1.5.6 with the pins above (16 passed, one
 The engine's `.github/config/extensions/{quack,httpfs}.cmake` descriptors are the authority:
 use their `APPLY_PATCHES`, not Quack's own different bundled engine/httpfs pins. Candidate
 patches cover table columns, binder include, literal constants, QueryResult, and nested-name
-tests. The current compatibility workflow pins a different 2.0 snapshot (`d591bb1d…`); use
+tests. The current compatibility workflow pins a different 2.0 snapshot (`8b3c3b7d…`); use
 each snapshot's own patch set. The release fixture follows the coordinated release-engine pin;
 the wheel-matched candidate remains independent.
 
