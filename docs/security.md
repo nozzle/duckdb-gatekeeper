@@ -348,7 +348,7 @@ The subsequent `8b3c3b7dbf` snapshot adds connected parser grammars: parameterle
 prepared execution and preparation on native-mutated connected sessions can now receive
 a Gatekeeper text refusal after remote dispatch, rather than success or a missing-handle
 error. The callback still runs first; these routes remain unsupported. The probe parses
-its mock server response with local parser options, independently of the connected client.
+its mock server response with default parser options, independently of the connected client.
 
 | Route | Boundary and result |
 | --- | --- |

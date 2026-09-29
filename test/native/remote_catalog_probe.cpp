@@ -208,6 +208,8 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	// unsupported native-mutated route may now be refused, still AFTER dispatch.
 	if (plain_result->HasError())
 		Denied(std::move(plain_result));
+	std::printf("remote-catalog probe: native-mutated parameterless execution after dispatch: %s\n",
+	            plain_result ? "success" : "Gatekeeper permission refusal");
 	auto parameterized_result = parameterized->Execute(42);
 	Require(parameterized_result->HasError() &&
 	            parameterized_result->GetError().find("Parameterized prepared statements") != string::npos &&
@@ -217,8 +219,13 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	Require(remote_prepare->HasError() && state.calls.size() == before + 3,
 	        "Prepare on native-mutated session did not dispatch before refusal");
 	Require(remote_prepare->GetError().find("prepared statement was not registered") != string::npos ||
-	            remote_prepare->GetError().find("Gatekeeper denied this statement") != string::npos,
+	            (remote_prepare->GetErrorObject().Type() == ExceptionType::PERMISSION &&
+	             remote_prepare->GetError().find("Gatekeeper denied this statement") != string::npos),
 	        "unexpected connected prepare error: " + remote_prepare->GetError());
+	std::printf("remote-catalog probe: native-mutated preparation after dispatch: %s\n",
+	            remote_prepare->GetError().find("prepared statement was not registered") != string::npos
+	                ? "missing local handle"
+					: "Gatekeeper permission refusal");
 	agent.context->DisconnectFromCatalog();
 
 	// Detached targets retain IsConnected. Engine refuses before hooks, not a Gatekeeper decision.
