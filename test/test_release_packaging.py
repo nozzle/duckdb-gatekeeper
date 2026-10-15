@@ -154,6 +154,12 @@ def test_output_file_is_not_overwritten(released, artifacts, tmp_path):
     # and never a branch or commit in place of a release tag.
     ("community/description.yml", f"variegata: {VARIEGATA}", "variegata: v9999.0.0", "variegata"),
     ("community/description.yml", f"variegata: {VARIEGATA}", "variegata: main", "variegata"),
+    # A present key whose value the reader cannot take as a plain scalar is drift, never mistaken for an absent key:
+    # quoting must not slip a stale ref_next, a later release, or a branch past the checks above.
+    ("community/description.yml", f"  ref: {TAG}\n", f'  ref: {TAG}\n  ref_next: "{TAG}"\n', "ref_next no longer"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", 'variegata: "v9999.0.0"', "repo.variegata"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", 'variegata: "main"', "repo.variegata"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", "variegata:", "repo.variegata"),
     ("community/description.yml", SUPPORTED_DUCKDB_REVISION, "0" * 40, "must cite the pinned DuckDB"),
     ("community/description.yml", f"DuckDB {SUPPORTED_DUCKDB}", "DuckDB 0.0.9", "must cite the pinned DuckDB"),
     # Every documentation link in the descriptor pins the release it describes; the last one is as checked as the

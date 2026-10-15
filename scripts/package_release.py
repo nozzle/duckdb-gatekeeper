@@ -47,17 +47,11 @@ def release_version(tag):
     # The community repository builds repo.ref against DuckDB 2.0. It no longer builds DuckDB 1.5 automatically:
     # repo.variegata names the release its 1.5 binaries came from, which moves only on request to its
     # maintainers, so it may name this release or an earlier one. repo.ref_next no longer triggers any build.
-    try:
-        community.scalar("repo", "ref_next", descriptor)
-    except community.DescriptorError:
-        pass
-    else:
+    # Either key, once present, is checked whatever its layout: an unreadable value is drift, not absence.
+    if community.has_key("repo", "ref_next", descriptor):
         raise ValueError("Community descriptor repo.ref_next no longer triggers a build; DuckDB 2.0 builds from "
                          "repo.ref and DuckDB 1.5 from repo.variegata")
-    try:
-        descriptor_variegata = community.scalar("repo", "variegata", descriptor)
-    except community.DescriptorError:
-        descriptor_variegata = None
+    descriptor_variegata = community.optional_scalar("repo", "variegata", descriptor)
     if descriptor_variegata is not None:
         earlier = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", descriptor_variegata)
         if not earlier or tuple(map(int, earlier.groups())) > tuple(map(int, version.split("."))):

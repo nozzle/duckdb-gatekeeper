@@ -36,6 +36,22 @@ def scalar(section_name, key, descriptor=None):
     return match.group(1)
 
 
+def has_key(section_name, key, descriptor=None):
+    """Whether top-level ``section_name:`` has a two-space indented ``key:``, whatever its value's layout."""
+    try:
+        _entry(section_name, key, "", text() if descriptor is None else descriptor, "a key")
+    except DescriptorError:
+        return False
+    return True
+
+
+def optional_scalar(section_name, key, descriptor=None):
+    """The plain scalar at ``section_name.key``, or None when the key is absent. A key that is present with any other
+    layout is drift and raises, as for ``scalar``; it is never mistaken for an absent one."""
+    descriptor = text() if descriptor is None else descriptor
+    return scalar(section_name, key, descriptor) if has_key(section_name, key, descriptor) else None
+
+
 def block_scalar(section_name, key, descriptor=None):
     """The lines of the literal block scalar at ``section_name.key`` (``key: |``), dedented by its four-space
     indent; blank lines are kept."""
