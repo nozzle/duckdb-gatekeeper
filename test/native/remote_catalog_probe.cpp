@@ -20,6 +20,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <type_traits>
 
 using namespace duckdb;
 
@@ -82,6 +83,17 @@ struct RemoteState : StorageExtensionInfo {
 	bool local_activation = false;
 };
 
+// The engine's built-in grammar, independent of any connection. Newer 2.0 snapshots name it explicitly and
+// remove the default constructor.
+template <class T, class = void> struct HasBuiltinParser : std::false_type {};
+template <class T> struct HasBuiltinParser<T, std::void_t<decltype(T::GetBuiltinParser())>> : std::true_type {};
+template <class P = Parser> P BuiltinParser() {
+	if constexpr (HasBuiltinParser<P>::value)
+		return P::GetBuiltinParser();
+	else
+		return P();
+}
+
 class RemoteCatalog : public DuckCatalog {
   public:
 	RemoteCatalog(AttachedDatabase &db, RemoteState &state) : DuckCatalog(db), state(state) {}
@@ -90,7 +102,7 @@ class RemoteCatalog : public DuckCatalog {
 		state.calls.push_back(sql); // The observable effect occurs before QueryBegin can refuse anything.
 		// This is the mock server's local response SQL, not client text. Newer engines
 		// attach a remote grammar to connected parser options, which would wrap it again.
-		Parser parser;
+		auto parser = BuiltinParser();
 		parser.ParseQuery(state.local_activation ? "SELECT * FROM gatekeeper_enforce()" : "SELECT 42 AS remote_value");
 		return make_uniq<SubqueryRef>(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])));
 	}

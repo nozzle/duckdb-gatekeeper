@@ -12,9 +12,11 @@
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -283,14 +285,91 @@ inline CatalogEntry &ResolveReplacementFunction(ClientContext &context, Function
 	return entry;
 }
 
-// A table function whose execution is its point must run even when the client does not fetch its rows.
+// A table function whose execution is its point must run even when the client does not fetch its rows. 2.0
+// snapshots through v2.0.0-alpha44357 let the planner settle that: the mark completes the statement before its
+// result is returned. Later ones removed planner eagerness and leave it to the reader, which streams only a SELECT
+// that returns rows: CALL and EXECUTE still complete at submission, a SELECT over the function runs as it is read.
+template <class T, class = void> struct HasResultEagerness : std::false_type {};
+template <class T>
+struct HasResultEagerness<T, std::void_t<decltype(std::declval<T &>().result_eagerness)>> : std::true_type {};
+template <class PROPERTIES> inline void CompleteAtSubmission(PROPERTIES &properties) {
+	if constexpr (HasResultEagerness<PROPERTIES>::value)
+		properties.result_eagerness = decltype(properties.result_eagerness)::FORCED;
+}
 inline void RunAtOnce(TableFunctionBindInput &input) {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	if (input.binder)
-		input.binder->GetStatementProperties().result_eagerness = ResultEagerness::FORCED;
+		CompleteAtSubmission(input.binder->GetStatementProperties());
 #else
 	(void)input;
 #endif
+}
+
+// The parser the connection itself uses: its parser options and extensions. Newer 2.0 snapshots build it from the
+// context and make ClientContext::GetParserOptions private.
+template <class CONTEXT> inline Parser ConnectionParser(CONTEXT &context) {
+	if constexpr (std::is_constructible<Parser, CONTEXT &>::value)
+		return Parser(context);
+	else
+		return Parser(context.GetParserOptions());
+}
+
+// The database-wide replacement scans. Newer 2.0 snapshots guard them with a lock, hand the binder a snapshot of
+// shared entries, and can only append; earlier engines expose the vector itself. Visit them in the order the engine
+// asks them until `visit` returns true.
+template <class T, class = void> struct HasScanSnapshot : std::false_type {};
+template <class T>
+struct HasScanSnapshot<T, std::void_t<decltype(std::declval<const T &>().Snapshot())>> : std::true_type {};
+template <class LIST, class VISIT> inline void VisitReplacementScans(LIST &scans, VISIT &&visit) {
+	if constexpr (HasScanSnapshot<LIST>::value) {
+		for (auto &scan : scans.Snapshot())
+			if (visit(*scan))
+				return;
+	} else {
+		for (auto &scan : scans)
+			if (visit(scan))
+				return;
+	}
+}
+
+// An existing entry carried into a rebuilt list unchanged: the same callback with the same data, shared with the
+// original, so snapshots the binder already holds and the rebuilt list agree.
+struct ForwardedScanData : ReplacementScanData {
+	explicit ForwardedScanData(shared_ptr<ReplacementScan> scan_p) : scan(std::move(scan_p)) {}
+	shared_ptr<ReplacementScan> scan;
+};
+inline unique_ptr<TableRef> ForwardedScan(ClientContext &context, ReplacementScanInput &input,
+                                          optional_ptr<ReplacementScanData> data) {
+	auto &scan = *data->Cast<ForwardedScanData>().scan;
+	return scan.function(context, input, scan.data.get());
+}
+
+// Put `function` ahead of every registered scan. A list that can only append is rebuilt with it in front and
+// replaced whole; a scan registered concurrently with the rebuild (another extension loading at the same time)
+// would be lost, which is why the extension is loaded during trusted setup.
+template <class LIST> inline void PrependReplacementScan(LIST &scans, replacement_scan_t function) {
+	if constexpr (HasScanSnapshot<LIST>::value) {
+		LIST rebuilt;
+		rebuilt.emplace_back(function);
+		for (auto &scan : scans.Snapshot())
+			rebuilt.emplace_back(ForwardedScan, make_uniq<ForwardedScanData>(scan));
+		scans = std::move(rebuilt);
+	} else {
+		scans.insert(scans.begin(), ReplacementScan(function));
+	}
+}
+
+// Whether `modifications` is at most the creation of catalog entries. Engines without the comparison register no
+// temporary-catalog modification for a dynamic PIVOT's enum type, so the question never arises there.
+template <class T, class = void> struct HasModificationContains : std::false_type {};
+template <class T>
+struct HasModificationContains<T, std::void_t<decltype(std::declval<const T &>().Contains(std::declval<T>()))>>
+    : std::true_type {};
+template <class MODIFICATIONS> inline bool OnlyCreatesEntries(const MODIFICATIONS &modifications) {
+	if constexpr (HasModificationContains<MODIFICATIONS>::value)
+		return MODIFICATIONS(MODIFICATIONS::CREATE_CATALOG_ENTRY).Contains(modifications);
+	else
+		return false;
 }
 
 // The serializer settings that produce the shape the grammar was generated from: the latest storage version

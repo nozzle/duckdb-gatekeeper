@@ -9,7 +9,7 @@ must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
-For 0.4.1 the shipped matrix has eight native targets. Wasm EH and Windows MinGW are
+Since 0.4.1 the shipped matrix has eight native targets. Wasm EH and Windows MinGW are
 temporarily excluded because their official hosts still embed 1.5.5. The full-matrix
 procedure below describes restoration: update the runtime/CRAN pins, enable the retained
 browser/R jobs, restore their packaging dependencies, platform list and descriptor entries,
@@ -18,11 +18,13 @@ then require all host tests before shipping them again. MVP/threads exclusions r
 1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
    the generated C++ constants consume) and a set of coupled edits the package gate and the
    tests refuse to release without:
-   - `community/description.yml`: `extension.version`, `repo.ref`, `repo.ref_next` (the same
-     tag: one source tree builds the stable engine and the next one, and the community
-     repository builds the next DuckDB from `ref_next`) and every
+   - `community/description.yml`: `extension.version`, `repo.ref`, and every
      `blob/` documentation link, including `blob/main/` links (the gate requires all of them
-     to name the release; `grep -n 'blob/' community/description.yml` lists them).
+     to name the release; `grep -n 'blob/' community/description.yml` lists them). The community
+     repository builds `repo.ref` against DuckDB 2.0. `repo.variegata` names the release its
+     DuckDB 1.5 binaries came from; it moves only on request to the community maintainers, so a
+     release normally leaves it alone. `repo.ref_next` no longer triggers a build, and the gate
+     rejects it.
    - `CHANGELOG.md`: rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` and add a fresh, empty
      `## Unreleased` above it. The gate requires the release's section to have content and
      Unreleased to be empty when a tag is packaged; that section becomes the top of the
@@ -39,7 +41,7 @@ then require all host tests before shipping them again. MVP/threads exclusions r
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
-3. Require the release's declared distribution matrix. For 0.4.1 this is Linux amd64/arm64
+3. Require the release's declared distribution matrix. Since 0.4.1 this is Linux amd64/arm64
    glibc and musl, macOS amd64/arm64, and Windows amd64/ARM64 MSVC (eight targets).
    The restoration target is the full matrix: Linux amd64/arm64 glibc and musl, macOS
    amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native artifact
@@ -79,7 +81,7 @@ git push origin vX.Y.Z
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
-every declared platform's build and official-host tests. In 0.4.1 that excludes the
+every declared platform's build and official-host tests. Since 0.4.1 that excludes the
 deferred Wasm/R jobs; when restored, those jobs must gate packaging again.
 Only after the required jobs succeed does the release job package the artifacts and publish a
 GitHub Release. The tag must match the CMake and runtime extension versions.
@@ -131,14 +133,16 @@ silently overwritten. Do not move a published version tag.
    of [duckdb/community-extensions](https://github.com/duckdb/community-extensions),
    dropping the comment preamble. Recheck its current descriptor conventions before
    submission. The prepared descriptor pins a version tag; never replace it with a
-   floating branch ref. The community repository pins the full commit SHA in `repo.ref` and
-   `repo.ref_next`: substitute the SHA the tag points at (`git rev-parse vX.Y.Z^{}`) for both
-   in the submitted copy only; the in-repo descriptor keeps the tag because it cannot name
-   the commit that contains it. The community repository's `test_against_latest` builds
-   `ref_next` against the next DuckDB branch with `extension-ci-tools@main`, both of which
-   move; a failure there is first a question about that drift, then about the source.
-2. State which engine the GitHub assets target (there are none for the next DuckDB; the
-   community repository builds those from `ref_next`), and link compatibility validation.
+   floating branch ref. The community repository pins full commit SHAs in `repo.ref` and
+   `repo.variegata`: substitute the SHA each tag points at (`git rev-parse vX.Y.Z^{}`) in the
+   submitted copy only; the in-repo descriptor keeps tags because it cannot name the commit
+   that contains it. The community repository builds every descriptor PR against its current
+   DuckDB 2.0 engine (a prerelease such as `v2.0.0-alpha44357` until 2.0.0 ships) with its own
+   `extension-ci-tools` revision; a failure there is first a question about that engine, then
+   about the source. `compatibility.yml` pins the same engine and tools revision.
+2. State which engine the GitHub assets target (there are none for DuckDB 2.0; the community
+   repository builds those from `repo.ref`, and its DuckDB 1.5 binaries stay at
+   `repo.variegata`), and link compatibility validation.
    The community repository can rebuild the source against another engine; the source
    has no fixed release allowlist. Each binary still loads only into the engine it was
    built from, and Gatekeeper enforces that itself when DuckDB's footer check is disabled.
@@ -157,8 +161,9 @@ silently overwritten. Do not move a published version tag.
 
 ## After community deployment
 
-Using DuckDB 1.5.6 with normal signature verification and a fresh extension directory,
-verify installation, loading, and the descriptor's hello-world queries:
+Using the DuckDB 2.0 engine the community repository deployed for (`v2.0.0-alpha44357` until
+2.0.0 ships) with normal signature verification and a fresh extension directory, verify
+installation, loading, and the descriptor's hello-world queries:
 
 ```sql
 INSTALL gatekeeper FROM community;

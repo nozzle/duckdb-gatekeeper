@@ -1,7 +1,7 @@
 # Wasm EH support and browser tests
 
-**0.4.1 temporarily defers Wasm EH distribution and browser CI:** no published runtime
-embeds its DuckDB 1.5.6 release engine yet. Use the immutable v0.4.0 source/assets and
+**Since 0.4.1, Wasm EH distribution and browser CI are temporarily deferred:** no published runtime
+embeds the DuckDB 1.5.6 release engine yet. Use the immutable v0.4.0 source/assets and
 the matching runtime below. Restore the runtime/npm lock, Emscripten pin, workflow jobs,
 package matrix and descriptor together once a 1.5.6 runtime passes these tests.
 Windows MinGW is similarly deferred pending a matching CRAN R host.
@@ -104,7 +104,7 @@ against a user who controls their browser.
 When repinning DuckDB, coordinate the npm runtime pin and lockfile, this documentation,
 and Emscripten compatibility with `extension-ci-tools`. `smoke.mjs` reads the engine pin
 from `versions.cmake` and fails when the runtime embeds a different engine. DuckDB-Wasm is excluded from routine Dependabot updates.
-Other npm test dependencies receive monthly updates. In 0.4.1 both browser jobs are
+Other npm test dependencies receive monthly updates. Since 0.4.1 both browser jobs are
 explicitly disabled and `wasm_eh` is excluded from distribution: the retained runtime
 embeds 1.5.5, not the release's 1.5.6. After a matching runtime is published and pinned,
 restore PR browser builds, the distribution-artifact browser test, packaging dependencies,

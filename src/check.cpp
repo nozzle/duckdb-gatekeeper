@@ -170,7 +170,7 @@ static TextCheck CheckStatementText(ClientContext &context, const gatekeeper::La
 		check.result = gatekeeper::FixedLimitExceeded("SQL exceeds fixed input size limit");
 		return check;
 	}
-	Parser parser(context.GetParserOptions());
+	auto parser = engine::ConnectionParser(context);
 	parser.ParseQuery(sql);
 	if (parser.statements.empty())
 		throw InvalidInputException("SQL contains no statements");
@@ -263,6 +263,17 @@ static bool ReadOperator(LogicalOperatorType type) {
 	}
 }
 
+// Whether the statement modifies a database. A dynamic PIVOT's enum type creates one entry in the temporary
+// catalog, which 2.0 snapshots since early October 2026 register as a modification of that catalog; that alone is
+// not one. Earlier engines register nothing for it.
+static bool ModifiesDatabase(const StatementProperties &properties, bool pivot_enum) {
+	for (auto &entry : properties.modified_databases)
+		if (!pivot_enum || engine::Str(entry.first) != TEMP_CATALOG ||
+		    !engine::OnlyCreatesEntries(entry.second.modifications))
+			return true;
+	return false;
+}
+
 void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrigin origin,
                const StatementProperties &properties, LogicalOperator &plan, gatekeeper::Result &result) {
 	auto deny = [&](const string &message) {
@@ -270,10 +281,10 @@ void CheckPlan(const gatekeeper::Layers &layers, TextCheck::Unit &unit, PlanOrig
 		throw PermissionException(gatekeeper::UNSUPPORTED_STATEMENT);
 	};
 	// A dynamic PIVOT's enum type: the engine reports it as a statement that creates a temporary object and
-	// returns nothing, over the plan of the SELECT that defines it. Its temporary catalog is not a modified
-	// database; nothing else may be one either.
+	// returns nothing, over the plan of the SELECT that defines it. Creating it in the temporary catalog is the one
+	// modification admitted; nothing else may modify a database.
 	bool pivot_enum = PivotEnumPlan(plan);
-	if (!properties.modified_databases.empty())
+	if (ModifiesDatabase(properties, pivot_enum))
 		deny("statement modifies a database");
 	if (properties.return_type != (pivot_enum ? StatementReturnType::NOTHING : StatementReturnType::QUERY_RESULT))
 		deny("statement does not return a query result");
@@ -395,24 +406,30 @@ static Resolution ResolveHostReplacement(ClientContext &context, ReplacementScan
 	// cannot change them; this keeps the message independent of that guarantee.)
 	auto path = engine::ReplacementPath(input);
 	auto &config = DBConfig::GetConfig(context);
-	for (auto &scan : config.replacement_scans) {
+	Resolution resolution;
+	engine::VisitReplacementScans(config.replacement_scans, [&](ReplacementScan &scan) {
 		if (scan.function == GatekeeperReplacementScan)
-			continue;
+			return false;
 		// Callbacks construct a TableRef without binding it; nothing is opened here.
 		auto replacement = scan.function(context, input, scan.data.get());
 		if (!replacement)
-			continue;
-		if (replacement->type != TableReferenceType::TABLE_FUNCTION)
-			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
-			        "host-language replacement scan cannot be authorized: " + path};
+			return false;
+		if (replacement->type != TableReferenceType::TABLE_FUNCTION) {
+			resolution = {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
+			              "host-language replacement scan cannot be authorized: " + path};
+			return true;
+		}
 		auto &function = replacement->Cast<TableFunctionRef>().function;
-		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION)
-			return {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
-			        "replacement scan has no resolvable function: " + path};
+		if (!function || function->GetExpressionClass() != ExpressionClass::FUNCTION) {
+			resolution = {Resolution::Kind::UNSUPPORTED, std::move(replacement), "",
+			              "replacement scan has no resolvable function: " + path};
+			return true;
+		}
 		auto name = engine::FunctionName(function->Cast<FunctionExpression>());
-		return {Resolution::Kind::FUNCTION, std::move(replacement), std::move(name), ""};
-	}
-	return {};
+		resolution = {Resolution::Kind::FUNCTION, std::move(replacement), std::move(name), ""};
+		return true;
+	});
+	return resolution;
 }
 
 static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, ReplacementScanInput &input,
@@ -543,10 +560,12 @@ static unique_ptr<TableRef> GatekeeperReplacementScan(ClientContext &context, Re
 }
 
 void InstallReplacementScan(DBConfig &config) {
-	for (auto &scan : config.replacement_scans)
-		if (scan.function == GatekeeperReplacementScan)
-			return;
-	config.replacement_scans.insert(config.replacement_scans.begin(), ReplacementScan(GatekeeperReplacementScan));
+	bool installed = false;
+	engine::VisitReplacementScans(config.replacement_scans, [&](ReplacementScan &scan) {
+		return installed = scan.function == GatekeeperReplacementScan;
+	});
+	if (!installed)
+		engine::PrependReplacementScan(config.replacement_scans, GatekeeperReplacementScan);
 }
 
 // The function names a scalar macro's definition introduces, read the way the binding boundary reads the

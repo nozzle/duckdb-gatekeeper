@@ -6,12 +6,15 @@ import zipfile
 import pytest
 
 import package_release as release
+from descriptor import scalar
 from support.artifact import ROOT
 from versions import EXTENSION_VERSION, SUPPORTED_DUCKDB, SUPPORTED_DUCKDB_REVISION
 
 # The release the checkout describes; every expectation about names, tags, and drift is relative to it.
 TAG = f"v{EXTENSION_VERSION}"
 ENGINE_TAG = f"v{SUPPORTED_DUCKDB}"
+# The release the community repository's DuckDB 1.5 binaries were built from.
+VARIEGATA = scalar("repo", "variegata", (ROOT / "community/description.yml").read_text())
 # The files the packager reads. A test that needs the tree in another state copies them with edits applied and
 # points the packager's ROOT at the copy.
 SOURCES = ("versions.cmake", "community/description.yml", "CHANGELOG.md", "LICENSE", "NOTICE")
@@ -141,11 +144,16 @@ def test_output_file_is_not_overwritten(released, artifacts, tmp_path):
     ("versions.cmake", f'GATEKEEPER_VERSION "{EXTENSION_VERSION}"', 'GATEKEEPER_VERSION "garbage"', "Invalid version"),
     ("community/description.yml", f"version: {EXTENSION_VERSION}", "version: 0.0.9", "Community descriptor.*must agree"),
     ("community/description.yml", f"ref: {TAG}", "ref: v0.0.9", "Community descriptor.*must agree"),
-    ("community/description.yml", f"ref_next: {TAG}", "ref_next: v0.0.9", "Community descriptor ref_next.*must agree"),
     ("community/description.yml", f"version: {EXTENSION_VERSION}", f"other_version: {EXTENSION_VERSION}",
      "extension.version"),
     ("community/description.yml", f"ref: {TAG}", f"other_ref: {TAG}", "repo.ref"),
     ("community/description.yml", "repo:\n", "other_repo:\n", "repo.ref"),
+    # ref_next no longer builds anything: a descriptor that still carries it describes a build that does not run.
+    ("community/description.yml", f"  ref: {TAG}\n", f"  ref: {TAG}\n  ref_next: {TAG}\n", "ref_next no longer"),
+    # variegata names the release the community repository's DuckDB 1.5 binaries came from: never a later one,
+    # and never a branch or commit in place of a release tag.
+    ("community/description.yml", f"variegata: {VARIEGATA}", "variegata: v9999.0.0", "variegata"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", "variegata: main", "variegata"),
     ("community/description.yml", SUPPORTED_DUCKDB_REVISION, "0" * 40, "must cite the pinned DuckDB"),
     ("community/description.yml", f"DuckDB {SUPPORTED_DUCKDB}", "DuckDB 0.0.9", "must cite the pinned DuckDB"),
     # Every documentation link in the descriptor pins the release it describes; the last one is as checked as the
@@ -158,10 +166,13 @@ def test_source_version_drift_is_diagnostic(tmp_path, monkeypatch, filename, old
         release.release_version(TAG)
 
 
-def test_descriptor_without_ref_next_is_built_for_the_stable_engine_only(tmp_path, monkeypatch):
-    """ref_next is what the community repository builds the next DuckDB from; a descriptor that omits it is
-    complete, just not built there. Present, it names the release tag like ref (one source tree, both engines)."""
-    checkout(tmp_path, monkeypatch, RELEASED + (("community/description.yml", f"  ref_next: {TAG}\n", ""),))
+def test_descriptor_variegata_is_optional_and_may_name_this_release(tmp_path, monkeypatch):
+    """variegata records which release the community repository last built for DuckDB 1.5; it moves only on request,
+    so it may trail this release, name it, or be absent for an extension never built there."""
+    checkout(tmp_path, monkeypatch, RELEASED + (("community/description.yml", f"  variegata: {VARIEGATA}\n", ""),))
+    assert release.release_version(TAG) == EXTENSION_VERSION
+    checkout(tmp_path / "same", monkeypatch, RELEASED + (
+        ("community/description.yml", f"variegata: {VARIEGATA}", f"variegata: {TAG}"),))
     assert release.release_version(TAG) == EXTENSION_VERSION
 
 

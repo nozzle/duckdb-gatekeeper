@@ -1224,8 +1224,9 @@ statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serialize
 `GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
 public API, so an engine upgrade can require source changes. Compatibility is therefore
 checked by compilation and functional regressions on every candidate engine
-(`compatibility.yml`: a post-release snapshot of the pinned line and a `v2.0-cyanoptera`
-snapshot), through both the direct CMake path and the community `make release` path. Existing function classifications do not
+(`compatibility.yml`: a post-release snapshot of the pinned line, the DuckDB 2.0 prerelease the
+community repository builds against, and a newer `v2.0-cyanoptera` snapshot), through both the
+direct CMake path and the community `make release` path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
@@ -1243,7 +1244,10 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   otherwise admitted replacement can bind before the final unrecorded-scan backstop refuses it.
   This is not a pre-reader-I/O guarantee for connection-scoped replacements. Hosts requiring
   that guarantee must use database-wide registrations; connection-scoped interception needs
-  a separate implementation and native callback-counter coverage.
+  a separate implementation and native callback-counter coverage. 2.0 snapshots after
+  `v2.0.0-alpha44357` only append to the database-wide list; Gatekeeper rebuilds it with its gate
+  first when it loads, forwarding every existing registration unchanged. A scan another extension
+  registers while that rebuild runs would be lost, so load Gatekeeper during trusted setup.
 - Named-parameter/session-variable collisions on 2.0 require `getvariable` permission before
   binding, even with explicit inputs during enforcement; see [parameter fallback](parameter-fallback.md).
   DuckDB 1.5 has no such fallback path.
@@ -1257,6 +1261,9 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   function in `FROM` may have a NULL violation position on 2.0 where 1.5 supplies an offset.
 - 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
   grammar does not know their query nodes and refuses them as `unsupported`.
+- 2.0 snapshots after `v2.0.0-alpha44357` report a dynamic `PIVOT`'s temporary enum type as a write
+  to the temporary catalog. Creating that one entry there is the only modification Gatekeeper admits;
+  the statement must still be exactly the engine's rewrite.
 - 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
   no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
   the supported spelling. `SHOW TABLES` and the other catalog-wide forms still bind to
@@ -1269,12 +1276,14 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   is refused at `Prepare()` rather than at its first `Execute()`; and the prepare's replacement
   gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
   time as it is on 1.5.
-- 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once by
-  marking the statement. `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from
-  their bind, so `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either
-  function, and `EXECUTE` of one run when the statement runs, whether or not the host reads the
-  row; an unread `SELECT ... FROM gatekeeper_enforce()` would otherwise have left the connection
-  unenforced while the host believed it latched.
+- 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once. Through
+  `v2.0.0-alpha44357` the planner marks `CALL` to complete before its result is returned, and
+  `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from their bind, so
+  `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either function, and
+  `EXECUTE` of one run when the statement runs, whether or not the host reads the row. Later 2.0
+  snapshots removed that mark: the reader decides, and a reader choosing for its client streams only
+  a `SELECT`, so `CALL` and `EXECUTE` still run at once but an unread `SELECT` over either function
+  may never run. Activate with `CALL gatekeeper_enforce()`, or require the returned row.
 - 2.0 supports nested schemas. Gatekeeper preserves written identifier components until binding,
   and uses the resolved full schema ancestry for authorization, provenance, scan accounting,
   and evidence. Three-part names can denote a nested schema without a catalog qualifier;

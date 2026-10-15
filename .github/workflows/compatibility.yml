@@ -1,9 +1,10 @@
 name: Engine rebuild compatibility
 # Builds each full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
-# the build or engine-facing sources rather than every documentation change. Two candidates: a
-# post-release snapshot of the pinned release line, and a snapshot of the next major's branch, the
-# engine duckdb/community-extensions builds a descriptor's `ref_next` against. Both pins are moved
-# by hand (AGENTS.md); a build that breaks against a new snapshot is the signal, not noise.
+# the build or engine-facing sources rather than every documentation change. Candidates: a
+# post-release snapshot of the pinned release line; the DuckDB 2.0 prerelease duckdb/community-extensions
+# builds and deploys a descriptor's `repo.ref` for until 2.0.0 ships; and a newer `v2.0-cyanoptera`
+# snapshot, the line 2.0.0 ships from. All pins are moved by hand (AGENTS.md); a build that breaks
+# against a new snapshot is the signal, not noise.
 on:
   push:
     branches: [main]
@@ -43,10 +44,17 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          # v2.0-cyanoptera snapshot: the next major, which labels itself v2.0.0-devN.
-          - name: DuckDB 2.0 candidate (8b3c3b7)
-            key: 8b3c3b7
-            ref: 8b3c3b7dbf40f491c52792c582cd0681de4bd359
+          # v2.0-cyanoptera at DuckDB's Main run 44357, deployed as v2.0.0-alpha44357: the engine the community
+          # repository builds a descriptor's repo.ref against until 2.0.0 ships. Labels itself v2.0.0-devN here.
+          - name: DuckDB 2.0 alpha44357 (db0ecec)
+            key: db0ecec
+            ref: db0ecec124f697710036513a29e9f93a0f8577d0
+            nested_schemas: '1'
+            engine_major: '2'
+          # A newer v2.0-cyanoptera snapshot, the line 2.0.0 ships from; labels itself v2.0.0-devN.
+          - name: DuckDB 2.0 candidate (45dc0a0)
+            key: 45dc0a0
+            ref: 45dc0a0958c37d4f491604a76e4dd472b404d1de
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -103,8 +111,9 @@ jobs:
   community-makefile:
     # The path duckdb/community-extensions actually runs: `make release` with the candidate engine checked
     # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile must let the
-    # checkout describe itself rather than labeling the rebuild as the pinned release. For the 2.0 candidate
-    # this is the `ref_next` build, with our pinned extension-ci-tools Makefile rather than its `main`.
+    # checkout describe itself rather than labeling the rebuild as the pinned release. The 2.0 legs are the
+    # community repository's `repo.ref` builds: they replace our pinned 1.5 extension-ci-tools with the 2.0
+    # tools it checks out over that directory, and the prerelease leg is labeled as the version deployed for.
     name: Community make release against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -116,13 +125,23 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          - name: DuckDB 2.0 candidate (8b3c3b7)
-            key: 8b3c3b7
-            ref: 8b3c3b7dbf40f491c52792c582cd0681de4bd359
+          - name: DuckDB 2.0 alpha44357 (db0ecec)
+            key: db0ecec
+            ref: db0ecec124f697710036513a29e9f93a0f8577d0
+            label: v2.0.0-alpha44357
+            ci_tools: 969bc76276acec1c0a3922ff500d2ec3a1a3b037 # v2.0-cyanoptera
+            nested_schemas: '1'
+            engine_major: '2'
+          - name: DuckDB 2.0 candidate (45dc0a0)
+            key: 45dc0a0
+            ref: 45dc0a0958c37d4f491604a76e4dd472b404d1de
+            ci_tools: 969bc76276acec1c0a3922ff500d2ec3a1a3b037 # v2.0-cyanoptera
             nested_schemas: '1'
             engine_major: '2'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
+      CANDIDATE_CI_TOOLS: ${{ matrix.ci_tools }}
+      CANDIDATE_LABEL: ${{ matrix.label }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
       GATEKEEPER_TEST_ENGINE_MAJOR: ${{ matrix.engine_major }}
     steps:
@@ -145,6 +164,12 @@ jobs:
           git -C duckdb fetch --no-recurse-submodules origin "$CANDIDATE_ENGINE"
           git -C duckdb checkout --quiet "$CANDIDATE_ENGINE"
           git -C duckdb describe --tags --long
+      - name: Check out the community repository's extension-ci-tools for this engine
+        if: matrix.ci_tools
+        run: |
+          git -C extension-ci-tools fetch --no-recurse-submodules origin "$CANDIDATE_CI_TOOLS"
+          git -C extension-ci-tools checkout --quiet "$CANDIDATE_CI_TOOLS"
+          git -C extension-ci-tools log -1 --oneline
       - uses: ./.github/actions/setup
         with:
           ccache-key: community-makefile-${{ matrix.key }}-ubuntu
@@ -159,8 +184,11 @@ jobs:
           GEN: ninja
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          # The community pipeline exports the engine version it builds for as DUCKDB_VERSION, which a 2.0
+          # engine adopts as its label; empty, the checkout labels itself.
+          DUCKDB_VERSION: ${{ matrix.label }}
       - run: make test_release
       - name: Stamped engine identity matches the candidate checkout
-        run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb
+        run: python scripts/check_engine_stamp.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source duckdb ${CANDIDATE_LABEL:+--expect-version "$CANDIDATE_LABEL"}
       - name: Loadable artifact loads into the candidate engine, and its engine guard refuses another
         run: python scripts/check_engine_guard.py --extension build/release/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/release/test/unittest
