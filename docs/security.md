@@ -1245,7 +1245,7 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   This is not a pre-reader-I/O guarantee for connection-scoped replacements. Hosts requiring
   that guarantee must use database-wide registrations; connection-scoped interception needs
   a separate implementation and native callback-counter coverage. 2.0 snapshots after
-  `v2.0.0-alpha44357` only append to the database-wide list; Gatekeeper rebuilds it with its gate
+  `v2.0.0-alpha46057` only append to the database-wide list; Gatekeeper rebuilds it with its gate
   first when it loads, forwarding every existing registration unchanged. A scan another extension
   registers while that rebuild runs would be lost, so load Gatekeeper during trusted setup.
 - Named-parameter/session-variable collisions on 2.0 require `getvariable` permission before
@@ -1261,7 +1261,7 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   function in `FROM` may have a NULL violation position on 2.0 where 1.5 supplies an offset.
 - 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
   grammar does not know their query nodes and refuses them as `unsupported`.
-- 2.0 snapshots after `v2.0.0-alpha44357` report a dynamic `PIVOT`'s temporary enum type as a write
+- 2.0 snapshots from `v2.0.0-alpha46057` on report a dynamic `PIVOT`'s temporary enum type as a write
   to the temporary catalog. Creating that one entry there is the only modification Gatekeeper admits;
   the statement must still be exactly the engine's rewrite.
 - 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
@@ -1277,7 +1277,7 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
   time as it is on 1.5.
 - 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once. Through
-  `v2.0.0-alpha44357` the planner marks `CALL` to complete before its result is returned, and
+  `v2.0.0-alpha46057` the planner marks `CALL` to complete before its result is returned, and
   `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from their bind, so
   `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either function, and
   `EXECUTE` of one run when the statement runs, whether or not the host reads the row. Later 2.0

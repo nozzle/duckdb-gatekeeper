@@ -990,7 +990,7 @@ enforcement. A SELECT-based setup must require an actual `enforced = true` resul
 ## Compatibility
 
 The same source supports DuckDB 1.5.6 and tested DuckDB 2.0 candidates, including the
-`v2.0.0-alpha44357` engine the community repository builds for; released GitHub binaries target
+`v2.0.0-alpha46057` engine the community repository builds for; released GitHub binaries target
 1.5.6. The policy model is shared, but engine capabilities, conservative
 refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
 for prepared statements, function provenance, parameter fallback, Quack, and the 2.0

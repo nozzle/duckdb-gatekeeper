@@ -11,9 +11,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 ### Changed
 
 - The DuckDB community repository now builds Gatekeeper for DuckDB 2.0 from this release, starting
-  with `v2.0.0-alpha44357`. It no longer builds DuckDB 1.5: its 1.5.6 binaries remain v0.4.1, which
+  with `v2.0.0-alpha46057`. It no longer builds DuckDB 1.5: its 1.5.6 binaries remain v0.4.1, which
   this release does not change on that engine. GitHub release assets still target DuckDB 1.5.6.
-- On DuckDB 2.0 snapshots after `v2.0.0-alpha44357`, the engine no longer lets a statement force its
+- On DuckDB 2.0 snapshots after `v2.0.0-alpha46057`, the engine no longer lets a statement force its
   result to complete before it is returned, so a `SELECT` over `gatekeeper_enforce()` or
   `gatekeeper_configure()` runs only as the client reads it. `CALL` and `EXECUTE` still run at once.
   Activate with `CALL gatekeeper_enforce()`, or require the returned `enforced = true` row, as
@@ -21,8 +21,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Fixed
 
-- Build against DuckDB `v2.0.0-alpha44357` and newer 2.0 snapshots, which construct the connection's
-  parser from its context and allow the database-wide replacement scans only to be appended to.
+- Build against DuckDB `v2.0.0-alpha46057`, which constructs the connection's parser from its context,
+  and newer 2.0 snapshots, which also allow the database-wide replacement scans only to be appended to.
   Gatekeeper's replacement gate still runs ahead of every one of them: it rebuilds that list with the
   gate first when it loads, so load it during trusted setup, not while other extensions load.
 - Dynamic `PIVOT` remains allowed on 2.0 snapshots that register its temporary enum type as a write to

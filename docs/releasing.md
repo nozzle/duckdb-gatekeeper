@@ -137,7 +137,7 @@ silently overwritten. Do not move a published version tag.
    `repo.variegata`: substitute the SHA each tag points at (`git rev-parse vX.Y.Z^{}`) in the
    submitted copy only; the in-repo descriptor keeps tags because it cannot name the commit
    that contains it. The community repository builds every descriptor PR against its current
-   DuckDB 2.0 engine (a prerelease such as `v2.0.0-alpha44357` until 2.0.0 ships) with its own
+   DuckDB 2.0 engine (a prerelease such as `v2.0.0-alpha46057` until 2.0.0 ships) with its own
    `extension-ci-tools` revision; a failure there is first a question about that engine, then
    about the source. `compatibility.yml` pins the same engine and tools revision.
 2. State which engine the GitHub assets target (there are none for DuckDB 2.0; the community
@@ -161,7 +161,7 @@ silently overwritten. Do not move a published version tag.
 
 ## After community deployment
 
-Using the DuckDB 2.0 engine the community repository deployed for (`v2.0.0-alpha44357` until
+Using the DuckDB 2.0 engine the community repository deployed for (`v2.0.0-alpha46057` until
 2.0.0 ships) with normal signature verification and a fresh extension directory, verify
 installation, loading, and the descriptor's hello-world queries:
 

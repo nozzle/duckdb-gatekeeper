@@ -286,7 +286,7 @@ inline CatalogEntry &ResolveReplacementFunction(ClientContext &context, Function
 }
 
 // A table function whose execution is its point must run even when the client does not fetch its rows. 2.0
-// snapshots through v2.0.0-alpha44357 let the planner settle that: the mark completes the statement before its
+// snapshots through v2.0.0-alpha46057 let the planner settle that: the mark completes the statement before its
 // result is returned. Later ones removed planner eagerness and leave it to the reader, which streams only a SELECT
 // that returns rows: CALL and EXECUTE still complete at submission, a SELECT over the function runs as it is read.
 template <class T, class = void> struct HasResultEagerness : std::false_type {};

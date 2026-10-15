@@ -44,11 +44,11 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          # v2.0-cyanoptera at DuckDB's Main run 44357, deployed as v2.0.0-alpha44357: the engine the community
+          # v2.0-cyanoptera at DuckDB's Main run 46057, deployed as v2.0.0-alpha46057: the engine the community
           # repository builds a descriptor's repo.ref against until 2.0.0 ships. Labels itself v2.0.0-devN here.
-          - name: DuckDB 2.0 alpha44357 (db0ecec)
-            key: db0ecec
-            ref: db0ecec124f697710036513a29e9f93a0f8577d0
+          - name: DuckDB 2.0 alpha46057 (b15358c)
+            key: b15358c
+            ref: b15358c371daf10dad799a43b6167f6ccdce84d8
             nested_schemas: '1'
             engine_major: '2'
           # A newer v2.0-cyanoptera snapshot, the line 2.0.0 ships from; labels itself v2.0.0-devN.
@@ -125,10 +125,10 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          - name: DuckDB 2.0 alpha44357 (db0ecec)
-            key: db0ecec
-            ref: db0ecec124f697710036513a29e9f93a0f8577d0
-            label: v2.0.0-alpha44357
+          - name: DuckDB 2.0 alpha46057 (b15358c)
+            key: b15358c
+            ref: b15358c371daf10dad799a43b6167f6ccdce84d8
+            label: v2.0.0-alpha46057
             ci_tools: 969bc76276acec1c0a3922ff500d2ec3a1a3b037 # v2.0-cyanoptera
             nested_schemas: '1'
             engine_major: '2'
