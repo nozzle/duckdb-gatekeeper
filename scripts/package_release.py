@@ -44,15 +44,19 @@ def release_version(tag):
     if descriptor_version != version or descriptor_ref != f"v{version}":
         raise ValueError(f"Community descriptor version {descriptor_version}, ref {descriptor_ref}, "
                          f"and release v{version} must agree")
-    # The community repository builds the next DuckDB from repo.ref_next when the descriptor has one. One source
-    # tree builds both engines, so it names the same tag as repo.ref; a descriptor without it is only built for
-    # the stable engine.
-    try:
-        descriptor_ref_next = community.scalar("repo", "ref_next", descriptor)
-    except community.DescriptorError:
-        descriptor_ref_next = None
-    if descriptor_ref_next is not None and descriptor_ref_next != f"v{version}":
-        raise ValueError(f"Community descriptor ref_next {descriptor_ref_next} and release v{version} must agree")
+    # The community repository builds repo.ref against DuckDB 2.0. It no longer builds DuckDB 1.5 automatically:
+    # repo.variegata names the release its 1.5 binaries came from, which moves only on request to its
+    # maintainers, so it may name this release or an earlier one. repo.ref_next no longer triggers any build.
+    # Either key, once present, is checked whatever its layout: an unreadable value is drift, not absence.
+    if community.has_key("repo", "ref_next", descriptor):
+        raise ValueError("Community descriptor repo.ref_next no longer triggers a build; DuckDB 2.0 builds from "
+                         "repo.ref and DuckDB 1.5 from repo.variegata")
+    descriptor_variegata = community.optional_scalar("repo", "variegata", descriptor)
+    if descriptor_variegata is not None:
+        earlier = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", descriptor_variegata)
+        if not earlier or tuple(map(int, earlier.groups())) > tuple(map(int, version.split("."))):
+            raise ValueError(f"Community descriptor variegata {descriptor_variegata} must name release v{version} "
+                             "or an earlier release tag")
     # Tagged releases pin documentation to their version. PR/main packaging also accepts main for
     # documentation of unreleased features, but never another release or arbitrary branch.
     allowed_refs = {f"v{version}"} if tag else {f"v{version}", "main"}

@@ -41,7 +41,7 @@ static DecisionMode ModeFor(bool log_only) { return log_only ? DecisionMode::LOG
 // parser diagnostics and the ordinary non-SELECT denial (and its audit record).
 static bool RoutingControl(ClientContext &context, const string &sql) {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
-	Parser parser(context.GetParserOptions());
+	auto parser = engine::ConnectionParser(context);
 	try {
 		parser.ParseQuery(sql);
 	} catch (const ParserException &) {
