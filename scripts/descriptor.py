@@ -18,12 +18,27 @@ class DescriptorError(ValueError):
     pass
 
 
+def _section(section_name, descriptor):
+    """The indented body of top-level ``section_name:``, or None when the descriptor has no such section."""
+    section = re.search(rf"(?m)^{re.escape(section_name)}:[ \t]*\n((?:[ \t]+[^\n]*\n|\n)*)", descriptor)
+    return section.group(1) if section else None
+
+
+def _spellings(body, key):
+    """Every line of ``body`` that writes ``key`` as a mapping key, canonical or not: any indentation, quoted or not,
+    whitespace before the colon or not."""
+    return [match.group(0) for match in re.finditer(rf"(?m)^[ \t]*([\"']?){re.escape(key)}\1[ \t]*:", body)]
+
+
 def _entry(section_name, key, value_pattern, descriptor, shape):
     """The match of ``key`` inside the body of top-level ``section_name:``; the error names the missing
-    ``section.key`` whichever of the two is absent."""
+    ``section.key`` whichever of the two is absent. The key must be written once, two-space indented and unquoted:
+    another spelling, or a repeat a YAML reader would let override the first, is drift."""
     location = f"community/description.yml {section_name}.{key}"
-    section = re.search(rf"(?m)^{re.escape(section_name)}:[ \t]*\n((?:[ \t]+[^\n]*\n|\n)*)", descriptor)
-    match = section and re.search(rf"(?m)^  {re.escape(key)}:{value_pattern}", section.group(1))
+    body = _section(section_name, descriptor)
+    if body is not None and _spellings(body, key) not in ([], [f"  {key}:"]):
+        raise DescriptorError(f"Cannot read {location}: expected the key once, two-space indented and unquoted")
+    match = body is not None and re.search(rf"(?m)^  {re.escape(key)}:{value_pattern}", body)
     if not match:
         raise DescriptorError(f"Cannot read {location}: expected {shape}")
     return match
@@ -37,11 +52,13 @@ def scalar(section_name, key, descriptor=None):
 
 
 def has_key(section_name, key, descriptor=None):
-    """Whether top-level ``section_name:`` has a two-space indented ``key:``, whatever its value's layout."""
-    try:
-        _entry(section_name, key, "", text() if descriptor is None else descriptor, "a key")
-    except DescriptorError:
+    """Whether top-level ``section_name:`` has ``key``, whatever its value's layout. The key written in any spelling
+    counts as present, so a non-canonical one raises as drift rather than reading as absent."""
+    descriptor = text() if descriptor is None else descriptor
+    body = _section(section_name, descriptor)
+    if body is None or not _spellings(body, key):
         return False
+    _entry(section_name, key, "", descriptor, "a key")
     return True
 
 

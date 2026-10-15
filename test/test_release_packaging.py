@@ -160,6 +160,15 @@ def test_output_file_is_not_overwritten(released, artifacts, tmp_path):
     ("community/description.yml", f"variegata: {VARIEGATA}", 'variegata: "v9999.0.0"', "repo.variegata"),
     ("community/description.yml", f"variegata: {VARIEGATA}", 'variegata: "main"', "repo.variegata"),
     ("community/description.yml", f"variegata: {VARIEGATA}", "variegata:", "repo.variegata"),
+    # A key spelled any other way (quoted, a space before the colon) or written twice, so that a YAML reader would
+    # take a different value than this one, is drift; it never reads as absent.
+    ("community/description.yml", f"  ref: {TAG}\n", f'  ref: {TAG}\n  "ref_next": main\n', "repo.ref_next"),
+    ("community/description.yml", f"  ref: {TAG}\n", f"  ref: {TAG}\n  ref_next : main\n", "repo.ref_next"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", '"variegata": v9999.0.0', "repo.variegata"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", "variegata : main", "repo.variegata"),
+    ("community/description.yml", f"variegata: {VARIEGATA}", f"variegata: {VARIEGATA}\n  variegata: v9999.0.0",
+     "repo.variegata"),
+    ("community/description.yml", f"  ref: {TAG}\n", f"  ref: {TAG}\n  ref: v0.0.9\n", "repo.ref"),
     ("community/description.yml", SUPPORTED_DUCKDB_REVISION, "0" * 40, "must cite the pinned DuckDB"),
     ("community/description.yml", f"DuckDB {SUPPORTED_DUCKDB}", "DuckDB 0.0.9", "must cite the pinned DuckDB"),
     # Every documentation link in the descriptor pins the release it describes; the last one is as checked as the
