@@ -268,6 +268,13 @@ def test_check_engine_stamp_follows_duckdb_2_labels(tmp_path):
     assert any("prerelease label" in p for p in check_engine_stamp.check(alpha, source))
     # A prerelease label other than the requested one is not confirmed by it.
     assert any("requested" in p for p in check_engine_stamp.check(alpha, None, "v2.0.0-alpha43"))
+    # 2.0 never derives a release label either: a v2.0.0 build is labeled explicitly before (and after) the tag,
+    # so it is confirmed only by naming it, and only on the checkout's own release line.
+    final = _synthetic_artifact(tmp_path / "final.duckdb_extension", "v2.0.0", commit[:10], "v2.0.0")
+    assert check_engine_stamp.check(final, source, "v2.0.0") == []
+    assert any("release label" in p for p in check_engine_stamp.check(final, source))
+    other_line = _synthetic_artifact(tmp_path / "line.duckdb_extension", "v1.5.6", commit[:10], "v1.5.6")
+    assert any("2.0 release line" in p for p in check_engine_stamp.check(other_line, source, "v1.5.6"))
 
 
 def test_check_engine_stamp_accepts_the_pinned_shallow_checkout(tmp_path):

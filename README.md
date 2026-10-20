@@ -989,9 +989,8 @@ enforcement. A SELECT-based setup must require an actual `enforced = true` resul
 
 ## Compatibility
 
-The same source supports DuckDB 1.5.6 and tested DuckDB 2.0 candidates, including the
-`v2.0.0-alpha46057` engine the community repository builds for; released GitHub binaries target
-1.5.6. The policy model is shared, but engine capabilities, conservative
+The same source supports DuckDB 1.5.6 and DuckDB 2.0, including the `v2.0.0` engine the
+community repository builds for; released GitHub binaries target 1.5.6. The policy model is shared, but engine capabilities, conservative
 refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
 for prepared statements, function provenance, parameter fallback, Quack, and the 2.0
 connection-scoped replacement-scan timing limitation.
@@ -1003,14 +1002,14 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 69 µs | 4.1 ms | 3.9 ms |
-| enforced connection | 99 µs (+30 µs) | 4.4 ms (+273 µs) | 7.1 ms (+3.3 ms) |
-| enforced, audit log at debug | 176 µs (+107 µs) | 4.6 ms (+418 µs) | 7.3 ms (+3.5 ms) |
-| validate, then execute | 262 µs (+193 µs) | 4.7 ms (+553 µs) | 7.4 ms (+3.5 ms) |
-| denied on an enforced connection | 337 µs | 540 µs | 2.8 ms |
+| plain connection | 67 µs | 3.8 ms | 3.8 ms |
+| enforced connection | 97 µs (+30 µs) | 4.0 ms (+196 µs) | 7.0 ms (+3.2 ms) |
+| enforced, audit log at debug | 169 µs (+102 µs) | 4.1 ms (+380 µs) | 7.2 ms (+3.4 ms) |
+| validate, then execute | 250 µs (+183 µs) | 4.3 ms (+515 µs) | 7.3 ms (+3.5 ms) |
+| denied on an enforced connection | 332 µs | 504 µs | 2.8 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python client
-on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.6, Gatekeeper 0.4.2. The
+on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.6, Gatekeeper 0.4.3. The
 plain row is the client round trip plus the engine's own work; in parentheses, what each mode
 adds to it.
 

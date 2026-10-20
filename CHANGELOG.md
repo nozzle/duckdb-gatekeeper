@@ -6,6 +6,14 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.4.3 - 2026-10-20
+
+### Fixed
+
+- Build against DuckDB 2.0.0, the `v2.0-cyanoptera` commit the community repository builds as
+  `v2.0.0`. It serializes operator expressions by hand. At the latest storage version, which
+  Gatekeeper validates, they keep their previous shape, so validation decisions are unchanged.
+
 ## 0.4.2 - 2026-10-15
 
 ### Changed

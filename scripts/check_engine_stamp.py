@@ -14,9 +14,9 @@ from the engine checkout's own Git metadata instead and fails when the stamps di
 engine's CMakeLists.txt derives it (DuckDB 2.0 from its release version file and commit count, 1.5 from
 ``git describe``); the pinned release revision in versions.cmake is expected as the pinned release, as
 the build labels it. ``--expect-version`` additionally pins the display version the caller knows the engine
-to be, and is the only confirmation of a prerelease label (``-alphaN``, ``-rcN``), which a build is given
-explicitly rather than deriving. At least one of the two is required; without a checkout only the footer,
-the Gatekeeper stamp, and the expected version are compared.
+to be, and is the only confirmation of a label a build is given explicitly rather than deriving: a prerelease
+(``-alphaN``, ``-rcN``), or any DuckDB 2.0 release, which 2.0 never derives from tags. At least one of the two is
+required; without a checkout only the footer, the Gatekeeper stamp, and the expected version are compared.
 """
 import argparse
 from pathlib import Path
@@ -105,13 +105,22 @@ def check(extension: Path, engine_source=None, expect_version=None):
             raise SystemExit(f"{engine_source} is not a Git checkout")
         if not commit.startswith(source_id):
             problems.append(f"stamp source id {source_id} is not a prefix of the checkout commit {commit}")
-        if re.search(r"-(alpha|rc)\d+$", version):
-            # A prerelease label is never derived from a checkout: DuckDB's build is given it explicitly (the
-            # nightly Python packages, for one, are v2.0.0-alphaN), so the caller must name it, and the
-            # checkout is held to the source id alone.
+        release_line = engine_source / "scripts/ci/release_version.txt"
+        prerelease = re.search(r"-(alpha|rc)\d+$", version)
+        if prerelease or (release and release_line.exists()):
+            # Neither a prerelease label nor a 2.0 release label is derived from a checkout. Prereleases are given
+            # their label explicitly (the nightly Python packages, for one, are v2.0.0-alphaN), and DuckDB 2.0
+            # labels a build from its release version file and commit count, never from tags, so a v2.0.0 build
+            # is given its label too (as the community repository does). The caller must name it, the checkout is
+            # held to the source id, and a 2.0 checkout's label to its own release line.
             if version != expect_version:
-                problems.append(f"stamp version {version} is a prerelease label the checkout cannot confirm; "
+                kind = "a prerelease label" if prerelease else "a 2.0 release label"
+                problems.append(f"stamp version {version} is {kind} the checkout cannot confirm; "
                                 "pass it with --expect-version")
+            if release_line.exists():
+                line = release_line.read_text().strip()
+                if not version.startswith(f"v{line}."):
+                    problems.append(f"stamp version {version} is not on the checkout's {line} release line")
         else:
             expected = expected_version(engine_source, commit)
             if expected.startswith("-dev"):

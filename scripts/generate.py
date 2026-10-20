@@ -41,11 +41,14 @@ def grammar(duckdb_source=ROOT / "duckdb"):
     allowed = set("SelectStatement QueryNode SelectNode SetOperationNode RecursiveCTENode TableRef BaseTableRef JoinRef SubqueryRef TableFunctionRef EmptyTableRef ExpressionListRef PivotRef ShowRef AtClause ParsedExpression BetweenExpression CaseExpression CastExpression CollateExpression ColumnRefExpression ComparisonExpression ConjunctionExpression ConstantExpression FunctionExpression LambdaExpression OperatorExpression ParameterExpression PositionalReferenceExpression StarExpression SubqueryExpression WindowExpression TypeExpression CommonTableExpressionInfo CommonTableExpressionMap OrderByNode CaseCheck SampleOptions PivotColumn PivotColumnEntry ResultModifier LimitModifier DistinctModifier OrderModifier LimitPercentModifier LegacyLimitPercentModifier".split())
     # Classes DuckDB 2.0 serializes by hand (custom_implementation). Their schema entries describe the C++
     # members, not the properties written, so the properties come from the implementation instead
-    # (src/parser/expression/{cast,function,window}_expression.cpp at the latest storage version, which is what
-    # Gatekeeper serializes with). Reviewed against the same engine as the schema files; a hand-serialized class
+    # (src/parser/expression/{cast,function,operator,window}_expression.cpp at the latest storage version, which is
+    # what Gatekeeper serializes with). Reviewed against the same engine as the schema files; a hand-serialized class
     # without an entry here is refused rather than guessed.
     latest = {
         "CastExpression": {"child": "ParsedExpression*", "try_cast": "bool", "type_expr": "ParsedExpression*"},
+        # 2.0.0 (OperatorExpression::Serialize) writes its children unchanged at the latest storage version. Only an
+        # older storage target rewrites an ARRAY_SLICE's empty bounds as the legacy INTEGER[] constant.
+        "OperatorExpression": {"children": "vector<ParsedExpression*>"},
         "FunctionExpression": {
             "function_name": "Identifier", "schema": "Identifier", "filter": "ParsedExpression*",
             "order_bys": "OrderModifier*", "distinct": "bool", "is_operator": "bool", "export_state": "bool",
