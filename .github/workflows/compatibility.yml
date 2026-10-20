@@ -1,10 +1,9 @@
 name: Engine rebuild compatibility
 # Builds each full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
 # the build or engine-facing sources rather than every documentation change. Candidates: a
-# post-release snapshot of the pinned release line; the DuckDB 2.0 prerelease duckdb/community-extensions
-# builds and deploys a descriptor's `repo.ref` for until 2.0.0 ships; and a newer `v2.0-cyanoptera`
-# snapshot, the line 2.0.0 ships from. All pins are moved by hand (AGENTS.md); a build that breaks
-# against a new snapshot is the signal, not noise.
+# post-release snapshot of the pinned release line, and the DuckDB 2.0 commit duckdb/community-extensions
+# pins as v2.0.0 and builds a descriptor's `repo.ref` against. All pins are moved by hand (AGENTS.md); a
+# build that breaks against a new snapshot is the signal, not noise.
 on:
   push:
     branches: [main]
@@ -44,17 +43,11 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          # v2.0-cyanoptera at DuckDB's Main run 46057, deployed as v2.0.0-alpha46057: the engine the community
-          # repository builds a descriptor's repo.ref against until 2.0.0 ships. Labels itself v2.0.0-devN here.
-          - name: DuckDB 2.0 alpha46057 (b15358c)
-            key: b15358c
-            ref: b15358c371daf10dad799a43b6167f6ccdce84d8
-            nested_schemas: '1'
-            engine_major: '2'
-          # A newer v2.0-cyanoptera snapshot, the line 2.0.0 ships from; labels itself v2.0.0-devN.
-          - name: DuckDB 2.0 candidate (45dc0a0)
-            key: 45dc0a0
-            ref: 45dc0a0958c37d4f491604a76e4dd472b404d1de
+          # The v2.0-cyanoptera commit duckdb/community-extensions pins as v2.0.0 and builds a descriptor's repo.ref
+          # against. Labels itself v2.0.0-devN here.
+          - name: DuckDB 2.0.0 (d54cbbe)
+            key: d54cbbe
+            ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -113,7 +106,7 @@ jobs:
     # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile must let the
     # checkout describe itself rather than labeling the rebuild as the pinned release. The 2.0 legs are the
     # community repository's `repo.ref` builds: they replace our pinned 1.5 extension-ci-tools with the 2.0
-    # tools it checks out over that directory, and the prerelease leg is labeled as the version deployed for.
+    # tools it checks out over that directory, and are labeled as the version deployed for.
     name: Community make release against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -125,17 +118,11 @@ jobs:
             key: a3cd0de
             ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
             engine_major: '1'
-          - name: DuckDB 2.0 alpha46057 (b15358c)
-            key: b15358c
-            ref: b15358c371daf10dad799a43b6167f6ccdce84d8
-            label: v2.0.0-alpha46057
-            ci_tools: 969bc76276acec1c0a3922ff500d2ec3a1a3b037 # v2.0-cyanoptera
-            nested_schemas: '1'
-            engine_major: '2'
-          - name: DuckDB 2.0 candidate (45dc0a0)
-            key: 45dc0a0
-            ref: 45dc0a0958c37d4f491604a76e4dd472b404d1de
-            ci_tools: 969bc76276acec1c0a3922ff500d2ec3a1a3b037 # v2.0-cyanoptera
+          - name: DuckDB 2.0.0 (d54cbbe)
+            key: d54cbbe
+            ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
+            label: v2.0.0
+            ci_tools: 78bd1e4abbd543822166d5b07644751ba1fc6e8d # v2.0-cyanoptera
             nested_schemas: '1'
             engine_major: '2'
     env:

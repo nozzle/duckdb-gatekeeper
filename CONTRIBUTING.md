@@ -47,9 +47,8 @@ labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
 `Engine rebuild compatibility` workflow rebuilds against pinned engine snapshots, one past the
-pinned release on its line and the DuckDB 2.0 engines the community repository builds a
-descriptor's `repo.ref` against (its current prerelease and a newer `v2.0-cyanoptera`
-snapshot), through both
+pinned release on its line and the DuckDB 2.0 commit the community repository pins as `v2.0.0`
+and builds a descriptor's `repo.ref` against, through both
 the direct CMake path and the community `make release` path; it checks the stamped engine
 identity against what the candidate checkout labels itself, runs `test/sql`, and runs
 `scripts/check_engine_guard.py`, which loads the resulting artifact into that engine's
