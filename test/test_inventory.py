@@ -5,7 +5,7 @@ import pytest
 
 from audit_inventory import compare, coverage
 from inventory import load, load_default_identities, load_default_mapping
-from support.artifact import ENGINE_MAJOR, ROOT, by_parser
+from support.artifact import ROOT, by_parser
 from support.headers import never_bind_names
 from support.typed_helpers import function_rules, validate
 from versions import BASELINE_FILENAME
@@ -167,8 +167,6 @@ def test_audit_named_arguments_and_positional_order():
     assert compare(baseline, candidate)["changed"] == ["reader"]
 
 
-@pytest.mark.skipif(ENGINE_MAJOR >= 2, reason="DuckDB 2.0's random() is not reproducible across statements "
-                                            "after setseed(), so the draw comparison cannot show anything")
 def test_rejected_validation_does_not_touch_the_rng(db):
     """switch evaluates its MAP argument at bind time without a foldability check; a caller-authored
     switch is rejected before binding, so the setseed inside it never runs during validation."""

@@ -287,7 +287,7 @@ def test_attached_catalog_views_are_trusted_definitions(db):
 def test_enforced_connections_execute_what_the_policy_allows(catalog, agent):
     # reporting.leak is a host view over secret.salaries under a policy that allows reporting.* only.
     assert agent.execute("SELECT * FROM reporting.leak").fetchall() == [("x", 1.0)]
-    assert agent.sql("SELECT count(*) FROM reporting.leak").fetchone() == (1,)
+    assert agent.sql("SELECT count(*) FROM reporting.leak").fetchall() == [(1,)]
     for sql in ["SELECT * FROM secret.salaries", "SELECT * FROM reporting.leak, secret.salaries",
                 "SELECT * FROM reporting.leak WHERE who IN (SELECT who FROM secret.salaries)"]:
         assert attempt(agent, sql).kind == "denied", sql

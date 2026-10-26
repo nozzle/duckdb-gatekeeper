@@ -2,7 +2,7 @@
 
 ## Building
 
-Requires Git, Python 3.10+, and a C++17 compiler. The pinned `duckdb` and
+The build/test environment requires Git, Python 3.11+, and a C++17 compiler. The pinned `duckdb` and
 `extension-ci-tools` submodules provide the standard extension-template layout.
 
 ```sh
@@ -38,17 +38,16 @@ sanitizer and fuzzer options, targets, the Emscripten container) stays in each s
 accepts an engine identifying as that release). `--duckdb-version` tells the engine build how
 to label itself; the identity CMake then computes is what `scripts/generate.py` bakes into the
 load-time guard, through its own `--engine-version-label`/`--engine-source-id`. A checkout at exactly the pinned engine
-revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v1.5.6`), because a shallow
-clone cannot `git describe` the engine and DuckDB would otherwise stamp a dummy `v0.0.1`
-that no real engine loads. Every other checkout, including another revision inside `duckdb/`,
+revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v2.0.0`). DuckDB 2.0 otherwise
+derives a development label from its release file and commit count; 1.5 uses `git describe`.
+Neither labels a shallow release checkout reliably. Every other checkout, including another revision inside `duckdb/`,
 uses its own Git metadata unless `--duckdb-version vX.Y.Z` overrides it; the `Makefile`
 applies the same revision-gated rule, so a community rebuild for a newer engine is never
 labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
-`Engine rebuild compatibility` workflow rebuilds against pinned engine snapshots, one past the
-pinned release on its line and the DuckDB 2.0 commit the community repository pins as `v2.0.0`
-and builds a descriptor's `repo.ref` against, through both
+`Engine rebuild compatibility` workflow rebuilds the primary DuckDB 2.0.0 and retained 1.5.6
+releases, each with its matching pinned toolchain, through both
 the direct CMake path and the community `make release` path; it checks the stamped engine
 identity against what the candidate checkout labels itself, runs `test/sql`, and runs
 `scripts/check_engine_guard.py`, which loads the resulting artifact into that engine's
@@ -61,14 +60,14 @@ The community-extension build path also works and runs on CI:
 ```sh
 make release          # pinned extension-ci-tools Makefile
 make test_release     # sqllogictests in test/sql
-make release OVERRIDE_GIT_DESCRIBE=v1.5.6   # label a shallow clone of another engine explicitly
+make release OVERRIDE_GIT_DESCRIBE=v2.0.0   # label a shallow clone of another engine explicitly
 OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, even for the pinned revision
 ```
 
 ### Loading unsigned builds
 
 Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
-engine matching the binary (1.5.6 for our release artifacts) and explicitly enable
+engine matching the binary (2.0.0 for current builds; published v0.4.3 assets use 1.5.6) and explicitly enable
 unsigned loading for these development artifacts:
 
 ```sh
@@ -97,7 +96,7 @@ make an unsigned extension a DuckDB-signed community build. See the
 ## Testing
 
 The optional provenance-tooling tests compare historical review sources, not the current
-build engine. For a full local run after the 1.5.6 repin, prepare a separate 1.5.5 checkout:
+build engine. For a full local run, prepare a separate historical 1.5.5 checkout:
 
 ```sh
 git clone --shared --no-checkout duckdb build/review-source
@@ -111,8 +110,9 @@ selects build grammar/header sources separately; it defaults to `duckdb/`. CI pr
 the historical checkout automatically. Do not change inventory provenance to match a repin.
 
 ```sh
-.venv/bin/python -m pytest test -q
-GATEKEEPER_PARSER=peg .venv/bin/python -m pytest test -q  # the same suite under DuckDB's PEG parser
+.venv/bin/python -m pytest test -q  # DuckDB 2.0's default PEG parser
+.venv/bin/python -c "import duckdb; duckdb.connect().execute('INSTALL legacy_parser')"
+GATEKEEPER_PARSER=postgres .venv/bin/python -m pytest test -q  # optional legacy parser
 .venv/bin/python scripts/audit_inventory.py
 .venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp
 .venv/bin/python scripts/test_sanitized.py      # ASan/UBSan rebuild and pytest
@@ -137,10 +137,11 @@ The suite has two layers with different reach:
   Windows, both architectures each). Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
-  `GATEKEEPER_PARSER=peg` runs the same suite with every connection `support.artifact.connect`
-  opens opted into the `autocomplete` extension's PEG parser override
-  (`CALL enable_peg_parser()`, DuckDB 1.5's experimental parser and the only parser from 2.0; it
-  needs `INSTALL autocomplete` once). A test that must open a raw connection because the
+   `GATEKEEPER_PARSER` selects the parser on every connection `support.artifact.connect` opens.
+   On 2.0, `peg` is the default and `postgres` loads `legacy_parser` and enables it; install
+   that extension once before the legacy leg. On 1.5, `postgres` is the default and `peg`
+   uses `LOAD autocomplete; CALL enable_peg_parser()` after `INSTALL autocomplete` once.
+   A test that must open a raw connection because the
   artifact's load path is what it tests applies the leg with `select_parser()` once the
   artifact is loaded. The tests that compile against the engine's headers or generate the
   grammar from its schema (`test_validator_structure.py`, `test_engine_errors.py`,
@@ -148,8 +149,8 @@ The suite has two layers with different reach:
   the checkout the artifact was built from.
   Gatekeeper parses with the connection's parser options, so its decisions must agree with the
   engine under either parser; the build-and-test workflow runs both legs. The parsers differ in
-  a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
-  the parser's or the binder's check, the arity a keyword-named call such as `position` must
+   a few diagnostics (which AST nodes carry a query location, whether `max_expression_depth` is
+   the parser's or the binder's check on 1.5, the arity a keyword-named call such as `position` must
   have to reach the binder), so a test that pins one of those names both expectations with
   `by_parser(postgres=..., peg=...)` from `support.artifact` rather than skipping a leg. A
   policy decision (`allowed`, a `forbidden`/`unsupported` code, a violation's `rule`) must
@@ -181,44 +182,42 @@ without silently exercising the engine library's older linked Gatekeeper. Withou
 variable, the normal CI probes still test the statically linked extension. All probes share this
 setup in `test/native/probe_database.hpp`.
 
-### Running the suite on DuckDB 2.0
+### Retained DuckDB 1.5 and candidate engines
 
-The Quack candidate workflow also runs the full Python suite against its hash-pinned 2.0
-wheel and matching loadable. The separate compatibility workflow tests the newer engine
-snapshot through SQL and native probes; historical inventory captures retain their own pins.
+DuckDB 2.0.0 is the default. The `DuckDB 1.5 maintenance` workflow runs the full Python suite
+under both 1.5 parsers and the Quack fixture against the hash-pinned 1.5.6 host and matching
+source until **2027-03-01**. Its one-package override is
+`test/compatibility/requirements-1.5.txt`; build/tooling dependencies use the primary lock.
+Keep the engine adapters, `by_engine` expectations, and 1.5 parser setup until that deadline.
+[#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99) tracks retirement independently
+of the default repin. Historical inventory captures retain their own source pins.
 
-The same source builds against `v2.0-cyanoptera` (see
-[Compatibility and review](docs/security.md#compatibility-and-review) for what the engine
-does differently there). The deep suite runs inside a `duckdb` Python package, and the load-time
-guard requires that package to be the exact engine the artifact was built from: for a
-prerelease that means DuckDB's nightly wheels (`pip install --pre --extra-index-url
-https://artifacts.duckdb.org/duckdb-python/nightly/simple duckdb==2.0.0.devN`), whose
-`PRAGMA version` names the engine commit and label to build against:
+For any alternate engine, the Python package and loadable must match exactly. `PRAGMA version`
+identifies the source commit and display label; use those to build a separate artifact:
 
 ```sh
 git -C build/candidate-source checkout <commit from PRAGMA version>
-cmake -G Ninja -S build/candidate-source -B build/v2 -DCMAKE_BUILD_TYPE=Release \
+cmake -G Ninja -S build/candidate-source -B build/candidate -DCMAKE_BUILD_TYPE=Release \
   -DOVERRIDE_GIT_DESCRIBE=<library_version from PRAGMA version> \
   -DDUCKDB_EXTENSION_CONFIGS=$PWD/extension_config.cmake -DUNITTEST_ROOT_DIRECTORY=$PWD \
   -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=ON -DGATEKEEPER_NATIVE_PROBES=ON
-cmake --build build/v2 --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe gatekeeper_qualified_probe
-GATEKEEPER_TEST_ENGINE_MAJOR=2 GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/v2/test/unittest 'test/sql/*'
-build/v2/extension/gatekeeper/gatekeeper_prepared_probe
-build/v2/extension/gatekeeper/gatekeeper_remote_probe
-build/v2/extension/gatekeeper/gatekeeper_qualified_probe
-python scripts/check_engine_guard.py --extension build/v2/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/v2/test/unittest
-GATEKEEPER_EXTENSION=$PWD/build/v2/extension/gatekeeper/gatekeeper.duckdb_extension \
+cmake --build build/candidate --target unittest shell gatekeeper_loadable_extension gatekeeper_prepared_probe gatekeeper_remote_probe gatekeeper_qualified_probe
+GATEKEEPER_TEST_ENGINE_MAJOR=2 GATEKEEPER_TEST_NESTED_SCHEMAS=1 build/candidate/test/unittest 'test/sql/*'
+build/candidate/extension/gatekeeper/gatekeeper_prepared_probe
+build/candidate/extension/gatekeeper/gatekeeper_remote_probe
+build/candidate/extension/gatekeeper/gatekeeper_qualified_probe
+python scripts/check_engine_guard.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/candidate/test/unittest
+GATEKEEPER_EXTENSION=$PWD/build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension \
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \
   <venv with that wheel>/bin/python -m pytest test -q --ignore test/test_inventory_tooling.py
 ```
 
-On 2.0 the suite has one parser leg (`peg`); `test_inventory_tooling.py` tests the pin tooling
-against the submodule and stays on the pinned engine. Engine behavior a test pins that 2.0
+Use engine-major `1` and omit the nested-schema marker for 1.5. `test_inventory_tooling.py`
+tests the primary pin and runs unconditionally in the normal 2.0 suite; alternate-engine runs
+omit it as above. Engine behavior a test pins that 2.0
 changed is named on both sides with `by_engine(v1=..., v2=...)` from `support.artifact`, under
-the same rule as `by_parser`: never a policy decision. The 1.5 side of every such site, and of
-the `#if GATEKEEPER_DUCKDB_MAJOR` branches in `src/`, is removed by the repin that moves the
-engine to 2.0; [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99) is that repin's
-checklist.
+the same rule as `by_parser`: never an excuse to weaken a policy decision. Unsupported engine
+capabilities have explicit refusal tests, including dynamic PIVOT on released 2.0.
 
 `test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
 create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises
@@ -305,7 +304,8 @@ catalog and scan function.
 
 Run `.venv/bin/python scripts/test_quack.py`
 for the disposable loopback client/server fixture.
-It downloads checksum-pinned 1.5.6 Quack/httpfs artifacts; candidate engines require explicit
+It downloads checksum-pinned 2.0.0 or retained 1.5.6 Quack/httpfs artifacts for the running
+host, and requires no skips on 2.0; candidate engines require explicit
 matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
 source pins, server-session limits, and the distinction between observed release behavior and
 candidate coverage. The opt-in tests live in `test/integration/test_quack.py`.
@@ -336,7 +336,7 @@ generated from the matching `.in` files. Edit the `.in` file, then regenerate wi
 [uv](https://docs.astral.sh/uv/):
 
 ```sh
-uv pip compile --universal --generate-hashes --python-version 3.10 -o <name>.txt <name>.in
+uv pip compile --upgrade --universal --generate-hashes --python-version 3.11 -o <name>.txt <name>.in
 ```
 
 Dependabot handles GitHub Actions, Docker, pip, and the `test/wasm` npm lock monthly.

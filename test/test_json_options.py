@@ -5,7 +5,7 @@ import duckdb
 from jsonschema import Draft202012Validator
 import pytest
 
-from support.artifact import ROOT
+from support.artifact import ROOT, by_engine
 from support.audit import decisions, enable, records
 from support.typed_helpers import configure, function_rules, policy, validate
 
@@ -186,7 +186,7 @@ def test_json_requires_text_without_implicit_casts(db, value):
 
 def test_duplicate_json_argument_is_a_bind_error(db):
     for prefix in ["CALL gatekeeper_configure(", "SELECT * FROM gatekeeper_validate('SELECT 1', "]:
-        with pytest.raises(duckdb.BinderException, match="duplicate Gatekeeper option"):
+        with pytest.raises(duckdb.BinderException, match=by_engine(v1="duplicate Gatekeeper option", v2="Duplicate named argument")):
             db.execute(prefix + "json := '{}', json := '{}')")
 
 

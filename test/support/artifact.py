@@ -25,9 +25,8 @@ ENGINE_SOURCE = Path(os.getenv("GATEKEEPER_ENGINE_SOURCE", str(ROOT / "duckdb"))
 # pin differs between DuckDB 1.5 and 2.0; see by_engine().
 ENGINE_MAJOR = int(duckdb.__version__.split(".")[0])
 
-# The parser leg. "postgres" is DuckDB 1.5's default PostgreSQL-derived parser; "peg" is the PEG parser: under
-# 1.5 the autocomplete extension's override, which the leg opts every connection into, and from 2.0 the only
-# parser there is, so 2.0 has one leg. Gatekeeper parses with the connection's ParserOptions, so its decisions
+# The parser leg. "postgres" is DuckDB 1.5's default parser and 2.0's optional legacy_parser extension;
+# "peg" is 1.5's autocomplete override and 2.0's default. Gatekeeper uses the connection's parser, so decisions
 # must agree with the engine under either; the two parsers do differ in what they stamp on the AST (query
 # locations, arity of keyword-named calls) and in which stage reports max_expression_depth, so a few
 # diagnostics are parser-specific.
@@ -35,8 +34,6 @@ PARSERS = ("postgres", "peg")
 PARSER = os.getenv("GATEKEEPER_PARSER", PARSERS[0] if ENGINE_MAJOR < 2 else "peg")
 if PARSER not in PARSERS:
     raise ValueError(f"GATEKEEPER_PARSER must be one of {PARSERS}, not {PARSER!r}")
-if ENGINE_MAJOR >= 2 and PARSER != "peg":
-    raise ValueError(f"DuckDB {duckdb.__version__} has only the PEG parser; GATEKEEPER_PARSER={PARSER!r} cannot run")
 PARSER_OVERRIDE_SETTING = "allow_parser_override_extension"
 
 
@@ -59,7 +56,7 @@ def by_engine(**expectation):
 def enable_peg_parser(connection):
     """Route ``connection``'s database through the PEG parser. Under DuckDB 1.5 that is the autocomplete
     extension's override, made strict so a statement it cannot parse is an error rather than a silent fallback
-    to the default parser; from 2.0 the PEG parser is the engine's only parser and there is nothing to enable."""
+    to the default parser; on a fresh 2.0 connection PEG is already the default."""
     if ENGINE_MAJOR >= 2:
         return
     connection.execute("LOAD autocomplete")
@@ -70,6 +67,24 @@ def select_parser(connection):
     """Put the selected parser in force on ``connection``'s database; nothing to do for the engine's default."""
     if PARSER == "peg":
         enable_peg_parser(connection)
+    elif ENGINE_MAJOR >= 2:
+        connection.execute("LOAD legacy_parser; SET enable_legacy_parser = true")
+
+
+def execute_peg_setup(connection, sql):
+    """Create trusted 2.0 objects using PEG, then restore the parser used by the queries under test.
+
+    The legacy grammar cannot CREATE SECURE VIEW or arbitrarily deep schemas, but can read host-created
+    secure views and the nested objects it can name. Those authorization paths still need coverage.
+    """
+    legacy = ENGINE_MAJOR >= 2 and PARSER == "postgres"
+    if legacy:
+        connection.execute("SET enable_legacy_parser = false")
+    try:
+        connection.execute(sql).fetchall()
+    finally:
+        if legacy:
+            connection.execute("SET enable_legacy_parser = true")
 
 
 def connect(extension=EXTENSION, **config):

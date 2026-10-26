@@ -1,13 +1,14 @@
 """Build the EH side module with the distribution pipeline's pinned Emscripten."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
 
-from engine import add_engine_arguments, build_command, engine_source, extension_cmake_flags
+from engine import add_engine_arguments, build_command, checkout_revision, engine_source, extension_cmake_flags
 
-IMAGE = "emscripten/emsdk@sha256:9922c93314b63a1d9ceba2e76f03737f1f9cc4b7350341211e2d3555633ffdd5"  # 3.1.71
+IMAGE = "emscripten/emsdk@sha256:96617f27fe16421588241def73908fd348a7f9d260440ed0d00b36dcf7a063cc"  # 6.0.9
 
 
 def common_git_dir(checkout):
@@ -46,6 +47,11 @@ def main():
         parser.error("--jobs must be positive")
     root = Path(__file__).resolve().parents[1]
     source = engine_source(args)
+    if args.duckdb_version is None:
+        runtime = json.loads((root / "test/wasm/runtime.json").read_text())
+        if checkout_revision(source) != runtime["engine_revision"]:
+            parser.error("the default Wasm build requires the exact engine revision in test/wasm/runtime.json")
+        args.duckdb_version = runtime["engine_version"]
     build = root / "build/wasm_eh"
     build.mkdir(parents=True, exist_ok=True)
     docker = ["docker", "run", "--rm", "--platform", "linux/amd64", "-w", str(root), *container_mounts(root, source)]

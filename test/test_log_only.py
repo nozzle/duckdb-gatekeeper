@@ -6,7 +6,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR, by_engine, connect, literal
+from support.artifact import ENGINE_MAJOR, PARSER, by_engine, connect, literal
 from support.audit import decisions, enable, records
 from support.corpus import CATALOG_POLICY, CATALOG_SQL, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -134,13 +134,18 @@ def test_flip_applies_at_the_next_statement_in_both_directions(catalog, agent):
 def test_log_only_routing_controls_are_refused_and_audited_as_enforced(catalog, agent, sql, recorded):
     enable(catalog, "debug")
     catalog.execute("SET gatekeeper_log_only = true")
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
-        agent.execute(sql).fetchall()
-    [record] = decisions(catalog)
-    assert (record["mode"], record["boundary"], record["allowed"], record["code"]) == (
-        "enforce", "binding", False, "unsupported")
-    # The engine strips leading comments before presenting the statement to QueryBegin.
-    assert record["statement"] == recorded
+    if PARSER == "postgres":
+        with pytest.raises(duckdb.ParserException, match="syntax error"):
+            agent.execute(sql).fetchall()
+        assert decisions(catalog) == []  # Rejected by the parser before QueryBegin.
+    else:
+        with pytest.raises(duckdb.PermissionException, match=DENIED):
+            agent.execute(sql).fetchall()
+        [record] = decisions(catalog)
+        assert (record["mode"], record["boundary"], record["allowed"], record["code"]) == (
+            "enforce", "binding", False, "unsupported")
+        # The engine strips leading comments before presenting the statement to QueryBegin.
+        assert record["statement"] == recorded
     assert agent.execute("SELECT 'CONNECT remote'").fetchone() == ("CONNECT remote",)
     agent.execute("CREATE TABLE log_only_local(i INTEGER)")
     assert decisions(catalog, "statement = 'CREATE TABLE log_only_local(i INTEGER)'")[0]["mode"] == "log_only"
@@ -180,10 +185,10 @@ def test_exactly_one_record_per_statement_at_the_boundary_that_decided_it(catalo
     found = decisions(catalog, "statement LIKE '%?%'")
     assert [(r["boundary"], r["code"]) for r in found] == [("replacement_scan", "forbidden"),
                                                             ("authorize", "forbidden"), ("execution", "ok")]
-    # The relation API goes through the same hooks with the relation's SQL rendering (2.0 qualifies the catalog).
+    # The relation API goes through the same hooks with the engine's SQL rendering.
     assert agent.table("secret.salaries").fetchall() == [("x", 1.0)]
     assert [r["statement"] for r in decisions(catalog, "statement LIKE '%\"secret\"%'")] == [
-        by_engine(v1='SELECT * FROM "secret".salaries', v2='SELECT * FROM memory."secret".salaries')]
+        by_engine(v1='SELECT * FROM "secret".salaries', v2='SELECT * FROM "secret"."salaries"')]
     # executemany prepares once outside any query. The pre-screen there has no text and no private bind, so
     # table policy waits for the executions, which rebind inside a query: one record per execution, none refused,
     # and nothing at the prepare boundary.

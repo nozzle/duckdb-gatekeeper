@@ -13,13 +13,18 @@ def pytest_report_header(config):
 
 @pytest.fixture(scope="session", autouse=True)
 def parser_leg():
-    """Under GATEKEEPER_PARSER=peg on DuckDB 1.5, prove once that connections really run the PEG override in
-    strict mode, so a leg that silently fell back to the default parser cannot pass as the PEG leg. (2.0 has no
-    other parser to fall back to.)"""
+    """Prove the requested parser is active, including both engines' extension-based alternatives."""
     if PARSER == "peg" and ENGINE_MAJOR < 2:
         with connect() as connection:
             mode = connection.execute(f"SELECT current_setting('{PARSER_OVERRIDE_SETTING}')").fetchone()[0]
             assert mode == "strict", mode
+    elif ENGINE_MAJOR >= 2:
+        with connect() as connection:
+            if PARSER == "postgres":
+                assert connection.execute("SELECT current_setting('enable_legacy_parser')").fetchone() == (True,)
+            # These intentional parser differences make a silent fallback observable.
+            assert connection.execute("SELECT 'abc' ~ 'b', 2 * 3!").fetchone() == (
+                (True, 12) if PARSER == "peg" else (False, 720))
 
 
 @pytest.fixture

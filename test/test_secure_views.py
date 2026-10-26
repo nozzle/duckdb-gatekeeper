@@ -2,7 +2,7 @@
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR, literal
+from support.artifact import ENGINE_MAJOR, execute_peg_setup, literal
 from support.audit import decisions, enable
 from support.enforcement import enforce, settle
 from support.typed_helpers import configure, function_rules, rule, validate
@@ -17,7 +17,7 @@ def identity(schema, name, kind="table"):
 
 @pytest.fixture
 def secure(db):
-    db.execute("CREATE SCHEMA hidden; CREATE SCHEMA exposed; "
+    execute_peg_setup(db, "CREATE SCHEMA hidden; CREATE SCHEMA exposed; "
                "CREATE TABLE hidden.payload AS SELECT * FROM (VALUES (1, '12'), (2, 'secret')) t(i, s); "
                "CREATE SECURE VIEW exposed.direct AS SELECT i, s, md5(s) AS digest FROM hidden.payload WHERE i = 1; "
                "CREATE VIEW exposed.regular AS SELECT * FROM exposed.direct; "
@@ -146,7 +146,7 @@ def test_engine_predicate_barrier_survives_enforcement(secure):
 
 
 def test_secure_boundary_does_not_hide_gatekeeper_control_plane(secure):
-    secure.execute("CREATE SECURE VIEW exposed.control AS SELECT * FROM gatekeeper_configure()")
+    execute_peg_setup(secure, "CREATE SECURE VIEW exposed.control AS SELECT * FROM gatekeeper_configure()")
     sql = "SELECT * FROM exposed.control"
     result = validate(secure, sql)
     assert result["code"] == "forbidden", result
@@ -165,7 +165,7 @@ def test_secure_boundary_does_not_hide_gatekeeper_control_plane(secure):
 @pytest.mark.parametrize("log_only", [False, True])
 def test_secure_view_substitution_origin_and_violation_audit(db, expression, target, kind, value, log_only):
     body = f"SELECT {expression} AS y FROM (VALUES ({value})) t(x)"
-    db.execute(f"CREATE SECURE VIEW wrapped AS {body}")
+    execute_peg_setup(db, f"CREATE SECURE VIEW wrapped AS {body}")
     implementation = {"catalog": "system", "schema_path": ["main"], "name": target, "type": kind}
     configure(db, {"blocked_functions": [implementation]})
     trusted = validate(db, "SELECT * FROM wrapped")

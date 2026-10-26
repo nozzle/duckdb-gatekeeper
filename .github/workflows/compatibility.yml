@@ -1,9 +1,8 @@
 name: Engine rebuild compatibility
 # Builds each full candidate engine (~1h), so run on main, on demand, and only for PRs that touch
-# the build or engine-facing sources rather than every documentation change. Candidates: a
-# post-release snapshot of the pinned release line, and the DuckDB 2.0 commit duckdb/community-extensions
-# pins as v2.0.0 and builds a descriptor's `repo.ref` against. All pins are moved by hand (AGENTS.md); a
-# build that breaks against a new snapshot is the signal, not noise.
+# the build or engine-facing sources rather than every documentation change. Rebuild both supported
+# releases: the primary 2.0 engine and the retained 1.5 engine (through 2027-03-01, #99).
+# All source and toolchain revisions move by hand with the matching host pins (AGENTS.md).
 on:
   push:
     branches: [main]
@@ -38,20 +37,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Retained pre-1.5.6 snapshot: prove compatibility with the earlier release-line API.
-          - name: DuckDB 1.5 candidate (a3cd0de)
-            key: a3cd0de
-            ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+          - name: DuckDB 1.5.6 (069cc9f)
+            key: 069cc9f
+            ref: 069cc9f9b5be802405797faecc284961b07c70ef
+            label: v1.5.6
             engine_major: '1'
-          # The v2.0-cyanoptera commit duckdb/community-extensions pins as v2.0.0 and builds a descriptor's repo.ref
-          # against. Labels itself v2.0.0-devN here.
           - name: DuckDB 2.0.0 (d54cbbe)
             key: d54cbbe
             ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
+            label: v2.0.0
             nested_schemas: '1'
             engine_major: '2'
     env:
       CANDIDATE_ENGINE: ${{ matrix.ref }}
+      CANDIDATE_LABEL: ${{ matrix.label }}
       GATEKEEPER_TEST_NESTED_SCHEMAS: ${{ matrix.nested_schemas || '0' }}
       GATEKEEPER_TEST_ENGINE_MAJOR: ${{ matrix.engine_major }}
     steps:
@@ -59,13 +58,11 @@ jobs:
         with:
           submodules: recursive
       - name: Check out the candidate engine
-        # Fetched by commit with full history and tags, which is what labels the build (`git describe` on
-        # 1.5, `git rev-list --count` on 2.0). Fetched by git, as the community job below does, rather than
-        # through actions/checkout: code scanning cannot see that a matrix ref is a literal SHA.
+        # Release builds are given their label explicitly and checked against this exact source revision.
         run: |
           git init --quiet build/candidate-source
           git -C build/candidate-source remote add origin https://github.com/duckdb/duckdb.git
-          git -C build/candidate-source fetch --quiet --tags origin "$CANDIDATE_ENGINE"
+          git -C build/candidate-source fetch --quiet --depth=1 origin "$CANDIDATE_ENGINE" "refs/tags/$CANDIDATE_LABEL:refs/tags/$CANDIDATE_LABEL"
           git -C build/candidate-source checkout --quiet "$CANDIDATE_ENGINE"
           git -C build/candidate-source log -1 --oneline
       - uses: ./.github/actions/setup
@@ -77,6 +74,7 @@ jobs:
           cmake -G Ninja -S build/candidate-source -B build/candidate
           -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DOVERRIDE_GIT_DESCRIBE=${{ matrix.label }}
           -DDUCKDB_EXTENSION_CONFIGS=${{ github.workspace }}/extension_config.cmake
           -DUNITTEST_ROOT_DIRECTORY=${{ github.workspace }}
           -DENABLE_UNITTEST_CPP_TESTS=OFF -DBUILD_SHELL=OFF -DGATEKEEPER_NATIVE_PROBES=ON
@@ -99,14 +97,13 @@ jobs:
         run: python scripts/check_engine_guard.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --unittest build/candidate/test/unittest
       - name: Stamped engine identity matches the candidate checkout
         # Independent of the co-built runner, which would carry the same label if the build were mislabeled.
-        run: python scripts/check_engine_stamp.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source build/candidate-source
+        run: python scripts/check_engine_stamp.py --extension build/candidate/extension/gatekeeper/gatekeeper.duckdb_extension --engine-source build/candidate-source --expect-version "$CANDIDATE_LABEL"
 
   community-makefile:
     # The path duckdb/community-extensions actually runs: `make release` with the candidate engine checked
-    # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile must let the
-    # checkout describe itself rather than labeling the rebuild as the pinned release. The 2.0 legs are the
-    # community repository's `repo.ref` builds: they replace our pinned 1.5 extension-ci-tools with the 2.0
-    # tools it checks out over that directory, and are labeled as the version deployed for.
+    # out inside duckdb/ and no OVERRIDE_GIT_DESCRIBE in the environment. The Makefile labels only the
+    # exact primary revision automatically; a retained engine must describe itself, using that engine's
+    # pinned extension-ci-tools. Both builds receive the community deployment label as DUCKDB_VERSION.
     name: Community make release against ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -114,15 +111,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: DuckDB 1.5 candidate (a3cd0de)
-            key: a3cd0de
-            ref: a3cd0deed18489bafdbdadb02f4e8b36c5e8a653
+          - name: DuckDB 1.5.6 (069cc9f)
+            key: 069cc9f
+            ref: 069cc9f9b5be802405797faecc284961b07c70ef
+            label: v1.5.6
+            ci_tools: 3fd6109fc01555673b7c7123eba8d0d143fe8ce4 # v1.5-variegata
             engine_major: '1'
           - name: DuckDB 2.0.0 (d54cbbe)
             key: d54cbbe
             ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
             label: v2.0.0
-            ci_tools: 78bd1e4abbd543822166d5b07644751ba1fc6e8d # v2.0-cyanoptera
+            ci_tools: b8d325c37e82160886579880707493bd358c0e62 # v2.0-cyanoptera
+            primary: true
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -136,19 +136,10 @@ jobs:
         with:
           submodules: recursive
       - name: Check out the candidate engine inside the submodule directory
-        # The submodule checkout is shallow; `git describe` (1.5) and `git rev-list --count` (2.0) need the
-        # history back to the last tag, exactly as the community pipeline's full-depth checkout provides it.
+        # The 1.5 Makefile path derives its release label from the tag; 2.0 takes DUCKDB_VERSION.
+        # Checkout remains pinned by SHA, and the independent stamp check verifies the supplied label.
         run: |
-          for attempt in 1 2 3; do
-            if [ "$(git -C duckdb rev-parse --is-shallow-repository)" = true ]; then
-              git -C duckdb -c fetch.parallel=1 fetch --no-recurse-submodules --unshallow --tags origin && break
-            else
-              git -C duckdb fetch --no-recurse-submodules --tags origin && break
-            fi
-            sleep 5
-          done
-          test "$(git -C duckdb rev-parse --is-shallow-repository)" = false
-          git -C duckdb fetch --no-recurse-submodules origin "$CANDIDATE_ENGINE"
+          git -C duckdb fetch --depth=1 --no-recurse-submodules origin "$CANDIDATE_ENGINE" "refs/tags/$CANDIDATE_LABEL:refs/tags/$CANDIDATE_LABEL"
           git -C duckdb checkout --quiet "$CANDIDATE_ENGINE"
           git -C duckdb describe --tags --long
       - name: Check out the community repository's extension-ci-tools for this engine
@@ -162,10 +153,12 @@ jobs:
           ccache-key: community-makefile-${{ matrix.key }}-ubuntu
           ccache-max-size: 1G
       - name: Show the engine label the Makefile passes to CMake
+        env:
+          EXPECTED_OVERRIDE: ${{ matrix.primary && matrix.label || '' }}
         run: |
           label=$(make -n release | grep -o 'OVERRIDE_GIT_DESCRIBE="[^"]*"' | head -1)
           echo "$label"
-          test "$label" = 'OVERRIDE_GIT_DESCRIBE=""' || { echo "::error::Makefile forced an engine label for a non-pinned checkout"; exit 1; }
+          test "$label" = "OVERRIDE_GIT_DESCRIBE=\"$EXPECTED_OVERRIDE\"" || { echo "::error::Makefile did not apply its revision-gated label"; exit 1; }
       - run: make release
         env:
           GEN: ninja

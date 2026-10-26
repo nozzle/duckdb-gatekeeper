@@ -18,8 +18,8 @@ extension:
   maintainers:
     - derekperkins
   requires_toolchains: python3
-  excluded_platforms: 'wasm_mvp;wasm_threads;wasm_eh;windows_amd64_mingw'
-  opt_in_platforms: 'linux_amd64_musl;linux_arm64_musl;windows_arm64'
+  excluded_platforms: 'wasm_mvp;wasm_threads;wasm_eh'
+  opt_in_platforms: 'osx_amd64;linux_amd64_musl;linux_arm64_musl;windows_amd64_mingw;windows_arm64'
 
 repo:
   github: nozzle/duckdb-gatekeeper
@@ -269,7 +269,8 @@ docs:
     ### What is never allowed
 
     - **Writes and administration:** DDL, DML, `COPY`, `SET`, and `ATTACH` are unsupported.
-      The parser-generated temporary enum for a dynamic `PIVOT` is the narrowly checked exception.
+      DuckDB 1.5's parser-generated temporary PIVOT enum is the narrowly checked exception.
+      Dynamic PIVOT is unsupported on 2.0; use explicit IN values or host-created enums.
     - **Caller-written elevated operations:** dynamic SQL, metadata readers, and sequence
       and storage functions on the never-bind list cannot be granted through options.
     - **Gatekeeper's control plane:** policy, enforcement, and logging controls are refused
@@ -306,12 +307,13 @@ docs:
       shared, with engine-specific capabilities and refusals;
       [Compatibility and review](https://github.com/nozzle/duckdb-gatekeeper/blob/v0.4.3/docs/security.md#compatibility-and-review)
       lists what a host on 2.0 sees differently.
-    - **GitHub release assets:** target DuckDB 1.5.6, source revision
-      `069cc9f9b5be802405797faecc284961b07c70ef`; there are none for 2.0. Each binary requires its
+    - **Primary build / next GitHub release:** target DuckDB 2.0.0, source revision
+      `d54cbbe3df17e8e5ce68312f483b4155836112aa`. Published v0.4.3 assets target 1.5.6.
+      Source compatibility with 1.5.6 is maintained until March 1, 2027. Each binary requires its
       matching engine. Builds and regression tests, not an engine allowlist, establish compatibility.
-    - **Deferred platforms:** Wasm EH and Windows MinGW await matching official 1.5.6
-      Wasm/CRAN R hosts. Use the v0.4.0 release assets with DuckDB 1.5.5 for those hosts.
-      MVP and threads/COI remain excluded.
+    - **Platforms:** the 2.0 distribution restores Windows MinGW with CRAN R. Wasm EH source
+      builds are browser-tested with a matching development-labeled 2.0 runtime; release Wasm
+      assets await a release-labeled host. MVP and threads/COI remain excluded.
     - **API stability:** Gatekeeper is in early development (0.x); options and result schemas
       may change between releases.
 
@@ -325,14 +327,14 @@ docs:
 
     | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
     | --- | ---: | ---: | ---: |
-    | plain connection | 67 µs | 3.8 ms | 3.8 ms |
-    | enforced connection | 97 µs (+30 µs) | 4.0 ms (+196 µs) | 7.0 ms (+3.2 ms) |
-    | enforced, audit log at debug | 169 µs (+102 µs) | 4.1 ms (+380 µs) | 7.2 ms (+3.4 ms) |
-    | validate, then execute | 250 µs (+183 µs) | 4.3 ms (+515 µs) | 7.3 ms (+3.5 ms) |
-    | denied on an enforced connection | 332 µs | 504 µs | 2.8 ms |
+    | plain connection | 115 µs | 4.5 ms | 9.7 ms |
+    | enforced connection | 178 µs (+63 µs) | 4.8 ms (+285 µs) | 21.2 ms (+11.6 ms) |
+    | enforced, audit log at debug | 245 µs (+130 µs) | 4.9 ms (+420 µs) | 21.4 ms (+11.7 ms) |
+    | validate, then execute | 301 µs (+186 µs) | 5.0 ms (+478 µs) | 19.8 ms (+10.2 ms) |
+    | denied on an enforced connection | 348 µs | 590 µs | 11.4 ms |
 
     Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python
-    client on one connection of an in-memory database; Apple M3 Max, DuckDB 1.5.6, Gatekeeper
+    client on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.0, Gatekeeper
     0.4.3. The plain row is the client round trip plus the engine's own work; in parentheses,
     what each mode adds to it.
 

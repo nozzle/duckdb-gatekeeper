@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "engine_api.hpp"
 #include "engine_errors.hpp"
 #include "fuzz_checks.hpp"
 #include "options.hpp"
@@ -54,7 +55,7 @@ static Value Decision(QueryResult &result) {
 		std::abort();
 	child_list_t<Value> columns;
 	for (idx_t i = 0; i < chunk->ColumnCount(); i++)
-		columns.emplace_back(result.names[i], chunk->GetValue(i, 0));
+		columns.emplace_back(engine::Str(result.ColumnName(i)), chunk->GetValue(i, 0));
 	auto value = Value::STRUCT(std::move(columns));
 	auto extra = result.Fetch();
 	if (extra && extra->size())
@@ -220,6 +221,30 @@ static void Fail(const char *why) {
 	std::abort();
 }
 
+static unique_ptr<DataChunk> OneRow(QueryResult &result) {
+	auto row = result.Fetch();
+	if (!row || row->size() != 1)
+		Fail("expected exactly one result row");
+	return row;
+}
+
+template <class... ARGS> static auto BindWithoutExecuting(Connection &connection, const string &sql, ARGS &...args) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	return connection.Submit(sql, args...);
+#else
+	return connection.PendingQuery(sql, args...);
+#endif
+}
+
+template <class RESULT> static bool CompleteFailed(RESULT &result) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	result.Complete();
+	return result.HasError();
+#else
+	return result.Execute()->HasError();
+#endif
+}
+
 static void CheckFunctionEvidence(Connection &connection, const string &sql) {
 	auto raw = connection.Query("SELECT * FROM gatekeeper_validate($1)", Value(sql));
 	auto value = Decision(*raw);
@@ -290,7 +315,7 @@ static void CheckFunctionEvidence(Connection &connection, const string &sql) {
 // enforced path then decides that SELECT, while gatekeeper_validate reports the raw text as unsupported.
 static bool IsSinglePragma(Connection &connection, const std::string &bytes) {
 	try {
-		Parser parser(connection.context->GetParserOptions());
+		auto parser = engine::ConnectionParser(*connection.context);
 		parser.ParseQuery(bytes);
 		return parser.statements.size() == 1 && parser.statements[0]->type == StatementType::PRAGMA_STATEMENT;
 	} catch (const Exception &error) {
@@ -322,7 +347,7 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 		CheckError(ErrorData(error).Type());
 		before_hooks = true;
 	}
-	auto pending = observed.PendingQuery(bytes);
+	auto pending = BindWithoutExecuting(observed, bytes);
 	std::string engine_error; // DuckDB's own rejection of the text, if any
 	if (pending->HasError()) {
 		CheckError(pending->GetErrorObject().Type());
@@ -338,7 +363,8 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 	    connection.Query("SELECT count(*), bool_and(" + same + "), any_value(code), any_value(error_message)" + from);
 	if (records->HasError())
 		Fail("log-only: cannot read the records");
-	auto count = records->GetValue(0, 0).GetValue<int64_t>();
+	auto row = OneRow(*records);
+	auto count = row->GetValue(0, 0).GetValue<int64_t>();
 	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
 	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text). A dynamic
 	// PIVOT is rewritten into several statements, which PendingQuery refuses as a batch before any hook runs.
@@ -349,13 +375,13 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 	}
 	if (count == 0 && !before_hooks)
 		Fail("log-only: a statement that reached QueryBegin left no record");
-	if (count == 1 && !records->GetValue(1, 0).GetValue<bool>()) {
+	if (count == 1 && !row->GetValue(1, 0).GetValue<bool>()) {
 		// The one other truthful record: the engine rejected the statement on its own (a parameter the caller
 		// did not supply, checked before planning on some entry points and after it on others), and the
 		// record says exactly that, in the engine's words. gatekeeper_validate binds without values and may
 		// have allowed the text.
-		bool engine_rejection = !engine_error.empty() && records->GetValue(2, 0).GetValue<string>() == "binding" &&
-		                        records->GetValue(3, 0).GetValue<string>() == engine_error;
+		bool engine_rejection = !engine_error.empty() && row->GetValue(2, 0).GetValue<string>() == "binding" &&
+		                        row->GetValue(3, 0).GetValue<string>() == engine_error;
 		if (!engine_rejection)
 			Fail("log-only: the record disagrees with gatekeeper_validate");
 	}
@@ -364,11 +390,11 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 		// that order: it says what the first denied record says, or allowed when every record is.
 		auto first = connection.Query("SELECT " + same + from + (allowed ? "" : " AND NOT allowed") +
 		                              " ORDER BY timestamp, context_id LIMIT 1");
-		if (first->HasError() || !first->GetValue(0, 0).GetValue<bool>())
+		if (first->HasError() || !OneRow(*first)->GetValue(0, 0).GetValue<bool>())
 			Fail("log-only: the deciding record of a rewritten batch disagrees with gatekeeper_validate");
 		if (allowed) {
 			auto every = connection.Query("SELECT bool_and(" + same + ")" + from);
-			if (every->HasError() || !every->GetValue(0, 0).GetValue<bool>())
+			if (every->HasError() || !OneRow(*every)->GetValue(0, 0).GetValue<bool>())
 				Fail("log-only: a record of an allowed batch disagrees with gatekeeper_validate");
 		}
 	}
@@ -408,7 +434,7 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	for (const auto &violation : entries)
 		if (StructValue::GetChildren(violation)[0].GetValue<string>() != "limit")
 			limit_only = false;
-	auto pending = enforced.PendingQuery(bytes);
+	auto pending = BindWithoutExecuting(enforced, bytes);
 	bool denial = pending->HasError() && GatekeeperDenial(pending->GetErrorObject());
 	if (pending->HasError())
 		CheckError(pending->GetErrorObject().Type());
@@ -445,7 +471,7 @@ static void CheckEnforcedLatch(DuckDB &database) {
 	// The denial is a record the host can read and the sandboxed connection cannot.
 	auto recorded = host.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND "
 	                           "NOT allowed AND statement = 'CREATE TABLE fuzz_denied(x INTEGER)'");
-	if (recorded->HasError() || recorded->GetValue(0, 0).GetValue<int64_t>() != 1)
+	if (recorded->HasError() || OneRow(*recorded)->GetValue(0, 0).GetValue<int64_t>() != 1)
 		std::abort();
 	auto unreadable = enforced.Query("SELECT count(*) FROM duckdb_logs");
 	if (!unreadable->HasError() || !GatekeeperDenial(unreadable->GetErrorObject()))
@@ -465,7 +491,7 @@ static void CheckEnforcedLatch(DuckDB &database) {
 	auto logged =
 	    host.Query("SELECT count(*) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND "
 		           "mode = 'log_only' AND NOT allowed AND statement = 'CREATE TABLE fuzz_observed(x INTEGER)'");
-	if (logged->HasError() || logged->GetValue(0, 0).GetValue<int64_t>() != 1)
+	if (logged->HasError() || OneRow(*logged)->GetValue(0, 0).GetValue<int64_t>() != 1)
 		std::abort();
 	if (host.Query("SET gatekeeper_log_only = false")->HasError())
 		std::abort();
@@ -576,7 +602,7 @@ static Value Configured(const std::string &options, const Value &text, int64_t l
 	auto published = connection.Query("SELECT current_setting('gatekeeper_policy')");
 	if (published->HasError())
 		std::abort();
-	CheckNullFree(published->GetValue(0, 0));
+	CheckNullFree(OneRow(*published)->GetValue(0, 0));
 	auto decision = Run(connection, "SELECT * FROM gatekeeper_validate('SELECT * FROM v')", text, limit);
 	auto overridden =
 	    Run(connection, "SELECT * FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])", text, limit);
@@ -625,7 +651,7 @@ static void CheckNativeSettingBypass() {
 	                                "[{catalog: '', schema_path: ['main'], \"table\": 'v'}])");
 	if (blocked->HasError())
 		std::abort();
-	config.SetOption("gatekeeper_policy", blocked->GetValue(0, 0));
+	config.SetOption("gatekeeper_policy", OneRow(*blocked)->GetValue(0, 0));
 	auto blocked_view = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM v', blocked_tables := [])");
 	if (StructValue::GetChildren(Decision(*blocked_view))[1].GetValue<string>() != "forbidden")
 		std::abort();
@@ -635,7 +661,7 @@ static void CheckNativeSettingBypass() {
 	                                  "[{catalog:'system',schema_path:['main'],name:'md5',type:'scalar'}])");
 	if (canonical->HasError())
 		std::abort();
-	config.SetOption("gatekeeper_policy", canonical->GetValue(0, 0));
+	config.SetOption("gatekeeper_policy", OneRow(*canonical)->GetValue(0, 0));
 	auto denied = connection.Query("SELECT * FROM gatekeeper_validate('SELECT md5(''x'')', blocked_functions := [])");
 	if (StructValue::GetChildren(Decision(*denied))[1].GetValue<string>() != "forbidden")
 		std::abort();
@@ -645,7 +671,7 @@ static void CheckNativeSettingBypass() {
 		                 "[{catalog: 'memory', schema_path: ['main'], \"table\": 'v'}], restrict_tables := false)");
 	if (inconsistent->HasError())
 		std::abort();
-	config.SetOption("gatekeeper_policy", inconsistent->GetValue(0, 0));
+	config.SetOption("gatekeeper_policy", OneRow(*inconsistent)->GetValue(0, 0));
 	auto ignored = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM secret.t')");
 	if (StructValue::GetChildren(Decision(*ignored))[1].GetValue<string>() != "invalid_input")
 		std::abort();
@@ -658,7 +684,7 @@ static void CheckNativeSettingBypass() {
 	                                "schema_path VARCHAR[], \"table\" VARCHAR)[])");
 	if (widened->HasError())
 		std::abort();
-	config.SetOption("gatekeeper_policy", widened->GetValue(0, 0));
+	config.SetOption("gatekeeper_policy", OneRow(*widened)->GetValue(0, 0));
 	auto closed = connection.Query("SELECT * FROM gatekeeper_validate('SELECT * FROM v')");
 	if (StructValue::GetChildren(Decision(*closed))[1].GetValue<string>() != "invalid_input")
 		std::abort();
@@ -674,9 +700,13 @@ struct ProbeData : ReplacementScanData {
 
 static unique_ptr<TableRef> Reader(const char *function, Value argument) {
 	vector<unique_ptr<ParsedExpression>> children;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	children.push_back(ConstantExpression::FromValue(argument));
+#else
 	children.push_back(make_uniq<ConstantExpression>(std::move(argument)));
+#endif
 	auto ref = make_uniq<TableFunctionRef>();
-	ref->function = make_uniq<FunctionExpression>(function, std::move(children));
+	ref->function = make_uniq<FunctionExpression>(engine::ToName(function), std::move(children));
 	return std::move(ref);
 }
 
@@ -684,28 +714,36 @@ static unique_ptr<TableRef> ProbeCallback(ClientContext &, ReplacementScanInput 
                                           optional_ptr<ReplacementScanData> data) {
 	auto &probe = data->Cast<ProbeData>();
 	probe.calls++;
+	auto path = engine::ReplacementName(input);
+	if (path.empty())
+		return nullptr;
+	auto &table_name = path.back();
 	// Declines on its first call and claims on its second: a second engine-driven pass would bypass us.
-	if (input.table_name == "second_claim")
+	if (table_name == "second_claim")
 		return probe.calls % 2 == 0 ? Reader("read_csv_auto", Value("/gatekeeper/missing/second.csv")) : nullptr;
 	// Validates on another connection mid-bind, then yields an admitted reader.
-	if (input.table_name == "nested_probe") {
+	if (table_name == "nested_probe") {
 		auto nested = probe.other->Query("SELECT * FROM gatekeeper_validate('SELECT 1')");
 		if (nested->HasError() || !StructValue::GetChildren(Decision(*nested))[0].GetValue<bool>())
 			std::abort();
 		return Reader("range", Value::BIGINT(1));
 	}
-	if (input.table_name == "denied_probe")
+	if (table_name == "denied_probe")
 		return Reader("read_csv_auto", Value("/gatekeeper/missing/denied.csv"));
 	// A reader that binds without external access, so a view over this name can be created and read.
-	if (input.table_name == "trusted_probe")
+	if (table_name == "trusted_probe")
 		return Reader("range", Value::BIGINT(1));
 	// Answers no policy can authorize: a reference that is not a table function, and one with no function.
-	if (input.table_name == "unsupported_ref") {
+	if (table_name == "unsupported_ref") {
 		auto ref = make_uniq<BaseTableRef>();
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		ref->SetTable("t");
+#else
 		ref->table_name = "t";
+#endif
 		return std::move(ref);
 	}
-	if (input.table_name == "unsupported_function")
+	if (table_name == "unsupported_function")
 		return make_uniq<TableFunctionRef>();
 	return nullptr;
 }
@@ -738,7 +776,7 @@ static int64_t GateRecords(Connection &connection) {
 	                               "AND mode <> 'validate' AND boundary = 'replacement_scan'");
 	if (result->HasError())
 		std::abort();
-	return result->GetValue(0, 0).GetValue<int64_t>();
+	return OneRow(*result)->GetValue(0, 0).GetValue<int64_t>();
 }
 
 // The same decision under a request layer that admits no reader: defaults off and the inherited global
@@ -816,7 +854,7 @@ static void CheckReplacementCallbacks() {
 		if (connection.Query("CALL truncate_duckdb_logs()")->HasError())
 			std::abort();
 		probe.calls = 0;
-		auto missing = enforced.PendingQuery("SELECT * FROM missing_table WHERE 1 = $1", one);
+		auto missing = BindWithoutExecuting(enforced, "SELECT * FROM missing_table WHERE 1 = $1", one);
 		if (!missing->HasError() || GatekeeperDenial(missing->GetErrorObject()))
 			Fail("no-match: expected the engine's own missing-table error");
 		if (probe.calls != (log_only ? 2 : 1)) {
@@ -827,9 +865,9 @@ static void CheckReplacementCallbacks() {
 		if (GateRecords(connection) != 0)
 			Fail("no-match: the gate recorded a decision");
 		probe.calls = 0;
-		auto shape = enforced.PendingQuery("SELECT count(*) FROM unsupported_ref WHERE 1 = $1", one);
+		auto shape = BindWithoutExecuting(enforced, "SELECT count(*) FROM unsupported_ref WHERE 1 = $1", one);
 		if (log_only) {
-			if (shape->HasError() || shape->Execute()->HasError())
+			if (shape->HasError() || CompleteFailed(*shape))
 				Fail("log-only unsupported shape: the engine did not bind the callback's replacement as produced");
 		} else if (!shape->HasError() || !GatekeeperDenial(shape->GetErrorObject())) {
 			Fail("unsupported shape: expected a Gatekeeper refusal");
@@ -884,7 +922,7 @@ static void CheckReplacementCallbacks() {
 		std::abort();
 	probe.calls = 0;
 	vector<Value> values{Value::INTEGER(1)};
-	auto pending = observed.PendingQuery("SELECT * FROM denied_probe WHERE 1 = $1", values);
+	auto pending = BindWithoutExecuting(observed, "SELECT * FROM denied_probe WHERE 1 = $1", values);
 	if (!pending->HasError())
 		Fail("log-only probe: the missing reader bound");
 	if (GatekeeperDenial(pending->GetErrorObject()))
@@ -896,9 +934,11 @@ static void CheckReplacementCallbacks() {
 	pending.reset();
 	auto recorded = connection.Query("SELECT count(*), any_value(boundary), any_value(code) FROM "
 	                                 "duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only'");
-	if (recorded->HasError() || recorded->GetValue(0, 0).GetValue<int64_t>() != 1 ||
-	    recorded->GetValue(1, 0).GetValue<string>() != "replacement_scan" ||
-	    recorded->GetValue(2, 0).GetValue<string>() != "forbidden") {
+	if (recorded->HasError())
+		Fail("log-only probe: cannot read the record");
+	auto row = OneRow(*recorded);
+	if (row->GetValue(0, 0).GetValue<int64_t>() != 1 || row->GetValue(1, 0).GetValue<string>() != "replacement_scan" ||
+	    row->GetValue(2, 0).GetValue<string>() != "forbidden") {
 		fprintf(stderr, "%s\n", recorded->ToString().c_str());
 		Fail("log-only probe: expected one replacement_scan/forbidden record");
 	}
@@ -930,17 +970,32 @@ static void CheckForeignAggregateProvenance() {
 		for (const auto &identity : {std::pair<string, string>{"memory", "main"}, {"system", "custom"}, {"", ""}}) {
 			for (bool null_input : {false, true}) {
 				ScalarFunction function(name, {LogicalType::INTEGER}, LogicalType::INTEGER, nullptr);
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+				function.SetQualifiedName(
+				    QualifiedName(Identifier(identity.first), Identifier(identity.second), Identifier(name)));
+#else
 				function.catalog_name = identity.first;
 				function.schema_name = identity.second;
-				function.SetSerializeCallback([](Serializer &, optional_ptr<FunctionData>, const ScalarFunction &) {
-					std::abort(); // A foreign callback must never be invoked, including for NULL inputs.
-				});
+#endif
+				function.SetSerializeCallback(
+				    [](Serializer &, optional_ptr<FunctionData>, const engine::BoundScalar &) {
+					    std::abort(); // A foreign callback must never be invoked, including for NULL inputs.
+				    });
 				vector<unique_ptr<Expression>> children;
 				children.push_back(make_uniq<BoundConstantExpression>(null_input ? Value() : Value::INTEGER(1)));
 				vector<unique_ptr<Expression>> expressions;
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+				expressions.push_back(make_uniq<BoundFunctionExpression>(
+				    BoundScalarFunction(function), std::move(children), make_uniq<ProbeBindData>()));
+#else
 				expressions.push_back(make_uniq<BoundFunctionExpression>(
 				    LogicalType::INTEGER, std::move(function), std::move(children), make_uniq<ProbeBindData>()));
+#endif
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+				LogicalProjection plan(TableIndex(0), std::move(expressions));
+#else
 				LogicalProjection plan(0, std::move(expressions));
+#endif
 				gatekeeper::Result result;
 				gatekeeper::Policy policy;
 				gatekeeper::BindingPolicy binding;
@@ -1011,8 +1066,8 @@ static int Fuzz(const uint8_t *data, size_t size) {
 		auto allow = connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT 1')");
 		auto deny =
 		    connection.Query("SELECT allowed FROM gatekeeper_validate('SELECT * FROM secret.t', allowed_tables := [])");
-		if (allow->HasError() || deny->HasError() || !allow->GetValue(0, 0).GetValue<bool>() ||
-		    deny->GetValue(0, 0).GetValue<bool>())
+		if (allow->HasError() || deny->HasError() || !OneRow(*allow)->GetValue(0, 0).GetValue<bool>() ||
+		    OneRow(*deny)->GetValue(0, 0).GetValue<bool>())
 			std::abort();
 		initialized = true;
 	}

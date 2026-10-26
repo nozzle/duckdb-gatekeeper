@@ -304,7 +304,7 @@ def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypat
         "SELECT * FROM v, 'data.parquet'",  # the caller and the view name the same file: the caller's check
         "SELECT * FROM v JOIN 'data.parquet' USING (x)",
         "SELECT * FROM v UNION ALL SELECT * FROM 'data.parquet'",
-        "PIVOT 'data.parquet' ON x USING count(*)",
+        "PIVOT 'data.parquet' ON x IN (1) USING count(*)",
     ]
     for sql in denied:
         result = validate(db, sql)

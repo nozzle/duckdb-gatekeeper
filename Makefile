@@ -1,9 +1,9 @@
 PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 EXT_NAME=gatekeeper
 EXT_CONFIG=${PROJ_DIR}extension_config.cmake
-# DuckDB stamps the engine identity from `git describe` of the checkout it compiles. A shallow clone
-# of the pinned submodule cannot describe itself and DuckDB then stamps a dummy v0.0.1 that no real
-# engine will load, so supply the release pin for exactly that revision. Any other checkout, including
+# DuckDB 2.0 derives a development label from its release file and commit count; 1.5 uses git describe.
+# Neither identifies a shallow release checkout reliably, so supply the release label for exactly
+# the pinned revision. Any other checkout, including
 # a community rebuild for a newer engine, keeps its own Git metadata: a fixed default here would label
 # every rebuild as the pinned release. Override explicitly with `make release OVERRIDE_GIT_DESCRIBE=...`.
 ifeq ($(origin OVERRIDE_GIT_DESCRIBE),undefined)

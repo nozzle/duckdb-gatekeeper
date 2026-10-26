@@ -6,6 +6,24 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Changed
+
+- Primary builds and the next GitHub release target DuckDB 2.0.0. DuckDB 1.5.6 source
+  compatibility and its full regression suite remain supported until March 1, 2027.
+  Python-based development and integrations require Python 3.11+ on 2.0. Both its default
+  PEG parser and optional legacy parser are tested. See the [migration notes](docs/duckdb-2.0-migration.md).
+- Restore Windows MinGW distribution against CRAN DuckDB 2.0.0. Restore Wasm EH source-build
+  browser CI against the same engine revision in the development-labeled runtime
+  `v2.0.0-dev88614`; stable-2.0 Wasm assets await a release-labeled runtime.
+
+### Fixed
+
+- Refuse dynamic `PIVOT` as `unsupported` on DuckDB 2.0: the released engine runs its rewrite
+  under one query hook, so later statements cannot receive the required pre-bind checks.
+  Explicit `IN` lists and host-created enums remain supported; 1.5 retains dynamic PIVOT.
+- Require concrete nested parameter types before reporting successful validation, including
+  DuckDB 2.0's `LIST(ANY)` placeholders in list sorting. Typed list parameters remain supported.
+
 ## 0.4.3 - 2026-10-20
 
 ### Fixed

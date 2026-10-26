@@ -1,9 +1,8 @@
 """Engine-checkout selection and the CMake invocation the local build scripts share.
 
-DuckDB stamps the engine identity from ``git describe`` of the checkout it compiles. A shallow
-clone of the pinned submodule cannot describe itself, and DuckDB then stamps a dummy ``v0.0.1``
-artifact that no real engine will load, so the release pin is supplied for exactly the pinned
-revision. Any other checkout, including the submodule directory with another revision checked
+DuckDB 2.0 derives a development label from its release file and commit count; 1.5 uses
+``git describe``. Neither labels a shallow release checkout reliably, so the release label
+is supplied for exactly the pinned revision. Any other checkout, including the submodule directory checked
 out, defaults to its own Git metadata; a fixed default would label it as the pinned release.
 
 Every configuration of this extension is a DuckDB source build with ``extension_config.cmake``
@@ -38,8 +37,8 @@ def add_engine_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
                         help="DuckDB source checkout to build (default: the pinned submodule)")
     parser.add_argument("--duckdb-version", default=None,
-                        help="OVERRIDE_GIT_DESCRIBE value, e.g. v1.6.0; defaults to the release pin when the "
-                             "checkout is at the pinned revision and to its own git describe otherwise")
+                         help="OVERRIDE_GIT_DESCRIBE value, e.g. v2.0.0; defaults to the release pin when the "
+                              "checkout is at the pinned revision and to its own Git metadata otherwise")
 
 
 def engine_source(args):

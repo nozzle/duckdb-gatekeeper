@@ -4,7 +4,7 @@ import json
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR
+from support.artifact import ENGINE_MAJOR, PARSER, by_parser, execute_peg_setup
 from support.audit import decisions, enable
 from support.enforcement import enforce, settle
 from support.typed_helpers import configure, policy, validate
@@ -64,7 +64,7 @@ def test_canonical_setting_rejects_invalid_paths_atomically(db, path):
 def nested(db):
     if ENGINE_MAJOR < 2:
         pytest.skip("Nested schemas require DuckDB 2.0")
-    db.execute("CREATE SCHEMA finance; CREATE SCHEMA finance.reports; "
+    execute_peg_setup(db, "CREATE SCHEMA finance; CREATE SCHEMA finance.reports; "
                "CREATE SCHEMA sales; CREATE SCHEMA sales.reports; "
                "CREATE SCHEMA finance.reports.monthly; "
                "CREATE TABLE finance.reports.orders AS SELECT 1 AS i; "
@@ -80,6 +80,9 @@ def test_nested_identity_and_exact_depth_wildcards(nested, reference):
     sql = f"SELECT * FROM {reference}"
     exact = table(["finance", "reports"])
     result = validate(nested, sql, {"allowed_tables": [exact]})
+    if PARSER == "postgres" and reference.startswith("memory."):
+        assert not result["allowed"] and result["code"] == "parser", result
+        return  # The legacy grammar cannot name four components.
     assert result["allowed"] and result["objects"] == result["caller_objects"] == [{**exact, "type": "table"}]
     for path, allowed in [(["finance", "reports"], True), (["finance", "*"], True), (["*", "reports"], True),
                           (["*", "*"], True), (["*"], False), (["reports"], False), (["sales", "reports"], False),
@@ -114,9 +117,11 @@ def test_nested_enforcement_and_audit(nested):
     with nested.cursor() as agent:
         enforce(agent)
         assert agent.execute("SELECT * FROM finance.reports.orders").fetchall() == [(1,)]
-        assert agent.execute("SELECT * FROM memory.finance.reports.orders WHERE i = ?", [1]).fetchall() == [(1,)]
+        reference = by_parser(postgres="finance.reports.orders", peg="memory.finance.reports.orders")
+        assert agent.execute(f"SELECT * FROM {reference} WHERE i = ?", [1]).fetchall() == [(1,)]
         for sql in ["SELECT * FROM sales.reports.orders", "SELECT * FROM finance.reports.monthly.orders"]:
-            with pytest.raises(duckdb.PermissionException):
+            error = duckdb.ParserException if PARSER == "postgres" and "monthly" in sql else duckdb.PermissionException
+            with pytest.raises(error):
                 agent.execute(sql)
             settle(agent)
         found = decisions(nested, "mode = 'enforce'")
@@ -125,7 +130,7 @@ def test_nested_enforcement_and_audit(nested):
 
 
 def test_nested_function_identity_and_literal_constructor_qualification(nested):
-    nested.execute("CREATE MACRO finance.reports.calc(x) AS abs(x); "
+    execute_peg_setup(nested, "CREATE MACRO finance.reports.calc(x) AS abs(x); "
                    "CREATE MACRO finance.reports.list_value(x) AS [x]")
     configure(nested, {"allowed_functions": [{"schema_path": ["finance", "reports"], "name": "calc"}]})
     result = validate(nested, "SELECT finance.reports.calc(-1)")
@@ -136,7 +141,7 @@ def test_nested_function_identity_and_literal_constructor_qualification(nested):
 
 
 def test_nested_catalog_ambiguity_and_literal_dot_are_distinct(nested):
-    nested.execute('CREATE SCHEMA "finance.reports"; CREATE TABLE "finance.reports".orders AS SELECT 4 AS i; '
+    execute_peg_setup(nested, 'CREATE SCHEMA "finance.reports"; CREATE TABLE "finance.reports".orders AS SELECT 4 AS i; '
                    "ATTACH ':memory:' AS finance; CREATE SCHEMA finance.reports; "
                    "CREATE TABLE finance.reports.orders AS SELECT 5 AS i")
     # The attached catalog takes precedence for the first component of a multi-part name.
@@ -144,6 +149,9 @@ def test_nested_catalog_ambiguity_and_literal_dot_are_distinct(nested):
                              ("memory.finance.reports.orders", table(["finance", "reports"])),
                              ('memory."finance.reports".orders', table(["finance.reports"]))]:
         result = validate(nested, f"SELECT * FROM {reference}", {"allowed_tables": [entry]})
+        if PARSER == "postgres" and reference == "memory.finance.reports.orders":
+            assert not result["allowed"] and result["code"] == "parser", result
+            continue
         assert result["allowed"] and result["caller_objects"] == [{**entry, "type": "table"}]
     assert not validate(nested, "SELECT * FROM finance.reports.orders",
                         {"allowed_tables": [table(["finance", "reports"])]})["allowed"]
@@ -161,7 +169,7 @@ def test_nested_layers_intersect_and_blocks_win(nested):
 
 
 def test_nested_view_and_macro_bodies_keep_full_written_paths(nested):
-    nested.execute("CREATE VIEW finance.reports.exposed AS SELECT * FROM sales.reports.orders; "
+    execute_peg_setup(nested, "CREATE VIEW finance.reports.exposed AS SELECT * FROM sales.reports.orders; "
                    "CREATE MACRO finance.reports.hidden() AS (SELECT sum(i) FROM sales.reports.orders)")
     configure(nested, {"allowed_functions": [{"schema_path": ["finance", "reports"], "name": "hidden"}]})
     options = {"allowed_tables": [table(["finance", "reports"], "exposed")]}

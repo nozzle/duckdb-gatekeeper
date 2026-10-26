@@ -10,7 +10,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import EXTENSION, by_parser, literal
+from support.artifact import ENGINE_MAJOR, EXTENSION, PARSER, by_engine, by_parser, literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -112,9 +112,9 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     # The engine parses a batch with the settings in force when it arrives; a statement in it that lowers
     # max_expression_depth changes what the binding boundary accepts for the statements after it. Enforcing,
     # the SET is refused first; log-only, it runs, and QueryBegin re-reads the next statement's text under the
-    # lowered depth. The default parser refuses it there (the binding boundary, code parser); the PEG parser
-    # leaves the depth check to the binder, so the text is admitted and the private bind fails (the authorize
-    # boundary, code binding). Either way the engine itself, having parsed the whole batch before the SET ran,
+    # lowered depth. The legacy parser and 2.0 PEG refuse it there (binding boundary, code parser); 1.5 PEG
+    # leaves the depth check to the binder (authorize boundary, code binding). The engine itself,
+    # having parsed the whole batch before the SET ran,
     # fails the statement in its binder. The record must describe it as gatekeeper_validate does on a
     # connection with the same setting.
     enable(catalog)
@@ -125,12 +125,20 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     with catalog.cursor() as same_settings:
         same_settings.execute("SET max_expression_depth = 8")
         expected = validate(same_settings, nested)
-    assert expected["code"] == by_parser(postgres="parser", peg="binding"), expected
+    assert expected["code"] == by_engine(v1=by_parser(postgres="parser", peg="binding"), v2="parser"), expected
     assert "Max expression depth" in expected["error_message"], expected
-    unsupported, record = decisions(catalog, "mode = 'log_only'")
+    found = decisions(catalog, "mode = 'log_only'")
+    if ENGINE_MAJOR >= 2 and PARSER == "postgres":
+        # The legacy override reparses the next statement after SET, before QueryBegin.
+        # Only SET reached a hook; a parser error cannot have a Gatekeeper decision record.
+        [unsupported] = found
+        assert unsupported["code"] == "unsupported"
+        assert unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
+        return
+    unsupported, record = found
     # The engine hands each statement of a batch over with its own text; DuckDB 2.0 keeps the separator.
     assert unsupported["code"] == "unsupported" and unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
-    assert record["boundary"] == by_parser(postgres="binding", peg="authorize"), record
+    assert record["boundary"] == by_engine(v1=by_parser(postgres="binding", peg="authorize"), v2="binding"), record
     assert record["statement"].strip() == nested
     assert [record[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], record
 
@@ -404,7 +412,9 @@ def test_pragma_preprocessing_cannot_forge_a_record(catalog, agent):
     # opened before enable_logging still holds a NopLogger, so run one statement first as a real agent would.
     agent.execute("SELECT count(*) FROM reporting.orders").fetchall()
     with pytest.raises(duckdb.Error):
-        agent.execute("PRAGMA no_such_pragma(write_log('forged', log_type := 'Gatekeeper', level := 'info'))")
+        # 2.0 looks up a missing pragma before evaluating its arguments; use a real one so this
+        # still measures the pre-hook evaluation boundary rather than a catalog lookup failure.
+        agent.execute("PRAGMA table_info(write_log('forged', log_type := 'Gatekeeper', level := 'info'))")
     assert catalog.execute("SELECT count(*) FROM duckdb_logs WHERE type = 'Gatekeeper' AND message = 'forged'"
                            ).fetchone()[0] == 0
 

@@ -19,7 +19,7 @@ See [trusted expansion](security.md#function-enforcement-and-trusted-expansion) 
 
 ## Support matrix
 
-| Route | DuckDB 1.5.5 / Quack c154811 | DuckDB 2.0 / Quack fa3f82c + engine patches |
+| Route | DuckDB 1.5.6 / Quack 7e80f7f | DuckDB 2.0.0 / Quack f96420e |
 | --- | --- | --- |
 | Attached base table | Explicit refusal | Local-binding route, with `remote_pushdown` disabled and table bind identity present |
 | Local trusted view over attached base table | Explicit refusal | Same requirements; view is caller object, attached table is local dependency evidence |
@@ -112,14 +112,14 @@ Build Gatekeeper normally, then:
 .venv/bin/python scripts/test_quack.py
 ```
 
-The runner downloads **hash-verified** Quack and httpfs 1.5.6 core artifacts into ignored
+The runner downloads **hash-verified** Quack and httpfs 2.0.0 or retained 1.5.6 core artifacts into ignored
 `build/quack-artifacts`. Supported download platforms are Linux AMD64/ARM64 and macOS ARM64.
 It uses separate in-memory client/server databases and a loopback listener, a random token,
 explicit LOAD paths, no autoinstall/autoload, and finally cleanup. Readiness requires a successful
 synchronous server bind, then a Quack query reading a per-fixture random marker stored only on that server.
-No Docker or extra Python dependencies are required. The release pin reserves then releases
+No Docker or extra Python dependencies are required. The 1.5 pin reserves then releases
 a candidate port before binding; bind failures retry up to five candidates and then fail setup,
-without probing or attaching to the competing listener. The candidate pin binds port `0` directly
+without probing or attaching to the competing listener. The 2.0 pin binds port `0` directly
 and returns the OS-allocated endpoint. Arbitrary HTTP responses are never accepted as readiness.
 
 Server-side `Quack` logs prove whether a PREPARE request arrived. A sequence-backed remote
@@ -137,32 +137,29 @@ GATEKEEPER_EXTENSION=/absolute/gatekeeper.duckdb_extension \
   --httpfs /absolute/httpfs.duckdb_extension
 ```
 
-For a custom candidate build, supply both explicit paths as above. For the exact pinned
-candidate, use `--candidate` instead: the runner downloads and verifies its pinned artifacts
-and rejects explicit paths. Gatekeeper and both extensions must match that Python engine.
-A 1.5.x Python package cannot test 2.0 binaries. The 1.5 Quack protocol is
-version 1, while the 2.0 pin is version 3; build both sides from the same set.
+For a custom candidate build, supply both explicit paths as above. Automatic downloads verify
+both the Python version and the engine source ID for the two supported releases. Gatekeeper
+and both extensions must match that host; a 1.5 Python package cannot test 2.0 binaries.
+Build both client and server from the same engine/protocol set. The 2.0 fixture requires zero skips.
 
 ### Reproducible source pins / candidate co-build
 
-| Component | Release fixture | Inspected candidate |
+| Component | Primary 2.0 fixture | Retained 1.5 fixture |
 | --- | --- | --- |
-| DuckDB | `069cc9f9b5be802405797faecc284961b07c70ef` (1.5.6) | `d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143` |
-| Quack | `7e80f7ffcc98d0b3e81d0e1df8cc1c2da240a64b` | `fa3f82c53cf587838d55efbd24f31b0c055684a9` |
-| httpfs | `4bc690dba4496c765777a0269d48fdbaff7cdc11` | `0507d4ae4914ef30be5952bda0a547aa2b7ca981` |
+| DuckDB | `d54cbbe3df17e8e5ce68312f483b4155836112aa` | `069cc9f9b5be802405797faecc284961b07c70ef` |
+| Quack | `f96420ed46aee9c42064bdb99ddfd1230d6c0086` | `7e80f7ffcc98d0b3e81d0e1df8cc1c2da240a64b` |
+| httpfs | `77392a72077a85897db2519fae11e2c0da972b8a` | `4bc690dba4496c765777a0269d48fdbaff7cdc11` |
 
-These release pins match the 1.5.6 engine descriptors and the downloaded artifact footers;
+These release pins match their engine descriptors and the downloaded artifact footers;
 compressed SHA256 values for all three supported platforms are in `scripts/test_quack.py`.
-The support matrix above records the original 1.5.5/Quack c154811 investigation. Its historical
+The support matrix was established by the original 1.5.5/Quack c154811 investigation. Its historical
 DuckDB `d8cdaa33fd`, Quack `c1548111c1`, and httpfs `827222fb45` evidence is preserved;
 the 0.4.1 release fixture was rerun on 1.5.6 with the pins above (16 passed, one 2.0-only skip).
 
 The engine's `.github/config/extensions/{quack,httpfs}.cmake` descriptors are the authority:
-use their `APPLY_PATCHES`, not Quack's own different bundled engine/httpfs pins. Candidate
-patches cover table columns, binder include, literal constants, QueryResult, and nested-name
-tests. The current compatibility workflow pins a different 2.0 snapshot (`8b3c3b7d…`); use
-each snapshot's own patch set. The release fixture follows the coordinated release-engine pin;
-the wheel-matched candidate remains independent.
+use their source revisions and any `APPLY_PATCHES`, not Quack's own bundled engine/httpfs pins.
+The current fixture follows the coordinated 2.0 release pin; the historical September alpha
+required engine patches for table columns, literal constants, QueryResult and nested names.
 
 With OpenSSL/curl development dependencies available, an isolated co-build is:
 
@@ -177,12 +174,19 @@ cmake --build build/quack-candidate --parallel 4 --target shell unittest \
   gatekeeper_loadable_extension quack_loadable_extension httpfs_loadable_extension
 ```
 
-For release source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v1.5.6`.
+For primary source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v2.0.0`.
 Keep candidate directories separate from existing builds. Follow CONTRIBUTING's exact-engine
 Python-wheel procedure before running the candidate fixture. Merely co-building the CLI does
 not provide a matching Python package.
 
 ## Validation and remaining limits
+
+The released 2.0.0 Python host and matching Gatekeeper/Quack/httpfs loadables pass all 17
+transport and authorization tests on macOS ARM64. The primary Linux job runs the same fixture;
+the retained 1.5 workflow runs its matching fixture through the extended support window.
+Compressed hashes for all three supported platforms are in `scripts/test_quack.py`.
+
+### Historical candidate evidence
 
 The original implementation was exercised against real macOS ARM64 1.5.5 **and 2.0** artifacts,
 then rerun for the 0.4.1 release on 1.5.6, using separate isolated Gatekeeper builds.
@@ -197,19 +201,13 @@ https://extensions.duckdb.org/v2.0.0-alpha42986/osx_arm64/httpfs.duckdb_extensio
 SHA256 40e01cc8ccae5f6cd822907c6d6ceaff53dc5f65a85191d1191fe1bd4f9dbe20
 ```
 
-The footers identify `fa3f82c53c` and `0507d4ae49` respectively, matching the source pins.
-Verify compressed bytes before decompression and supply the explicit paths above; automatic
-downloads default to the supported 1.5.6 release. `--candidate` selects this exact candidate
-on Linux AMD64 or macOS ARM64, checks the Python version and engine source ID, and fails if
-any selected test skips. Both platform/version URLs can change,
-so the checksum, not the URL alone, is the artifact pin. Candidate errors can surface while
-fetching results; server-denial tests drain the result before asserting the error.
-The dedicated `Quack candidate integration` workflow pins the Linux CPython 3.13 wheel by
-SHA256, checks out the exact engine commit, builds Gatekeeper, downloads the
-hash-pinned matching protocol-3 extensions, and executes the entire suite with zero skips.
-The candidate fixture pins remain unchanged by the release repin. Release tests skip full/partial pushdown
-and CONNECT only on 1.5, where those features do not exist.
-The candidate test executes positive transport controls before checking refusals.
+Those historical footers identify `fa3f82c53c` and `0507d4ae49`. The old `--candidate` runner
+and wheel-specific workflow have been replaced by released-2.0 coverage and the retained
+1.5 maintenance job. URLs can change, so checksums remain the artifact pins. Tests drain
+results before asserting server errors and execute positive transport controls before refusals.
+Only 1.5 skips the full/partial pushdown and CONNECT case, since it lacks those features.
+
+### Current limitations
 
 Quack currently disables scan-level filter pushdown and rejects multiple streaming scans of
 one session. Disabling SQL pushdown can therefore make some joins unsupported. Its catalog is

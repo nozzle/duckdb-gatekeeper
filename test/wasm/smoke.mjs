@@ -11,21 +11,25 @@ const root = resolve(here, '../..');
 const dist = resolve(here, 'node_modules/@duckdb/duckdb-wasm/dist');
 const artifact = resolve(process.env.GATEKEEPER_WASM_EXTENSION ||
   resolve(root, 'build/wasm_eh/extension/gatekeeper/gatekeeper.duckdb_extension.wasm'));
-// The release build pin, read the way scripts/versions.py reads it (leading whitespace and trailing comments
-// allowed). The npm runtime's own version says nothing about the engine it embeds; the worker is asked, below,
-// and must answer with this.
-const pinMatch = readFileSync(resolve(root, 'versions.cmake'), 'utf8')
+// The runtime's npm version is independent of its embedded engine. Hold its source to the primary pin,
+// and its display label to the observed, explicitly pinned host identity (currently a development label).
+const metadata = readFileSync(resolve(root, 'versions.cmake'), 'utf8');
+const pinMatch = metadata
   .match(/^[ \t]*set\(GATEKEEPER_DUCKDB_VERSION "([^"]+)"\)[ \t]*(?:#.*)?$/m);
 if (!pinMatch) throw Error('versions.cmake does not define GATEKEEPER_DUCKDB_VERSION');
-const pinnedEngine = 'v' + pinMatch[1];
+const runtime = JSON.parse(readFileSync(resolve(here, 'runtime.json'), 'utf8'));
+const sourceMatch = metadata.match(/set\(GATEKEEPER_DUCKDB_REVISION "([0-9a-f]+)"\)/);
+assert.equal(runtime.engine_revision, sourceMatch?.[1], 'Wasm and native builds must use the same engine source');
+assert.ok(runtime.engine_version === 'v' + pinMatch[1] || runtime.engine_version.startsWith('v' + pinMatch[1] + '-dev'));
+const pinnedEngine = runtime.engine_version;
 const bundle = await build({entryPoints: [resolve(dist, 'duckdb-browser.mjs')], bundle: true,
   format: 'esm', write: false});
 // An explicit route map keeps the development server from exposing the checkout.
 const routes = new Map([
   ['/', ['text/html', '<!doctype html><title>Gatekeeper Wasm tests</title>']],
   ['/duckdb.mjs', ['text/javascript', bundle.outputFiles[0].contents]],
-  ['/duckdb-browser-eh.worker.js', ['text/javascript', readFileSync(resolve(dist, 'duckdb-browser-eh.worker.js'))]],
-  ['/duckdb-eh.wasm', ['application/wasm', readFileSync(resolve(dist, 'duckdb-eh.wasm'))]],
+  ['/duckdb-browser-base.worker.js', ['text/javascript', readFileSync(resolve(dist, 'duckdb-browser-base.worker.js'))]],
+  ['/duckdb-base.wasm', ['application/wasm', readFileSync(resolve(dist, 'duckdb-base.wasm'))]],
   ['/gatekeeper.duckdb_extension.wasm', ['application/wasm', readFileSync(artifact)]],
 ]);
 const server = createServer((req, res) => {
@@ -47,20 +51,22 @@ try {
   // Tests are entirely local: accidental extension autoload/network access fails.
   await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
   await page.goto(origin);
-  const report = await page.evaluate(async pinnedEngine => {
+  const report = await page.evaluate(async ({pinnedEngine, pinnedRevision}) => {
     const wasm = await import('/duckdb.mjs');
-    const worker = new Worker('/duckdb-browser-eh.worker.js');
+    const worker = new Worker('/duckdb-browser-base.worker.js');
     const db = new wasm.AsyncDuckDB(new wasm.VoidLogger(), worker);
     let con;
     const passed = [];
     const check = (name, value) => {if (!value) throw Error(name); passed.push(name);};
     try {
-      await db.instantiate('/duckdb-eh.wasm');
+      await db.instantiate('/duckdb-base.wasm');
       await db.open({allowUnsignedExtensions: true});
       con = await db.connect();
       const rows = async sql => (await con.query(sql)).toArray().map(r => r.toJSON());
-      const version = (await rows('SELECT version() AS version'))[0].version;
-      check('embedded DuckDB version', version === pinnedEngine);
+      const identity = (await rows('PRAGMA version'))[0];
+      const version = identity.library_version;
+      check(`embedded DuckDB version (expected ${pinnedEngine}, got ${version}/${identity.source_id})`, version === pinnedEngine);
+      check('embedded DuckDB source', pinnedRevision.startsWith(identity.source_id) && identity.source_id.length >= 7);
       await con.query('SET autoload_known_extensions=false; SET autoinstall_known_extensions=false');
       await con.query(`LOAD '${location.origin}/gatekeeper.duckdb_extension.wasm'`);
       const decision = async (sql, options = '') => JSON.parse(JSON.stringify(
@@ -176,7 +182,7 @@ try {
       if (con) await con.close();
       await db.terminate();
     }
-  }, pinnedEngine);
+  }, {pinnedEngine, pinnedRevision: runtime.engine_revision});
   assert.deepEqual(errors, [], 'uncaught browser errors');
   console.log(JSON.stringify(report, null, 2));
   console.log(`${report.passed.length} Wasm EH checks passed`);

@@ -27,6 +27,10 @@ Only the latest tagged release receives fixes. Community-repository rebuilds of 
 release for newer DuckDB engines are covered as long as the source revision is the
 supported one.
 
+DuckDB 2.0 is the primary engine target. Source compatibility with DuckDB 1.5.6 is maintained
+until its extended upstream EOL on **March 1, 2027**; it requires a separately built matching
+artifact. This engine window does not extend support to older Gatekeeper releases.
+
 ## Scope
 
 In scope: `gatekeeper_validate` returns `allowed = true` and `code = 'ok'` for a statement
