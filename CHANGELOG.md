@@ -23,6 +23,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
   Explicit `IN` lists and host-created enums remain supported; 1.5 retains dynamic PIVOT.
 - Require concrete nested parameter types before reporting successful validation, including
   DuckDB 2.0's `LIST(ANY)` placeholders in list sorting. Typed list parameters remain supported.
+- Give the embedded engine JSON serializer private symbols so static builds can link with
+  DuckDB 2.0's prebuilt/LTO JSON extension archives.
 
 ## 0.4.3 - 2026-10-20
 

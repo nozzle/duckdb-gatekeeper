@@ -41,7 +41,9 @@ def test_width(db):
 @pytest.mark.parametrize("shape", ["calls", "subqueries"])
 def test_parser_depth_on_worker_threads_and_recovery(db, depth, shape):
     if sys.platform == "darwin" and PARSER == "postgres" and shape == "calls" and depth == 1000:
-        pytest.skip("DuckDB 2.0 legacy_parser crashes on 1000 nested calls on macOS (duckdb-legacy-parser#9)")
+        version = db.execute("SELECT extension_version FROM duckdb_extensions() WHERE extension_name='legacy_parser'").fetchone()[0]
+        if version == "bcdf276132":
+            pytest.skip("legacy_parser bcdf276132 crashes on 1000 nested calls on macOS (duckdb-legacy-parser#9)")
     db.execute("SET threads=3")
     sql = ("SELECT " + "abs(" * depth + "1" + ")" * depth if shape == "calls" else
            "SELECT * FROM " + "(SELECT * FROM " * depth + "(SELECT 1) base" + ") nested" * depth)

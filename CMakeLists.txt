@@ -43,7 +43,10 @@ if(NOT DUCKDB_MAJOR_VERSION MATCHES "^[0-9]+$")
   message(FATAL_ERROR "DuckDB did not export a numeric DUCKDB_MAJOR_VERSION: '${DUCKDB_MAJOR_VERSION}'")
 endif()
 foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
-  target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
+  # Keep the embedded engine serializer independent of the SQL JSON extension. Prebuilt LTO archives
+  # coalesce JSON's objects and otherwise link a second definition of these symbols into static hosts.
+  target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION}
+    JsonSerializer=GatekeeperJsonSerializer DoubleToJSONValue=GatekeeperDoubleToJSONValue)
 endforeach()
 # The loadable statically links its own engine copy, so the load-time engine guard is compiled only into
 # it (see LoadInternal). Gatekeeper sets this marker itself: DuckDB 1.5 defined

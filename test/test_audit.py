@@ -309,8 +309,10 @@ assert c.execute('SELECT code FROM gatekeeper_validate(?)', ['\\0' * (4 * 1024 *
 text, size = c.execute("SELECT statement, statement_length FROM duckdb_logs_parsed('Gatekeeper')").fetchone()
 assert text == '\\ufffd' * (65536 // 3) and size == 4 * 1024 * 1024
 """
-    subprocess.run([sys.executable, "-c", script], check=True, timeout=15,
-                   env={**os.environ, "GATEKEEPER_EXTENSION": str(EXTENSION)})
+    env = {**os.environ, "GATEKEEPER_EXTENSION": str(EXTENSION)}
+    if sys.platform == "darwin" and env.get("GATEKEEPER_ASAN_RUNTIME"):
+        env["DYLD_INSERT_LIBRARIES"] = env["GATEKEEPER_ASAN_RUNTIME"]
+    subprocess.run([sys.executable, "-c", script], check=True, timeout=15, env=env)
 
 
 @pytest.mark.parametrize("body", ["SELECT * FROM gatekeeper_enforce()",

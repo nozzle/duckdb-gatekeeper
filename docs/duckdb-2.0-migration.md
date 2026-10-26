@@ -39,6 +39,8 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
   refusal, including nested forms, caller expressions and a missing reader behind an explicit grant.
 - Validation rejects incomplete types nested inside parameters, including the new `LIST(ANY)`
   sorting placeholders. Concrete typed list parameters remain supported.
+- The embedded engine JSON serializer has Gatekeeper-private symbols. This avoids duplicate
+  definitions when the 2.0 distribution toolchain links prebuilt/LTO JSON archives alongside it.
 - Both default PEG and the optional `legacy_parser` are exercised. The legacy grammar has
   no CONNECT or CREATE SECURE VIEW syntax and cannot name more than three components.
   Tests create trusted secure views/nested schemas with PEG, restore the requested parser,
