@@ -2,7 +2,7 @@
 import pytest
 
 from support.audit import decisions, enable
-from support.artifact import ENGINE_MAJOR
+from support.artifact import ENGINE_MAJOR, execute_peg_setup
 from support.enforcement import attempt, enforce
 from support.typed_helpers import configure, function_rules, validate
 
@@ -15,7 +15,7 @@ def test_resolved_object_identity_in_validation_and_audit(db, kind, blocked, log
     # The same spelling is a table or a (secure) view: syntax and rule cannot tell them apart.
     db.execute('CREATE SCHEMA "Reporting.Path"')
     definition = "(i INTEGER)" if kind == "table" else "AS SELECT 1 AS i"
-    db.execute(f'CREATE {kind} "Reporting.Path"."Orders" {definition}')
+    execute_peg_setup(db, f'CREATE {kind} "Reporting.Path"."Orders" {definition}')
     object_rule = {"catalog": "memory", "schema_path": ["Reporting.Path"], "table": "Orders"}
     configure(db, {"blocked_tables": [object_rule]} if blocked else {"allowed_tables": []})
     enable(db)

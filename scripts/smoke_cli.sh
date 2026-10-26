@@ -1,10 +1,10 @@
 #!/bin/sh
 # Loadable smoke through the official DuckDB CLI, for the artifacts no Python package can load: the musl
-# targets, whose CLI DuckDB publishes as duckdb_cli-linux-{amd64,arm64}-musl (dynamically linked against
+# targets, whose CLI DuckDB publishes as duckdb-cli-linux-{amd64,arm64}-musl (dynamically linked against
 # musl, so it can dlopen a musl extension). Runs in an Alpine container from the distribution workflow.
 #
 #   sh scripts/smoke_cli.sh <duckdb-cli> <gatekeeper.duckdb_extension> <engine version> <platform>
-#   e.g.  sh scripts/smoke_cli.sh ./duckdb build/distributed/gatekeeper.duckdb_extension v1.5.5 linux_amd64_musl
+#   e.g.  sh scripts/smoke_cli.sh ./duckdb build/distributed/gatekeeper.duckdb_extension v2.0.0 linux_amd64_musl
 #
 # The CLI is one connection, so the checks come in two forms. scripts/smoke/loadable.sql, the half the other
 # hosts share, is read as one stdin script under -bail (every statement asserts inside SQL). The half that needs
@@ -36,12 +36,12 @@ count() {
 	grep -c -- "$1" "$2" || true
 }
 duckdb() {
-	"$cli" -unsigned -init /dev/null -csv -noheader "$@"
+	"$cli" -no-agent -unsigned -init /dev/null -csv -noheader "$@"
 }
 load="LOAD '$(printf %s "$extension" | sed "s/'/''/g")'"
 
 # 1. The host is the pinned engine, the artifact is this platform's, and it loads.
-reported=$("$cli" --version)
+reported=$(duckdb --version)
 case $reported in
 "$version "*) ;;
 *) fail "the CLI reports '$reported', expected $version" ;;

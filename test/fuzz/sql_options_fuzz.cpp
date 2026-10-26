@@ -338,7 +338,7 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 	if (connection.Query("CALL truncate_duckdb_logs()")->HasError())
 		Fail("log-only: cannot truncate the log");
 	// Zero records are legitimate only when the engine rejects the text before any hook runs: its parser, the
-	// PRAGMA and PIVOT preprocessing that runs inside parsing, or the one-statement check PendingQuery applies.
+	// PRAGMA/PIVOT preprocessing, or the one-statement check the non-executing submission applies.
 	// The host connection runs that same pipeline here; it is unenforced, so nothing it does is recorded.
 	bool before_hooks = false;
 	try {
@@ -367,7 +367,8 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 	auto count = row->GetValue(0, 0).GetValue<int64_t>();
 	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
 	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text). A dynamic
-	// PIVOT is rewritten into several statements, which PendingQuery refuses as a batch before any hook runs.
+	// PIVOT is rewritten into several statements: 1.5 PendingQuery refuses the batch before any hook;
+	// 2.0 Submit reaches the first enum's unsupported decision without executing that statement.
 	if (pragma_rewrite) {
 		if (connection.Query("SET gatekeeper_log_only = false")->HasError())
 			Fail("log-only: cannot reset the switch");
@@ -403,7 +404,7 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 }
 
 // An enforced connection must agree with gatekeeper_validate under the same global policy. Plan the
-// text on a latched connection: PendingQuery runs the binding boundary, the engine's bind, and the
+// text on a latched connection: 1.5 PendingQuery / 2.0 Submit runs the binding boundary, the engine's bind, and the
 // execution boundary, then schedules pipeline events. Setup() pins the database to threads=1, so no
 // worker exists to run a scheduled task and nothing executes before the pending result is discarded.
 // The latched connection lives only for this input: a pending result leaves the connection's query
