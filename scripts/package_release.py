@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = (
     "linux_amd64", "linux_arm64", "linux_amd64_musl", "linux_arm64_musl",
     "osx_amd64", "osx_arm64", "windows_amd64", "windows_arm64",
+    "windows_amd64_mingw",
 )
 
 
@@ -108,7 +109,20 @@ def package_release(tag, artifacts, output):
         binary = directory / name
         if not binary.is_file() or binary.is_symlink() or binary.stat().st_size == 0:
             raise ValueError(f"Missing or empty binary: {binary}")
-        if set(directory.iterdir()) != {binary}:
+        contents = set(directory.iterdir())
+        support = directory / "test-support"
+        if support in contents:
+            # extension-ci-tools bundles its static test runner separately from the loadable.
+            # Validate the pinned staging layout, but never unpack or ship that CI-only archive.
+            artifact_id = hashlib.sha256(directory.name.encode("utf-8")).hexdigest()[:16]
+            bundle_dir = support / artifact_id
+            archive = bundle_dir / "test-support.tar.gz"
+            if (support.is_symlink() or not support.is_dir() or set(support.iterdir()) != {bundle_dir}
+                    or bundle_dir.is_symlink() or not bundle_dir.is_dir() or set(bundle_dir.iterdir()) != {archive}
+                    or archive.is_symlink() or not archive.is_file() or archive.stat().st_size == 0):
+                raise ValueError(f"Unexpected test-support files in artifact: {directory}")
+            contents.remove(support)
+        if contents != {binary}:
             raise ValueError(f"Unexpected files in artifact: {directory}")
         binaries.append((platform, binary))
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
@@ -133,9 +147,11 @@ def package_release(tag, artifacts, output):
         (release_links(changes, tag) + "\n\n---\n\n" if changes else "") +
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
-        "They are not DuckDB-signed community binaries. The eight-target native distribution matrix "
-        "passed before packaging. Wasm EH and Windows MinGW are temporarily deferred until matching "
-        "official DuckDB hosts are published; use Gatekeeper v0.4.0 with DuckDB 1.5.5 for those hosts.\n\n"
+        "They are not DuckDB-signed community binaries. All nine native distribution targets passed their "
+        "matching official host's loadable checks before packaging, including CRAN R for Windows MinGW. "
+        "Wasm EH source builds are browser-tested with a separately matched development host; release assets "
+        "await a release-labeled Wasm host. DuckDB 1.5 source compatibility is maintained until March 1, 2027; "
+        "these binaries require the DuckDB 2.0 engine they were built for.\n\n"
         "Select the archive matching your DuckDB platform, verify it against `SHA256SUMS`, "
         "and extract it. Each archive includes the canonical extension filename, LICENSE, "
         "and NOTICE. Native builds require explicit unsigned loading. Checksums do not provide "

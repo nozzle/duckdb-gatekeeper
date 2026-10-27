@@ -9,11 +9,11 @@ must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
-Since 0.4.1 the shipped matrix has eight native targets. Wasm EH and Windows MinGW are
-temporarily excluded because their official hosts still embed 1.5.5. The full-matrix
-procedure below describes restoration: update the runtime/CRAN pins, enable the retained
-browser/R jobs, restore their packaging dependencies, platform list and descriptor entries,
-then require all host tests before shipping them again. MVP/threads exclusions remain separate.
+The 2.0 build matrix has nine native targets, including restored Windows MinGW with CRAN
+DuckDB 2.0.0. Wasm EH has a separately matched development-host browser job, but its release
+artifact remains excluded: the published runtime reports `v2.0.0-dev88614`, not `v2.0.0`.
+Restore that release target, distribution browser job and packaging dependency together
+when an official release-labeled host passes. MVP/threads exclusions remain separate.
 
 1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
    the generated C++ constants consume) and a set of coupled edits the package gate and the
@@ -41,12 +41,9 @@ then require all host tests before shipping them again. MVP/threads exclusions r
 2. Run the [contributor checks](../CONTRIBUTING.md#testing). Land the release preparation
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
-3. Require the release's declared distribution matrix. Since 0.4.1 this is Linux amd64/arm64
-   glibc and musl, macOS amd64/arm64, and Windows amd64/ARM64 MSVC (eight targets).
-   The restoration target is the full matrix: Linux amd64/arm64 glibc and musl, macOS
-   amd64/arm64, Windows amd64 MSVC/MinGW and ARM64 MSVC, and Wasm EH. Every native artifact
-   is tested in two ways and Wasm EH in the browser, and the checklist is only what actually
-   runs:
+3. Require the declared matrix: Linux amd64/arm64 glibc and musl, macOS amd64/arm64,
+   Windows amd64 MSVC/MinGW and ARM64 MSVC (nine native targets). Intel macOS is an
+   explicit opt-in on the 2.0 toolchain. Every shipped artifact must pass its official host:
    - The reusable pipeline runs the SQL contract suite against a statically linked
      `unittest` on every native target except `linux_arm64` and the cross-compiled
      `osx_amd64` (an upstream skip; those two get the full Python suite below instead).
@@ -59,7 +56,8 @@ then require all host tests before shipping them again. MVP/threads exclusions r
      the full Python suite); the engine's musl CLI in Alpine for `linux_amd64_musl` and
      `linux_arm64_musl` (`loadable-cli`: `scripts/smoke_cli.sh`); the CRAN R package for
      `windows_amd64_mingw` (`loadable-r`: `scripts/smoke_loadable.R`, the one leg that takes
-     a client `Prepare()` into the shipped binary); and Chromium for Wasm EH (`browser-test`).
+      a client `Prepare()` into the shipped binary). The separate `wasm.yml` job tests the
+      development-labeled Wasm host; the distribution `browser-test` stays deferred with its target.
      The R leg runs the portable SQL form of the smoke (`scripts/smoke/loadable.sql` and
      `enforced.sql`), which the Python leg and `test/test_smoke_sql.py` run as well. The CLI
      is one connection: it runs `loadable.sql` as is, and `scripts/smoke_cli.sh` replays the
@@ -81,8 +79,8 @@ git push origin vX.Y.Z
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
-every declared platform's build and official-host tests. Since 0.4.1 that excludes the
-deferred Wasm/R jobs; when restored, those jobs must gate packaging again.
+every declared platform's build and official-host tests. The R job gates packaging; the
+deferred distribution Wasm job must also gate packaging when that target is restored.
 Only after the required jobs succeed does the release job package the artifacts and publish a
 GitHub Release. The tag must match the CMake and runtime extension versions.
 Packaging also runs on PRs and `main`, uploading `gatekeeper-release-assets` as a CI
@@ -114,7 +112,10 @@ registered where each function is (`src/gatekeeper_extension.cpp`, `src/policy_s
 
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
-all ZIPs. Native and Wasm assets are unsigned development builds, not DuckDB-signed
+all ZIPs. Incoming CI artifacts may also contain the toolchain's
+`test-support/<artifact-name-hash>/test-support.tar.gz`; packaging validates that exact
+optional layout and omits it from release assets. Other extra files remain an error.
+Native and Wasm assets are unsigned development builds, not DuckDB-signed
 community binaries. The release notes open with the release's `CHANGELOG.md` section and
 link to versioned loading and security docs. Relative changelog links are converted to
 tag-pinned repository URLs when generating the GitHub Release body.
@@ -140,9 +141,10 @@ silently overwritten. Do not move a published version tag.
    DuckDB 2.0 engine (the commit it pins as `v2.0.0`) with its own
    `extension-ci-tools` revision; a failure there is first a question about that engine, then
    about the source. `compatibility.yml` pins the same engine and tools revision.
-2. State which engine the GitHub assets target (there are none for DuckDB 2.0; the community
-   repository builds those from `repo.ref`, and its DuckDB 1.5 binaries stay at
-   `repo.variegata`), and link compatibility validation.
+2. State that new GitHub assets target DuckDB 2.0.0, while published v0.4.3 assets target
+   1.5.6. The community repository builds 2.0 from `repo.ref`; its 1.5 binaries stay at
+   `repo.variegata` until maintainers explicitly rebuild them. Link compatibility validation
+   and the retained 1.5 source-support deadline of 2027-03-01.
    The community repository can rebuild the source against another engine; the source
    has no fixed release allowlist. Each binary still loads only into the engine it was
    built from, and Gatekeeper enforces that itself when DuckDB's footer check is disabled.

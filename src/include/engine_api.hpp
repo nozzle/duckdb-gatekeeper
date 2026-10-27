@@ -1,8 +1,8 @@
 #pragma once
-// Adapters over the engine APIs that differ between the DuckDB releases Gatekeeper builds against: 1.5, the
-// pinned release, and 2.0, where names became Identifier values, bound expressions gained accessors over
-// private members, and a few types moved. Every helper is spelled as the 2.0 accessor it stands for, so call
-// sites read the same on both engines and the 1.5 branch is dropped when the engine pin moves.
+// Adapters over the engine APIs that differ between the DuckDB releases Gatekeeper builds against: the
+// pinned 2.0 release and the supported 1.5 line. In 2.0 names became Identifier values, bound expressions
+// gained accessors over private members, and a few types moved. Helpers use the 2.0 accessor spelling.
+// Retain the 1.5 branches until its extended support ends on 2027-03-01 (issue #99).
 // GATEKEEPER_DUCKDB_MAJOR is set in CMakeLists.txt from DuckDB's own DUCKDB_MAJOR_VERSION.
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"

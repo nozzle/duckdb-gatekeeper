@@ -360,6 +360,11 @@ or minor release. To change our release build defaults, update together:
    `MainDistributionPipeline.yml`, and the stamp checks follow it without an edit. The
    `Makefile` and `scripts/engine.py` read it too and apply it only when the engine checkout
    is at exactly the pinned revision;
+- the external-linkage symbols in the embedded `extension/json/json_serializer.cpp` and its
+  header. The private-name mappings in `CMakeLists.txt` currently cover `JsonSerializer` and
+  `DoubleToJSONValue`; inspect the new source and the serializer object's defined symbols
+  (for example with `nm -C`) for additional classes/free functions and extend the mappings.
+  Verify a static link against the engine's prebuilt/LTO JSON archive as well as the loadable;
 - `ci_tools_version` and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
@@ -367,10 +372,11 @@ or minor release. To change our release build defaults, update together:
 - the `duckdb` pin in `requirements-dev.in` and the regenerated hashed lock files
   (`uv pip compile`, see [CONTRIBUTING.md](../CONTRIBUTING.md#dependencies));
 - the fuzz image (`test/fuzz/Dockerfile`), whose venv installs the same lock file;
-- the DuckDB-Wasm runtime and npm lock in `test/wasm` and the Emscripten pin in
-  `scripts/build_wasm.py`. The npm package version differs from the engine it embeds; the EH
-  browser test asserts the embedded engine against the pin in `versions.cmake`, so a runtime
-  that embeds another engine fails there;
+- the DuckDB-Wasm runtime/npm lock and observed engine identity in `test/wasm/runtime.json`,
+  and the Emscripten pin in `scripts/build_wasm.py`. The npm package version differs from the
+  embedded engine. The browser test holds its source revision to `versions.cmake` and checks
+  its exact display label separately. A development-labeled host needs a matching source
+  build; restore release distribution only when an official release-labeled host passes;
 - the hosts of the distribution workflow's loadable legs that are not the pinned Python package
   (`env` of `.github/workflows/MainDistributionPipeline.yml`): the musl CLI is the engine's own
   release asset and follows `versions.cmake` without an edit, but the CRAN `duckdb` package that
@@ -389,12 +395,17 @@ or minor release. To change our release build defaults, update together:
   `PEG_DEEP_NESTING_CRASH` skips, and the enablement path in `test/support/artifact.py` state
   facts about the pinned engine's PEG parser and are re-derived, not carried. The checklist is
   [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90);
-- when the pin crosses into DuckDB 2.0, the 1.5 side of the dual-engine build: every
-  `#if GATEKEEPER_DUCKDB_MAJOR` branch in `src/`, every `by_engine(...)` and `ENGINE_MAJOR` site in
-  the Python suite, the 1.5 label derivation in `scripts/check_engine_stamp.py`, the 1.5 row of
-  `compatibility.yml`'s matrix, and the `code IN ('parser', 'unsupported')` assertions in
-  `test/sql/statements.test` that hold on both engines. Each is deleted or tightened to the 2.0
-  fact, not carried. The checklist is
+- the alternative-parser fixtures in `test/compatibility/parser-pins.json`: engine/parser
+  revisions, extension footer version, and compressed/binary SHA256 values for all Python-host
+  platforms. `scripts/prepare_test_parser.py` prepares verified workspace-local fixtures; the
+  suite never uses a floating `INSTALL` for its alternative parser. Re-derive platform-specific
+  audit timing and crash exclusions against those exact binaries when changing the pins;
+- the supported-engine matrix and its host packages. DuckDB 2.0 is primary, but 1.5.6 remains
+  tested until upstream's extended EOL on **2027-03-01**. Keep its API adapters, grammar/stamp
+  paths, engine/parser-specific test expectations, and compatibility jobs through that date;
+  moving the default pin is not their deletion trigger. The full 1.5 job uses
+  `test/compatibility/requirements-1.5.txt`. Refresh and execute the retirement checklist at
+  the support deadline:
   [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99).
 
 Historical inventory source references and baselines need not change with the build pin.

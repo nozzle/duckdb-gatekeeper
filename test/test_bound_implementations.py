@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from support.artifact import ROOT
+from support.artifact import ENGINE_MAJOR, ROOT
 from support.enforcement import DENIED, enforce
 from support.headers import header_names
 from support.typed_helpers import configure, validate, grants
@@ -134,11 +134,24 @@ def test_typed_parameter_keeps_aggregate_authorization(db):
     assert result["violations"][0]["function_name"] == "sum"
 
 
-@pytest.mark.parametrize("sql", ["SELECT list_sort($1)", "SELECT array_slice($1,1,2)", "SELECT list_zip($1)"])
+@pytest.mark.parametrize("sql", ["SELECT list_sort($1)", "SELECT list_reverse_sort($1)",
+                                 "SELECT list_grade_up($1)", "SELECT array_slice($1,1,2)", "SELECT list_zip($1)"])
 def test_placeholder_plans_require_resolved_parameters(db, sql):
+    if ENGINE_MAJOR < 2 and "list_grade_up" in sql:
+        # 1.5's bind callback dereferences missing list type data before it can return a plan.
+        # Internal engine errors propagate rather than becoming successful partial validation.
+        with pytest.raises(duckdb.InternalException, match="optional pointer"):
+            validate(db, sql)
+        return
     result = validate(db, sql)
     assert result["code"] == "binding", result
     assert not result["allowed"] and result["objects"] == result["functions"] == []
+
+
+def test_concrete_list_parameter_remains_supported(db):
+    sql = "SELECT list_sort($1::INTEGER[])"
+    assert validate(db, sql)["allowed"]
+    assert db.execute(sql, [[3, 1, 2]]).fetchall() == [([1, 2, 3],)]
 
 
 def test_admitted_dispatch_uses_actual_aggregate(db):

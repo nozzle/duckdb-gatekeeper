@@ -198,8 +198,8 @@ struct EnforcementState : ClientContextState {
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
-		// The engine presents one statement at a time here: a dynamic PIVOT arrives as the statements its
-		// preprocessor rewrote it into, each with its own text, never as the batch. Fail closed on anything else.
+		// 1.5 presents each dynamic PIVOT statement here separately; 2.0's first enum statement is refused
+		// by CheckText because later statements have no pre-bind hook. Admit exactly one checked unit.
 		if (text.units.size() != 1 || !text.units[0].pivot_enums.empty()) {
 			result = gatekeeper::UnsupportedStatement();
 			Record(context, Boundary::BINDING, &policy, &sql);

@@ -1,0 +1,2 @@
+# Retained engine for the full compatibility suite until 2027-03-01 (#99).
+duckdb==1.5.6

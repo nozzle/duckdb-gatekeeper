@@ -1,5 +1,6 @@
 import json
 import random
+import sys
 
 import duckdb
 import pytest
@@ -33,6 +34,24 @@ def test_depth(db, depth):
 def test_width(db):
     sql = "SELECT " + ",".join(str(i) for i in range(1000))
     assert validate(db, sql)["allowed"]
+
+
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="released 2.0 parser worker-stack regression (#90)")
+@pytest.mark.parametrize("depth", [75, 100, 400, 1000])
+@pytest.mark.parametrize("shape", ["calls", "subqueries"])
+def test_parser_depth_on_worker_threads_and_recovery(db, depth, shape):
+    if sys.platform == "darwin" and PARSER == "postgres" and shape == "calls" and depth == 1000:
+        version = db.execute("SELECT extension_version FROM duckdb_extensions() WHERE extension_name='legacy_parser'").fetchone()[0]
+        if version == "bcdf276132":
+            pytest.skip("legacy_parser bcdf276132 crashes on 1000 nested calls on macOS (duckdb-legacy-parser#9)")
+    db.execute("SET threads=3")
+    sql = ("SELECT " + "abs(" * depth + "1" + ")" * depth if shape == "calls" else
+           "SELECT * FROM " + "(SELECT * FROM " * depth + "(SELECT 1) base" + ") nested" * depth)
+    expected = validate(db, sql)["code"]
+    for _ in range(300):
+        assert db.execute("SELECT count(*), bool_and(code = $2) FROM range(64) "
+                          "CROSS JOIN gatekeeper_validate($1)", [sql, expected]).fetchall() == [(64, True)]
+    assert validate(db, "SELECT 42")["allowed"]
 
 
 @pytest.mark.parametrize("sql,message", [

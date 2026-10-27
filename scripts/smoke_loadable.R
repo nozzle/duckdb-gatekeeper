@@ -5,7 +5,7 @@
 # conventions those files describe. Needs only DBI and duckdb.
 #
 #   Rscript scripts/smoke_loadable.R <gatekeeper.duckdb_extension> <engine version> <platform>
-#   e.g.  Rscript scripts/smoke_loadable.R build/distributed/gatekeeper.duckdb_extension v1.5.5 windows_amd64_mingw
+#   e.g.  Rscript scripts/smoke_loadable.R build/distributed/gatekeeper.duckdb_extension v2.0.0 windows_amd64_mingw
 
 suppressPackageStartupMessages({
   library(DBI)
@@ -125,6 +125,10 @@ dbDisconnect(db$host, shutdown = TRUE)
 # 3. The enforced half: a second connection to the same database latches itself.
 db <- connect()
 agent <- dbConnect(db$driver)
+# dbExecute uses Prepare followed by Execute. On 2.0 a log-only denial is recorded for each;
+# enforcement stops at the prepare, and allowed prepares leave no extra allowed decision.
+log_only_count <- if (startsWith(expected_version, "v2.")) 2L else 1L
+dbExecute(db$host, sprintf("SET VARIABLE gatekeeper_smoke_log_only_count = %d", log_only_count))
 run(file.path(smoke_dir, "enforced.sql"), list(host = db$host, agent = agent))
 dbDisconnect(agent)
 dbDisconnect(db$host, shutdown = TRUE)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from support.artifact import by_engine
+from support.artifact import by_engine, by_parser
 from support.typed_helpers import configure, validate
 
 
@@ -227,7 +227,7 @@ def test_missing_nested_schema_objects_fail_binding(db, sql):
     db.execute("CREATE TABLE t(x INTEGER)")
     result = validate(db, sql)
     assert not result["allowed"]
-    assert result["code"] == by_engine(v1="parser", v2="binding"), result
+    assert result["code"] == by_engine(v1="parser", v2=by_parser(postgres="parser", peg="binding")), result
 
 
 @pytest.mark.parametrize("sql", [

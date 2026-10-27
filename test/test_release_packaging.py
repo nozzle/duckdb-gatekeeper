@@ -68,7 +68,7 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path, monkeypatch):
     output = tmp_path / "release"
     release.package_release(tag, artifacts, output)
     lines = (output / "SHA256SUMS").read_text().splitlines()
-    assert len(lines) == 8
+    assert len(lines) == 9
     for line in lines:
         digest, name = line.split("  ")
         assert name.startswith(f"gatekeeper-{TAG}-duckdb-{ENGINE_TAG}-")
@@ -87,6 +87,39 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path, monkeypatch):
         # The notes lead with the release's own changelog section, then the boilerplate.
         changes = release.changelog_sections(CHANGELOG)[EXTENSION_VERSION]
         assert changes and notes.startswith(release.release_links(changes, tag) + "\n\n---\n\n")
+
+
+def test_ci_test_support_is_not_published(released, artifacts, tmp_path):
+    directory = artifacts / f"gatekeeper-{ENGINE_TAG}-extension-linux_amd64"
+    artifact_id = hashlib.sha256(directory.name.encode("utf-8")).hexdigest()[:16]
+    archive = directory / "test-support" / artifact_id / "test-support.tar.gz"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(b"CI runner data is not a release asset")
+    output = tmp_path / "release"
+    release.package_release(TAG, artifacts, output)
+    for path in output.glob("*.zip"):
+        with zipfile.ZipFile(path) as bundle:
+            assert set(bundle.namelist()) == {"gatekeeper.duckdb_extension", "LICENSE", "NOTICE"}
+
+
+@pytest.mark.parametrize("damage", ["wrong_id", "extra_file", "missing_archive", "empty_archive", "not_directory"])
+def test_malformed_ci_test_support_is_rejected(released, artifacts, tmp_path, damage):
+    directory = artifacts / f"gatekeeper-{ENGINE_TAG}-extension-linux_amd64"
+    support = directory / "test-support"
+    artifact_id = hashlib.sha256(directory.name.encode("utf-8")).hexdigest()[:16]
+    if damage == "not_directory":
+        support.write_bytes(b"not a directory")
+    else:
+        bundle = support / ("wrong" if damage == "wrong_id" else artifact_id)
+        bundle.mkdir(parents=True)
+        if damage != "missing_archive":
+            (bundle / "test-support.tar.gz").write_bytes(b"" if damage == "empty_archive" else b"CI runner")
+        if damage == "extra_file":
+            (bundle / "extra").write_bytes(b"unexpected")
+    output = tmp_path / "release"
+    with pytest.raises(ValueError, match="test-support"):
+        release.package_release(TAG, artifacts, output)
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("damage", ["missing_target", "empty_binary", "extra_target", "extra_file", "wrong_engine"])

@@ -48,6 +48,9 @@ def main():
     if platform.system() == "Darwin":
         runtime = subprocess.check_output([cc, "-print-file-name=libclang_rt.asan_osx_dynamic.dylib"], text=True).strip()
         env["DYLD_INSERT_LIBRARIES"] = runtime
+        # The macOS ASan runtime removes DYLD_INSERT_LIBRARIES after startup. Retain its path so
+        # tests that launch another instrumented Python process can preload it before that child starts.
+        env["GATEKEEPER_ASAN_RUNTIME"] = runtime
     elif platform.system() == "Linux":
         # Clang's shared ASan runtime also carries the UBSan handlers the extension references.
         library = "libclang_rt.asan-" + platform.machine() + ".so"

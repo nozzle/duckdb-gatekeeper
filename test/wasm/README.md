@@ -1,21 +1,21 @@
 # Wasm EH support and browser tests
 
-**Since 0.4.1, Wasm EH distribution and browser CI are temporarily deferred:** no published runtime
-embeds the DuckDB 1.5.6 release engine yet. Use the immutable v0.4.0 source/assets and
-the matching runtime below. Restore the runtime/npm lock, Emscripten pin, workflow jobs,
-package matrix and descriptor together once a 1.5.6 runtime passes these tests.
-Windows MinGW is similarly deferred pending a matching CRAN R host.
+**Wasm EH source-build browser CI is enabled. Release distribution is still deferred.**
+The pinned `@duckdb/duckdb-wasm@1.33.1-dev110.0` runtime embeds the same source as DuckDB
+2.0.0 (`d54cbbe3df17e8e5ce68312f483b4155836112aa`), but reports **`v2.0.0-dev88614`**.
+It cannot load a release-labeled `v2.0.0` extension. `runtime.json` records the observed
+host identity, and `build_wasm.py` builds for that exact label and revision. The browser
+asserts both; neither engine footer checks nor Gatekeeper's load-time guard are bypassed.
 
-Gatekeeper v0.4.0 supports the **EH (native WebAssembly exception handling)** bundle of
-DuckDB-Wasm with embedded **DuckDB 1.5.5**. The tested npm package is
-`@duckdb/duckdb-wasm@1.33.1-dev64.0`; its package version is independent of the
-engine version. Pin this package and verify its embedded engine; do not bypass engine
-metadata/version checks.
+The runtime now calls its single-threaded **EH (native WebAssembly exception handling)**
+bundle `base`, with `duckdb-base.wasm` and `duckdb-browser-base.worker.js`. Its npm version
+is independent of the embedded engine. Historical Gatekeeper v0.4.0 Wasm assets still
+match DuckDB 1.5.5 and `@duckdb/duckdb-wasm@1.33.1-dev64.0`.
 
 ## Build and test locally
 
-Requires Docker, Python 3.10+, Node.js 22+, and initialized repository submodules.
-From a checkout of v0.4.0 (the retained runtime does not match 0.4.1's engine):
+Requires Docker, Python 3.11+, Node.js 22+, and initialized repository submodules.
+From the current checkout:
 
 ```sh
 python3 scripts/build_wasm.py --jobs 4
@@ -29,11 +29,12 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
-`build_wasm.py` uses a digest-pinned Emscripten 3.1.71 image (linux/amd64, also
+`build_wasm.py` uses a digest-pinned Emscripten 6.0.9 image (linux/amd64, also
 usable through Docker emulation on Apple Silicon). It builds the EH side module
 at `build/wasm_eh/extension/gatekeeper/gatekeeper.duckdb_extension.wasm`.
 `GATEKEEPER_WASM_EXTENSION=/absolute/path/to/artifact.wasm npm test` tests an
-alternative artifact, including one produced by the distribution pipeline.
+alternative artifact for the same runtime identity. The native distribution workflow's
+release-labeled Wasm artifact remains excluded until a matching official host is available.
 
 The smoke test starts a localhost server and an actual Chromium worker. It fails
 on assertions, unexpected page errors, or a 90-second timeout. Requests outside
@@ -48,15 +49,15 @@ not exercise browser lakehouse integrations or all browser engines.
 Serve the extension over HTTP(S) with `Content-Type: application/wasm`, alongside
 the matching DuckDB-Wasm assets. Preserve the leaf filename
 `gatekeeper.duckdb_extension.wasm`: DuckDB derives the C++ entrypoint name from it.
-Use same-origin assets or configure CORS. Choose the **EH** worker explicitly;
+Use same-origin assets or configure CORS. Choose the **base/EH** worker explicitly;
 automatic bundle selection may choose an unsupported target.
 
 ```js
 import * as duckdb from '@duckdb/duckdb-wasm';
 
-const worker = new Worker('/duckdb/duckdb-browser-eh.worker.js');
+const worker = new Worker('/duckdb/duckdb-browser-base.worker.js');
 const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
-await db.instantiate('/duckdb/duckdb-eh.wasm');
+await db.instantiate('/duckdb/duckdb-base.wasm');
 // Current CI artifacts are unsigned development builds.
 await db.open({ allowUnsignedExtensions: true });
 const conn = await db.connect();
@@ -86,26 +87,25 @@ against a user who controls their browser.
 
 ## Excluded targets
 
-- **MVP:** builds/loads, but the tested runtime throws `_setThrew is not defined`
-  on a missing-table error even without Gatekeeper. Exception paths cannot be
-  supported until the runtime is fixed and regression-tested.
+- **MVP:** the 2.0 runtime requires Wasm exception handling and publishes no MVP bundle.
+  The historical 1.5 MVP host also failed exception paths (`_setThrew is not defined`).
 - **Threads/COI:** excluded because the toolchain's `wasm_threads` artifacts cannot load. The
   `wasm_threads` target in `extension-ci-tools` never passes `-DUSE_WASM_THREADS=1`, so the side
   module is linked without `-pthread -sSHARED_MEMORY=1` and the threaded main module rejects
   its memory import (`LinkError: mismatch in shared state of memory`). This is
-  [extension-ci-tools#391](https://github.com/duckdb/extension-ci-tools/issues/391), unfixed on
-  every branch, and it affects DuckDB's own core extensions
+  [extension-ci-tools#391](https://github.com/duckdb/extension-ci-tools/issues/391), still present
+  in the pinned toolchain, and it affects DuckDB's own core extensions
   ([duckdb-wasm#2041](https://github.com/duckdb/duckdb-wasm/issues/2041)), so no COI deployment
   can load extensions today. The exit condition, and the COI browser test to add when it is
   met, are in [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101).
 
 ## Maintenance
 
-When repinning DuckDB, coordinate the npm runtime pin and lockfile, this documentation,
-and Emscripten compatibility with `extension-ci-tools`. `smoke.mjs` reads the engine pin
-from `versions.cmake` and fails when the runtime embeds a different engine. DuckDB-Wasm is excluded from routine Dependabot updates.
-Other npm test dependencies receive monthly updates. Since 0.4.1 both browser jobs are
-explicitly disabled and `wasm_eh` is excluded from distribution: the retained runtime
-embeds 1.5.5, not the release's 1.5.6. After a matching runtime is published and pinned,
-restore PR browser builds, the distribution-artifact browser test, packaging dependencies,
-and descriptor/platform entries together. The v0.4.0 tag retains the validated EH pipeline.
+When repinning DuckDB, coordinate the npm runtime/lock, `runtime.json`, this documentation,
+and Emscripten with `extension-ci-tools`. `smoke.mjs` holds the Wasm source revision to
+`versions.cmake` and separately checks the exact runtime label. DuckDB-Wasm is excluded from
+routine Dependabot updates; other npm test dependencies receive monthly updates.
+The standalone browser job tests the matched development host. Restore stable Wasm distribution,
+its distribution-artifact browser test, packaging dependency and descriptor entry together only
+after an official release-labeled runtime passes. Windows MinGW has its matching CRAN 2.0.0 host
+and is restored independently.

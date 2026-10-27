@@ -391,7 +391,7 @@ resolved identity and by who retrieved it, and those attributable to the caller 
 authorized; what a trusted view or macro body retrieves is that definition's own. Guarantee:
 no SQL text submitted for execution reaches the engine's binder unless it is a single
 `SELECT` whose grammar, caller-written functions and (parameter-free) caller-attributable
-resolved objects the policy allows, or
+resolved objects the policy allows, or, on DuckDB 1.5,
 the one statement DuckDB's own parser derives from such a `SELECT`: the temporary enum type of
 a dynamic `PIVOT` (below), admitted by exact shape and checked as the `SELECT` that defines it.
 Consequently an agent-written `read_csv('s3://...')`, `FROM 'file'`, or `duckdb_settings()`
@@ -405,7 +405,7 @@ sources the private bind of the admitted statement scanned, none of them more of
 that bind did (each `LOGICAL_GET` is matched by count: a table entry by resolved identity,
 a table function by name; the tables attributable to the caller are authorized again), and
 pass the same resolved-function
-and implementation checks `gatekeeper_validate` applies to its own plan. The one other root
+and implementation checks `gatekeeper_validate` applies to its own plan. On DuckDB 1.5 the one other root
 it accepts is a dynamic `PIVOT`'s enum type (`LOGICAL_CREATE_TYPE` of that exact shape, in the
 temporary catalog, returning nothing) over such a plan. If the binding boundary deferred
 object authorization because the statement had parameters, it runs here with the values the
@@ -538,7 +538,17 @@ under residuals.
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
   differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
-- **Dynamic `PIVOT` runs as a batch.** DuckDB's parser rewrites `PIVOT t ON col USING agg(x)`
+- **Dynamic `PIVOT` is unsupported on DuckDB 2.0.** Its released query lifecycle invokes
+  `QueryBegin` only for the first statement of an expanded batch. Later statements bind
+  without a new pre-bind hook, so the required text/function/reader checks cannot cover
+  them. Both validation and enforcement refuse dynamic PIVOT and its temporary enum DDL
+  as `unsupported` before binding; log-only records that refusal and lets the engine proceed.
+  On 2.0 that record carries the rewritten `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" ...`
+  text; the trailing pivoting SELECT runs without another Gatekeeper record in log-only mode.
+  Use explicit `IN` values or an enum created by the trusted host. Static PIVOT remains
+  covered by the ordinary checks. Restoring dynamic PIVOT requires an upstream hook that
+  covers every expanded statement before binding and callback-counter regression coverage.
+- **On DuckDB 1.5, dynamic `PIVOT` runs as a batch.** DuckDB's parser rewrites `PIVOT t ON col USING agg(x)`
   (no `IN` list) into `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" AS ENUM (SELECT
   DISTINCT CAST(col AS VARCHAR) FROM t ...)` per dynamic column followed by the `SELECT` that
   pivots on those types, and the engine runs each as its own statement
@@ -1033,8 +1043,9 @@ Built-in temporal casts can use ICU timezone/calendar settings; GEOMETRY CRS bin
 can consult trusted CRS providers and `ignore_unknown_crs`.
 
 - `bind_pivot.cpp` performs direct aggregate and enum lookups. Explicit aggregate
-  names pass preflight; named PIVOT enums use the host's type definitions. A dynamic
-  PIVOT's own enum is created from a SELECT that passes every check first (see residuals).
+  names pass preflight; named PIVOT enums use the host's type definitions. On 1.5, a dynamic
+  PIVOT's enum is created from a SELECT that passes every check first; on 2.0 that rewrite
+  is unsupported (see residuals).
 - `bind_window_expression.cpp` and `function_binder.cpp` contain direct aggregate/
   function lookup paths. Caller names pass preflight; surviving bound scalar,
   aggregate, window and table functions also pass a resolved-deny plan walk, and the
@@ -1208,7 +1219,9 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 ## Compatibility and review
 
-Release binaries target DuckDB 1.5.6. Source builds may use another engine checkout;
+Primary builds and the next release target DuckDB 2.0.0; published v0.4.3 GitHub assets target
+1.5.6. The 1.5.6 source/test compatibility path is retained until **2027-03-01**, independently
+of the primary pin. Source builds may use another engine checkout;
 the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
 `allow_extensions_metadata_mismatch`, so Gatekeeper also records the engine it was built
@@ -1224,20 +1237,26 @@ statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serialize
 `GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
 public API, so an engine upgrade can require source changes. Compatibility is therefore
 checked by compilation and functional regressions on every candidate engine
-(`compatibility.yml`: a post-release snapshot of the pinned line and the DuckDB 2.0 commit the
-community repository pins as `v2.0.0`), through both the
+(`compatibility.yml`: the pinned 2.0.0 and retained 1.5.6 releases), through both the
 direct CMake path and the community `make release` path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
 
-The same source builds against DuckDB 2.0 (`v2.0-cyanoptera`); `src/include/engine_api.hpp`
+The same source builds against DuckDB 2.0.0 and 1.5.6; `src/include/engine_api.hpp`
 adapts the engine APIs that differ, and `scripts/generate.py` reads either release's
 serialization schema. Both engines enforce the same policy model, with engine-specific
 capabilities, conservative refusals, and diagnostics. These differences are worth knowing:
 
-- 2.0 has only the PEG parser; the 1.5 `postgres` leg does not exist there.
+- 2.0 uses PEG by default and supports the optional `legacy_parser` extension
+  (`LOAD legacy_parser; SET enable_legacy_parser = true`). Both parser configurations are
+  tested. The released PEG parser checks `max_expression_depth` during parsing; 1.5's
+  experimental PEG override leaves that check to the binder.
+  The optional 2.0 legacy parser crashes on macOS when parsing 1,000 nested function calls
+  from a worker, also reproducible using `json_serialize_sql` without Gatekeeper
+  ([duckdb-legacy-parser#9](https://github.com/duckdb/duckdb-legacy-parser/issues/9)). That
+  specific regression is excluded from the legacy leg; use default PEG for untrusted text.
 - 2.0 connection-scoped replacement callbacks (including C API v2 registrations) run before
   database-wide callbacks. Gatekeeper's early replacement gate covers only the database-wide
   list. Ordinary catalog checks can still refuse a returned reader before its bind, but an
@@ -1261,12 +1280,12 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   function in `FROM` may have a NULL violation position on 2.0 where 1.5 supplies an offset.
 - 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
   grammar does not know their query nodes and refuses them as `unsupported`.
-- 2.0 snapshots from `v2.0.0-alpha46057` on report a dynamic `PIVOT`'s temporary enum type as a write
-  to the temporary catalog. Creating that one entry there is the only modification Gatekeeper admits;
-  the statement must still be exactly the engine's rewrite.
-- 2.0's `SHOW name` can read a setting's value at bind time when no such table exists, with
+- 2.0 dynamic `PIVOT` and its temporary enum DDL are unsupported because later statements of
+  the rewrite have no pre-bind query hook. Static PIVOT, including host-created enums, remains supported.
+- 2.0 PEG's `SHOW name` can read a setting's value at bind time when no such table exists, with
   no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
-  the supported spelling. `SHOW TABLES` and the other catalog-wide forms still bind to
+  the supported spelling. The legacy parser retains the DESCRIBE interpretation.
+  `SHOW TABLES` and the other catalog-wide forms still bind to
   never-bind readers and are refused as before.
 - 2.0 runs `Prepare()` and `Execute()` from client APIs as statements carrying the prepared
   text. A prepare's plan is pre-screened as under 1.5 (its parameter values are not known) and
@@ -1276,14 +1295,11 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   is refused at `Prepare()` rather than at its first `Execute()`; and the prepare's replacement
   gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
   time as it is on 1.5.
-- 2.0 produces a `SELECT`'s rows only as the client reads them, and runs `CALL` at once. Through
-  `v2.0.0-alpha46057` the planner marks `CALL` to complete before its result is returned, and
-  `gatekeeper_enforce` and `gatekeeper_configure` set the same mark from their bind, so
-  `SELECT enforced FROM gatekeeper_enforce()`, a prepared statement over either function, and
-  `EXECUTE` of one run when the statement runs, whether or not the host reads the row. Later 2.0
-  snapshots removed that mark: the reader decides, and a reader choosing for its client streams only
-  a `SELECT`, so `CALL` and `EXECUTE` still run at once but an unread `SELECT` over either function
-  may never run. Activate with `CALL gatekeeper_enforce()`, or require the returned row.
+  In log-only mode a denied parameterless statement prepared and then executed has two
+  decision records with distinct query IDs, one per operation; R's `dbExecute` follows this path.
+- 2.0 produces a `SELECT`'s rows only as the client reads them. `CALL` and `EXECUTE` run at once,
+  but an unread `SELECT` over `gatekeeper_enforce` or `gatekeeper_configure` may never run.
+  Activate with `CALL gatekeeper_enforce()`, or require the returned row.
 - 2.0 supports nested schemas. Gatekeeper preserves written identifier components until binding,
   and uses the resolved full schema ancestry for authorization, provenance, scan accounting,
   and evidence. Three-part names can denote a nested schema without a catalog qualifier;
@@ -1314,10 +1330,10 @@ can eliminate the table function entirely: `LIMIT 0`, `WHERE false`, or an unuse
 can return successfully without latching on either engine. If setup uses a SELECT projection,
 require the actual returned `enforced = true` row; an empty result is not activation evidence.
 
-Gatekeeper parses with the connection's parser options, so it follows the engine onto DuckDB
-1.5's opt-in PEG parser (`LOAD autocomplete; CALL enable_peg_parser()`, the default parser from
-2.0), and the Python suite runs under both parsers; decisions agree, and the parsers differ
-only in diagnostics (query locations, which stage reports `max_expression_depth`). One
+Gatekeeper parses with the connection's parser options. The Python suite covers 2.0's PEG and
+optional legacy parser, and 1.5's default parser and opt-in PEG override
+(`LOAD autocomplete; CALL enable_peg_parser()`). Policy checks agree on syntax supported by
+both parsers; engine diagnostics and some syntax differ. One
 engine property does not carry over: the 1.5.x PEG matcher recurses once per nesting level
 with no depth guard and no stack check, so `max_expression_depth`, which is the binder's check
 under PEG, never runs on text deep enough to matter. About 1000 nested calls overflow an

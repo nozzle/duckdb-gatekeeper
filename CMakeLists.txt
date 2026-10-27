@@ -5,6 +5,7 @@ if(NOT DuckDB_SOURCE_DIR)
 endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Generation is standard-library-only (3.10+); the DuckDB 2.0 Python host/tests require 3.11+.
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
 file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
@@ -43,7 +44,11 @@ if(NOT DUCKDB_MAJOR_VERSION MATCHES "^[0-9]+$")
   message(FATAL_ERROR "DuckDB did not export a numeric DUCKDB_MAJOR_VERSION: '${DUCKDB_MAJOR_VERSION}'")
 endif()
 foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
-  target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION})
+  # Keep the embedded engine serializer independent of the SQL JSON extension. Prebuilt LTO archives
+  # coalesce JSON's objects and otherwise link a second definition of these symbols into static hosts.
+  # Recheck all external-linkage symbols at each engine repin (inventories/README.md).
+  target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION}
+    JsonSerializer=GatekeeperJsonSerializer DoubleToJSONValue=GatekeeperDoubleToJSONValue)
 endforeach()
 # The loadable statically links its own engine copy, so the load-time engine guard is compiled only into
 # it (see LoadInternal). Gatekeeper sets this marker itself: DuckDB 1.5 defined
@@ -68,6 +73,9 @@ if(GATEKEEPER_FUZZ)
 endif()
 option(GATEKEEPER_SANITIZE "Instrument Gatekeeper with address/undefined behavior sanitizers" OFF)
 if(GATEKEEPER_SANITIZE)
+  # Consumers of the instrumented static extension (including DuckDB 2.0's shared library)
+  # must link its sanitizer runtime too; a static archive has no link step of its own.
+  target_link_options(gatekeeper_extension INTERFACE -fsanitize=address,undefined -fno-sanitize=vptr)
   foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
     target_compile_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr -fno-omit-frame-pointer)
     target_link_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr)

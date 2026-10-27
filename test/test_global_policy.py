@@ -4,7 +4,7 @@ import concurrent.futures
 import duckdb
 import pytest
 
-from support.artifact import connect
+from support.artifact import by_engine, connect
 from support.typed_helpers import configure, function_rules, policy, validate
 
 
@@ -161,8 +161,8 @@ def test_call_rejects_unknown_empty_identity_fields_and_duplicates(db, argument)
     with pytest.raises(duckdb.BinderException) as caught:
         db.execute("CALL gatekeeper_configure(" + argument + ")")
     if "blocked_functions := [], " in argument or "blocked_functions = [], " in argument:
-        assert "duplicate Gatekeeper option" in str(caught.value), caught.value
-        with pytest.raises(duckdb.BinderException, match="duplicate Gatekeeper option"):
+        assert by_engine(v1="duplicate Gatekeeper option", v2="Duplicate named argument") in str(caught.value), caught.value
+        with pytest.raises(duckdb.BinderException, match=by_engine(v1="duplicate Gatekeeper option", v2="Duplicate named argument")):
             db.execute("SELECT * FROM gatekeeper_validate('SELECT 1', blocked_functions := [], blocked_functions := [{schema_path:['*'],name:'md5'}])")
 
 

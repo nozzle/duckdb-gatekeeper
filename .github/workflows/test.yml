@@ -51,13 +51,12 @@ jobs:
           git -C build/review-source fetch https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
           git -C build/review-source checkout --detach FETCH_HEAD
       - run: python -m pytest test -q
-      - name: Python suite under the PEG parser
-        # DuckDB 1.5's opt-in parser override (the default parser from 2.0). Gatekeeper parses with the
-        # connection's parser, so every decision must agree with the engine under it; see CONTRIBUTING.md.
+      - name: Python suite under the legacy parser
+        # The first suite uses 2.0's default PEG parser; this leg selects the published legacy extension.
         env:
-          GATEKEEPER_PARSER: peg
+          GATEKEEPER_PARSER: postgres
         run: |
-          python -c "import duckdb; duckdb.connect().execute('INSTALL autocomplete')"
+          python scripts/prepare_test_parser.py
           python -m pytest test -q
       - run: python scripts/audit_inventory.py
       - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp

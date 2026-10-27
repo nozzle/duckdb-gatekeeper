@@ -11,7 +11,7 @@ import re
 import pytest
 
 from smoke_loadable import DIRECTIVE, SMOKE_DIR, run, statements
-from support.artifact import connect
+from support.artifact import ENGINE_MAJOR, connect
 
 
 def test_loadable_half_passes(tmp_path, monkeypatch):
@@ -24,6 +24,26 @@ def test_loadable_half_passes(tmp_path, monkeypatch):
 def test_enforced_half_passes():
     with connect() as host, host.cursor() as agent:
         run(SMOKE_DIR / "enforced.sql", {"host": host, "agent": agent})
+
+
+def test_enforced_half_through_prepare_and_execute():
+    """The R driver prepares every statement; log-only emits one decision per engine operation on 2.0."""
+    class PreparedDriver:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def execute(self, sql):
+            self.connection.executemany(sql, [[]])
+            return self
+
+        def fetchall(self):
+            # executemany completes every execution and discards its rows, as dbExecute does.
+            # Smoke assertions run inside SQL; no result value is checked by the driver.
+            return []
+
+    with connect() as host, host.cursor() as agent:
+        host.execute(f"SET VARIABLE gatekeeper_smoke_log_only_count = {2 if ENGINE_MAJOR >= 2 else 1}")
+        run(SMOKE_DIR / "enforced.sql", {"host": PreparedDriver(host), "agent": PreparedDriver(agent)})
 
 
 def test_loadable_half_needs_one_connection():

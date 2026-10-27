@@ -5,7 +5,7 @@ import threading
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR, by_engine, connect, literal
+from support.artifact import ENGINE_MAJOR, by_engine, by_parser, connect, literal
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce, settle
 from support.typed_helpers import configure, validate
@@ -16,7 +16,9 @@ from support.typed_helpers import configure, validate
 def test_connect_is_refused_before_target_lookup_or_implicit_attach(agent, sql):
     # A missing target or plain DuckCatalog would fail later with an engine error if binding/execution
     # were reached. The native remote-catalog probe separately counts actual dispatch callbacks.
-    with pytest.raises(duckdb.PermissionException, match=DENIED):
+    # The optional legacy parser has no CONNECT grammar and rejects it before any hook.
+    with pytest.raises(by_parser(postgres=duckdb.ParserException, peg=duckdb.PermissionException),
+                       match=by_parser(postgres="syntax error", peg=DENIED)):
         agent.execute(sql).fetchall()
     assert agent.execute("SELECT 42").fetchone() == (42,)
 
@@ -59,6 +61,7 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
             agent.execute(pragma).fetchall()
 
 
+@pytest.mark.skipif(ENGINE_MAJOR >= 2, reason="2.0 has no per-statement pre-bind hook for dynamic PIVOT batches")
 def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(catalog, agent):
     # DuckDB's parser turns PIVOT ... ON col (no IN list) into CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>"
     # AS ENUM (SELECT DISTINCT col ...) followed by the SELECT that names the type, and the engine runs each as
@@ -128,6 +131,27 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
         agent.execute("PIVOT reporting.missing ON tag USING sum(amount), md5(tag)").fetchall()
 
 
+@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="1.5 exposes each rewritten PIVOT statement to QueryBegin")
+@pytest.mark.parametrize("sql", [
+    "PIVOT reporting.orders ON tag USING sum(amount)",
+    "PIVOT reporting.orders ON tag USING sum(amount) LIMIT (SELECT 1)",
+    "SELECT * FROM (PIVOT reporting.orders ON tag USING sum(amount))",
+    "PIVOT read_csv_auto('/nonexistent/gatekeeper-pivot.csv') ON tag USING count(*)",
+])
+def test_dynamic_pivot_is_refused_before_binding_on_2(catalog, agent, sql):
+    configure(catalog, {**CATALOG_POLICY, "allowed_functions": [{"schema_path": ["main"], "name": "read_csv_auto"}]})
+    result = validate(catalog, sql)
+    assert not result["allowed"] and result["code"] == "unsupported", result
+    assert result["violations"][0]["rule"] == "statement"
+    assert result["objects"] == result["functions"] == result["caller_objects"] == result["caller_functions"] == []
+    with pytest.raises(duckdb.PermissionException, match="unsupported"):
+        agent.execute(sql).fetchall()
+    assert agent.execute("SELECT 42").fetchall() == [(42,)]
+    static = "PIVOT reporting.orders ON tag IN ('a', 'b') USING sum(amount)"
+    assert validate(catalog, static)["allowed"]
+    assert agent.execute(static).fetchall() == catalog.execute(static).fetchall()
+
+
 def test_generated_nesting_agrees_with_validate(catalog, agent):
     import random
     rng = random.Random(4127)
@@ -190,7 +214,7 @@ def test_parameters_are_authorized_with_their_values(catalog, agent):
 
 
 def test_relation_api_is_enforced(catalog, agent):
-    assert agent.sql("SELECT sum(amount) FROM reporting.orders").fetchone() == (35.75,)
+    assert agent.sql("SELECT sum(amount) FROM reporting.orders").fetchall() == [(35.75,)]
     assert agent.table("reporting.orders").filter("id > 2").fetchall() == [(3, 5.0, "a")]
     with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.sql("SELECT * FROM secret.salaries").fetchall()
@@ -456,7 +480,7 @@ def test_pragma_arguments_are_not_evaluated_on_enforced_connections(catalog, age
     # passing (an engine change or a new hook), remove the xfail and the matching residual in
     # docs/security.md#residuals.
     with pytest.raises(duckdb.PermissionException, match=DENIED):
-        agent.execute("PRAGMA no_such_pragma(nextval('reporting.seq'))")
+        agent.execute("PRAGMA table_info(nextval('reporting.seq'))")
     assert catalog.execute("SELECT nextval('reporting.seq')").fetchone() == (1,)
 
 

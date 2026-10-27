@@ -1,0 +1,58 @@
+name: DuckDB 1.5 maintenance
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: legacy-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  legacy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GATEKEEPER_EXTENSION: ${{ github.workspace }}/build/legacy/extension/gatekeeper/gatekeeper.duckdb_extension
+      GATEKEEPER_ENGINE_SOURCE: ${{ github.workspace }}/build/legacy-source
+      GATEKEEPER_REVIEW_SOURCE: ${{ github.workspace }}/build/review-source
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+        with:
+          python-version: '3.13'
+          ccache-key: legacy-069cc9f-ubuntu
+      - name: Install the retained hash-pinned Python engine
+        run: >-
+          python -m pip install --no-deps --force-reinstall --require-hashes
+          -r test/compatibility/requirements-1.5.txt
+      - name: Check out the retained engine and historical review source
+        run: |
+          git clone --shared --no-checkout duckdb build/legacy-source
+          git -C build/legacy-source fetch --depth=1 https://github.com/duckdb/duckdb.git 069cc9f9b5be802405797faecc284961b07c70ef refs/tags/v1.5.6:refs/tags/v1.5.6
+          git -C build/legacy-source checkout --detach 069cc9f9b5be802405797faecc284961b07c70ef
+          git clone --shared --no-checkout duckdb build/review-source
+          git -C build/review-source fetch --depth=1 https://github.com/duckdb/duckdb.git d8cdaa33fda8df955cc76ef58a280f68f4cd43fa
+          git -C build/review-source checkout --detach FETCH_HEAD
+      - name: Build Gatekeeper for that engine
+        run: |
+          cmake -G Ninja -S build/legacy-source -B build/legacy \
+            -DCMAKE_BUILD_TYPE=Release -DOVERRIDE_GIT_DESCRIBE=v1.5.6 \
+            -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" \
+            -DDUCKDB_EXTENSION_CONFIGS="$PWD/extension_config.cmake" \
+            -DBUILD_SHELL=OFF -DBUILD_UNITTESTS=OFF
+          cmake --build build/legacy --target gatekeeper_loadable_extension --parallel 4
+      - name: Full Python suite on DuckDB 1.5
+        # Inventory tooling verifies the release pin; it runs in the release-engine jobs.
+        run: python -m pytest test -q --ignore test/test_inventory_tooling.py
+      - name: Full Python suite under the retained PEG override
+        env:
+          GATEKEEPER_PARSER: peg
+        run: |
+          python scripts/prepare_test_parser.py
+          python -m pytest test -q --ignore test/test_inventory_tooling.py
+      - name: Retained Quack client/server suite
+        run: python scripts/test_quack.py

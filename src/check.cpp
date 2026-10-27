@@ -10,6 +10,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -95,6 +96,10 @@ static bool PivotEnumInfo(const CreateInfo &info) {
 
 // The statement as parsed from text: unqualified, with the SELECT that defines the enum still attached.
 static bool PivotEnumStatement(const SQLStatement &statement) {
+	// 2.0 runs the entire expanded batch under one QueryBegin/QueryEnd pair, exposing only the first
+	// statement's text before binding. Later statements cannot receive the required pre-bind checks.
+	if (GATEKEEPER_DUCKDB_MAJOR >= 2)
+		return false;
 	if (statement.type != StatementType::CREATE_STATEMENT)
 		return false;
 	auto &info = *statement.Cast<CreateStatement>().info;
@@ -107,6 +112,8 @@ static bool PivotEnumStatement(const SQLStatement &statement) {
 // The statement as bound: the binder has resolved the temporary catalog and moved the SELECT into the plan as
 // the root's single child.
 static bool PivotEnumPlan(const LogicalOperator &plan) {
+	if (GATEKEEPER_DUCKDB_MAJOR >= 2)
+		return false;
 	if (plan.type != LogicalOperatorType::LOGICAL_CREATE_TYPE || plan.children.size() != 1)
 		return false;
 	auto &info = plan.Cast<LogicalCreate>().info;
@@ -888,7 +895,9 @@ static void AuthorizeStatement(ClientContext &context, const gatekeeper::Layers 
 	// Mirror Planner's bound_all_parameters type check: execution must not choose a different
 	// implementation after validation by resolving an UNKNOWN parameter for the first time.
 	for (const auto &entry : bound_parameters.GetParameters())
-		if (!entry.second->return_type.IsValid())
+		if (TypeVisitor::Contains(entry.second->return_type, [](const LogicalType &type) {
+			    return !type.IsValid() || type.id() == LogicalTypeId::ANY;
+		    }))
 			throw BinderException(gatekeeper::PARAMETERS_REQUIRED);
 	CheckPlan(layers, unit, PlanOrigin::PRIVATE, binder->GetStatementProperties(), *bound.plan, result);
 	// Backstop: every replacement DuckDB recorded must have passed the Gatekeeper callback.
