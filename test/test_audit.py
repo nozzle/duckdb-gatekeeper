@@ -12,7 +12,7 @@ import pytest
 
 from support.artifact import ENGINE_MAJOR, EXTENSION, PARSER, by_engine, by_parser, literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
-from support.corpus import PARITY_CORPUS
+from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
 from support.typed_helpers import configure, validate
 
@@ -85,6 +85,32 @@ def test_records_agree_with_validate_and_the_error(catalog, agent, sql):
 
 def union(records, column):
     return sorted({json.dumps(entry, sort_keys=True) for record in records for entry in record[column]})
+
+
+@pytest.mark.parametrize("log_only", [False, True])
+@pytest.mark.parametrize("block_sum", [False, True])
+@pytest.mark.parametrize("columns,enums", [("tag", 1), ("tag, id", 2)])
+def test_each_pivot_stage_has_its_own_decision(catalog, agent, log_only, block_sum, columns, enums):
+    policy = dict(CATALOG_POLICY)
+    if block_sum:
+        policy["blocked_functions"] = [{"schema_path": ["*"], "name": "sum"}]
+    configure(catalog, policy)
+    catalog.execute(f"SET gatekeeper_log_only = {log_only}")
+    enable(catalog, "debug")
+    sql = f"PIVOT reporting.orders ON {columns} USING sum(amount)"
+    seen = attempt(agent, sql)
+    assert seen.kind == ("denied" if block_sum and not log_only else "rows"), seen
+    found = decisions(catalog, "mode = 'log_only'" if log_only else "mode = 'enforce'")
+    assert len(found) == enums + 1, found
+    assert len({r["query_id"] for r in found}) == enums + 1
+    assert all(r["query_id"] is not None for r in found)
+    assert [r["allowed"] for r in found] == [True] * enums + [not block_sum]
+    assert [r["boundary"] for r in found] == ["execution"] * enums + ["binding" if block_sum else "execution"]
+    assert all(r["statement"].startswith("CREATE OR REPLACE TEMP TYPE") for r in found[:-1])
+    assert "PIVOT" in found[-1]["statement"]
+    if block_sum:
+        assert found[-1]["code"] == "forbidden"
+        assert found[-1]["violations"][0]["function_name"] == "sum"
 
 
 ERROR_COLUMNS = ["code", "error_type", "error_message", "position"]

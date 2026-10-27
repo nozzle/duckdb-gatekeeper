@@ -178,8 +178,10 @@ The suite has two layers with different reach:
   `-DGATEKEEPER_NATIVE_PROBES=ON`, and the engine-rebuild workflow builds and runs them against
   each candidate engine. The parameter-fallback leg on 2.0 also retains handles across session-variable
   changes and counts table-function binds to prove collision refusals precede bind-time work (see
-  [the fallback decision](docs/parameter-fallback.md)). Add a probe here when a guarantee is made to a
-  client API rather than to SQL text.
+  [the fallback decision](docs/parameter-fallback.md)). Its dynamic-PIVOT leg exercises retained handles,
+  blocking and submitted execution, and counted readers in later enum/final-SELECT stages. Denied stages
+  must never reach those bind callbacks. Add a probe here when a guarantee is made to a client API
+  rather than to SQL text.
 
 Native probes also accept `GATEKEEPER_EXTENSION=/absolute/path/to/gatekeeper.duckdb_extension`.
 In this mode they disable automatic linked-extension loading, load core functions, and explicitly
@@ -228,8 +230,9 @@ Use engine-major `1` and omit the nested-schema marker for 1.5. `test_inventory_
 tests the primary pin and runs unconditionally in the normal 2.0 suite; alternate-engine runs
 omit it as above. Engine behavior a test pins that 2.0
 changed is named on both sides with `by_engine(v1=..., v2=...)` from `support.artifact`, under
-the same rule as `by_parser`: never an excuse to weaken a policy decision. Unsupported engine
-capabilities have explicit refusal tests, including dynamic PIVOT on released 2.0.
+the same rule as `by_parser`: never an excuse to weaken a policy decision. Dynamic PIVOT is
+tested on both engines. On 2.0, `CanRequestRebind` must run before each rewritten statement
+binds; native callback counters and strict per-stage audit counts verify that lifecycle contract.
 
 `test/sql/nested_schemas.test` requires `GATEKEEPER_TEST_NESTED_SCHEMAS=1` because 1.5 cannot
 create nested schemas. Both 2.0 engine-rebuild CI jobs set it. `schema_paths.test` exercises

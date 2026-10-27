@@ -69,6 +69,9 @@ static bool RoutingControl(ClientContext &context, const string &sql) {
 // parameter values are not known; at execution QueryBegin admits the text, the rebind hook forces a rebind
 // inside the query, and PostBind authorizes and re-checks the plan that will execute. Parameter values
 // are known only to the engine's binder, so parameterized statements are authorized in PostBind.
+// DuckDB 2.0 calls QueryBegin only for the first statement of a dynamic PIVOT's expanded batch, but asks
+// CanRequestRebind before planning every statement. Its new statement id advances the same admission boundary
+// there, before any binder or optimizer callback can run, with the enum types earlier statements created.
 //
 // Where those two run differs by engine. DuckDB 1.5 binds Prepare() before any hook and outside any
 // statement, and asks OnExecutePrepared before running the prepared plan. DuckDB 2.0 runs both as internal
@@ -90,8 +93,8 @@ static bool RoutingControl(ClientContext &context, const string &sql) {
 //
 // The flags are four separate dimensions, not one phase, and hold these invariants between the hooks:
 //   - authorized ⇒ admitted ⇒ in_statement: each is set only by the step after the one before it, and Reset
-//     clears all of them together at QueryBegin and QueryEnd. policy, log_only and unit are meaningful only
-//     while in_statement; unit.statement is set only while admitted.
+//     clears all of them together at each statement's admission and QueryEnd. policy, log_only and unit are meaningful
+//     only while in_statement; unit.statement is set only while admitted.
 //   - decided is orthogonal to admission: a statement is decided at whichever boundary first writes its
 //     record, admitted or not, and never twice. Only log-only mode reads it: enforcing, a denial throws out
 //     of the hook that recorded it and the engine ends the query.
@@ -102,6 +105,9 @@ static bool RoutingControl(ClientContext &context, const string &sql) {
 //     hook, marking the nested plan that follows as the one that will execute; the second by the pre-screen
 //     of a Prepare()'s nested plan, which its PREPARE wrapper then consumes.
 struct EnforcementState : ClientContextState {
+	explicit EnforcementState(ClientContext &owner_p) : owner(owner_p) {}
+	ClientContext &owner;
+	idx_t statement_id = 0;          // the engine query id of the rewritten statement these snapshots describe
 	gatekeeper::Policy policy;       // one snapshot for the whole statement
 	gatekeeper::Result result;       // the decision in progress
 	bool log_only = false;           // this statement is recorded and never refused
@@ -118,6 +124,7 @@ struct EnforcementState : ClientContextState {
 	// check runs as gatekeeper_validate runs it with no options.
 	gatekeeper::Layers Snapshot() const { return {policy, policy}; }
 	void Reset() {
+		statement_id = 0;
 		policy = gatekeeper::Policy();
 		result = gatekeeper::Result();
 		log_only = false;
@@ -160,13 +167,15 @@ struct EnforcementState : ClientContextState {
 		}
 		authorized = true;
 	}
-	void QueryBegin(ClientContext &context) override {
+	bool CurrentStatement() const { return in_statement && statement_id == owner.transaction.GetActiveQuery(); }
+	void BeginStatement(ClientContext &context) {
 		// On DuckDB 2.0 this is AFTER SubmitStatement's connected-session RemoteExecute callback.
 		// Safety on normal SQL routes comes from refusing CONNECT below (CheckText's non-SELECT
 		// rejection) while still local, not from inspecting connected state here. Native hosts must
 		// keep enforced connections local; see docs/security.md#connect-mode-and-native-host-state.
 		Reset();
 		in_statement = true;
+		statement_id = context.transaction.GetActiveQuery();
 		const auto &sql = context.GetCurrentQuery();
 		log_only = LogOnlySetting(context) && !RoutingControl(context, sql);
 		if (!TryGlobalPolicy(context, policy, result)) {
@@ -198,8 +207,8 @@ struct EnforcementState : ClientContextState {
 			Record(context, Boundary::BINDING, &policy, &sql);
 			return;
 		}
-		// 1.5 presents each dynamic PIVOT statement here separately; 2.0's first enum statement is refused
-		// by CheckText because later statements have no pre-bind hook. Admit exactly one checked unit.
+		// The engine presents each rewritten PIVOT statement separately, after any earlier enum types exist.
+		// Validation's placeholder-enum batch path is never the statement the engine is about to bind.
 		if (text.units.size() != 1 || !text.units[0].pivot_enums.empty()) {
 			result = gatekeeper::UnsupportedStatement();
 			Record(context, Boundary::BINDING, &policy, &sql);
@@ -212,6 +221,7 @@ struct EnforcementState : ClientContextState {
 		if (unit.statement->named_param_map.empty())
 			Authorize(context, nullptr);
 	}
+	void QueryBegin(ClientContext &context) override { BeginStatement(context); }
 	bool CheckParameters(ClientContext &context) {
 		try {
 			// QueryBegin has only text; 2.0's rebind hook already receives values merged with variable defaults.
@@ -242,7 +252,17 @@ struct EnforcementState : ClientContextState {
 	// next inside an explicit transaction. Declaring that this state can request a rebind makes the engine
 	// report how every prepare attempt ended, OnFinalizePrepare or OnPlanningError, at the cost of binding a
 	// copy of the statement; no rebind is ever requested from here.
-	bool CanRequestRebind() override { return true; }
+	bool CanRequestRebind() override {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+		// CreatePreparedStatement asks before copying/planning each expanded statement. BeginStatementInternal
+		// has already assigned its query id and text; unlike QueryBegin, this callback covers later PIVOT stages.
+		// Compare ids rather than SQL: consecutive statements can carry identical text. Private binds use
+		// Binder directly, so admission here does not recurse through this callback.
+		if (in_statement && !CurrentStatement())
+			BeginStatement(owner);
+#endif
+		return true;
+	}
 	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &, ErrorData &error) override {
 		if (!in_statement) {
 			prepare_decided = false;
@@ -295,7 +315,9 @@ static shared_ptr<EnforcementState> StateOf(ClientContext &context) {
 	return context.registered_state->Get<EnforcementState>(STATE_KEY);
 }
 
-static void Latch(ClientContext &context) { context.registered_state->GetOrCreate<EnforcementState>(STATE_KEY); }
+static void Latch(ClientContext &context) {
+	context.registered_state->GetOrCreate<EnforcementState>(STATE_KEY, context);
+}
 
 GateMode ReplacementGate(ClientContext &context) {
 	auto state = StateOf(context);
@@ -376,6 +398,12 @@ static void PostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 			MarkDenied(result);
 			Decide(context, {mode, Boundary::PREPARE, &policy, nullptr}, result);
 		}
+		return;
+	}
+	if (!state->CurrentStatement()) {
+		// A plan may never reuse a preceding statement's admission, even if an engine path missed both hooks.
+		state->result = gatekeeper::NotAdmitted();
+		state->Record(context, Boundary::EXECUTION, &state->policy, &context.GetCurrentQuery());
 		return;
 	}
 	if (state->log_only && state->decided) {

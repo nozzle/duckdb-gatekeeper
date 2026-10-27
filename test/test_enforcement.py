@@ -61,7 +61,6 @@ def test_pragmas_are_checked_as_the_statements_duckdb_rewrites_them_into(catalog
             agent.execute(pragma).fetchall()
 
 
-@pytest.mark.skipif(ENGINE_MAJOR >= 2, reason="2.0 has no per-statement pre-bind hook for dynamic PIVOT batches")
 def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(catalog, agent):
     # DuckDB's parser turns PIVOT ... ON col (no IN list) into CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>"
     # AS ENUM (SELECT DISTINCT col ...) followed by the SELECT that names the type, and the engine runs each as
@@ -131,25 +130,21 @@ def test_dynamic_pivot_is_checked_as_the_statements_duckdb_rewrites_it_into(cata
         agent.execute("PIVOT reporting.missing ON tag USING sum(amount), md5(tag)").fetchall()
 
 
-@pytest.mark.skipif(ENGINE_MAJOR < 2, reason="1.5 exposes each rewritten PIVOT statement to QueryBegin")
 @pytest.mark.parametrize("sql", [
-    "PIVOT reporting.orders ON tag USING sum(amount)",
     "PIVOT reporting.orders ON tag USING sum(amount) LIMIT (SELECT 1)",
-    "SELECT * FROM (PIVOT reporting.orders ON tag USING sum(amount))",
-    "PIVOT read_csv_auto('/nonexistent/gatekeeper-pivot.csv') ON tag USING count(*)",
+    "SELECT * FROM (PIVOT reporting.orders ON tag USING sum(amount)), read_csv_auto('/nonexistent/gatekeeper-pivot.csv')",
+    "SELECT * FROM (PIVOT reporting.orders ON tag USING sum(amount)), '/nonexistent/gatekeeper-pivot.parquet'",
+    "SELECT * FROM (PIVOT reporting.orders ON tag USING sum(amount)) LIMIT (SELECT nextval('reporting.seq'))",
 ])
-def test_dynamic_pivot_is_refused_before_binding_on_2(catalog, agent, sql):
-    configure(catalog, {**CATALOG_POLICY, "allowed_functions": [{"schema_path": ["main"], "name": "read_csv_auto"}]})
+def test_dynamic_pivot_checks_the_later_statement_before_binding(catalog, agent, sql):
+    # The first enum SELECT contains none of the refused text. The trailing SELECT must have its own admission
+    # before readers or LIMIT evaluation bind; on 2.0 only CanRequestRebind sees that new statement pre-bind.
     result = validate(catalog, sql)
-    assert not result["allowed"] and result["code"] == "unsupported", result
-    assert result["violations"][0]["rule"] == "statement"
+    assert not result["allowed"] and result["code"] == "forbidden", result
     assert result["objects"] == result["functions"] == result["caller_objects"] == result["caller_functions"] == []
-    with pytest.raises(duckdb.PermissionException, match="unsupported"):
+    with pytest.raises(duckdb.PermissionException, match=DENIED):
         agent.execute(sql).fetchall()
     assert agent.execute("SELECT 42").fetchall() == [(42,)]
-    static = "PIVOT reporting.orders ON tag IN ('a', 'b') USING sum(amount)"
-    assert validate(catalog, static)["allowed"]
-    assert agent.execute(static).fetchall() == catalog.execute(static).fetchall()
 
 
 def test_generated_nesting_agrees_with_validate(catalog, agent):

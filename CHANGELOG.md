@@ -18,9 +18,9 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ### Fixed
 
-- Refuse dynamic `PIVOT` as `unsupported` on DuckDB 2.0: the released engine runs its rewrite
-  under one query hook, so later statements cannot receive the required pre-bind checks.
-  Explicit `IN` lists and host-created enums remain supported; 1.5 retains dynamic PIVOT.
+- Check every rewritten dynamic `PIVOT` stage before binding on DuckDB 2.0, closing an
+  enforcement gap while retaining dynamic, nested, and multi-column pivots. Each stage
+  receives its own policy snapshot and audit decision.
 - Require concrete nested parameter types before reporting successful validation, including
   DuckDB 2.0's `LIST(ANY)` placeholders in list sorting. Typed list parameters remain supported.
 - Give the embedded engine JSON serializer private symbols so static builds can link with
