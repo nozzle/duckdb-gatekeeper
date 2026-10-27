@@ -1221,7 +1221,7 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 ## Compatibility and review
 
-Primary builds and the next release target DuckDB 2.0.0; published v0.4.3 GitHub assets target
+Primary builds and v0.4.4 GitHub assets target DuckDB 2.0.0; published v0.4.3 GitHub assets target
 1.5.6. The 1.5.6 source/test compatibility path is retained until **2027-03-01**, independently
 of the primary pin. Source builds may use another engine checkout;
 the grammar and serializer come from that checkout, and DuckDB enforces binary
