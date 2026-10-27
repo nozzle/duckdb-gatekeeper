@@ -69,9 +69,9 @@ static bool RoutingControl(ClientContext &context, const string &sql) {
 // parameter values are not known; at execution QueryBegin admits the text, the rebind hook forces a rebind
 // inside the query, and PostBind authorizes and re-checks the plan that will execute. Parameter values
 // are known only to the engine's binder, so parameterized statements are authorized in PostBind.
-// DuckDB 2.0 calls QueryBegin only for the first statement of a dynamic PIVOT's expanded batch, but asks
+// DuckDB 2.0 calls QueryBegin only for the first statement of an expanded batch, but asks
 // CanRequestRebind before planning every statement. Its new statement id advances the same admission boundary
-// there, before any binder or optimizer callback can run, with the enum types earlier statements created.
+// there, before any binder or optimizer callback can run, including PIVOT and other preprocessor expansions.
 //
 // Where those two run differs by engine. DuckDB 1.5 binds Prepare() before any hook and outside any
 // statement, and asks OnExecutePrepared before running the prepared plan. DuckDB 2.0 runs both as internal
@@ -167,7 +167,10 @@ struct EnforcementState : ClientContextState {
 		}
 		authorized = true;
 	}
-	bool CurrentStatement() const { return in_statement && statement_id == owner.transaction.GetActiveQuery(); }
+	bool CurrentStatement() const {
+		return in_statement && owner.transaction.HasActiveTransaction() &&
+		       statement_id == owner.transaction.GetActiveQuery();
+	}
 	void BeginStatement(ClientContext &context) {
 		// On DuckDB 2.0 this is AFTER SubmitStatement's connected-session RemoteExecute callback.
 		// Safety on normal SQL routes comes from refusing CONNECT below (CheckText's non-SELECT
@@ -254,11 +257,12 @@ struct EnforcementState : ClientContextState {
 	// copy of the statement; no rebind is ever requested from here.
 	bool CanRequestRebind() override {
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
-		// CreatePreparedStatement asks before copying/planning each expanded statement. BeginStatementInternal
-		// has already assigned its query id and text; unlike QueryBegin, this callback covers later PIVOT stages.
+		// This predicate serves as a lifecycle hook because CreatePreparedStatement asks before copying/planning,
+		// and AdvanceStatementInternal has already assigned the new id/text. Recheck both functions on a repin:
+		// the ordering, rather than a lifecycle API contract, makes these side effects safe.
 		// Compare ids rather than SQL: consecutive statements can carry identical text. Private binds use
 		// Binder directly, so admission here does not recurse through this callback.
-		if (in_statement && !CurrentStatement())
+		if (in_statement && owner.transaction.HasActiveTransaction() && !CurrentStatement())
 			BeginStatement(owner);
 #endif
 		return true;
@@ -323,10 +327,11 @@ GateMode ReplacementGate(ClientContext &context) {
 	auto state = StateOf(context);
 	if (!state)
 		return GateMode::OPEN;
-	// Inside a statement the snapshot QueryBegin took governs every check of it; a Prepare() bind outside any
+	// Inside a statement the snapshot admission took governs every check of it; a Prepare() bind outside any
 	// statement reads the setting as it stands.
 	if (state->in_statement) {
-		if (!state->log_only)
+		// An earlier stage's log-only decision cannot waive checks in this bind window.
+		if (!state->CurrentStatement() || !state->log_only)
 			return GateMode::ENFORCE;
 		return state->decided ? GateMode::OPEN : GateMode::LOG_ONLY;
 	}
@@ -347,21 +352,21 @@ void MarkGateDecided(ClientContext &context) {
 
 optional_ptr<const string> AdmittedQuery(ClientContext &context) {
 	auto state = StateOf(context);
-	if (!state || !state->admitted)
+	if (!state || !state->admitted || !state->CurrentStatement())
 		return nullptr;
 	return &context.GetCurrentQuery();
 }
 
 optional_ptr<const gatekeeper::Policy> AdmittedPolicy(ClientContext &context) {
 	auto state = StateOf(context);
-	if (!state || !state->admitted)
+	if (!state || !state->admitted || !state->CurrentStatement())
 		return nullptr;
 	return &state->policy;
 }
 
 optional_ptr<const gatekeeper::BindingPolicy> AdmittedBinding(ClientContext &context) {
 	auto state = StateOf(context);
-	if (!state || !state->admitted)
+	if (!state || !state->admitted || !state->CurrentStatement())
 		return nullptr;
 	return &state->unit.binding;
 }

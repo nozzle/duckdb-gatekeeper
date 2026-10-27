@@ -21,8 +21,8 @@ GateMode ReplacementGate(ClientContext &context);
 // Marks the statement in progress, or the Prepare() bind outside one, as decided at the gate, so the hooks
 // the engine reaches afterwards do not decide it again.
 void MarkGateDecided(ClientContext &context);
-// The text of the statement an enforced connection is executing once its pre-bind admission passed; null on an
-// unenforced connection and outside a query (a Prepare() bind), where no statement text is available.
+// The text of the statement an enforced connection is executing once its pre-bind admission passed; null
+// without a current admission, including outside a query (a Prepare() bind) or after the statement id changed.
 optional_ptr<const string> AdmittedQuery(ClientContext &context);
 // The policy snapshot admission took for that statement, under the same conditions. Every check of one
 // statement, including the engine's own bind reaching the replacement-scan gate, must use this one snapshot.

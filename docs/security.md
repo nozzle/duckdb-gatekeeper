@@ -538,6 +538,9 @@ under residuals.
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
   differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
+  On 2.0 the per-stage admission boundary covers every multi-statement expansion, including
+  PRAGMA query callbacks that return several statements and ALTER materialization rewrites.
+  Each stage receives fresh policy checks and its own audit decision, including in log-only mode.
 - **Dynamic `PIVOT` runs as a checked batch on both engines.** DuckDB's parser rewrites
   `PIVOT t ON col USING agg(x)`
   (no `IN` list) into `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" AS ENUM (SELECT
@@ -1282,6 +1285,10 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
 - Dynamic `PIVOT` is supported on both engines. The 2.0 path uses the per-statement
   `CanRequestRebind` callback to check later rewrite stages before planning; each has its own
   audit decision. The stages share one transaction on 2.0; see [dynamic PIVOT](#residuals).
+  With the 2.0 Python client, use `connection.execute("PIVOT ...").fetchall()`:
+  `connection.sql("PIVOT ...").fetchall()` wraps the expanded result in a host-language
+  `__duckdb_source_...` scan, which is refused as `replacement_scan` even when the PIVOT stages
+  themselves passed their checks.
 - 2.0 PEG's `SHOW name` can read a setting's value at bind time when no such table exists, with
   no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
   the supported spelling. The legacy parser retains the DESCRIBE interpretation.

@@ -20,7 +20,8 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 - Check every rewritten dynamic `PIVOT` stage before binding on DuckDB 2.0, closing an
   enforcement gap while retaining dynamic, nested, and multi-column pivots. Each stage
-  receives its own policy snapshot and audit decision.
+  receives its own policy snapshot and audit decision. The same per-stage checks and audit
+  records cover other 2.0 expansions, including PRAGMA query callbacks and ALTER materialization.
 - Require concrete nested parameter types before reporting successful validation, including
   DuckDB 2.0's `LIST(ANY)` placeholders in list sorting. Typed list parameters remain supported.
 - Give the embedded engine JSON serializer private symbols so static builds can link with
