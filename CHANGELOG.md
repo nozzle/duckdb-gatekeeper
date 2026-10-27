@@ -6,9 +6,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.4.4 - 2026-10-27
+
 ### Changed
 
-- Primary builds and the next GitHub release target DuckDB 2.0.0. DuckDB 1.5.6 source
+- Primary builds and GitHub release artifacts now target DuckDB 2.0.0. DuckDB 1.5.6 source
   compatibility and its full regression suite remain supported until March 1, 2027.
   Python-based development and integrations require Python 3.11+ on 2.0. Both its default
   PEG parser and optional legacy parser are tested. See the [migration notes](docs/duckdb-2.0-migration.md).

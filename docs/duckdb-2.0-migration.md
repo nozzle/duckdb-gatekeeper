@@ -1,6 +1,6 @@
 # DuckDB 2.0 migration and validation
 
-Reviewed 2026-10-26. DuckDB 2.0.0 is the primary build and next-release target.
+Reviewed 2026-10-27. DuckDB 2.0.0 is the primary build and Gatekeeper v0.4.4 release target.
 DuckDB 1.5.6 remains source-compatible and tested until **2027-03-01**, its
 [extended upstream EOL](https://duckdb.org/release_calendar.html). The default repin
 does not delete its adapters or tests; [#99](https://github.com/nozzle/duckdb-gatekeeper/issues/99)
@@ -11,8 +11,8 @@ tracks released-parser verification.
 
 - New native builds target **DuckDB 2.0.0**, including Windows MinGW with CRAN R 2.0.0.
   Published GitHub v0.4.3 assets still target 1.5.6. Every artifact requires its matching engine.
-- The community repository builds Gatekeeper v0.4.3 for 2.0; its 1.5.6 binaries remain
-  v0.4.1 until maintainers explicitly rebuild `repo.variegata`.
+- Community publication follows the GitHub release through a separate descriptor update.
+  Its 1.5.6 binaries remain v0.4.1 until maintainers explicitly rebuild `repo.variegata`.
 - Python integrations and the development environment require **Python 3.11+** for 2.0.
   Relation results no longer provide `fetchone()`; the tests retain relation-path coverage
   using `fetchall()`. See the [Python migration guide](https://duckdb.org/docs/2.0/clients/python/migration.html).

@@ -21,10 +21,11 @@ every enforced denial is a `Permission Error` the statement never recovers from.
 > Read the [security model](docs/security.md) before integrating.
 
 > [!NOTE]
-> Early development. This README follows `main`, whose build and next release target
-> **DuckDB 2.0.0**. Published GitHub v0.4.3 binaries still target DuckDB 1.5.6. On DuckDB 2.0,
-> `INSTALL gatekeeper FROM community` installs v0.4.3; the community repository's DuckDB
-> 1.5.6 binaries remain v0.4.1. Source compatibility with 1.5 is maintained until **March 1, 2027**.
+> Early development. Gatekeeper v0.4.4 builds and GitHub binaries target **DuckDB 2.0.0**;
+> published v0.4.3 GitHub binaries target DuckDB 1.5.6. Community publication is
+> [a separate step](docs/releasing.md); check the installed extension version when deploying.
+> The community repository's DuckDB 1.5.6 binaries are v0.4.1. Source compatibility with 1.5
+> is maintained until **March 1, 2027**.
 
 ## Installation
 
@@ -991,16 +992,17 @@ enforcement. A SELECT-based setup must require an actual `enforced = true` resul
 
 DuckDB 2.0.0 is the primary build and release target. DuckDB 1.5.6 retains source compatibility
 and a full regression job until its [extended EOL on March 1, 2027](https://duckdb.org/release_calendar.html).
-Each engine needs its own matching binary. Published GitHub v0.4.3 assets target 1.5.6;
-new builds target 2.0.0. The policy model is shared, but engine capabilities, conservative
+Each engine needs its own matching binary. GitHub v0.4.4 assets target 2.0.0;
+published v0.4.3 assets target 1.5.6. The policy model is shared, but engine capabilities, conservative
 refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
 for prepared statements, function provenance, parameter fallback, Quack, and the 2.0
 connection-scoped replacement-scan timing limitation.
 
 On 2.0, both default PEG and the optional `legacy_parser` are tested. Dynamic `PIVOT` is
-`unsupported` because the released engine exposes only the first statement of its rewrite to
-the pre-bind query hook; use an explicit `IN` list or a host-created enum. Python integrations
-require Python 3.11+. See the [2.0 migration and validation notes](docs/duckdb-2.0-migration.md).
+supported: each rewritten enum query and the final SELECT receive their own pre-bind policy
+checks and audit decision. With Python, use `execute(...).fetchall()` for dynamic pivots;
+`sql(...).fetchall()` introduces a host-language replacement scan that Gatekeeper refuses.
+Python integrations require Python 3.11+. See the [2.0 migration and validation notes](docs/duckdb-2.0-migration.md).
 
 ## Benchmarks
 
@@ -1009,14 +1011,14 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 115 µs | 4.5 ms | 9.7 ms |
-| enforced connection | 178 µs (+63 µs) | 4.8 ms (+285 µs) | 21.2 ms (+11.6 ms) |
-| enforced, audit log at debug | 245 µs (+130 µs) | 4.9 ms (+420 µs) | 21.4 ms (+11.7 ms) |
-| validate, then execute | 301 µs (+186 µs) | 5.0 ms (+478 µs) | 19.8 ms (+10.2 ms) |
-| denied on an enforced connection | 348 µs | 590 µs | 11.4 ms |
+| plain connection | 103 µs | 4.0 ms | 9.4 ms |
+| enforced connection | 164 µs (+61 µs) | 4.2 ms (+221 µs) | 20.7 ms (+11.3 ms) |
+| enforced, audit log at debug | 227 µs (+124 µs) | 4.4 ms (+370 µs) | 20.8 ms (+11.4 ms) |
+| validate, then execute | 278 µs (+175 µs) | 4.4 ms (+405 µs) | 19.2 ms (+9.8 ms) |
+| denied on an enforced connection | 334 µs | 529 µs | 11.1 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python client
-on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.0, Gatekeeper 0.4.3. The
+on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.0, Gatekeeper 0.4.4. The
 plain row is the client round trip plus the engine's own work; in parentheses, what each mode
 adds to it.
 
