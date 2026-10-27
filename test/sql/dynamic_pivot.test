@@ -1,0 +1,116 @@
+# name: test/sql/dynamic_pivot.test
+# description: Every stage of a dynamic PIVOT is checked before binding and has its own audit decision.
+# group: [gatekeeper]
+
+require gatekeeper
+
+statement ok
+CREATE TABLE pivot_input(id INTEGER, k VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO pivot_input VALUES (1, 'a', 10), (1, 'b', 20), (2, 'a', 30);
+
+statement ok
+CREATE SEQUENCE pivot_sequence;
+
+query I
+SELECT nextval('pivot_sequence');
+----
+1
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'pivot_input'}]);
+
+query I
+SELECT allowed FROM gatekeeper_validate('PIVOT pivot_input ON k USING sum(v) GROUP BY id');
+----
+true
+
+# Validation does not execute enum discovery or create the temporary types.
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name LIKE '__pivot_enum_%';
+----
+0
+
+statement ok
+CALL enable_logging('Gatekeeper');
+
+statement ok
+SET logging_level = 'debug';
+
+statement ok agent
+CALL gatekeeper_enforce();
+
+query III agent
+PIVOT pivot_input ON k USING sum(v) GROUP BY id ORDER BY id;
+----
+1	10	20
+2	30	NULL
+
+query IIII agent
+PIVOT pivot_input ON k, id USING sum(v);
+----
+10	30	20	NULL
+
+# One enum plus the final SELECT, then two enums plus the final SELECT: no missing or duplicate records.
+query III
+SELECT count(*), count(DISTINCT query_id), bool_and(allowed) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce';
+----
+5	5	true
+
+# The enum's SELECT contains no SUM. Its successful decision must not admit the later pivoting SELECT.
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'pivot_input'}], blocked_functions := [{schema_path:['*'],name:'sum'}]);
+
+statement error agent
+PIVOT pivot_input ON k USING sum(v) GROUP BY id;
+----
+Gatekeeper denied this statement
+
+query TTI
+SELECT boundary, code, violations[1].function_name = 'sum' FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'enforce' AND NOT allowed;
+----
+binding	forbidden	true
+
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'pivot_input'}]);
+
+# The reader and bind-time expression appear only in the final SELECT. The refusal precedes I/O/evaluation.
+statement error agent
+SELECT * FROM (PIVOT pivot_input ON k USING sum(v)) p, read_csv('/nonexistent/gatekeeper-pivot.csv');
+----
+Gatekeeper denied this statement
+
+statement ok agent
+SELECT 1;
+
+statement error agent
+PIVOT pivot_input ON k USING sum(v) LIMIT (SELECT nextval('pivot_sequence'));
+----
+Gatekeeper denied this statement
+
+query I
+SELECT nextval('pivot_sequence');
+----
+2
+
+# Log-only records both stages and executes the final SELECT despite its policy denial.
+statement ok
+CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'pivot_input'}], blocked_functions := [{schema_path:['*'],name:'sum'}]);
+
+statement ok
+SET gatekeeper_log_only = true;
+
+statement ok agent
+SELECT 1;
+
+query III agent
+PIVOT pivot_input ON k USING sum(v) GROUP BY id ORDER BY id;
+----
+1	10	20
+2	30	NULL
+
+query III
+SELECT count(*), count(DISTINCT query_id), count(*) FILTER (WHERE NOT allowed) FROM duckdb_logs_parsed('Gatekeeper') WHERE event = 'decision' AND mode = 'log_only' AND contains(statement, '__pivot_enum_');
+----
+2	2	1

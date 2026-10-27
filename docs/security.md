@@ -538,17 +538,11 @@ under residuals.
   `SELECT` they stand for before any hook. The rewritten statement is what Gatekeeper checks
   and what the audit record's `statement` holds; that is policy-consistent, but the raw text
   differs from what `gatekeeper_validate` would report (`unsupported` for the `PRAGMA`).
-- **Dynamic `PIVOT` is unsupported on DuckDB 2.0.** Its released query lifecycle invokes
-  `QueryBegin` only for the first statement of an expanded batch. Later statements bind
-  without a new pre-bind hook, so the required text/function/reader checks cannot cover
-  them. Both validation and enforcement refuse dynamic PIVOT and its temporary enum DDL
-  as `unsupported` before binding; log-only records that refusal and lets the engine proceed.
-  On 2.0 that record carries the rewritten `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" ...`
-  text; the trailing pivoting SELECT runs without another Gatekeeper record in log-only mode.
-  Use explicit `IN` values or an enum created by the trusted host. Static PIVOT remains
-  covered by the ordinary checks. Restoring dynamic PIVOT requires an upstream hook that
-  covers every expanded statement before binding and callback-counter regression coverage.
-- **On DuckDB 1.5, dynamic `PIVOT` runs as a batch.** DuckDB's parser rewrites `PIVOT t ON col USING agg(x)`
+  On 2.0 the per-stage admission boundary covers every multi-statement expansion, including
+  PRAGMA query callbacks that return several statements and ALTER materialization rewrites.
+  Each stage receives fresh policy checks and its own audit decision, including in log-only mode.
+- **Dynamic `PIVOT` runs as a checked batch on both engines.** DuckDB's parser rewrites
+  `PIVOT t ON col USING agg(x)`
   (no `IN` list) into `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" AS ENUM (SELECT
   DISTINCT CAST(col AS VARCHAR) FROM t ...)` per dynamic column followed by the `SELECT` that
   pivots on those types, and the engine runs each as its own statement
@@ -556,12 +550,20 @@ under residuals.
   `CREATE`, by shape (`OR REPLACE`, `TEMP`, unqualified, that name pattern, defined by a query,
   not by literals) in both paths, checks its `SELECT` as any other, and requires the bound plan
   to be that `SELECT`'s under a `LOGICAL_CREATE_TYPE` root in the temporary catalog.
+  On 1.5 each stage reaches `QueryBegin`. On 2.0 only the first does, but
+  `ClientContext::CreatePreparedStatement` calls `CanRequestRebind` before planning every
+  stage. The engine has already assigned that stage's query ID and text; Gatekeeper detects
+  the new ID and performs the same text admission and private authorization before binding.
+  An earlier enum's successful check never admits a later stage. Native callback-counter
+  tests verify this ordering for blocking/submitted execution and retained prepared handles.
   `gatekeeper_validate` decides the same statements on the same text the engine will run, in
   the engine's order, stopping at the first denial, and creates nothing. What remains:
-  - The enum is a real temporary type in the caller's session. The engine never drops it
-    (an upstream `FIXME`), it is created before the pivoting `SELECT` is checked, and it stays
-    when that `SELECT` is denied. It holds the distinct values of a column the policy let the
-    caller read, in the caller's own temporary catalog, and nothing else can reach it.
+  - The enum is a real temporary type in the caller's session, created before the pivoting
+    `SELECT` is checked. Successful pivots leave their enums behind (an upstream `FIXME`).
+    On 1.5 an earlier stage commits separately, so its enum also stays when a later stage is
+    denied. On 2.0 the stages share a transaction, which rolls back their newly created types
+    on a later failure. The type holds values the policy let the caller read in the caller's
+    own temporary catalog.
   - On an enforced connection the audit trail is one record per rewritten statement, each on
     DuckDB's rewritten text rather than the caller's. Enforcement stops at the first denied
     record; log-only mode records every statement. `gatekeeper_validate` writes its usual one
@@ -571,14 +573,12 @@ under residuals.
     copy of the source per dynamic column, is DuckDB's parser's and happens for every
     connection before any hook; `gatekeeper_validate` then spends one check and one or two
     binds per rewritten statement, proportional to what executing the text costs.
-  - Each rewritten statement is a statement to the engine, so each reads its own policy
-    snapshot at `QueryBegin`, exactly as the statements of `SELECT 1; SELECT 2` do. A policy
+  - Each rewritten statement reads its own policy snapshot at admission (`QueryBegin`, or
+    `CanRequestRebind` for a later 2.0 stage), as the statements of `SELECT 1; SELECT 2` do. A policy
     change that lands between the enum's `CREATE` and the pivoting `SELECT` governs the
-    `SELECT`; nothing executes under a snapshot older than its own statement, and a denial
-    then leaves only the temporary type above. `gatekeeper_validate` reads one snapshot for
-    the whole text, as it does for any statement whose execution a later policy change can
-    still refuse. There is no hook that spans the batch, so this is the boundary, not a gap
-    in it.
+    `SELECT`; nothing executes under a snapshot older than its own statement.
+    `gatekeeper_validate` reads one snapshot for the whole text, as it does for any statement
+    whose execution a later policy change can still refuse.
   - The enum types do not exist when `gatekeeper_validate` binds the statements that name
     them (the pivoting `SELECT`, and the `SELECT` of a later enum when a dynamic `PIVOT` is
     nested inside another), so those are bound against placeholder `IN` lists instead, once
@@ -594,8 +594,10 @@ under residuals.
     data-dependent, so text whose binding depends on it (a column alias list over the pivot,
     a set operation with it as an operand, a value count that reaches `pivot_limit`) can bind
     differently at execution than under the placeholders; the enforced connection binds the
-    real type and is exact. DuckDB itself refuses to `PREPARE` a dynamic `PIVOT` for the same
-    reason.
+    real type and is exact. DuckDB 1.5 refuses to `PREPARE` a dynamic `PIVOT`. Its 2.0 client API
+    retains an unbound expanding handle instead; each execution checks the stages again under
+    their current policies, and result metadata is available only after execution. DuckDB 2.0
+    does not support parameters on a statement that expands into several.
 - **Enforcement is opt-in per connection.** A connection the host opens without running
   `CALL gatekeeper_enforce()` on it is trusted, with the whole engine available. That is what
   lets the host keep a connection for the audit log and policy changes, and what lets
@@ -1280,8 +1282,13 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   function in `FROM` may have a NULL violation position on 2.0 where 1.5 supplies an offset.
 - 2.0 parses data-modifying CTEs (`WITH d AS (DELETE ...)`) that 1.5's parser refused; the
   grammar does not know their query nodes and refuses them as `unsupported`.
-- 2.0 dynamic `PIVOT` and its temporary enum DDL are unsupported because later statements of
-  the rewrite have no pre-bind query hook. Static PIVOT, including host-created enums, remains supported.
+- Dynamic `PIVOT` is supported on both engines. The 2.0 path uses the per-statement
+  `CanRequestRebind` callback to check later rewrite stages before planning; each has its own
+  audit decision. The stages share one transaction on 2.0; see [dynamic PIVOT](#residuals).
+  With the 2.0 Python client, use `connection.execute("PIVOT ...").fetchall()`:
+  `connection.sql("PIVOT ...").fetchall()` wraps the expanded result in a host-language
+  `__duckdb_source_...` scan, which is refused as `replacement_scan` even when the PIVOT stages
+  themselves passed their checks.
 - 2.0 PEG's `SHOW name` can read a setting's value at bind time when no such table exists, with
   no function for the never-bind list to see, so that kind is refused; `DESCRIBE name` is
   the supported spelling. The legacy parser retains the DESCRIBE interpretation.
@@ -1314,8 +1321,8 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   including a Gatekeeper refusal (1.5 kept it usable after a `Permission Error`). Enforced
   connections never hold one, so this only concerns hosts refusing `gatekeeper_enforce()`
   inside their own transaction, which then `ROLLBACK`.
-- A refusal at the text boundary is thrown from DuckDB's `QueryBegin` hook, after the engine
-  began the statement's auto-commit transaction and before it can end the query. On 2.0 that
+- A first-statement refusal at the text boundary is thrown from DuckDB's `QueryBegin` hook,
+  after the engine began the statement's auto-commit transaction and before it can end the query. On 2.0 that
   leftover transaction is invalid, and a statement the engine preprocesses inside a transaction
   before the next cleanup (a rewritten `PRAGMA`, a dynamic `PIVOT`, a relation-API statement)
   fails with "Current transaction is aborted" if it directly follows a refusal on the same

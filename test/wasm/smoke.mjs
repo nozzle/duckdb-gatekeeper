@@ -148,12 +148,21 @@ try {
       // Enforcement, the audit log, and log-only mode run through the engine's query hooks and log manager,
       // both compiled into this Wasm image; the host connection reads the log the agent connection cannot.
       await con.query("CALL gatekeeper_configure(allowed_tables := [{schema_path:['main'], 'table':'t'}, {schema_path:['main'], 'table':'v'}])");
+      await con.query('INSERT INTO t VALUES (1), (2)');
       await con.query("CALL enable_logging('Gatekeeper')");
+      await con.query("SET logging_level = 'debug'");
       const agent = await db.connect();
       try {
         const enforced = (await agent.query('SELECT enforced FROM gatekeeper_enforce()')).toArray()[0].enforced;
         check('enforce latches', enforced === true);
         check('enforced allowed read', (await agent.query('SELECT count(*) AS n FROM t')).toArray().length === 1);
+        check('dynamic PIVOT validates', (await decision('PIVOT t ON x USING count(*)')).allowed);
+        const pivoted = (await agent.query('PIVOT t ON x USING count(*)')).toArray();
+        check('dynamic PIVOT executes', pivoted.length === 1 && Number(pivoted[0]['1']) === 1 && Number(pivoted[0]['2']) === 1);
+        const pivotAudit = (await rows("SELECT count(*) AS n, count(DISTINCT query_id) AS ids, bool_and(allowed) AS allowed FROM duckdb_logs_parsed('Gatekeeper') WHERE mode = 'enforce' AND contains(statement, '__pivot_enum_')"))[0];
+        check('each dynamic PIVOT stage audited', Number(pivotAudit.n) === 2 && Number(pivotAudit.ids) === 2 && pivotAudit.allowed);
+        check('later PIVOT stage checked before binding', await rejectsOn(agent,
+          'PIVOT t ON x USING count(*) LIMIT (SELECT 1)', 'Gatekeeper denied this statement'));
         check('enforced table denial', await rejectsOn(agent, 'SELECT * FROM secret', 'Gatekeeper denied this statement'));
         check('enforced statement denial', await rejectsOn(agent, 'CREATE TABLE u(x INTEGER)', 'Gatekeeper denied this statement'));
         check('enforced cannot reach the log', await rejectsOn(agent, "SELECT * FROM duckdb_logs_parsed('Gatekeeper')", 'Gatekeeper denied this statement'));
@@ -161,6 +170,9 @@ try {
         const denied = (await con.query("SELECT mode, code FROM duckdb_logs_parsed('Gatekeeper') WHERE statement = 'SELECT * FROM secret'")).toArray();
         check('denial is an audit record', denied.length === 1 && denied[0].mode === 'enforce' && denied[0].code === 'forbidden');
         await con.query('SET gatekeeper_log_only = true');
+        check('log-only dynamic PIVOT executes', (await agent.query('PIVOT t ON x USING count(*) LIMIT (SELECT 1)')).toArray().length === 1);
+        const pivotLogOnly = (await rows("SELECT count(*) AS n, count(DISTINCT query_id) AS ids, count(*) FILTER (WHERE NOT allowed) AS denied FROM duckdb_logs_parsed('Gatekeeper') WHERE mode = 'log_only' AND contains(statement, '__pivot_enum_')"))[0];
+        check('log-only audits every PIVOT stage', Number(pivotLogOnly.n) === 2 && Number(pivotLogOnly.ids) === 2 && Number(pivotLogOnly.denied) === 1);
         check('log-only refuses nothing', (await agent.query('SELECT count(*) AS n FROM secret')).toArray().length === 1);
         const logged = (await con.query("SELECT mode, code FROM duckdb_logs_parsed('Gatekeeper') WHERE statement = 'SELECT count(*) AS n FROM secret'")).toArray();
         check('log-only decision recorded', logged.length === 1 && logged[0].mode === 'log_only' && logged[0].code === 'forbidden');

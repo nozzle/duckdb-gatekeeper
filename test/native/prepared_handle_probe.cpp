@@ -15,6 +15,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "probe_database.hpp"
 
@@ -58,10 +59,18 @@ Outcome Drain(unique_ptr<QueryResult> result) {
 		}
 		return outcome;
 	}
-	while (auto chunk = result->Fetch())
-		outcome.rows += chunk->size();
-	if (result->HasError())
-		Fail("error while reading rows: " + result->GetError());
+	try {
+		while (auto chunk = result->Fetch())
+			outcome.rows += chunk->size();
+	} catch (const std::exception &error) {
+		if (!result->HasError())
+			Fail("fetch failed without a result error: " + string(error.what()));
+	}
+	if (result->HasError()) {
+		if (outcome.rows)
+			Fail("refusal arrived after rows were returned: " + result->GetError());
+		return Drain(std::move(result)); // A submitted PIVOT can reach its later statements only while fetching.
+	}
 	return outcome;
 }
 
@@ -214,6 +223,93 @@ void CheckParameterHandles(Connection &catalog) {
 		Fail("log-only refused binding instead of observing it");
 	Run(catalog, "SET gatekeeper_log_only = false");
 }
+
+struct PivotPolicyFlip : ClientContextState {
+	explicit PivotPolicyFlip(Connection &catalog_p) : catalog(catalog_p) {}
+	Connection &catalog;
+	string change;
+	idx_t changes = 0;
+	RebindQueryInfo OnFinalizePrepare(ClientContext &, PreparedStatementData &statement,
+	                                  PreparedStatementMode) override {
+		if (!change.empty() && statement.statement_type == StatementType::CREATE_STATEMENT) {
+			auto sql = std::move(change);
+			change.clear();
+			Run(catalog, sql);
+			changes++;
+		}
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+};
+
+void CheckPivotHandles(Connection &catalog) {
+	Connection agent(*catalog.context->db);
+	CreateTableFunctionInfo info(
+	    TableFunction("pivot_probe", {LogicalType::BIGINT}, ParameterProbe, BindParameterProbe));
+	agent.context->RegisterFunction(info);
+	const string pivot = "PIVOT reporting.leak ON x USING sum(x)";
+	const string reader = "SELECT * FROM (" + pivot + ") p, pivot_probe(7)";
+	const string nested = "PIVOT (" + reader + ") ON \"1\" USING count(*)";
+	const string limit = "SELECT * FROM (" + pivot + ") p LIMIT (SELECT n FROM pivot_probe(7))";
+	// Controls: each spelling really reaches the counted native bind callback without enforcement. The reader
+	// appears only after the first enum statement, including inside the later enum of the nested PIVOT.
+	for (const auto &sql : {reader, nested, limit}) {
+		parameter_bind_calls = 0;
+		Run(agent, sql);
+		if (!parameter_bind_calls)
+			Fail("dynamic PIVOT control did not reach the bind callback: " + sql);
+	}
+	auto reader_handle = agent.Prepare(reader);
+	auto pivot_handle = agent.Prepare(pivot);
+	Allow(catalog, "*");
+	Run(agent, "CALL gatekeeper_enforce()");
+	const vector<Value> none;
+	ExpectRows(Execute(*pivot_handle, none), 1, "dynamic PIVOT retained handle");
+	ExpectRows(Execute(*pivot_handle, none), 1, "dynamic PIVOT retained handle reused");
+	for (const auto &sql : {reader, nested}) {
+		parameter_bind_calls = 0;
+		ExpectRefused(Drain(agent.Query(sql)), "dynamic PIVOT later reader");
+		ExpectRefused(Drain(agent.context->Submit(sql, QueryParameters())), "submitted dynamic PIVOT later reader");
+		if (parameter_bind_calls)
+			Fail("denied later PIVOT statement reached the native bind callback");
+	}
+	parameter_bind_calls = 0;
+	ExpectRefused(Execute(*reader_handle, none), "prepared dynamic PIVOT later reader");
+	identifier_map_t<BoundParameterData> empty;
+	ExpectRefused(Drain(reader_handle->Submit(empty)), "submitted prepared dynamic PIVOT later reader");
+	if (parameter_bind_calls)
+		Fail("prepared dynamic PIVOT bypassed the pre-bind reader check");
+	Run(catalog, "CALL gatekeeper_configure(allowed_functions := [{schema_path:['main'],name:'pivot_probe'}])");
+	parameter_bind_calls = 0;
+	ExpectRefused(Drain(agent.Query(limit)), "later PIVOT bind-time expression with a granted reader");
+	if (parameter_bind_calls)
+		Fail("denied later PIVOT LIMIT expression reached the native bind callback");
+	ExpectRows(Execute(*reader_handle, none), 0, "same PIVOT handle after reader grant");
+	if (!parameter_bind_calls)
+		Fail("granted later PIVOT reader did not reach its bind callback");
+	Run(catalog, "CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'sum'}])");
+	ExpectRefused(Execute(*pivot_handle, none), "same PIVOT handle after aggregate withdrawal");
+	Allow(catalog, "*");
+	ExpectRows(Execute(*pivot_handle, none), 1, "same PIVOT handle after aggregate restoration");
+	Run(catalog, "SET gatekeeper_log_only = true");
+	parameter_bind_calls = 0;
+	ExpectRows(Execute(*reader_handle, none), 0, "dynamic PIVOT later reader in log-only mode");
+	if (!parameter_bind_calls)
+		Fail("log-only refused the later PIVOT reader");
+	Run(catalog, "SET gatekeeper_log_only = false");
+	// Change policy after the first enum has been authorized, inside the same expanding execution. The final
+	// SELECT must read a fresh snapshot, including a log-only -> enforce transition between stages.
+	auto flip = make_shared_ptr<PivotPolicyFlip>(catalog);
+	agent.context->registered_state->Insert("pivot-policy-flip", flip);
+	flip->change = "CALL gatekeeper_configure(blocked_functions := [{schema_path:['*'],name:'sum'}])";
+	ExpectRefused(Execute(*pivot_handle, none), "policy changed between stages of one PIVOT");
+	Run(catalog, "SET gatekeeper_log_only = true");
+	flip->change = "SET gatekeeper_log_only = false";
+	ExpectRefused(Execute(*pivot_handle, none), "enforcement resumed between stages of one PIVOT");
+	if (flip->changes != 2)
+		Fail("PIVOT stage-change controls did not run");
+	Allow(catalog, "*");
+	ExpectRows(Execute(*pivot_handle, none), 1, "same PIVOT handle after inter-stage changes");
+}
 #endif
 
 } // namespace
@@ -284,6 +380,7 @@ int main() {
 	SecureViews(catalog, agent);
 #if GATEKEEPER_DUCKDB_MAJOR >= 2
 	CheckParameterHandles(catalog);
+	CheckPivotHandles(catalog);
 #endif
 	std::printf("prepared-handle probe: ok on DuckDB %s\n", DuckDB::LibraryVersion());
 	return 0;

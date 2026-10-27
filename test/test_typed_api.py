@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 
-from support.artifact import by_engine, by_parser
+from support.artifact import by_parser
 from support.enforcement import engine_code
 from support.typed_helpers import configure, function_rules, validate
 
@@ -304,8 +304,7 @@ def test_caller_written_shorthand_still_needs_the_reader(db, tmp_path, monkeypat
         "SELECT * FROM v, 'data.parquet'",  # the caller and the view name the same file: the caller's check
         "SELECT * FROM v JOIN 'data.parquet' USING (x)",
         "SELECT * FROM v UNION ALL SELECT * FROM 'data.parquet'",
-        by_engine(v1="PIVOT 'data.parquet' ON x USING count(*)",
-                  v2="PIVOT 'data.parquet' ON x IN (1) USING count(*)"),
+        "PIVOT 'data.parquet' ON x USING count(*)",
     ]
     for sql in denied:
         result = validate(db, sql)

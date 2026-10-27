@@ -269,8 +269,8 @@ docs:
     ### What is never allowed
 
     - **Writes and administration:** DDL, DML, `COPY`, `SET`, and `ATTACH` are unsupported.
-      DuckDB 1.5's parser-generated temporary PIVOT enum is the narrowly checked exception.
-      Dynamic PIVOT is unsupported on 2.0; use explicit IN values or host-created enums.
+      Parser-shaped temporary PIVOT enums are the narrowly checked exception on both engines.
+      Dynamic PIVOT checks each enum query and the final SELECT before binding and execution.
     - **Caller-written elevated operations:** dynamic SQL, metadata readers, and sequence
       and storage functions on the never-bind list cannot be granted through options.
     - **Gatekeeper's control plane:** policy, enforcement, and logging controls are refused

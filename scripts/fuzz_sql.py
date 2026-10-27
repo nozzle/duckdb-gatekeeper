@@ -32,8 +32,13 @@ def main():
                                "SELECT list_transform(['a'], lambda x: x COLLATE nocase = 'A')",
                                "WITH unused AS (SELECT md5('x')) SELECT 1",
                                "WITH unused AS (SELECT md5('x')) SELECT hashed FROM hashed_v",
-                               "SELECT * FROM t WHERE false AND md5('x') = 'a'",
-                               "SELECT CASE WHEN false THEN md5('x') ELSE 'a' END"]):
+                                "SELECT * FROM t WHERE false AND md5('x') = 'a'",
+                                "SELECT CASE WHEN false THEN md5('x') ELSE 'a' END",
+                                "PIVOT t ON x USING sum(x)",
+                                "PIVOT t ON x, x + 1 USING count(*)",
+                                "PIVOT t ON x USING sum(x) LIMIT (SELECT 1)",
+                                "PIVOT secret.t ON x USING sum(x)",
+                                "SELECT count(*) FROM (PIVOT t ON x USING sum(x))"]):
         (corpus / f"sql-{i}").write_bytes(bytes(4) + query.encode())
         (corpus / f"resolved-{i}").write_bytes(bytes([14,0,0,0]) + query.encode())
         (corpus / f"enforced-{i}").write_bytes(bytes([12,0,0,0]) + query.encode())

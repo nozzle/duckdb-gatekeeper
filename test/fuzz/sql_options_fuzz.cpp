@@ -6,6 +6,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -324,6 +325,26 @@ static bool IsSinglePragma(Connection &connection, const std::string &bytes) {
 	}
 }
 
+// A non-executing 2.0 submission plans only the first stage of an expanding statement: later stages need the
+// enum values that execution would create. Compare its decision with validation of that same stage. Full
+// execution of every PIVOT stage is covered by the native prepared-handle probe and SQL/Python/Wasm suites.
+static string FirstBindingText(Connection &connection, const string &sql) {
+#if GATEKEEPER_DUCKDB_MAJOR >= 2
+	try {
+		auto parser = engine::ConnectionParser(*connection.context);
+		parser.ParseQuery(sql);
+		if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::MULTI_STATEMENT) {
+			auto &batch = parser.statements[0]->Cast<MultiStatement>().statements;
+			if (!batch.empty())
+				return batch[0]->query;
+		}
+	} catch (const std::exception &error) {
+		CheckError(ErrorData(error).Type());
+	}
+#endif
+	return sql;
+}
+
 // Under gatekeeper_log_only the same text on a fresh enforced connection must never surface a Gatekeeper
 // denial, and the one record it leaves must say what gatekeeper_validate said. The engine then plans the
 // statement itself, so DuckDB's own errors for it are permitted; a decision that was refused above is
@@ -368,7 +389,7 @@ static void CheckLogOnlyParity(DuckDB &database, Connection &connection, const s
 	// The engine's parser may reject text before any hook runs (no record); the preprocessor may rewrite a
 	// PRAGMA into a SELECT (a record on that SELECT, which follows the policy rather than the raw text). A dynamic
 	// PIVOT is rewritten into several statements: 1.5 PendingQuery refuses the batch before any hook;
-	// 2.0 Submit reaches the first enum's unsupported decision without executing that statement.
+	// 2.0 Submit decides only the first enum without executing it (FirstBindingText selects that oracle).
 	if (pragma_rewrite) {
 		if (connection.Query("SET gatekeeper_log_only = false")->HasError())
 			Fail("log-only: cannot reset the switch");
@@ -418,7 +439,8 @@ static void CheckEnforcedParity(DuckDB &database, Connection &connection, const 
 	auto truncated = connection.Query("CALL truncate_duckdb_logs()");
 	if (truncated->HasError())
 		Fail("enforced: cannot truncate the log");
-	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)", Value(bytes));
+	auto expected = connection.Query("SELECT allowed, code, violations FROM gatekeeper_validate($1)",
+	                                 Value(FirstBindingText(connection, bytes)));
 	if (expected->HasError()) {
 		CheckError(expected->GetErrorObject().Type());
 		return;

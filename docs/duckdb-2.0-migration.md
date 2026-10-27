@@ -31,12 +31,14 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
 
 ## Authorization and parser changes
 
-- **Dynamic PIVOT is unsupported on 2.0.** The released engine invokes `QueryBegin` only
-  for the first statement in its rewritten batch. Subsequent statements bind without a
-  new pre-bind hook. Validation and enforcement therefore refuse the batch and its enum
-  DDL before binding. Static `IN` lists and host-created enums remain supported. The 1.5
-  path retains its per-statement checks. The SQL and three Python parity suites cover this
-  refusal, including nested forms, caller expressions and a missing reader behind an explicit grant.
+- **Dynamic PIVOT remains supported on 2.0.** The released engine invokes `QueryBegin` only
+  for the first statement in its rewritten batch, but `ClientContext::CreatePreparedStatement`
+  calls `CanRequestRebind` before planning every stage. Gatekeeper uses the engine's new
+  statement ID to run the same text admission and private authorization there before later
+  stages bind. Each enum query and the final SELECT get their own policy snapshot and audit
+  decision. Native callback counters cover readers and bind-time expressions in later stages,
+  including retained prepared handles and submitted execution; SQL, Python and Wasm tests
+  cover allowed pivots, refusals and per-stage audit records. The 1.5 query-hook path remains supported.
 - Validation rejects incomplete types nested inside parameters, including the new `LIST(ANY)`
   sorting placeholders. Concrete typed list parameters remain supported.
 - The embedded engine JSON serializer has Gatekeeper-private symbols. This avoids duplicate
