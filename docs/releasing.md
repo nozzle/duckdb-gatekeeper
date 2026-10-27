@@ -112,7 +112,10 @@ registered where each function is (`src/gatekeeper_extension.cpp`, `src/policy_s
 
 Each ZIP is named with the extension version, DuckDB version, platform, and `unsigned`.
 Inside are the canonical binary filename, `LICENSE`, and `NOTICE`; `SHA256SUMS` covers
-all ZIPs. Native and Wasm assets are unsigned development builds, not DuckDB-signed
+all ZIPs. Incoming CI artifacts may also contain the toolchain's
+`test-support/<artifact-name-hash>/test-support.tar.gz`; packaging validates that exact
+optional layout and omits it from release assets. Other extra files remain an error.
+Native and Wasm assets are unsigned development builds, not DuckDB-signed
 community binaries. The release notes open with the release's `CHANGELOG.md` section and
 link to versioned loading and security docs. Relative changelog links are converted to
 tag-pinned repository URLs when generating the GitHub Release body.

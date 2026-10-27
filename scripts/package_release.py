@@ -109,7 +109,20 @@ def package_release(tag, artifacts, output):
         binary = directory / name
         if not binary.is_file() or binary.is_symlink() or binary.stat().st_size == 0:
             raise ValueError(f"Missing or empty binary: {binary}")
-        if set(directory.iterdir()) != {binary}:
+        contents = set(directory.iterdir())
+        support = directory / "test-support"
+        if support in contents:
+            # extension-ci-tools bundles its static test runner separately from the loadable.
+            # Validate the pinned staging layout, but never unpack or ship that CI-only archive.
+            artifact_id = hashlib.sha256(directory.name.encode("utf-8")).hexdigest()[:16]
+            bundle_dir = support / artifact_id
+            archive = bundle_dir / "test-support.tar.gz"
+            if (support.is_symlink() or not support.is_dir() or set(support.iterdir()) != {bundle_dir}
+                    or bundle_dir.is_symlink() or not bundle_dir.is_dir() or set(bundle_dir.iterdir()) != {archive}
+                    or archive.is_symlink() or not archive.is_file() or archive.stat().st_size == 0):
+                raise ValueError(f"Unexpected test-support files in artifact: {directory}")
+            contents.remove(support)
+        if contents != {binary}:
             raise ValueError(f"Unexpected files in artifact: {directory}")
         binaries.append((platform, binary))
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
