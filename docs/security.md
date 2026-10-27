@@ -1293,6 +1293,8 @@ capabilities, conservative refusals, and diagnostics. These differences are wort
   is refused at `Prepare()` rather than at its first `Execute()`; and the prepare's replacement
   gate knows the text, so a `FROM 'file'` inside a trusted view is not over-refused at prepare
   time as it is on 1.5.
+  In log-only mode a denied parameterless statement prepared and then executed has two
+  decision records with distinct query IDs, one per operation; R's `dbExecute` follows this path.
 - 2.0 produces a `SELECT`'s rows only as the client reads them. `CALL` and `EXECUTE` run at once,
   but an unread `SELECT` over `gatekeeper_enforce` or `gatekeeper_configure` may never run.
   Activate with `CALL gatekeeper_enforce()`, or require the returned row.

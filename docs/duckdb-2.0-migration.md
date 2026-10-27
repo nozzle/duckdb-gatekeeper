@@ -55,6 +55,8 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
 - Duplicate named arguments now receive DuckDB's bind diagnostic before Gatekeeper's callback.
   Prepared-plan reauthorization and unread-SELECT activation rules remain regression-tested;
   hosts should activate using standalone `CALL gatekeeper_enforce()`.
+  R's `dbExecute` prepares and executes separately, so a log-only denial has two records on
+  2.0. Its smoke check requires exactly two distinct query IDs; direct-query clients require one.
 - `setseed()` again produces reproducible cross-statement draws on released 2.0, so its
   validation-side-effect regression runs on both engines. The QueryBegin transaction-cleanup
   issue remains [duckdb#25876](https://github.com/duckdb/duckdb/issues/25876); its fix

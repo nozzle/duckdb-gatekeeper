@@ -85,6 +85,8 @@ SELECT CASE WHEN NOT coalesce(count(*) = 1 AND bool_and(violations[1].rule = 'ta
 FROM duckdb_logs_parsed('Gatekeeper') WHERE NOT allowed AND statement = 'SELECT * FROM secret';
 
 -- Log-only: the same decisions are recorded and nothing is refused; back to enforcing at the next statement.
+-- A 2.0 client that prepares and then executes parameterless text (R's dbExecute) records both operations.
+-- Such a driver sets gatekeeper_smoke_log_only_count = 2 on the host; direct-query drivers default to one.
 -- @host
 CALL truncate_duckdb_logs();
 
@@ -95,8 +97,10 @@ SET gatekeeper_log_only = true;
 SELECT count(*) FROM secret;
 
 -- @host
-SELECT CASE WHEN NOT coalesce(count(*) = 1 AND bool_and((mode, allowed, code) = ('log_only', false, 'forbidden')), false)
-            THEN error('log-only record: ' || coalesce(list((mode, allowed, code))::VARCHAR, '[]')) END
+SELECT CASE WHEN NOT coalesce(count(*) = coalesce(getvariable('gatekeeper_smoke_log_only_count'), 1)
+                          AND count(DISTINCT query_id) = count(*)
+                          AND bool_and((mode, allowed, code) = ('log_only', false, 'forbidden')), false)
+            THEN error('log-only record: ' || coalesce(list((query_id, boundary, mode, allowed, code))::VARCHAR, '[]')) END
 FROM duckdb_logs_parsed('Gatekeeper') WHERE statement = 'SELECT count(*) FROM secret';
 
 -- @host
