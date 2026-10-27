@@ -56,7 +56,7 @@ jobs:
         env:
           GATEKEEPER_PARSER: postgres
         run: |
-          python -c "import duckdb; duckdb.connect().execute('INSTALL legacy_parser')"
+          python scripts/prepare_test_parser.py
           python -m pytest test -q
       - run: python scripts/audit_inventory.py
       - run: clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp

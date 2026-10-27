@@ -118,6 +118,13 @@ jobs:
           GATEKEEPER_EXTENSION: ${{ github.workspace }}/build/distributed/gatekeeper.duckdb_extension
         # The C++-compiling tests need the build tree; everything else loads GATEKEEPER_EXTENSION.
         run: python -m pytest test -q --ignore test/test_engine_errors.py --ignore test/test_validator_structure.py --ignore test/test_inventory_tooling.py
+      - name: Pinned legacy-parser boundary smoke
+        env:
+          GATEKEEPER_EXTENSION: ${{ github.workspace }}/build/distributed/gatekeeper.duckdb_extension
+          GATEKEEPER_PARSER: postgres
+        run: |
+          python scripts/prepare_test_parser.py
+          python -m pytest test/test_audit.py::test_text_the_binding_boundary_cannot_parse_under_the_connection_settings -q
 
   loadable-cli:
     # The musl artifacts: no Python wheel exists, so the host is the engine's own musl CLI (dynamically

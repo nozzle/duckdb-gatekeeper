@@ -1,8 +1,9 @@
 """The repository, the loadable artifact under test, and connections with it loaded.
 
-The default location and the load idiom are scripts/artifact.py's; this module adds two environment overrides:
+The default location and the load idiom are scripts/artifact.py's; this module adds environment overrides:
 GATEKEEPER_EXTENSION, which the distribution workflow uses to point the suite at a downloaded platform
 artifact, and GATEKEEPER_PARSER, which selects the SQL parser in force on every connection the suite opens here.
+GATEKEEPER_PARSER_EXTENSION can select an explicitly matched parser for a custom candidate engine.
 The raw duckdb.connect() calls in test_versions.py exist to test the artifact's own load path and apply the
 selection with select_parser() once the artifact is loaded; those in test_typed_api.py never load Gatekeeper.
 """
@@ -13,6 +14,7 @@ import duckdb
 
 import artifact as loadable
 from artifact import literal  # noqa: F401  (re-exported: tests build SQL with it)
+from prepare_test_parser import checked_path
 
 ROOT = loadable.ROOT
 EXTENSION = Path(os.getenv("GATEKEEPER_EXTENSION", loadable.DEFAULT_EXTENSION))
@@ -59,8 +61,15 @@ def enable_peg_parser(connection):
     to the default parser; on a fresh 2.0 connection PEG is already the default."""
     if ENGINE_MAJOR >= 2:
         return
-    connection.execute("LOAD autocomplete")
+    load_parser(connection, "autocomplete")
     connection.execute("CALL enable_peg_parser()")
+
+
+def load_parser(connection, name):
+    # Candidate builds can explicitly supply a matching parser; supported fixtures are hash-checked once.
+    override = os.getenv("GATEKEEPER_PARSER_EXTENSION")
+    path = Path(override).resolve(strict=True) if override else checked_path(name)
+    connection.execute("LOAD " + literal(path))
 
 
 def select_parser(connection):
@@ -68,7 +77,8 @@ def select_parser(connection):
     if PARSER == "peg":
         enable_peg_parser(connection)
     elif ENGINE_MAJOR >= 2:
-        connection.execute("LOAD legacy_parser; SET enable_legacy_parser = true")
+        load_parser(connection, "legacy_parser")
+        connection.execute("SET enable_legacy_parser = true")
 
 
 def execute_peg_setup(connection, sql):

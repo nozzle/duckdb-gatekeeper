@@ -543,6 +543,8 @@ under residuals.
   without a new pre-bind hook, so the required text/function/reader checks cannot cover
   them. Both validation and enforcement refuse dynamic PIVOT and its temporary enum DDL
   as `unsupported` before binding; log-only records that refusal and lets the engine proceed.
+  On 2.0 that record carries the rewritten `CREATE OR REPLACE TEMP TYPE "__pivot_enum_<uuid>" ...`
+  text; the trailing pivoting SELECT runs without another Gatekeeper record in log-only mode.
   Use explicit `IN` values or an enum created by the trusted host. Static PIVOT remains
   covered by the ordinary checks. Restoring dynamic PIVOT requires an upstream hook that
   covers every expanded statement before binding and callback-counter regression coverage.

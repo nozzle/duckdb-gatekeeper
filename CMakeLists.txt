@@ -5,6 +5,7 @@ if(NOT DuckDB_SOURCE_DIR)
 endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Generation is standard-library-only (3.10+); the DuckDB 2.0 Python host/tests require 3.11+.
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE INVENTORY_FILES CONFIGURE_DEPENDS inventories/*.json)
 file(GLOB SERIALIZATION_FILES CONFIGURE_DEPENDS
@@ -45,6 +46,7 @@ endif()
 foreach(TARGET gatekeeper_extension gatekeeper_loadable_extension)
   # Keep the embedded engine serializer independent of the SQL JSON extension. Prebuilt LTO archives
   # coalesce JSON's objects and otherwise link a second definition of these symbols into static hosts.
+  # Recheck all external-linkage symbols at each engine repin (inventories/README.md).
   target_compile_definitions(${TARGET} PRIVATE GATEKEEPER_DUCKDB_MAJOR=${DUCKDB_MAJOR_VERSION}
     JsonSerializer=GatekeeperJsonSerializer DoubleToJSONValue=GatekeeperDoubleToJSONValue)
 endforeach()

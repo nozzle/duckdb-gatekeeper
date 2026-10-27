@@ -45,6 +45,8 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
   no CONNECT or CREATE SECURE VIEW syntax and cannot name more than three components.
   Tests create trusted secure views/nested schemas with PEG, restore the requested parser,
   and check authorization under that parser. Unsupported written syntax remains a parser error.
+  Alternative-parser fixtures (`legacy_parser` on 2.0, `autocomplete` on 1.5) are pinned by
+  source revision, archive/binary SHA256 and footer identity in `test/compatibility/parser-pins.json`.
 - Released PEG checks `max_expression_depth` during parsing. Worker-stack regressions cover
   nested calls/subqueries at depths 75, 100, 400 and 1000, with 300 submissions per case.
   The optional legacy parser crashes at 1,000 nested calls on macOS; that precise case is

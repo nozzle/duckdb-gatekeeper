@@ -360,6 +360,11 @@ or minor release. To change our release build defaults, update together:
    `MainDistributionPipeline.yml`, and the stamp checks follow it without an edit. The
    `Makefile` and `scripts/engine.py` read it too and apply it only when the engine checkout
    is at exactly the pinned revision;
+- the external-linkage symbols in the embedded `extension/json/json_serializer.cpp` and its
+  header. The private-name mappings in `CMakeLists.txt` currently cover `JsonSerializer` and
+  `DoubleToJSONValue`; inspect the new source and the serializer object's defined symbols
+  (for example with `nm -C`) for additional classes/free functions and extend the mappings.
+  Verify a static link against the engine's prebuilt/LTO JSON archive as well as the loadable;
 - `ci_tools_version` and the reusable workflow ref in
   `.github/workflows/MainDistributionPipeline.yml`, plus the `extension-ci-tools`
   submodule (upstream tracks each minor release on a codename branch such as
@@ -390,6 +395,11 @@ or minor release. To change our release build defaults, update together:
   `PEG_DEEP_NESTING_CRASH` skips, and the enablement path in `test/support/artifact.py` state
   facts about the pinned engine's PEG parser and are re-derived, not carried. The checklist is
   [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90);
+- the alternative-parser fixtures in `test/compatibility/parser-pins.json`: engine/parser
+  revisions, extension footer version, and compressed/binary SHA256 values for all Python-host
+  platforms. `scripts/prepare_test_parser.py` prepares verified workspace-local fixtures; the
+  suite never uses a floating `INSTALL` for its alternative parser. Re-derive platform-specific
+  audit timing and crash exclusions against those exact binaries when changing the pins;
 - the supported-engine matrix and its host packages. DuckDB 2.0 is primary, but 1.5.6 remains
   tested until upstream's extended EOL on **2027-03-01**. Keep its API adapters, grammar/stamp
   paths, engine/parser-specific test expectations, and compatibility jobs through that date;

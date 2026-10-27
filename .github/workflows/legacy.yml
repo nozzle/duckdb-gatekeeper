@@ -52,7 +52,7 @@ jobs:
         env:
           GATEKEEPER_PARSER: peg
         run: |
-          python -c "import duckdb; duckdb.connect().execute('INSTALL autocomplete')"
+          python scripts/prepare_test_parser.py
           python -m pytest test -q --ignore test/test_inventory_tooling.py
       - name: Retained Quack client/server suite
         run: python scripts/test_quack.py

@@ -4,6 +4,9 @@
 
 The build/test environment requires Git, Python 3.11+, and a C++17 compiler. The pinned `duckdb` and
 `extension-ci-tools` submodules provide the standard extension-template layout.
+Python 3.11 is required by the DuckDB 2.0 Python host and its dependency locks. CMake's
+standard-library-only source generator also supports Python 3.10; a CMake-only source build
+does not import or install the DuckDB Python package.
 
 ```sh
 git clone --recurse-submodules https://github.com/nozzle/duckdb-gatekeeper.git
@@ -111,7 +114,7 @@ the historical checkout automatically. Do not change inventory provenance to mat
 
 ```sh
 .venv/bin/python -m pytest test -q  # DuckDB 2.0's default PEG parser
-.venv/bin/python -c "import duckdb; duckdb.connect().execute('INSTALL legacy_parser')"
+.venv/bin/python scripts/prepare_test_parser.py
 GATEKEEPER_PARSER=postgres .venv/bin/python -m pytest test -q  # optional legacy parser
 .venv/bin/python scripts/audit_inventory.py
 .venv/bin/clang-format --dry-run --Werror src/*.cpp src/include/*.hpp test/fuzz/*.cpp test/native/*.cpp
@@ -137,11 +140,15 @@ The suite has two layers with different reach:
   Windows, both architectures each). Set
   `GATEKEEPER_EXTENSION=/path/to/gatekeeper.duckdb_extension` to point it at another
   artifact; the distribution workflow does this with the downloaded platform artifacts.
-   `GATEKEEPER_PARSER` selects the parser on every connection `support.artifact.connect` opens.
-   On 2.0, `peg` is the default and `postgres` loads `legacy_parser` and enables it; install
-   that extension once before the legacy leg. On 1.5, `postgres` is the default and `peg`
-   uses `LOAD autocomplete; CALL enable_peg_parser()` after `INSTALL autocomplete` once.
-   A test that must open a raw connection because the
+  `GATEKEEPER_PARSER` selects the parser on every connection `support.artifact.connect` opens.
+  On 2.0, `peg` is the default and `postgres` enables the pinned `legacy_parser`; on 1.5,
+  `postgres` is the default and `peg` enables the pinned `autocomplete` override.
+  Run `scripts/prepare_test_parser.py` using that engine's Python environment before its
+  alternative-parser leg. It verifies the download and binary SHA256 values and footer identity
+  against `test/compatibility/parser-pins.json`, then stores a content-addressed workspace fixture.
+  Test connections verify it before their first LOAD and perform no downloads. This does not
+  install into or replace the user's DuckDB extension cache.
+  A test that must open a raw connection because the
   artifact's load path is what it tests applies the leg with `select_parser()` once the
   artifact is loaded. The tests that compile against the engine's headers or generate the
   grammar from its schema (`test_validator_structure.py`, `test_engine_errors.py`,
@@ -211,6 +218,11 @@ GATEKEEPER_EXTENSION=$PWD/build/candidate/extension/gatekeeper/gatekeeper.duckdb
   GATEKEEPER_ENGINE_SOURCE=$PWD/build/candidate-source \
   <venv with that wheel>/bin/python -m pytest test -q --ignore test/test_inventory_tooling.py
 ```
+
+For a candidate outside the parser fixture pins, the default engine parser needs no extension.
+To test an alternative, set `GATEKEEPER_PARSER_EXTENSION=/absolute/path/to/legacy_parser.duckdb_extension`
+(or `autocomplete.duckdb_extension` for 1.5) alongside `GATEKEEPER_PARSER`; preserve the
+extension's canonical filename. The host's normal extension compatibility checks still apply.
 
 Use engine-major `1` and omit the nested-schema marker for 1.5. `test_inventory_tooling.py`
 tests the primary pin and runs unconditionally in the normal 2.0 suite; alternate-engine runs
