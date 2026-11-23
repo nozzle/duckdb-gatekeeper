@@ -10,7 +10,7 @@ import time
 import duckdb
 import pytest
 
-from support.artifact import ENGINE_MAJOR, EXTENSION, by_engine, by_parser, literal
+from support.artifact import ENGINE_MAJOR, EXTENSION, PARSER, by_engine, by_parser, literal
 from support.audit import RECORD_COLUMNS, decisions, enable, records
 from support.corpus import CATALOG_POLICY, PARITY_CORPUS
 from support.enforcement import DENIED, attempt, enforce
@@ -135,13 +135,14 @@ def test_text_the_engine_parsed_but_the_binding_boundary_cannot_read(catalog, ag
 
 
 def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(catalog, agent):
-    # A statement in a batch that lowers max_expression_depth changes what the parser accepts for the statements
-    # after it. Enforcing, the SET is refused first; log-only, it runs. DuckDB 2.0.1 parses each statement of a
-    # batch with the options then in force, so its own parser refuses the nested statement before QueryBegin and
-    # there is no decision to record. DuckDB 1.5 parsed the whole batch before the SET ran: QueryBegin re-reads
-    # the next statement's text under the lowered depth, where the legacy parser refuses it (binding boundary,
-    # code parser) and 1.5 PEG leaves the depth check to the binder (authorize boundary, code binding), and the
-    # record must describe it as gatekeeper_validate does on a connection with the same setting.
+    # A statement in a batch that lowers max_expression_depth changes what the binding boundary accepts for the
+    # statements after it. Enforcing, the SET is refused first; log-only, it runs. Where the engine parsed the
+    # next statement before the SET took effect, QueryBegin re-reads its text under the lowered depth: the legacy
+    # parser refuses it there (binding boundary, code parser), 1.5 PEG leaves the depth check to the binder
+    # (authorize boundary, code binding), and the record must describe it as gatekeeper_validate does on a
+    # connection with the same setting. DuckDB 2.0.1's PEG parser parses each statement of a batch with the
+    # options then in force, so the engine's own parser refuses the statement before QueryBegin and there is no
+    # decision to record; the pinned macOS legacy parser does the same.
     enable(catalog)
     catalog.execute("SET gatekeeper_log_only = true")
     nested = "SELECT " + "abs(" * 12 + "1" + ")" * 12
@@ -153,16 +154,20 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     assert expected["code"] == by_engine(v1=by_parser(postgres="parser", peg="binding"), v2="parser"), expected
     assert "Max expression depth" in expected["error_message"], expected
     found = decisions(catalog, "mode = 'log_only'")
-    # Pin the count independently of the observed rows so a missing decision fails.
-    assert len(found) == by_engine(v1=2, v2=1), found
-    unsupported = found[0]
-    # The engine hands each statement of a batch over with its own text; DuckDB 2.0 keeps the separator.
-    assert unsupported["code"] == "unsupported" and unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
-    if ENGINE_MAJOR >= 2:
+    before_hook = ENGINE_MAJOR >= 2 and (PARSER == "peg" or sys.platform == "darwin")
+    assert len(found) == (1 if before_hook else 2), found
+    if before_hook:
+        # The legacy parser on Linux and Windows reaches its reparse in the hook instead.
+        # Pin the count independently of the observed rows so a missing decision fails on other hosts.
+        [unsupported] = found
+        assert unsupported["code"] == "unsupported"
+        assert unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
         assert isinstance(seen.error, duckdb.ParserException), seen
         return
-    record = found[1]
-    assert record["boundary"] == by_parser(postgres="binding", peg="authorize"), record
+    unsupported, record = found
+    # The engine hands each statement of a batch over with its own text; DuckDB 2.0 keeps the separator.
+    assert unsupported["code"] == "unsupported" and unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
+    assert record["boundary"] == by_engine(v1=by_parser(postgres="binding", peg="authorize"), v2="binding"), record
     assert record["statement"].strip() == nested
     assert [record[c] for c in ERROR_COLUMNS] == [expected[c] for c in ERROR_COLUMNS], record
 

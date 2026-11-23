@@ -147,10 +147,12 @@ and the embedded JSON serializer is identical. The behavior a host can notice:
 - **Statement text.** The engine now gives a statement the comments and whitespace before its
   first token (2.0.0 started at that token), so audit records' `statement` and
   `statement_length` include them.
-- **Batches are parsed statement by statement.** Each statement is parsed with the settings in
+- **PEG parses a batch statement by statement.** Each statement is parsed with the settings in
   force when it runs. In log-only mode, a statement the engine's parser refuses because an
   earlier statement of the batch lowered `max_expression_depth` fails before `QueryBegin` and
-  has no decision record. Enforcing, the `SET` is refused first as before.
+  has no decision record. With the optional `legacy_parser` that holds on macOS only: on Linux
+  and Windows the statement reaches the hook and is recorded, as on 2.0.0 (CI observation).
+  Enforcing, the `SET` is refused first as before.
 - **Prepare while CONNECT-ed.** A client `Prepare` on a connected session no longer dispatches
   to the remote catalog; the handle keeps the written text and each execution submits it. The
   unsupported native-mutated route therefore dispatches at execution instead of preparation.

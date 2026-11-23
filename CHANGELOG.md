@@ -15,10 +15,12 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 - On DuckDB 2.0.1 an audit record's `statement` begins with the comments and whitespace that
   precede the statement, and `statement_length` counts them. DuckDB 2.0.0 started the text at
   the statement's first token.
-- On DuckDB 2.0.1 the engine parses each statement of a batch with the settings then in force.
-  In log-only mode, a later statement that the engine's own parser refuses because an earlier
-  statement of the batch changed a parser setting (for example `max_expression_depth`) fails
-  before Gatekeeper's hook and has no decision record.
+- On DuckDB 2.0.1 the default PEG parser parses each statement of a batch with the settings
+  then in force. In log-only mode, a later statement that the engine's own parser refuses
+  because an earlier statement of the batch changed a parser setting (for example
+  `max_expression_depth`) fails before Gatekeeper's hook and has no decision record. With the
+  optional `legacy_parser` on Linux and Windows the statement still reaches the hook and is
+  recorded, as on 2.0.0.
 
 ### Fixed
 
