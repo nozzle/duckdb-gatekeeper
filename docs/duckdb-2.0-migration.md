@@ -171,9 +171,8 @@ Distribution and fixtures:
   the shipped artifact in Chromium and packages it. The newly pinned `extension-ci-tools` also
   passes `USE_WASM_THREADS` to the threads target; threads/COI stays excluded until the
   remaining conditions of [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101) hold.
-- **Windows MinGW's R host is pending.** CRAN published the `duckdb` 2.0.1 source package on
-  2026-11-23, but neither a Windows binary nor a Posit Package Manager snapshot carried it at
-  review time. `R_CRAN_SNAPSHOT` must move to a snapshot that serves it before the `loadable-r`
+- **Windows MinGW's R host is pending.** CRAN published `duckdb` 2.0.1, including its Windows
+  binary, on 2026-11-23, but no dated Posit Package Manager snapshot carried it at review time. `R_CRAN_SNAPSHOT` must move to a snapshot that serves it before the `loadable-r`
   leg can pass; that leg asserts the host's engine version and fails rather than test 2.0.0.
 - `legacy_parser` keeps source revision `bcdf276132` and is rebuilt for 2.0.1; its macOS crash
   at 1,000 nested calls reproduces and stays excluded. Quack moves to `3bc63c01f8` and httpfs
