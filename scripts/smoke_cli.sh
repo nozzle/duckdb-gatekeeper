@@ -4,7 +4,7 @@
 # musl, so it can dlopen a musl extension). Runs in an Alpine container from the distribution workflow.
 #
 #   sh scripts/smoke_cli.sh <duckdb-cli> <gatekeeper.duckdb_extension> <engine version> <platform>
-#   e.g.  sh scripts/smoke_cli.sh ./duckdb build/distributed/gatekeeper.duckdb_extension v2.0.0 linux_amd64_musl
+#   e.g.  sh scripts/smoke_cli.sh ./duckdb build/distributed/gatekeeper.duckdb_extension v2.0.1 linux_amd64_musl
 #
 # The CLI is one connection, so the checks come in two forms. scripts/smoke/loadable.sql, the half the other
 # hosts share, is read as one stdin script under -bail (every statement asserts inside SQL). The half that needs

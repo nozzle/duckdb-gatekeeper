@@ -1,13 +1,13 @@
 # Default function identity provenance
 
 `inventories/default_identities.json` translates the **953 historically reviewed compute
-names** into **919 explicit identities covering 913 names**, with **40 explicit namespace
+names** into **920 explicit identities covering 913 names**, with **40 explicit namespace
 exclusions**. There are **zero unresolved names**. Historical classifications, implementation
 review notes and `baselines/duckdb-1.5.5.json` remain unchanged.
 
 | Kind | Explicit defaults |
 | --- | ---: |
-| scalar | 728 |
+| scalar | 729 |
 | aggregate | 83 |
 | macro | 76 |
 | table | 19 |
@@ -30,7 +30,8 @@ every implementation review.
 
 Core and in-tree extension evidence uses DuckDB
 `d8cdaa33fda8df955cc76ef58a280f68f4cd43fa` (the historical 1.5.5 source). The explicit
-2.0 window mapping uses `d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143`. Out-of-tree
+2.0 window mapping uses `d4e72566aa8dcb35fc727e2a5ced8e9a2f6d8143`, and the 2.0.1 `fmod`
+registration uses `8d78114e90a53823803660bf821f6073ac87da8c`. Out-of-tree
 extensions use their existing historical source pins, individually linked in the map.
 
 The namespace registration chain at the historical core revision is:
@@ -81,9 +82,13 @@ classification remains trusted, but does not justify a fabricated `system.main` 
   Both are explicit. A table registration never implicitly authorizes scalar dispatch.
 - `round_even` and its `roundbankers` alias change from historical macros to explicit
   scalar registrations in the pinned 2.0 math registration inputs. Both kinds are recorded.
+- `fmod` changes from a `DEFAULT_SCHEMA` macro (`x-y*floor(x/y)`) to an explicit scalar
+  function set in DuckDB 2.0.1, which removes the macro. `FmodFun` registers FLOAT and DOUBLE
+  overloads bound like the modulo operator: local arithmetic that reads the IEEE and
+  division-by-zero settings. Both kinds are recorded; 1.5.6 and 2.0.0 still register the macro.
 - `range`, `generate_series`, and `repeat` each have independently registered scalar
-  and table forms. These plus scalar `unnest` and two rounding transitions explain the
-  six identities beyond the 913 granted names.
+  and table forms. These plus scalar `unnest`, two rounding transitions and the `fmod`
+  transition explain the seven identities beyond the 913 granted names.
 
 The 13 removed synthetic aggregate grants are `cume_dist`, `dense_rank`, `fill`,
 `first_value`, `lag`, `last_value`, `lead`, `nth_value`, `ntile`, `percent_rank`, `rank`,
@@ -111,17 +116,18 @@ new qualified observations are checked in separately under `inventories/runtime/
 - [DuckDB 1.5.5, macOS ARM64](../inventories/runtime/duckdb-1.5.5-osx_arm64/README.md):
   locked replay succeeded for 28 of 29 extension setups, including the extensions above.
   MotherDuck was installed but deliberately not loaded. The independent captures observe
-  903 of 919 current default identities. The 16 unobserved identities are the 13 windows
-  reported only as synthetic aggregates, the two 2.0-only rounding scalars, and scalar
-  `unnest` (a binder intrinsic). No target-added default-name identity falls outside the grants; the aggregate
+  903 of 920 current default identities. The 17 unobserved identities are the 13 windows
+  reported only as synthetic aggregates, the two 2.0-only rounding scalars, the 2.0.1-only
+  `fmod` scalar, and scalar `unnest` (a binder intrinsic). No target-added default-name identity falls outside the grants; the aggregate
   report still flags the 13 synthetic window labels. `vortex_version` is the only added
   name absent from the historical classifications.
 - [DuckDB 2.0 candidate, macOS ARM64](../inventories/runtime/duckdb-2.0-d4e72566aa-osx_arm64/README.md):
   locked replay succeeded for 25 of 29 setups at `d4e72566aa`; Lance, MotherDuck, UI and
   Vortex artifacts were unavailable at the recorded coordinates. The independent captures
-  observe 913 of 919 current default identities, with no default names at ungranted identities.
-  The six unobserved defaults are two ICU locale scalars, the two historical rounding
-  macros, Spatial's `st_snap`, and scalar `unnest`;
+  observe 913 of 920 current default identities, with no default names at ungranted identities.
+  The seven unobserved defaults are two ICU locale scalars, the two historical rounding
+  macros, Spatial's `st_snap`, scalar `unnest`, and the `fmod` scalar that 2.0.1 introduced
+  after this capture;
   the candidate report links their
   source reconciliation. Its 248 unclassified runtime names grant no permissions.
 

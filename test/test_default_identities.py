@@ -20,7 +20,7 @@ def test_default_mapping_accounts_for_every_historical_name():
     excluded = {name for group in mapping["exclusions"] for name in group["names"]}
     granted = {identity["name"] for identity in identities}
     assert len(names) == 953
-    assert len(identities) == 919 and len(granted) == 913 and len(excluded) == 40
+    assert len(identities) == 920 and len(granted) == 913 and len(excluded) == 40
     assert granted | excluded == set(names) and not granted & excluded
     assert identities == sorted(identities, key=identity_key)
     assert all(row["catalog"] == "system" and row["schema_path"] == ["main"] for row in identities)
@@ -36,6 +36,7 @@ def test_default_mapping_accounts_for_every_historical_name():
     assert kinds("st_rotate") == {"macro"}
     assert kinds("st_memunion_agg") == {"aggregate"}
     assert kinds("round_even") == {"macro", "scalar"}
+    assert kinds("fmod") == {"macro", "scalar"}
 
 
 def test_identity_kinds_cross_check_historical_snapshot_without_promoting_it():
@@ -51,7 +52,7 @@ def test_identity_kinds_cross_check_historical_snapshot_without_promoting_it():
             assert discrepancy["reported_type"] in historical[name]
             assert discrepancy["type"] == kind
             continue  # Explicit source-backed discrepancy, not an executable aggregate registration.
-        if kind == "scalar" and name in {"unnest", "round_even", "roundbankers"}:
+        if kind == "scalar" and name in {"unnest", "round_even", "roundbankers", "fmod"}:
             continue  # Explicit separate source evidence, not present in the 1.5 catalog.
         if name in historical:
             assert kind in historical[name], identity

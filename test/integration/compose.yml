@@ -1,6 +1,6 @@
 services:
   storage:
-    image: docker.io/rustfs/rustfs@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2 # 1.0.4
+    image: docker.io/rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a # 1.0.6
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: gatekeeper-test
@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:19000:9000"
   catalog:
-    image: apache/iceberg-rest-fixture@sha256:db8de90b5b7693d4ac334c336f91d9bbe320d7b19f4f514d26de84cdfbcbfe8d
+    image: apache/iceberg-rest-fixture@sha256:009f9f6897cc1e8fd6e8133c401c7a3e7c333c71293a621d06a71570ae989c29
     environment:
       AWS_ACCESS_KEY_ID: gatekeeper-test
       AWS_SECRET_ACCESS_KEY: gatekeeper-local-only

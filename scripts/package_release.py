@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = (
     "linux_amd64", "linux_arm64", "linux_amd64_musl", "linux_arm64_musl",
     "osx_amd64", "osx_arm64", "windows_amd64", "windows_arm64",
-    "windows_amd64_mingw",
+    "windows_amd64_mingw", "wasm_eh",
 )
 
 
@@ -148,13 +148,14 @@ def package_release(tag, artifacts, output):
         f"These Gatekeeper {version} binaries target **DuckDB {SUPPORTED_DUCKDB}**.\n\n"
         "These are **unsigned development binaries**, built from the workflow's source ref. "
         "They are not DuckDB-signed community binaries. All nine native distribution targets passed their "
-        "matching official host's loadable checks before packaging, including CRAN R for Windows MinGW. "
-        "Wasm EH source builds are browser-tested with a separately matched development host; release assets "
-        "await a release-labeled Wasm host. DuckDB 1.5 source compatibility is maintained until March 1, 2027; "
+        "matching official host's loadable checks before packaging, including CRAN R for Windows MinGW, and "
+        "the Wasm EH artifact passed its Chromium test in the pinned DuckDB-Wasm runtime. "
+        "DuckDB 1.5 source compatibility is maintained until March 1, 2027; "
         "these binaries require the DuckDB 2.0 engine they were built for.\n\n"
         "Select the archive matching your DuckDB platform, verify it against `SHA256SUMS`, "
         "and extract it. Each archive includes the canonical extension filename, LICENSE, "
-        "and NOTICE. Native builds require explicit unsigned loading. Checksums do not provide "
+        "and NOTICE. Native builds require explicit unsigned loading; Wasm requires the "
+        "pinned EH runtime and unsigned-extension setting. Checksums do not provide "
         "DuckDB signature verification.\n\n"
         f"See [loading instructions](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/CONTRIBUTING.md#loading-unsigned-builds), "
         f"[Wasm setup](https://github.com/nozzle/duckdb-gatekeeper/blob/{tag}/test/wasm/README.md), "

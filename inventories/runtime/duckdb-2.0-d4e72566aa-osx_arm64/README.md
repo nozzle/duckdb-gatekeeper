@@ -77,9 +77,10 @@ support or lack of it.
 
 ## Current-default reconciliation
 
-**913 of 919** compiled default identities were observed. There were **zero** default
-names at unexpected namespaces or kinds. The six unobserved defaults are explained
-by pinned registration sources in `evidence/reconciliation-sources.json`:
+**913 of 920** compiled default identities were observed. There were **zero** default
+names at unexpected namespaces or kinds. Six unobserved defaults are explained
+by pinned registration sources in `evidence/reconciliation-sources.json`; the seventh,
+scalar `fmod`, was added to the defaults after this capture:
 
 | Identity in `system.main` | Source reconciliation |
 | --- | --- |
@@ -87,6 +88,7 @@ by pinned registration sources in `evidence/reconciliation-sources.json`:
 | `round_even`, `roundbankers` — macro | The candidate registers the scalar function set and alias instead; both scalar identities are already explicit defaults. The old macro registrations are absent from `default_functions.cpp`. |
 | `st_snap` — scalar | The candidate spatial descriptor pins `686950e980…`, whose GEOS registration module has no `ST_Snap`. The historical reviewed `eb1e57c9…` module explicitly registers it. This is a source-version availability difference, not an inferred namespace move. |
 | `unnest` — scalar | SELECT-list UNNEST remains a binder intrinsic (`BoundUnnestExpression`), not a scalar catalog registration. Its table identity is observed. |
+| `fmod` — scalar | Registered as a scalar function set from DuckDB 2.0.1 (`8d78114e90`), which removes the macro; see the `fmod-2.0.1` evidence in `default_identities.json`. This candidate registers the `DEFAULT_SCHEMA` macro, whose identity is observed. |
 
 The report also lists **248 runtime names absent from all historical classifications**.
 These include new `collate_*` sort-key functions, JSON helpers, internal engine

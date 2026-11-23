@@ -42,10 +42,10 @@ jobs:
             ref: 069cc9f9b5be802405797faecc284961b07c70ef
             label: v1.5.6
             engine_major: '1'
-          - name: DuckDB 2.0.0 (d54cbbe)
-            key: d54cbbe
-            ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
-            label: v2.0.0
+          - name: DuckDB 2.0.1 (8d78114)
+            key: 8d78114
+            ref: 8d78114e90a53823803660bf821f6073ac87da8c
+            label: v2.0.1
             nested_schemas: '1'
             engine_major: '2'
     env:
@@ -117,11 +117,11 @@ jobs:
             label: v1.5.6
             ci_tools: 3fd6109fc01555673b7c7123eba8d0d143fe8ce4 # v1.5-variegata
             engine_major: '1'
-          - name: DuckDB 2.0.0 (d54cbbe)
-            key: d54cbbe
-            ref: d54cbbe3df17e8e5ce68312f483b4155836112aa
-            label: v2.0.0
-            ci_tools: b8d325c37e82160886579880707493bd358c0e62 # v2.0-cyanoptera
+          - name: DuckDB 2.0.1 (8d78114)
+            key: 8d78114
+            ref: 8d78114e90a53823803660bf821f6073ac87da8c
+            label: v2.0.1
+            ci_tools: 43dae9ec2b843bf9c6200ea4bbe5ad703cd01f77 # v2.0-cyanoptera
             primary: true
             nested_schemas: '1'
             engine_major: '2'

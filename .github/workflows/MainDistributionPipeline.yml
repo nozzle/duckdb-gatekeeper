@@ -1,15 +1,16 @@
 name: Extension distribution
 # Builds and tests Gatekeeper on every community-extension platform through the reusable
 # extension-ci-tools pipeline (linux amd64/arm64 glibc and musl, macOS amd64/arm64,
-# Windows MSVC x64/ARM64 and MinGW). Wasm EH awaits a release-labeled runtime;
-# its separately matched development host runs in wasm.yml (test/wasm/README.md).
+# Windows MSVC x64/ARM64 and MinGW, and Wasm EH). MVP and threads remain excluded
+# (test/wasm/README.md).
 # Both refs below are pinned to the commit tracked by the
 # extension-ci-tools submodule on the v2.0-cyanoptera branch.
 #
 # Every shipped artifact is then loaded, as the loadable it is, into an official DuckDB host of the
 # pinned version and exercised across the host/loadable ABI boundary: the Python package for the six
 # targets it has wheels for (loadable-test), the musl CLI in Alpine for the two musl targets
-# (loadable-cli) and CRAN R for MinGW.
+# (loadable-cli), CRAN R for MinGW (loadable-r), and Chromium with the pinned DuckDB-Wasm runtime for
+# Wasm EH (browser-test).
 on:
   push:
     branches: [main]
@@ -31,7 +32,7 @@ env:
   R_CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-10-26
   # The container the musl CLI runs in (multi-arch index digest; alpine:3.24). Reviewed with the other
   # container images in the periodic dependency pass, not engine-coupled.
-  ALPINE_IMAGE: alpine@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+  ALPINE_IMAGE: alpine@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 jobs:
   metadata:
     # The engine pin the reusable pipeline builds against and names its artifacts with, read from
@@ -51,23 +52,22 @@ jobs:
   build:
     name: Build extension binaries
     needs: metadata
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@b8d325c37e82160886579880707493bd358c0e62 # v2.0-cyanoptera
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@43dae9ec2b843bf9c6200ea4bbe5ad703cd01f77 # v2.0-cyanoptera
     with:
       extension_name: gatekeeper
       duckdb_version: v${{ needs.metadata.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.metadata.outputs.duckdb_revision }}
-      ci_tools_version: b8d325c37e82160886579880707493bd358c0e62
+      ci_tools_version: 43dae9ec2b843bf9c6200ea4bbe5ad703cd01f77
       # scripts/generate.py runs at configure time; the musl images only ship Python on request.
       extra_toolchains: python3
       # Intel macOS, both musl targets, MinGW and Windows ARM64 are opt-in on 2.0.
       opt_in_archs: 'osx_amd64;linux_amd64_musl;linux_arm64_musl;windows_amd64_mingw;windows_arm64'
-      exclude_archs: 'wasm_mvp;wasm_threads;wasm_eh'
+      exclude_archs: 'wasm_mvp;wasm_threads'
       reduced_ci_mode: disabled
 
   browser-test:
-    # The published Wasm host labels the same source as a dev build; it cannot load this release-labeled artifact.
-    # Restore this job/target and its packaging dependency with a release-labeled host. wasm.yml tests the dev host.
-    if: false
+    # The pinned DuckDB-Wasm runtime reports the release label of the pinned engine (test/wasm/runtime.json), so it
+    # loads the release-labeled artifact this pipeline ships. wasm.yml tests a source build against the same host.
     name: Distribution Wasm EH Chromium
     needs: [metadata, build]
     runs-on: ubuntu-latest
@@ -192,7 +192,7 @@ jobs:
 
   package:
     name: Package unsigned release artifacts
-    needs: [build, loadable-test, loadable-cli, loadable-r]
+    needs: [build, browser-test, loadable-test, loadable-cli, loadable-r]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

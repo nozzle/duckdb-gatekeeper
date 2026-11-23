@@ -19,7 +19,7 @@ See [trusted expansion](security.md#function-enforcement-and-trusted-expansion) 
 
 ## Support matrix
 
-| Route | DuckDB 1.5.6 / Quack 7e80f7f | DuckDB 2.0.0 / Quack f96420e |
+| Route | DuckDB 1.5.6 / Quack 7e80f7f | DuckDB 2.0.1 / Quack 3bc63c0 |
 | --- | --- | --- |
 | Attached base table | Explicit refusal | Local-binding route, with `remote_pushdown` disabled and table bind identity present |
 | Local trusted view over attached base table | Explicit refusal | Same requirements; view is caller object, attached table is local dependency evidence |
@@ -112,7 +112,7 @@ Build Gatekeeper normally, then:
 .venv/bin/python scripts/test_quack.py
 ```
 
-The runner downloads **hash-verified** Quack and httpfs 2.0.0 or retained 1.5.6 core artifacts into ignored
+The runner downloads **hash-verified** Quack and httpfs 2.0.1 or retained 1.5.6 core artifacts into ignored
 `build/quack-artifacts`. Supported download platforms are Linux AMD64/ARM64 and macOS ARM64.
 It uses separate in-memory client/server databases and a loopback listener, a random token,
 explicit LOAD paths, no autoinstall/autoload, and finally cleanup. Readiness requires a successful
@@ -146,9 +146,9 @@ Build both client and server from the same engine/protocol set. The 2.0 fixture 
 
 | Component | Primary 2.0 fixture | Retained 1.5 fixture |
 | --- | --- | --- |
-| DuckDB | `d54cbbe3df17e8e5ce68312f483b4155836112aa` | `069cc9f9b5be802405797faecc284961b07c70ef` |
-| Quack | `f96420ed46aee9c42064bdb99ddfd1230d6c0086` | `7e80f7ffcc98d0b3e81d0e1df8cc1c2da240a64b` |
-| httpfs | `77392a72077a85897db2519fae11e2c0da972b8a` | `4bc690dba4496c765777a0269d48fdbaff7cdc11` |
+| DuckDB | `8d78114e90a53823803660bf821f6073ac87da8c` | `069cc9f9b5be802405797faecc284961b07c70ef` |
+| Quack | `3bc63c01f80a13d57ca02a721dd13908c1d934c1` | `7e80f7ffcc98d0b3e81d0e1df8cc1c2da240a64b` |
+| httpfs | `f71cfdb4bff85b9e15b1f3b842d9aa395aff0167` | `4bc690dba4496c765777a0269d48fdbaff7cdc11` |
 
 These release pins match their engine descriptors and the downloaded artifact footers;
 compressed SHA256 values for all three supported platforms are in `scripts/test_quack.py`.
@@ -174,14 +174,14 @@ cmake --build build/quack-candidate --parallel 4 --target shell unittest \
   gatekeeper_loadable_extension quack_loadable_extension httpfs_loadable_extension
 ```
 
-For primary source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v2.0.0`.
+For primary source builds, use the release engine and `-DOVERRIDE_GIT_DESCRIBE=v2.0.1`.
 Keep candidate directories separate from existing builds. Follow CONTRIBUTING's exact-engine
 Python-wheel procedure before running the candidate fixture. Merely co-building the CLI does
 not provide a matching Python package.
 
 ## Validation and remaining limits
 
-The released 2.0.0 Python host and matching Gatekeeper/Quack/httpfs loadables pass all 17
+The released 2.0.1 Python host and matching Gatekeeper/Quack/httpfs loadables pass all 17
 transport and authorization tests on macOS ARM64. The primary Linux job runs the same fixture;
 the retained 1.5 workflow runs its matching fixture through the extended support window.
 Compressed hashes for all three supported platforms are in `scripts/test_quack.py`.

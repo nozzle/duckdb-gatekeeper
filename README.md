@@ -8,7 +8,7 @@ DuckDB itself refuses to run anything the policy denies (`CALL gatekeeper_enforc
 | Control | What it enforces |
 | --- | --- |
 | **Table ACL** | Once you configure `allowed_tables`, only the catalogs, schemas, tables, and views you allow, matched by their *resolved* identity after binding. Tables and views are **unrestricted by default**, except internal objects. |
-| **Function ACL** | Only the functions you allow, starting from 919 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
+| **Function ACL** | Only the functions you allow, starting from 920 reviewed qualified defaults, with namespace/name/kind allow and block rules. |
 | **Read-only, no introspection** | `SELECT` statements only. `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, dynamic SQL, and catalog metadata readers (`duckdb_tables`, `information_schema.*`) are rejected. |
 
 A lockable **global policy** sets the ceiling; per-request options can narrow it but never widen it.
@@ -21,8 +21,8 @@ every enforced denial is a `Permission Error` the statement never recovers from.
 > Read the [security model](docs/security.md) before integrating.
 
 > [!NOTE]
-> Early development. Gatekeeper v0.4.4 builds and GitHub binaries target **DuckDB 2.0.0**;
-> published v0.4.3 GitHub binaries target DuckDB 1.5.6. Community publication is
+> Early development. Source builds on `main` target **DuckDB 2.0.1**. Published GitHub v0.4.4
+> binaries target DuckDB 2.0.0 and v0.4.3 binaries target DuckDB 1.5.6. Community publication is
 > [a separate step](docs/releasing.md); check the installed extension version when deploying.
 > The community repository's DuckDB 1.5.6 binaries are v0.4.1. Source compatibility with 1.5
 > is maintained until **March 1, 2027**.
@@ -45,9 +45,10 @@ can rebuild Gatekeeper source for newer engines; source compatibility is checked
 builds and regression tests rather than a fixed release allowlist. Defaults are reviewed
 catalog/schema-path/name/kind identities: new identities remain excluded until added, and existing implementations are
 trusted across DuckDB upgrades.
-The 2.0 distribution restores Windows MinGW with the matching CRAN R host. Wasm EH source builds
-are browser-tested against a separately pinned development-labeled 2.0 runtime; release Wasm
-assets await a release-labeled host. See [Wasm installation and browser tests](test/wasm/README.md).
+The 2.0 distribution includes Windows MinGW with the matching CRAN R host. From DuckDB 2.0.1 it
+also includes Wasm EH again, browser-tested against the pinned release-labeled DuckDB-Wasm
+runtime; published v0.4.4 assets have no Wasm build. See
+[Wasm installation and browser tests](test/wasm/README.md).
 
 ## Quickstart
 
@@ -151,7 +152,7 @@ checked even when empty. See the [policy v2 migration guide](docs/policy-migrati
 | --- | --- | --- | --- |
 | `allowed_tables` | STRUCT[] | unrestricted (non-internal) | `{catalog?, schema_path: VARCHAR[], table}`. A nonempty path, outermost schema first. `'*'` matches one whole component at exactly that depth; omitted/NULL catalog matches any. `[]` denies all tables and views. Until this is set, every non-internal table and view is readable. |
 | `blocked_tables` | STRUCT[] | `[]` | Same identity rules, including exact path depth: `['*']` does not block nested schemas on 2.0. A match always denies what the caller names; does not reach inside trusted views, macros, or attached tables. |
-| `use_default_functions` | BOOLEAN | `true` | `true`: 919 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
+| `use_default_functions` | BOOLEAN | `true` | `true`: 920 reviewed qualified defaults (913 distinct names) **plus** `allowed_functions`. `false`: only `allowed_functions`. |
 | `allowed_functions` | STRUCT[] | `[]` | `{catalog?, schema_path: VARCHAR[], name, type?}` resolved grants. Required exact leaf; `'*'` names multiplication, not all functions. Defaults grant reviewed `system.main` identities only. See [matching rules](docs/qualified-functions.md). |
 | `blocked_functions` | STRUCT[] | `[]` | Same qualified identity rules as grants, including optional kind and exact schema depth. A matching block always wins for caller-attributable functions. Does not reach inside trusted views, macros, or attached tables. |
 
@@ -990,10 +991,10 @@ enforcement. A SELECT-based setup must require an actual `enforced = true` resul
 
 ## Compatibility
 
-DuckDB 2.0.0 is the primary build and release target. DuckDB 1.5.6 retains source compatibility
+DuckDB 2.0.1 is the primary build and release target. DuckDB 1.5.6 retains source compatibility
 and a full regression job until its [extended EOL on March 1, 2027](https://duckdb.org/release_calendar.html).
-Each engine needs its own matching binary. GitHub v0.4.4 assets target 2.0.0;
-published v0.4.3 assets target 1.5.6. The policy model is shared, but engine capabilities, conservative
+Each engine needs its own matching binary. New builds target 2.0.1; published GitHub v0.4.4
+assets target 2.0.0 and v0.4.3 assets target 1.5.6. The policy model is shared, but engine capabilities, conservative
 refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
 for prepared statements, function provenance, parameter fallback, Quack, and the 2.0
 connection-scoped replacement-scan timing limitation.
@@ -1011,14 +1012,14 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 103 µs | 4.0 ms | 9.4 ms |
-| enforced connection | 164 µs (+61 µs) | 4.2 ms (+221 µs) | 20.7 ms (+11.3 ms) |
-| enforced, audit log at debug | 227 µs (+124 µs) | 4.4 ms (+370 µs) | 20.8 ms (+11.4 ms) |
-| validate, then execute | 278 µs (+175 µs) | 4.4 ms (+405 µs) | 19.2 ms (+9.8 ms) |
-| denied on an enforced connection | 334 µs | 529 µs | 11.1 ms |
+| plain connection | 111 µs | 4.3 ms | 6.6 ms |
+| enforced connection | 159 µs (+48 µs) | 4.6 ms (+224 µs) | 15.5 ms (+8.9 ms) |
+| enforced, audit log at debug | 222 µs (+111 µs) | 4.7 ms (+349 µs) | 15.7 ms (+9.2 ms) |
+| validate, then execute | 271 µs (+160 µs) | 4.7 ms (+414 µs) | 14.1 ms (+7.5 ms) |
+| denied on an enforced connection | 939 µs | 1.1 ms | 7.1 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python client
-on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.0, Gatekeeper 0.4.4. The
+on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.1, Gatekeeper 0.4.4. The
 plain row is the client round trip plus the engine's own work; in parentheses, what each mode
 adds to it.
 

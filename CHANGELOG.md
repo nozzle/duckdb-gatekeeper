@@ -6,6 +6,27 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+### Changed
+
+- Primary builds and the next GitHub release artifacts target DuckDB 2.0.1. Published v0.4.4
+  assets still target 2.0.0; DuckDB 1.5.6 support is unchanged.
+- Wasm EH is distributed again. `@duckdb/duckdb-wasm@1.33.1-dev121.0` embeds DuckDB 2.0.1 and
+  reports the release label `v2.0.1`, so the browser test now runs against the shipped artifact.
+- On DuckDB 2.0.1 an audit record's `statement` begins with the comments and whitespace that
+  precede the statement, and `statement_length` counts them. DuckDB 2.0.0 started the text at
+  the statement's first token.
+- On DuckDB 2.0.1 the engine parses each statement of a batch with the settings then in force.
+  In log-only mode, a later statement that the engine's own parser refuses because an earlier
+  statement of the batch changed a parser setting (for example `max_expression_depth`) fails
+  before Gatekeeper's hook and has no decision record.
+
+### Fixed
+
+- Allow `fmod` by default on DuckDB 2.0.1, which registers it as a native scalar function
+  instead of a macro. Defaults are now 920 reviewed qualified identities over 913 names.
+  Gatekeeper v0.4.4 built for 2.0.1, including the community binary, refuses `fmod` even with
+  an explicit grant.
+
 ## 0.4.4 - 2026-10-27
 
 ### Changed

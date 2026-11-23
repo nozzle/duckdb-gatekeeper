@@ -349,6 +349,9 @@ prepared execution and preparation on native-mutated connected sessions can now 
 a Gatekeeper text refusal after remote dispatch, rather than success or a missing-handle
 error. The callback still runs first; these routes remain unsupported. The probe parses
 its mock server response with default parser options, independently of the connected client.
+DuckDB 2.0.1 (`8d78114e90`) prepares on a connected session without dispatching: the handle
+keeps the written text and each execution submits it to the connected database, so the
+remote callback moves from preparation to execution, where it still precedes any refusal.
 
 | Route | Boundary and result |
 | --- | --- |
@@ -358,7 +361,7 @@ its mock server response with default parser options, independently of the conne
 | Local activation body reached while `IsConnected()` is true | The latch throws a Permission Error and installs no enforcement state, even in log-only mode. It tests the flag, not just the live target, so stale/expired targets are refused too. |
 | SQL activation submitted on an already-connected live session | Its original text reaches `RemoteExecute` first. It may never execute the local latch at all; a successful result is not evidence of local enforcement. Even if the returned plan invokes the local latch, its refusal is too late to protect that callback. |
 | SQL activation with an expired/detached routing target | The engine refuses before Gatekeeper runs; `IsConnected()` remains true until explicit DISCONNECT. A detached target still held alive by trusted native code can remain routable. Neither detachment nor the absence of a usable target establishes LOCAL state. |
-| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. Client Prepare also dispatches first: older snapshots then fail to register a local handle, while `8b3c3b7dbf` can report a Gatekeeper text refusal instead. Bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
+| Trusted native code calls `ConnectToCatalog` after latching | Subsequent SQL and parameterless prepared executions can reach the callback before a later Gatekeeper refusal. Client Prepare no longer dispatches on 2.0.1: it returns a handle without reaching the callback or a Gatekeeper hook, and executing that handle dispatches before a later refusal (2.0.0 and earlier snapshots dispatched during Prepare). Bound-parameter execution is rejected by the engine before dispatch. None is a supported way to enforce remote execution. |
 | CONNECT/DISCONNECT while log-only is on | Routing controls are identified by parsed statement type before log-only can waive a denial. They retain `mode = 'enforce'` and are refused before binding, with zero remote callbacks on local sessions. Turning log-only off therefore restores policy refusals on the same local route. Native-mutated connected state remains unsupported and must be restored through trusted native setup or the connection replaced. |
 
 Host/native extension callbacks, UDFs, replacement scans, casts, and catalog implementations
@@ -730,7 +733,7 @@ the STRUCT schema must include both trailing kind fields. The rest of the record
 | `event` | `decision`, `policy_changed`, or `log_only_changed` |
 | `mode` | `enforce` (an enforced decision, including CONNECT/DISCONNECT while log-only is on), `log_only` (a policy decision with `gatekeeper_log_only` true; the statement ran regardless), or `validate` (`gatekeeper_validate`) |
 | `boundary` | where an enforced statement was decided: `binding` (text check), `authorize` (private bind), `execution` (the plan the engine will run), `prepare` (pre-screen of a `Prepare()` plan), `replacement_scan` (a reader resolved outside the private bind). NULL for `validate`, which runs the whole check at once. |
-| `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
+| `statement` | the SQL the engine ran, capped at 64 KiB (`statement_length` is the full size). DuckDB 2.0.1 gives a statement the comments and whitespace before its first token (2.0.0 started the text at that token and kept what followed its separator instead). NULL at `boundary = 'prepare'`, where no query is active and DuckDB exposes no text; the `violations` still name the object or function. For dynamic `PIVOT` and query pragmas this is DuckDB's rewritten text, not the caller's (see residuals). |
 | `policy_hash` | sixteen hex digits over the canonical `gatekeeper_policy` value in force for the decision; the same hash appears on the `policy_changed` record that installed it, whose `new_value` is the full policy |
 | `new_value` | the new setting value on `*_changed` records |
 
@@ -1221,8 +1224,8 @@ via `enum_range`, even when no table is read; type definitions are host-trusted 
 
 ## Compatibility and review
 
-Primary builds and v0.4.4 GitHub assets target DuckDB 2.0.0; published v0.4.3 GitHub assets target
-1.5.6. The 1.5.6 source/test compatibility path is retained until **2027-03-01**, independently
+Primary builds target DuckDB 2.0.1; published v0.4.4 GitHub assets target 2.0.0 and v0.4.3 assets
+target 1.5.6. The 1.5.6 source/test compatibility path is retained until **2027-03-01**, independently
 of the primary pin. Source builds may use another engine checkout;
 the grammar and serializer come from that checkout, and DuckDB enforces binary
 compatibility through the extension footer. That footer check can be disabled with
@@ -1239,14 +1242,14 @@ statements for another. Gatekeeper also compiles DuckDB's in-tree JSON serialize
 `GetReplacementScans`) and bind-data serialization callbacks; none of these are stable
 public API, so an engine upgrade can require source changes. Compatibility is therefore
 checked by compilation and functional regressions on every candidate engine
-(`compatibility.yml`: the pinned 2.0.0 and retained 1.5.6 releases), through both the
+(`compatibility.yml`: the pinned 2.0.1 and retained 1.5.6 releases), through both the
 direct CMake path and the community `make release` path. Existing function classifications do not
 need repeating for each engine version. Unknown serialized fields and
 node classes fail closed. Cast types use latest `UNBOUND(TypeExpression)` decoding,
 including nested type parameters. Computed type parameters remain conservatively
 unsupported. Ordinary literal payloads remain data, not executable nodes.
 
-The same source builds against DuckDB 2.0.0 and 1.5.6; `src/include/engine_api.hpp`
+The same source builds against DuckDB 2.0.1 and 1.5.6; `src/include/engine_api.hpp`
 adapts the engine APIs that differ, and `scripts/generate.py` reads either release's
 serialization schema. Both engines enforce the same policy model, with engine-specific
 capabilities, conservative refusals, and diagnostics. These differences are worth knowing:

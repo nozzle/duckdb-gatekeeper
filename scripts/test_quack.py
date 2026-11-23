@@ -11,19 +11,19 @@ import urllib.request
 import duckdb
 
 ROOT = Path(__file__).resolve().parents[1]
-# SHA256 of compressed 2.0.0 downloads (quack f96420ed46 / httpfs 77392a7207).
+# SHA256 of compressed 2.0.1 downloads (quack 3bc63c01f8 / httpfs f71cfdb4bf).
 PINS = {
     "linux_amd64": {
-        "quack": "f9a5c0d2e0eef0f7546aba4579ab80d75d167cdf48830459faf67378ab2000fe",
-        "httpfs": "ee6c7d7e60a5da1b6f6bf6156b4298b55ddce0496a5bfe628bd6ab6d47eb8e3e",
+        "quack": "f213adc7c1a810599604f39f1d9a4bdbc70f366dd159883092ef72d223fab9b5",
+        "httpfs": "c88a9686336b93d2cde3ef574ad7101f1c7be5396a2af8a6eb53c9cad1db2dc2",
     },
     "linux_arm64": {
-        "quack": "9f7938a11eb9ff8026ccc9c6403ac4a9b1ba347f8c12ecd815f86eea09ed6005",
-        "httpfs": "f524888fc7d74cc0c6c4a8f7ed5beedac5b12e71cb426503f882c72ce6afbd43",
+        "quack": "0e5b0238552830046dbb8a8a2dcb57d2cbf22c05d21400b7affcb2faa266238c",
+        "httpfs": "8ec5abca653685519743ebb6bc480b693b14860c49bf1bca9603108ae837aadd",
     },
     "osx_arm64": {
-        "quack": "d6779fb4adf9835e31f3b34cfdb1444cec1dd3af8f5ca99071271a91bae52cfc",
-        "httpfs": "6aea2d728cb7eedb978ca264ce190e31284271e9ea4f68b2424bf20806b46638",
+        "quack": "fbd026d15962dcfe8620fbc478b0bec5cfd741ea25a9952eb0a331e97bd16ecc",
+        "httpfs": "62d27c7ba72598151f89628d90ff93203db594bb9b22e853d2760eacc8c72b43",
     },
 }
 # Retained 1.5.6 core downloads (quack 7e80f7f / httpfs 4bc690d), through 2027-03-01.
@@ -47,12 +47,12 @@ def artifacts(cache):
     with duckdb.connect() as db:
         platform = db.execute("PRAGMA platform").fetchone()[0]
         identity = db.execute("PRAGMA version").fetchone()
-    if duckdb.__version__ == "2.0.0" and identity[:2] == ("v2.0.0", "d54cbbe3df"):
-        version, pins = "v2.0.0", PINS
+    if duckdb.__version__ == "2.0.1" and identity[:2] == ("v2.0.1", "8d78114e90"):
+        version, pins = "v2.0.1", PINS
     elif duckdb.__version__ == "1.5.6" and identity[:2] == ("v1.5.6", "069cc9f9b5"):
         version, pins = "v1.5.6", LEGACY_PINS
     else:
-        raise SystemExit("Automatic fixtures require DuckDB 2.0.0/d54cbbe3df or 1.5.6/069cc9f9b5; "
+        raise SystemExit("Automatic fixtures require DuckDB 2.0.1/8d78114e90 or 1.5.6/069cc9f9b5; "
                          "supply --quack and --httpfs for another matched build")
     if platform not in pins:
         raise SystemExit("Automatic downloads for " + version + " support " + ", ".join(pins)
