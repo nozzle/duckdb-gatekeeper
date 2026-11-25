@@ -81,7 +81,7 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
 | Retained 1.5 source / host | `069cc9f9b5be802405797faecc284961b07c70ef` / `1.5.6` |
 | Retained 1.5 extension-ci-tools | `3fd6109fc01555673b7c7123eba8d0d143fe8ce4` |
 | Wasm runtime / toolchain | `1.33.1-dev121.0` / Emscripten `6.0.9` |
-| R host | R `4.6.1`, CRAN snapshot `2026-10-26`, DuckDB `2.0.0` (2.0.1 snapshot pending, see below) |
+| R host | R `4.6.2`, CRAN snapshot `2026-11-24`, DuckDB `2.0.1` |
 
 The table lists the current pins; the review notes after it describe the 2.0.0 pass.
 The full source/label identity of the Wasm host is in `test/wasm/runtime.json`; its Emscripten
@@ -171,9 +171,10 @@ Distribution and fixtures:
   the shipped artifact in Chromium and packages it. The newly pinned `extension-ci-tools` also
   passes `USE_WASM_THREADS` to the threads target; threads/COI stays excluded until the
   remaining conditions of [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101) hold.
-- **Windows MinGW's R host is pending.** CRAN published `duckdb` 2.0.1, including its Windows
-  binary, on 2026-11-23, but no dated Posit Package Manager snapshot carried it at review time. `R_CRAN_SNAPSHOT` must move to a snapshot that serves it before the `loadable-r`
-  leg can pass; that leg asserts the host's engine version and fails rather than test 2.0.0.
+- **Windows MinGW's R host follows a day later.** CRAN published `duckdb` 2.0.1, including its
+  Windows binary, on 2026-11-23; the first dated Posit Package Manager snapshot to carry it is
+  2026-11-24, which `R_CRAN_SNAPSHOT` now pins with R 4.6.2. Until then the `loadable-r` leg
+  failed, as designed: it asserts the host's engine version rather than test 2.0.0.
 - `legacy_parser` keeps source revision `bcdf276132` and is rebuilt for 2.0.1; its macOS crash
   at 1,000 nested calls reproduces and stays excluded. Quack moves to `3bc63c01f8` and httpfs
   to `f71cfdb4bf`. Archive and binary hashes are repinned for every platform.
@@ -182,7 +183,7 @@ Dependency review: CMake 4.4.5, clang-format 23.1.5 (no formatting changes), pyt
 boto3/botocore 1.44.9, Playwright 1.65.1 and ccache-action 1.2.26. The Ubuntu 26.04 and Alpine
 3.24 digests are refreshed, RustFS moves to 1.0.6 and the Iceberg REST fixture to its current
 digest. Ninja, jsonschema, esbuild, the other Actions and Emscripten 6.0.9 (coupled to
-`extension-ci-tools`) are current. R 4.6.2 is deferred to the snapshot move above.
+`extension-ci-tools`) are current. R moves to 4.6.2 with its snapshot.
 
 Validated locally on macOS ARM64:
 

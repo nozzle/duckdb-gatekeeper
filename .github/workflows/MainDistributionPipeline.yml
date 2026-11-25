@@ -28,8 +28,8 @@ env:
   # package is CRAN's build of the same engine, installed as a Windows binary from a dated Posit Package
   # Manager snapshot so the version stays what it was validated with (CRAN keeps only the current binary).
   # The snapshot must postdate the CRAN release of the duckdb package version equal to the engine pin.
-  R_VERSION: '4.6.1'
-  R_CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-10-26
+  R_VERSION: '4.6.2'
+  R_CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-11-24
   # The container the musl CLI runs in (multi-arch index digest; alpine:3.24). Reviewed with the other
   # container images in the periodic dependency pass, not engine-coupled.
   ALPINE_IMAGE: alpine@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
