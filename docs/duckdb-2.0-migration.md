@@ -7,6 +7,9 @@ does not delete its adapters or tests; [#99](https://github.com/nozzle/duckdb-ga
 tracks their retirement. [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90)
 tracks released-parser verification.
 
+The primary pin moved to **DuckDB 2.0.1** on 2026-11-23, the Gatekeeper v0.4.5 release target; see [the 2.0.1 repin](#duckdb-201-repin)
+for what changed. The sections before it record the 2.0.0 migration.
+
 ## Distribution and host requirements
 
 - New native builds target **DuckDB 2.0.0**, including Windows MinGW with CRAN R 2.0.0.
@@ -73,13 +76,14 @@ These engine changes are independent of Gatekeeper's policy-v2 document format.
 
 | Component | Pin |
 | --- | --- |
-| DuckDB source / Python host | `d54cbbe3df17e8e5ce68312f483b4155836112aa` / `2.0.0` |
-| Primary extension-ci-tools | `b8d325c37e82160886579880707493bd358c0e62` |
+| DuckDB source / Python host | `8d78114e90a53823803660bf821f6073ac87da8c` / `2.0.1` |
+| Primary extension-ci-tools | `43dae9ec2b843bf9c6200ea4bbe5ad703cd01f77` |
 | Retained 1.5 source / host | `069cc9f9b5be802405797faecc284961b07c70ef` / `1.5.6` |
 | Retained 1.5 extension-ci-tools | `3fd6109fc01555673b7c7123eba8d0d143fe8ce4` |
-| Wasm runtime / toolchain | `1.33.1-dev110.0` / Emscripten `6.0.9` |
-| R host | R `4.6.1`, CRAN snapshot `2026-10-26`, DuckDB `2.0.0` |
+| Wasm runtime / toolchain | `1.33.1-dev121.0` / Emscripten `6.0.9` |
+| R host | R `4.6.2`, CRAN snapshot `2026-11-24`, DuckDB `2.0.1` |
 
+The table lists the current pins; the review notes after it describe the 2.0.0 pass.
 The full source/label identity of the Wasm host is in `test/wasm/runtime.json`; its Emscripten
 image is digest-pinned in `scripts/build_wasm.py`. Quack/httpfs source and compressed artifact
 pins are recorded in [the Quack guide](quack.md) and `scripts/test_quack.py` for both engines.
@@ -127,3 +131,71 @@ Completed locally on macOS ARM64:
 
 Full Python parser/engine suites, final formatting, sanitizer/fuzz runs and the changed
 Actions/distribution jobs are release gates; their final results are recorded in the migration PR.
+
+## DuckDB 2.0.1 repin
+
+Reviewed 2026-11-23. The primary pin moves from 2.0.0 (`d54cbbe3df`) to 2.0.1
+(`8d78114e90a53823803660bf821f6073ac87da8c`). Gatekeeper's sources compile against it unchanged
+and the embedded JSON serializer is identical. The behavior a host can notice:
+
+- **`fmod` is a scalar function.** 2.0.1 removes the `fmod` default macro and registers a
+  native scalar function set, so the macro grant no longer matched and Gatekeeper refused the
+  call. The scalar identity is now a default with its own registration evidence
+  ([default provenance](default-provenance.md#intrinsics-and-supported-kind-transitions)):
+  **920** identities over 913 names. No other default identity changed between the two engines.
+  Gatekeeper v0.4.4 built for 2.0.1, including the community binary, refuses `fmod`.
+- **Statement text.** The engine now gives a statement the comments and whitespace before its
+  first token (2.0.0 started at that token), so audit records' `statement` and
+  `statement_length` include them.
+- **PEG parses a batch statement by statement.** Each statement is parsed with the settings in
+  force when it runs. In log-only mode, a statement the engine's parser refuses because an
+  earlier statement of the batch lowered `max_expression_depth` fails before `QueryBegin` and
+  has no decision record. With the optional `legacy_parser` that holds on macOS only: on Linux
+  and Windows the statement reaches the hook and is recorded, as on 2.0.0 (CI observation).
+  Enforcing, the `SET` is refused first as before.
+- **Prepare while CONNECT-ed.** A client `Prepare` on a connected session no longer dispatches
+  to the remote catalog; the handle keeps the written text and each execution submits it. The
+  unsupported native-mutated route therefore dispatches at execution instead of preparation.
+  Refusals on supported local routes are unchanged, with zero remote callbacks
+  ([CONNECT mode](security.md#connect-mode-and-native-host-state)).
+- **New engine names are not granted.** `add_grammar_extension`, `remove_grammar_extension`,
+  `duckdb_live_query_metrics` and `parquet_page_index` in `system.main`, and
+  `pg_catalog.map_type_id_to_pg_oid`, are unclassified and refused. `logging_sink` replaces
+  `logging_storage` in `duckdb_settings()`; the old name still sets it, and an enforced
+  connection refuses either `SET`.
+
+Distribution and fixtures:
+
+- **Wasm EH is distributed again.** `@duckdb/duckdb-wasm@1.33.1-dev121.0` embeds this revision
+  and reports the release label `v2.0.1`, so the distribution workflow builds the target, tests
+  the shipped artifact in Chromium and packages it. The newly pinned `extension-ci-tools` also
+  passes `USE_WASM_THREADS` to the threads target; threads/COI stays excluded until the
+  remaining conditions of [#101](https://github.com/nozzle/duckdb-gatekeeper/issues/101) hold.
+- **Windows MinGW's R host follows a day later.** CRAN published `duckdb` 2.0.1, including its
+  Windows binary, on 2026-11-23; the first dated Posit Package Manager snapshot to carry it is
+  2026-11-24, which `R_CRAN_SNAPSHOT` now pins with R 4.6.2. Until then the `loadable-r` leg
+  failed, as designed: it asserts the host's engine version rather than test 2.0.0.
+- `legacy_parser` keeps source revision `bcdf276132` and is rebuilt for 2.0.1; its macOS crash
+  at 1,000 nested calls reproduces and stays excluded. Quack moves to `3bc63c01f8` and httpfs
+  to `f71cfdb4bf`. Archive and binary hashes are repinned for every platform.
+
+Dependency review: CMake 4.4.5, clang-format 23.1.5 (no formatting changes), pytest 9.2.0,
+boto3/botocore 1.44.9, Playwright 1.65.1 and ccache-action 1.2.26. The Ubuntu 26.04 and Alpine
+3.24 digests are refreshed, RustFS moves to 1.0.6 and the Iceberg REST fixture to its current
+digest. Ninja, jsonschema, esbuild, the other Actions and Emscripten 6.0.9 (coupled to
+`extension-ci-tools`) are current. R moves to 4.6.2 with its snapshot.
+
+Validated locally on macOS ARM64:
+
+- Native build and SQL contract: **1,285 assertions in 29 files**; prepared-handle,
+  qualified-function and remote-catalog probes; load-time engine guard and stamp checks.
+- Full Python suite under PEG and the pinned `legacy_parser`, and under ASan/UBSan with no
+  sanitizer reports. Retained 1.5.6: full suite under both of its parsers.
+- Quack: **17 passed** on 2.0.1; **16 passed**, one 2.0-only case skipped, on 1.5.6.
+- Iceberg/RustFS and DuckLake: **10 passed** with the refreshed fixtures.
+- Wasm EH in Chromium: **57 checks passed**, including the exact engine label and source.
+- Official 2.0.1 macOS CLI loadable smoke; inventory audit and both offline collection reports.
+- Rebuilt Ubuntu fuzz image: native AST fuzz smoke **2,754,678 executions**; linked SQL/option
+  fuzz smoke with Homebrew LLVM **2,424 executions**, both without findings.
+
+Linux, Windows, musl and the distribution pipeline's artifacts are covered by CI, not this local pass.

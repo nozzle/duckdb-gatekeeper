@@ -1,6 +1,6 @@
 {
   "base_sha256": "d448c7200107a06a3ec65105a901eef2cf9118c2f0bd73551ba9baee8f1c6207",
-  "compiled_defaults": 919,
+  "compiled_defaults": 920,
   "default_names_at_ungranted_identities": [
     {
       "catalog": "system",
@@ -139,6 +139,14 @@
         "main"
       ],
       "type": "window"
+    },
+    {
+      "catalog": "system",
+      "name": "fmod",
+      "schema_path": [
+        "main"
+      ],
+      "type": "scalar"
     },
     {
       "catalog": "system",
@@ -15831,7 +15839,7 @@
       "unclassified_target_added_names": []
     }
   },
-  "policy_sha256": "9c72b9ad8c74601a19965376ed98e79a5016e6b19524845ebe59f77a209e10d2",
+  "policy_sha256": "d48c33a7f32823c625b4ca1b8f3a8654a67ef9ca95ac87738276707ae9765cb3",
   "report_schema": "gatekeeper-qualified-collection-audit-v1",
   "reporting_discrepancies": [
     {

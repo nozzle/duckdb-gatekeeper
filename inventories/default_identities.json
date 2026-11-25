@@ -51,6 +51,16 @@
       ],
       "notes": ["The 2.0 registration explicitly defines round_even as scalar_function_set with roundbankers alias. Keep these concrete scalar identities alongside the historical macro identities; existing implementation classifications remain trusted."]
     },
+    "fmod-2.0.1": {
+      "inventories": ["core"],
+      "sources": [
+        "https://github.com/duckdb/duckdb/blob/8d78114e90a53823803660bf821f6073ac87da8c/src/function/scalar/operator/functions.json",
+        "https://github.com/duckdb/duckdb/blob/8d78114e90a53823803660bf821f6073ac87da8c/src/function/scalar/operator/arithmetic.cpp",
+        "https://github.com/duckdb/duckdb/blob/8d78114e90a53823803660bf821f6073ac87da8c/src/function/function_list.cpp",
+        "https://github.com/duckdb/duckdb/blob/8d78114e90a53823803660bf821f6073ac87da8c/src/catalog/default/default_functions.cpp"
+      ],
+      "notes": ["DuckDB 2.0.1 (duckdb b451b93a3b7) removes the DEFAULT_SCHEMA fmod DefaultMacro and registers fmod as scalar_function_set (FmodFun, DUCKDB_SCALAR_FUNCTION_SET in function_list.cpp). FmodFun::GetFunctions defines FLOAT and DOUBLE overloads over FlooredModuloOperator, bound by BindBinaryFloatingPoint like the modulo operator: local arithmetic that reads only the ieee_floating_point_ops and division-by-zero settings. Keep this concrete scalar identity alongside the historical macro identity, which 1.5.6 and 2.0.0 still register."]
+    },
     "json": {
       "inventories": ["core", "json"],
       "sources": [
@@ -191,6 +201,7 @@
     {"catalog": "system", "schema_path": ["main"], "type": "table", "evidence": "tpch", "names": ["tpch_answers", "tpch_queries"]},
     {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "unnest-intrinsic", "names": ["unnest"]},
     {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "rounding-2.0", "names": ["round_even", "roundbankers"]},
+    {"catalog": "system", "schema_path": ["main"], "type": "scalar", "evidence": "fmod-2.0.1", "names": ["fmod"]},
     {"catalog": "system", "schema_path": ["main"], "type": "window", "evidence": "windows", "names": ["cume_dist", "dense_rank", "fill", "first_value", "lag", "last_value", "lead", "nth_value", "ntile", "percent_rank", "rank", "rank_dense", "row_number"]}
   ],
   "reporting_discrepancies": [

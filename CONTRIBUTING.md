@@ -41,7 +41,7 @@ sanitizer and fuzzer options, targets, the Emscripten container) stays in each s
 accepts an engine identifying as that release). `--duckdb-version` tells the engine build how
 to label itself; the identity CMake then computes is what `scripts/generate.py` bakes into the
 load-time guard, through its own `--engine-version-label`/`--engine-source-id`. A checkout at exactly the pinned engine
-revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v2.0.0`). DuckDB 2.0 otherwise
+revision is stamped with the release pin (`OVERRIDE_GIT_DESCRIBE=v2.0.1`). DuckDB 2.0 otherwise
 derives a development label from its release file and commit count; 1.5 uses `git describe`.
 Neither labels a shallow release checkout reliably. Every other checkout, including another revision inside `duckdb/`,
 uses its own Git metadata unless `--duckdb-version vX.Y.Z` overrides it; the `Makefile`
@@ -49,7 +49,7 @@ applies the same revision-gated rule, so a community rebuild for a newer engine 
 labeled as the pinned release. Compatibility requires the build and regression
 tests to pass; it does not require reclassifying existing function names. See
 [build-pin maintenance](inventories/README.md#repinning-the-engine). The
-`Engine rebuild compatibility` workflow rebuilds the primary DuckDB 2.0.0 and retained 1.5.6
+`Engine rebuild compatibility` workflow rebuilds the primary DuckDB 2.0.1 and retained 1.5.6
 releases, each with its matching pinned toolchain, through both
 the direct CMake path and the community `make release` path; it checks the stamped engine
 identity against what the candidate checkout labels itself, runs `test/sql`, and runs
@@ -63,14 +63,14 @@ The community-extension build path also works and runs on CI:
 ```sh
 make release          # pinned extension-ci-tools Makefile
 make test_release     # sqllogictests in test/sql
-make release OVERRIDE_GIT_DESCRIBE=v2.0.0   # label a shallow clone of another engine explicitly
+make release OVERRIDE_GIT_DESCRIBE=v2.0.1   # label a shallow clone of another engine explicitly
 OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, even for the pinned revision
 ```
 
 ### Loading unsigned builds
 
 Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
-engine matching the binary (2.0.0 for current builds; published v0.4.3 assets use 1.5.6) and explicitly enable
+engine matching the binary (2.0.1 for current builds and v0.4.5 assets; published v0.4.4 assets use 2.0.0 and v0.4.3 assets 1.5.6) and explicitly enable
 unsigned loading for these development artifacts:
 
 ```sh
@@ -193,7 +193,7 @@ setup in `test/native/probe_database.hpp`.
 
 ### Retained DuckDB 1.5 and candidate engines
 
-DuckDB 2.0.0 is the default. The `DuckDB 1.5 maintenance` workflow runs the full Python suite
+DuckDB 2.0.1 is the default. The `DuckDB 1.5 maintenance` workflow runs the full Python suite
 under both 1.5 parsers and the Quack fixture against the hash-pinned 1.5.6 host and matching
 source until **2027-03-01**. Its one-package override is
 `test/compatibility/requirements-1.5.txt`; build/tooling dependencies use the primary lock.
@@ -319,7 +319,7 @@ catalog and scan function.
 
 Run `.venv/bin/python scripts/test_quack.py`
 for the disposable loopback client/server fixture.
-It downloads checksum-pinned 2.0.0 or retained 1.5.6 Quack/httpfs artifacts for the running
+It downloads checksum-pinned 2.0.1 or retained 1.5.6 Quack/httpfs artifacts for the running
 host, and requires no skips on 2.0; candidate engines require explicit
 matching extension paths. See [remote scope and the support matrix](docs/quack.md) for commands,
 source pins, server-session limits, and the distinction between observed release behavior and

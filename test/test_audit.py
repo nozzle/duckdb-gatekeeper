@@ -135,14 +135,14 @@ def test_text_the_engine_parsed_but_the_binding_boundary_cannot_read(catalog, ag
 
 
 def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(catalog, agent):
-    # The engine parses a batch with the settings in force when it arrives; a statement in it that lowers
-    # max_expression_depth changes what the binding boundary accepts for the statements after it. Enforcing,
-    # the SET is refused first; log-only, it runs, and QueryBegin re-reads the next statement's text under the
-    # lowered depth. The legacy parser and 2.0 PEG refuse it there (binding boundary, code parser); 1.5 PEG
-    # leaves the depth check to the binder (authorize boundary, code binding). The engine itself,
-    # having parsed the whole batch before the SET ran,
-    # fails the statement in its binder. The record must describe it as gatekeeper_validate does on a
-    # connection with the same setting.
+    # A statement in a batch that lowers max_expression_depth changes what the binding boundary accepts for the
+    # statements after it. Enforcing, the SET is refused first; log-only, it runs. Where the engine parsed the
+    # next statement before the SET took effect, QueryBegin re-reads its text under the lowered depth: the legacy
+    # parser refuses it there (binding boundary, code parser), 1.5 PEG leaves the depth check to the binder
+    # (authorize boundary, code binding), and the record must describe it as gatekeeper_validate does on a
+    # connection with the same setting. DuckDB 2.0.1's PEG parser parses each statement of a batch with the
+    # options then in force, so the engine's own parser refuses the statement before QueryBegin and there is no
+    # decision to record; the pinned macOS legacy parser does the same.
     enable(catalog)
     catalog.execute("SET gatekeeper_log_only = true")
     nested = "SELECT " + "abs(" * 12 + "1" + ")" * 12
@@ -154,14 +154,15 @@ def test_text_the_binding_boundary_cannot_parse_under_the_connection_settings(ca
     assert expected["code"] == by_engine(v1=by_parser(postgres="parser", peg="binding"), v2="parser"), expected
     assert "Max expression depth" in expected["error_message"], expected
     found = decisions(catalog, "mode = 'log_only'")
-    before_hook = ENGINE_MAJOR >= 2 and PARSER == "postgres" and sys.platform == "darwin"
+    before_hook = ENGINE_MAJOR >= 2 and (PARSER == "peg" or sys.platform == "darwin")
     assert len(found) == (1 if before_hook else 2), found
     if before_hook:
-        # The pinned macOS legacy parser rejects before QueryBegin; Linux reaches its reparse in the hook.
+        # The legacy parser on Linux and Windows reaches its reparse in the hook instead.
         # Pin the count independently of the observed rows so a missing decision fails on other hosts.
         [unsupported] = found
         assert unsupported["code"] == "unsupported"
         assert unsupported["statement"].rstrip("; ") == "SET max_expression_depth = 8"
+        assert isinstance(seen.error, duckdb.ParserException), seen
         return
     unsupported, record = found
     # The engine hands each statement of a batch over with its own text; DuckDB 2.0 keeps the separator.
@@ -402,7 +403,8 @@ def test_sandboxed_connection_cannot_reach_the_log(catalog, agent, tmp_path):
                 "SELECT * FROM truncate_duckdb_logs()", "CALL truncate_duckdb_logs()", "CALL enable_logging('Gatekeeper')",
                 f"SELECT * FROM enable_logging(storage := 'file', storage_path := {literal(tmp_path / 'agent.csv')})",
                 "SELECT write_log('forged', log_type := 'Gatekeeper', level := 'info')",
-                "SET enable_logging = false", "SET logging_level = 'fatal'", "SET logging_storage = 'stdout'"]:
+                "SET enable_logging = false", "SET logging_level = 'fatal'", "SET logging_storage = 'stdout'",
+                "SET logging_sink = 'stdout'"]:
         with pytest.raises(duckdb.PermissionException, match=DENIED):
             agent.execute(sql)
     # Never-bind: the host cannot allowlist them either.

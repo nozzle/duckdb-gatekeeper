@@ -9,11 +9,12 @@ must exist and pass CI before it is submitted.
 
 ## Prepare the release commit
 
-The 2.0 build matrix has nine native targets, including restored Windows MinGW with CRAN
-DuckDB 2.0.0. Wasm EH has a separately matched development-host browser job, but its release
-artifact remains excluded: the published runtime reports `v2.0.0-dev88614`, not `v2.0.0`.
-Restore that release target, distribution browser job and packaging dependency together
-when an official release-labeled host passes. MVP/threads exclusions remain separate.
+The 2.0 build matrix has nine native targets, including Windows MinGW with CRAN DuckDB, plus
+Wasm EH. The pinned DuckDB-Wasm runtime reports the release label of the pinned engine
+(`test/wasm/runtime.json`), so the distribution `browser-test` job loads the shipped artifact
+and packaging depends on it. If a later engine's runtime is only development-labeled, exclude
+the release target, its browser job and its packaging dependency together and keep the
+source-build job in `wasm.yml`. MVP/threads exclusions remain separate.
 
 1. Move the version. It is one edit in `versions.cmake` (`GATEKEEPER_VERSION`, which CMake and
    the generated C++ constants consume) and a set of coupled edits the package gate and the
@@ -42,7 +43,7 @@ when an official release-labeled host passes. MVP/threads exclusions remain sepa
    changes and verify the intended `main` commit's CI, including inventory audit,
    sanitizers, lakehouse integration, native/linked fuzz smoke, and distribution builds.
 3. Require the declared matrix: Linux amd64/arm64 glibc and musl, macOS amd64/arm64,
-   Windows amd64 MSVC/MinGW and ARM64 MSVC (nine native targets). Intel macOS is an
+   Windows amd64 MSVC/MinGW and ARM64 MSVC (nine native targets), plus Wasm EH. Intel macOS is an
    explicit opt-in on the 2.0 toolchain. Every shipped artifact must pass its official host:
    - The reusable pipeline runs the SQL contract suite against a statically linked
      `unittest` on every native target except `linux_arm64` and the cross-compiled
@@ -56,8 +57,9 @@ when an official release-labeled host passes. MVP/threads exclusions remain sepa
      the full Python suite); the engine's musl CLI in Alpine for `linux_amd64_musl` and
      `linux_arm64_musl` (`loadable-cli`: `scripts/smoke_cli.sh`); the CRAN R package for
      `windows_amd64_mingw` (`loadable-r`: `scripts/smoke_loadable.R`, the one leg that takes
-      a client `Prepare()` into the shipped binary). The separate `wasm.yml` job tests the
-      development-labeled Wasm host; the distribution `browser-test` stays deferred with its target.
+      a client `Prepare()` into the shipped binary); Chromium with the pinned DuckDB-Wasm
+      runtime for `wasm_eh` (`browser-test`). The separate `wasm.yml` job tests a source build
+      against the same runtime.
      The R leg runs the portable SQL form of the smoke (`scripts/smoke/loadable.sql` and
      `enforced.sql`), which the Python leg and `test/test_smoke_sql.py` run as well. The CLI
      is one connection: it runs `loadable.sql` as is, and `scripts/smoke_cli.sh` replays the
@@ -79,8 +81,8 @@ git push origin vX.Y.Z
 ```
 
 The version-tag push triggers **Extension distribution** on that exact ref. It runs
-every declared platform's build and official-host tests. The R job gates packaging; the
-deferred distribution Wasm job must also gate packaging when that target is restored.
+every declared platform's build and official-host tests. The R job and the distribution
+Wasm browser job gate packaging.
 Only after the required jobs succeed does the release job package the artifacts and publish a
 GitHub Release. The tag must match the CMake and runtime extension versions.
 Packaging also runs on PRs and `main`, uploading `gatekeeper-release-assets` as a CI
@@ -138,11 +140,11 @@ silently overwritten. Do not move a published version tag.
    `repo.variegata`: substitute the SHA each tag points at (`git rev-parse vX.Y.Z^{}`) in the
    submitted copy only; the in-repo descriptor keeps tags because it cannot name the commit
    that contains it. The community repository builds every descriptor PR against its current
-   DuckDB 2.0 engine (the commit it pins as `v2.0.0`) with its own
+   DuckDB 2.0 engine (the commit it pins as `v2.0.1`) with its own
    `extension-ci-tools` revision; a failure there is first a question about that engine, then
    about the source. `compatibility.yml` pins the same engine and tools revision.
-2. State that new GitHub assets target DuckDB 2.0.0, while published v0.4.3 assets target
-   1.5.6. The community repository builds 2.0 from `repo.ref`; its 1.5 binaries stay at
+2. State that new GitHub assets target DuckDB 2.0.1, while published v0.4.4 assets target
+   2.0.0 and v0.4.3 assets 1.5.6. The community repository builds 2.0 from `repo.ref`; its 1.5 binaries stay at
    `repo.variegata` until maintainers explicitly rebuild them. Link compatibility validation
    and the retained 1.5 source-support deadline of 2027-03-01.
    The community repository can rebuild the source against another engine; the source
@@ -163,7 +165,7 @@ silently overwritten. Do not move a published version tag.
 
 ## After community deployment
 
-Using the DuckDB 2.0 engine the community repository deployed for (`v2.0.0`) with normal
+Using the DuckDB 2.0 engine the community repository deployed for (`v2.0.1`) with normal
 signature verification and a fresh extension directory, verify
 installation, loading, and the descriptor's hello-world queries:
 

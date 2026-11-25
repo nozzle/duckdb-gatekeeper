@@ -227,17 +227,19 @@ void RemoteRoutes(DuckDB &db, RemoteState &state) {
 	            parameterized_result->GetError().find("Parameterized prepared statements") != string::npos &&
 	            state.calls.size() == before + 2,
 	        "engine parameterized connected execution refusal changed");
+	// DuckDB 2.0.1 prepares on a connected session without dispatching: the handle carries the written text and
+	// every execution submits it to the connected database. Preparation reaches no remote callback; the
+	// unsupported route's dispatch happens at execution, still BEFORE any refusal.
 	auto remote_prepare = agent.Prepare("SELECT 42");
-	Require(remote_prepare->HasError() && state.calls.size() == before + 3,
-	        "Prepare on native-mutated session did not dispatch before refusal");
-	Require(remote_prepare->GetError().find("prepared statement was not registered") != string::npos ||
-	            (remote_prepare->GetErrorObject().Type() == ExceptionType::PERMISSION &&
-	             remote_prepare->GetError().find("Gatekeeper denied this statement") != string::npos),
-	        "unexpected connected prepare error: " + remote_prepare->GetError());
-	std::printf("remote-catalog probe: native-mutated preparation after dispatch: %s\n",
-	            remote_prepare->GetError().find("prepared statement was not registered") != string::npos
-	                ? "missing local handle"
-					: "Gatekeeper permission refusal");
+	Require(!remote_prepare->HasError() && state.calls.size() == before + 2,
+	        "Prepare on native-mutated session dispatched or failed; review the upstream boundary");
+	auto remote_result = remote_prepare->Execute();
+	Require(state.calls.size() == before + 3 && state.calls.back() == "SELECT 42",
+	        "handle prepared on native-mutated session did not route at execution");
+	if (remote_result->HasError())
+		Denied(std::move(remote_result));
+	std::printf("remote-catalog probe: native-mutated prepared execution after dispatch: %s\n",
+	            remote_result ? "success" : "Gatekeeper permission refusal");
 	agent.context->DisconnectFromCatalog();
 
 	// Detached targets retain IsConnected. Engine refuses before hooks, not a Gatekeeper decision.

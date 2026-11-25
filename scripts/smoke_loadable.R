@@ -5,7 +5,7 @@
 # conventions those files describe. Needs only DBI and duckdb.
 #
 #   Rscript scripts/smoke_loadable.R <gatekeeper.duckdb_extension> <engine version> <platform>
-#   e.g.  Rscript scripts/smoke_loadable.R build/distributed/gatekeeper.duckdb_extension v2.0.0 windows_amd64_mingw
+#   e.g.  Rscript scripts/smoke_loadable.R build/distributed/gatekeeper.duckdb_extension v2.0.1 windows_amd64_mingw
 
 suppressPackageStartupMessages({
   library(DBI)

@@ -127,11 +127,9 @@ def test_flip_applies_at_the_next_statement_in_both_directions(catalog, agent):
 
 
 @pytest.mark.skipif(ENGINE_MAJOR < 2, reason="CONNECT routing was introduced in DuckDB 2.0")
-@pytest.mark.parametrize("sql, recorded", [("CONNECT missing_remote", "CONNECT missing_remote"),
-                                          ("/* routing */ CoNnEcT ':memory:'", "CoNnEcT ':memory:'"),
-                                          ("-- routing\n DiScOnNeCt", "DiScOnNeCt"),
-                                          ("CONNECT LOCAL", "CONNECT LOCAL"), ("CONNECT", "CONNECT")])
-def test_log_only_routing_controls_are_refused_and_audited_as_enforced(catalog, agent, sql, recorded):
+@pytest.mark.parametrize("sql", ["CONNECT missing_remote", "/* routing */ CoNnEcT ':memory:'", "-- routing\n DiScOnNeCt",
+                                 "CONNECT LOCAL", "CONNECT"])
+def test_log_only_routing_controls_are_refused_and_audited_as_enforced(catalog, agent, sql):
     enable(catalog, "debug")
     catalog.execute("SET gatekeeper_log_only = true")
     if PARSER == "postgres":
@@ -144,8 +142,8 @@ def test_log_only_routing_controls_are_refused_and_audited_as_enforced(catalog, 
         [record] = decisions(catalog)
         assert (record["mode"], record["boundary"], record["allowed"], record["code"]) == (
             "enforce", "binding", False, "unsupported")
-        # The engine strips leading comments before presenting the statement to QueryBegin.
-        assert record["statement"] == recorded
+        # DuckDB 2.0.1 presents a statement with the comments and whitespace before its first token.
+        assert record["statement"] == sql
     assert agent.execute("SELECT 'CONNECT remote'").fetchone() == ("CONNECT remote",)
     agent.execute("CREATE TABLE log_only_local(i INTEGER)")
     assert decisions(catalog, "statement = 'CREATE TABLE log_only_local(i INTEGER)'")[0]["mode"] == "log_only"

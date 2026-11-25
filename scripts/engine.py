@@ -37,7 +37,7 @@ def add_engine_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--duckdb-source", type=Path, default=ROOT / "duckdb",
                         help="DuckDB source checkout to build (default: the pinned submodule)")
     parser.add_argument("--duckdb-version", default=None,
-                         help="OVERRIDE_GIT_DESCRIBE value, e.g. v2.0.0; defaults to the release pin when the "
+                         help="OVERRIDE_GIT_DESCRIBE value, e.g. v2.0.1; defaults to the release pin when the "
                               "checkout is at the pinned revision and to its own Git metadata otherwise")
 
 

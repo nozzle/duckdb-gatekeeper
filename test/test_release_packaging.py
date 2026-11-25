@@ -68,7 +68,7 @@ def test_release_archives_and_checksums(tag, artifacts, tmp_path, monkeypatch):
     output = tmp_path / "release"
     release.package_release(tag, artifacts, output)
     lines = (output / "SHA256SUMS").read_text().splitlines()
-    assert len(lines) == 9
+    assert len(lines) == 10
     for line in lines:
         digest, name = line.split("  ")
         assert name.startswith(f"gatekeeper-{TAG}-duckdb-{ENGINE_TAG}-")
@@ -99,7 +99,8 @@ def test_ci_test_support_is_not_published(released, artifacts, tmp_path):
     release.package_release(TAG, artifacts, output)
     for path in output.glob("*.zip"):
         with zipfile.ZipFile(path) as bundle:
-            assert set(bundle.namelist()) == {"gatekeeper.duckdb_extension", "LICENSE", "NOTICE"}
+            binary = "gatekeeper.duckdb_extension" + (".wasm" if "wasm_eh" in path.name else "")
+            assert set(bundle.namelist()) == {binary, "LICENSE", "NOTICE"}
 
 
 @pytest.mark.parametrize("damage", ["wrong_id", "extra_file", "missing_archive", "empty_archive", "not_directory"])

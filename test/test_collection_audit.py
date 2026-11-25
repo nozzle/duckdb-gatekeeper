@@ -14,6 +14,9 @@ from inventory_capture import apply_delta, reconstruct_collection, snapshot
 
 
 COLLECTIONS = sorted((ROOT / "inventories/runtime").glob("*/collection.json"))
+# Defaults whose registration postdates both captures: DuckDB 2.0.1 registers fmod as a scalar; the captures
+# observe its historical macro. They add to each collection's unobserved defaults without altering its evidence.
+LATER_DEFAULTS = {("system", ("main",), "fmod", "scalar")}
 
 
 @pytest.fixture(scope="module", params=COLLECTIONS, ids=lambda path: path.parent.name)
@@ -87,20 +90,20 @@ def test_version_specific_intrinsics_and_reporting_labels_remain_explicit(collec
             ("system", ("main",), n, "scalar") for n in ("icu_collate_yue", "icu_collate_yue_cn", "st_snap")}
         assert report["reporting_discrepancies"] == []
         assert report["default_names_at_ungranted_identities"] == []
-    assert missing == expected
+    assert missing == expected | LATER_DEFAULTS
     grants = {identity_key(row) for row in load_default_identities()}
-    assert {identity_key(row) for row in report["observed_default_identities"]} == grants - expected
+    assert {identity_key(row) for row in report["observed_default_identities"]} == grants - expected - LATER_DEFAULTS
 
 
 def test_historical_policy_claims_do_not_follow_new_defaults(collection):
     path, _, _, current = collection
-    assert current["compiled_defaults"] == 919
+    assert current["compiled_defaults"] == 920
     historical = json.loads((path / "report.json").read_text())
     historical_missing = historical.get("qualified_source_mapping", historical)["defaults_not_observed"]
     # Removing the invented window spellings restores the historical identity set,
     # not its map hash: current source rationale and historical provenance differ.
     assert {identity_key(row) for row in current["defaults_not_observed"]} == {
-        identity_key(row) for row in historical_missing}
+        identity_key(row) for row in historical_missing} | LATER_DEFAULTS
     changed = copy.deepcopy(current)
     changed["compiled_defaults"] += 1
     verify_historical_report(path, changed)  # Historical policy claims stay immutable.
