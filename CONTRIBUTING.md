@@ -70,7 +70,7 @@ OVERRIDE_GIT_DESCRIBE= make release         # force the checkout's own tags, eve
 ### Loading unsigned builds
 
 Source builds, CI artifacts, and GitHub Release binaries are unsigned. Use the DuckDB
-engine matching the binary (2.0.1 for current builds; published v0.4.4 assets use 2.0.0 and v0.4.3 assets 1.5.6) and explicitly enable
+engine matching the binary (2.0.1 for current builds and v0.4.5 assets; published v0.4.4 assets use 2.0.0 and v0.4.3 assets 1.5.6) and explicitly enable
 unsigned loading for these development artifacts:
 
 ```sh

@@ -21,8 +21,8 @@ every enforced denial is a `Permission Error` the statement never recovers from.
 > Read the [security model](docs/security.md) before integrating.
 
 > [!NOTE]
-> Early development. Source builds on `main` target **DuckDB 2.0.1**. Published GitHub v0.4.4
-> binaries target DuckDB 2.0.0 and v0.4.3 binaries target DuckDB 1.5.6. Community publication is
+> Early development. Gatekeeper v0.4.5 builds and GitHub binaries target **DuckDB 2.0.1**;
+> published v0.4.4 binaries target DuckDB 2.0.0 and v0.4.3 binaries DuckDB 1.5.6. Community publication is
 > [a separate step](docs/releasing.md); check the installed extension version when deploying.
 > The community repository's DuckDB 1.5.6 binaries are v0.4.1. Source compatibility with 1.5
 > is maintained until **March 1, 2027**.
@@ -993,7 +993,7 @@ enforcement. A SELECT-based setup must require an actual `enforced = true` resul
 
 DuckDB 2.0.1 is the primary build and release target. DuckDB 1.5.6 retains source compatibility
 and a full regression job until its [extended EOL on March 1, 2027](https://duckdb.org/release_calendar.html).
-Each engine needs its own matching binary. New builds target 2.0.1; published GitHub v0.4.4
+Each engine needs its own matching binary. GitHub v0.4.5 assets target 2.0.1; published v0.4.4
 assets target 2.0.0 and v0.4.3 assets target 1.5.6. The policy model is shared, but engine capabilities, conservative
 refusals, and diagnostic positions differ. See [Compatibility and review](docs/security.md#compatibility-and-review)
 for prepared statements, function provenance, parameter fallback, Quack, and the 2.0
@@ -1012,14 +1012,14 @@ plain connection:
 
 | | point lookup (1 K rows) | aggregate (10 M rows) | large statement (11 KB) |
 | --- | ---: | ---: | ---: |
-| plain connection | 111 µs | 4.3 ms | 6.6 ms |
-| enforced connection | 159 µs (+48 µs) | 4.6 ms (+224 µs) | 15.5 ms (+8.9 ms) |
-| enforced, audit log at debug | 222 µs (+111 µs) | 4.7 ms (+349 µs) | 15.7 ms (+9.2 ms) |
-| validate, then execute | 271 µs (+160 µs) | 4.7 ms (+414 µs) | 14.1 ms (+7.5 ms) |
-| denied on an enforced connection | 939 µs | 1.1 ms | 7.1 ms |
+| plain connection | 110 µs | 4.6 ms | 6.9 ms |
+| enforced connection | 160 µs (+50 µs) | 4.9 ms (+302 µs) | 16.1 ms (+9.2 ms) |
+| enforced, audit log at debug | 225 µs (+115 µs) | 5.0 ms (+378 µs) | 16.4 ms (+9.4 ms) |
+| validate, then execute | 277 µs (+167 µs) | 5.1 ms (+465 µs) | 14.7 ms (+7.8 ms) |
+| denied on an enforced connection | 911 µs | 1.2 ms | 7.3 ms |
 
 Median of 1000 runs per cell after 20 warm-ups, `execute().fetchall()` through the Python client
-on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.1, Gatekeeper 0.4.4. The
+on one connection of an in-memory database; Apple M3 Max, DuckDB 2.0.1, Gatekeeper 0.4.5. The
 plain row is the client round trip plus the engine's own work; in parentheses, what each mode
 adds to it.
 

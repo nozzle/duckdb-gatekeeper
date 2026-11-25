@@ -6,9 +6,11 @@ integrating the extension, not for the commit log. Engine pins are in `versions.
 
 ## Unreleased
 
+## 0.4.5 - 2026-11-24
+
 ### Changed
 
-- Primary builds and the next GitHub release artifacts target DuckDB 2.0.1. Published v0.4.4
+- Primary builds and GitHub release artifacts now target DuckDB 2.0.1. Published v0.4.4
   assets still target 2.0.0; DuckDB 1.5.6 support is unchanged.
 - Wasm EH is distributed again. `@duckdb/duckdb-wasm@1.33.1-dev121.0` embeds DuckDB 2.0.1 and
   reports the release label `v2.0.1`, so the browser test now runs against the shipped artifact.

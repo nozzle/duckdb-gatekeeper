@@ -7,7 +7,7 @@ does not delete its adapters or tests; [#99](https://github.com/nozzle/duckdb-ga
 tracks their retirement. [#90](https://github.com/nozzle/duckdb-gatekeeper/issues/90)
 tracks released-parser verification.
 
-The primary pin moved to **DuckDB 2.0.1** on 2026-11-23; see [the 2.0.1 repin](#duckdb-201-repin)
+The primary pin moved to **DuckDB 2.0.1** on 2026-11-23, the Gatekeeper v0.4.5 release target; see [the 2.0.1 repin](#duckdb-201-repin)
 for what changed. The sections before it record the 2.0.0 migration.
 
 ## Distribution and host requirements
